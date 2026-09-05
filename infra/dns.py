@@ -44,22 +44,29 @@ def domains() -> list[str]:
 
 # ---------------------------------------------------------------- GoDaddy
 def gd_headers() -> dict:
+    """Classic key/secret pairs use `sso-key`; newer personal access tokens (gd_pat_...) are Bearer tokens."""
     key, secret = os.environ.get("GODADDY_API_KEY"), os.environ.get("GODADDY_API_SECRET")
+    pat = os.environ.get("GODADDY_PAT") or (secret if (secret or "").startswith("gd_pat_") else None)
+    if pat:
+        return {"Authorization": f"Bearer {pat}", "Content-Type": "application/json"}
     if not key or not secret:
-        sys.exit("GODADDY_API_KEY / GODADDY_API_SECRET not set")
+        sys.exit("GODADDY_API_KEY / GODADDY_API_SECRET (or GODADDY_PAT) not set")
     return {"Authorization": f"sso-key {key}:{secret}", "Content-Type": "application/json"}
 
 
 def godaddy_set_a(domain: str, ip: str, ttl: int = 600) -> None:
+    # GoDaddy creates `www CNAME @` by default; an A record for www cannot coexist with it (422)
+    d = requests.delete(f"{GODADDY}/domains/{domain}/records/CNAME/www", headers=gd_headers(), timeout=30)
+    if d.status_code == 204:
+        print(f"  removed default www CNAME on {domain}")
     for name in ("@", "www"):
         r = requests.put(f"{GODADDY}/domains/{domain}/records/A/{name}", headers=gd_headers(),
                          json=[{"data": ip, "ttl": ttl}], timeout=30)
         if r.status_code == 403:
             sys.exit(f"GoDaddy refused API access for {domain} (403). Use --provider linode.\n{r.text}")
-        r.raise_for_status()
+        if r.status_code >= 400:
+            sys.exit(f"GoDaddy rejected {name}.{domain}: {r.status_code} {r.text[:300]}")
         print(f"  {name}.{domain} A -> {ip}")
-    # a stale www CNAME would conflict with the A record we just set
-    requests.delete(f"{GODADDY}/domains/{domain}/records/CNAME/www", headers=gd_headers(), timeout=30)
 
 
 def godaddy_set_nameservers(domain: str, nameservers: list[str]) -> bool:
@@ -121,7 +128,7 @@ def main() -> int:
             godaddy_set_a(domain, args.ip)
         else:
             linode_set_a(domain, args.ip, soa)
-            if os.environ.get("GODADDY_API_KEY"):
+            if os.environ.get("GODADDY_API_KEY") or os.environ.get("GODADDY_PAT") or (os.environ.get("GODADDY_API_SECRET") or "").startswith("gd_pat_"):
                 godaddy_set_nameservers(domain, LINODE_NS)
             else:
                 print(f"  -> set nameservers for {domain} at GoDaddy to: {', '.join(LINODE_NS)}")
