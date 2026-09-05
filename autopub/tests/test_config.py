@@ -29,3 +29,16 @@ def test_duplicate_keys_rejected(tmp_path):
         assert "duplicate" in str(exc)
     else:
         raise AssertionError("expected ValueError")
+
+
+def test_sections_and_branding(settings):
+    junkies = settings.site("JUNKIES")
+    assert junkies.categories[0] == junkies.category          # default section leads the list
+    assert "Campaigns" in junkies.categories
+    assert junkies.use_source_image is True
+    assert junkies.brand.logo and junkies.brand.logo.endswith(".png")
+    from pathlib import Path
+    assert Path(junkies.brand.logo).is_absolute() and Path(junkies.brand.logo).exists()
+    mentalist = settings.site("MENTALIST")
+    assert mentalist.brand.logo is None                        # sites without a logo asset fall back to text
+    assert mentalist.categories and mentalist.categories[0] == mentalist.category

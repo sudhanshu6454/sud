@@ -30,18 +30,19 @@ upsert_env() {  # upsert_env KEY VALUE
   fi
 }
 
-# key|domain|name|tagline per line, read into an array up front: the loop body runs docker,
-# which would otherwise swallow the rest of a piped/heredoc list and stop after the first site.
+# key|domain|name|tagline|categories per line, read into an array up front: the loop body runs
+# docker, which would otherwise swallow the rest of a piped/heredoc list and stop after the first site.
 mapfile -t SITE_LINES < <(python3 - <<'PY'
 import yaml
 for s in yaml.safe_load(open("autopub/config/sites.yaml"))["sites"]:
-    print("|".join([s["key"].upper(), s["domain"], s["name"], s.get("tagline", "")]))
+    cats = s.get("categories") or [s.get("category", "News")]
+    print("|".join([s["key"].upper(), s["domain"], s["name"], s.get("tagline", ""), ",".join(cats)]))
 PY
 )
 echo "sites to set up: ${#SITE_LINES[@]}"
 
 for LINE in "${SITE_LINES[@]}"; do
-  IFS='|' read -r KEY DOMAIN NAME TAGLINE <<< "$LINE"
+  IFS='|' read -r KEY DOMAIN NAME TAGLINE CATEGORIES <<< "$LINE"
   [ -z "$KEY" ] && continue
   slug=$(echo "$KEY" | tr '[:upper:]' '[:lower:]')
   wp() { docker compose run --rm -T "cli_${slug}" "$@" </dev/null; }
@@ -89,6 +90,27 @@ for LINE in "${SITE_LINES[@]}"; do
     wp plugin activate "$p" >/dev/null 2>&1 || true
   done
   wp plugin delete hello akismet >/dev/null 2>&1 || true
+
+  echo "-- sections + primary menu"
+  # Every section exists as a category, and the header/footer menus list them all -
+  # menus (unlike the category fallback) show sections that have no posts yet.
+  MENU="Primary"
+  wp menu list --fields=name --format=csv 2>/dev/null | tail -n +2 | grep -qx "$MENU" || wp menu create "$MENU" >/dev/null
+  for item in $(wp menu item list "$MENU" --field=db_id 2>/dev/null); do
+    wp menu item delete "$item" >/dev/null 2>&1 || true
+  done
+  IFS=',' read -ra CATS <<< "$CATEGORIES"
+  for cat in "${CATS[@]}"; do
+    [ -z "$cat" ] && continue
+    term_id=$(wp term list category --field=term_id --name="$cat" 2>/dev/null | head -1)
+    if [ -z "$term_id" ]; then
+      term_id=$(wp term create category "$cat" --porcelain)
+    fi
+    wp menu item add-term "$MENU" category "$term_id" >/dev/null
+  done
+  wp menu location assign "$MENU" primary >/dev/null 2>&1 || true
+  wp menu location assign "$MENU" footer-sections >/dev/null 2>&1 || true
+  echo "   sections: $CATEGORIES"
 
   echo "-- autopub user + application password"
   AUTOPUB_USER="${WP_AUTOPUB_USER:-autopub}"

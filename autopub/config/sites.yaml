@@ -24,6 +24,7 @@ sites:
     audience: Brand managers, founders and marketers in India and worldwide who want to understand what makes people buy.
     tone: Insightful, analytical, slightly playful, confident. Uses examples and frameworks.
     category: Marketing Psychology
+    categories: [Marketing Psychology, Branding, Consumer Behaviour, Pricing Psychology, Storytelling]
     max_posts_per_run: 2
     max_age_hours: 72
     min_words: 250
@@ -60,6 +61,7 @@ sites:
     audience: Digital marketers, agency folks, D2C founders and growth teams.
     tone: Energetic, punchy, practical. Short paragraphs, clear takeaways.
     category: Digital Marketing
+    categories: [Digital Marketing, SEO, Social Media, AI in Marketing, Growth Hacking, E-commerce]
     max_posts_per_run: 2
     max_age_hours: 48
     min_words: 250
@@ -100,6 +102,7 @@ sites:
     audience: Marketing professionals and students who want a quick, reliable daily digest.
     tone: Newsy, crisp, informative, neutral with a friendly voice.
     category: Marketing News
+    categories: [Marketing News, Campaigns, Martech, Media, Agencies, Features]
     max_posts_per_run: 3
     max_age_hours: 36
     min_words: 200
@@ -120,8 +123,9 @@ sites:
       - marketing news India
       - advertising campaign launch
     hashtags: [MarketingNews, AdTech, MarTech, MarketingJunkies]
-    brand:
-      primary: "#064e3b"
-      accent: "#34d399"
-      text: "#ffffff"
+    brand:                          # the real brand: ink ground, bronze accent, cream type
+      primary: "#1c1b1a"
+      accent: "#8a6d47"
+      text: "#fbf8f3"
+      logo: brand/marketing-junkies-logo.png
     socials: [twitter, facebook, instagram, linkedin, pinterest, telegram, threads]

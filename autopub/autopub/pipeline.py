@@ -44,7 +44,7 @@ def make_wordpress(site: Site) -> WordPress:
 
 
 def publish_one(site: Site, settings: Settings, state: State, cand: sources.Candidate, rewriter: Rewriter,
-                wp: WordPress, publishers, work_dir: Path, report: RunReport, use_source_image: bool = False) -> bool:
+                wp: WordPress, publishers, work_dir: Path, report: RunReport, use_source_image: bool | None = None) -> bool:
     url = cand.url
     log.info("[%s] working on: %s (%s)", site.key, cand.title, url)
 
@@ -80,8 +80,10 @@ def publish_one(site: Site, settings: Settings, state: State, cand: sources.Cand
 
     # 3. images
     stem = slugify(post.slug or post.title)[:60] or f"post-{int(time.time())}"
+    if use_source_image is None:
+        use_source_image = site.use_source_image
     try:
-        cards = images.render_set(post.image_headline or post.title, post.image_kicker or site.category, site,
+        cards = images.render_set(post.image_headline or post.title, post.image_kicker or post.category or site.category, site,
                                   work_dir / site.slug, stem, backdrop_url=article.image if use_source_image else None)
     except Exception as exc:  # noqa: BLE001
         log.error("[%s] image generation failed: %s", site.key, exc)
@@ -91,7 +93,7 @@ def publish_one(site: Site, settings: Settings, state: State, cand: sources.Cand
     try:
         landscape_media = wp.upload_media(cards["landscape"], post.title, alt_text=post.image_headline) if cards.get("landscape") else None
         square_media = wp.upload_media(cards["square"], f"{post.title} (square)", alt_text=post.image_headline) if cards.get("square") else None
-        cat_id = wp.ensure_term("categories", site.category)
+        cat_id = wp.ensure_term("categories", post.category or site.category)
         tag_ids = []
         for tag in post.tags[:8]:
             try:

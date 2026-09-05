@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from copy import deepcopy
 from typing import Any
 
 import anthropic
@@ -40,6 +41,7 @@ class Captions(BaseModel):
 
 class CuratedPost(BaseModel):
     title: str = Field(max_length=120)
+    category: str = ""
     slug: str
     excerpt: str
     body_html: str
@@ -52,9 +54,10 @@ class CuratedPost(BaseModel):
 OUTPUT_SCHEMA: dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,
-    "required": ["title", "slug", "excerpt", "body_html", "tags", "image_headline", "image_kicker", "captions"],
+    "required": ["title", "category", "slug", "excerpt", "body_html", "tags", "image_headline", "image_kicker", "captions"],
     "properties": {
         "title": {"type": "string", "description": "SEO headline, max 65 characters, no clickbait, no quotes around it"},
+        "category": {"type": "string", "description": "The one section this story belongs in"},
         "slug": {"type": "string", "description": "lowercase-hyphenated url slug, max 8 words"},
         "excerpt": {"type": "string", "description": "Meta description / excerpt, 120-155 characters"},
         "body_html": {"type": "string", "description": "Article body as clean HTML (p, h2, h3, ul, ol, li, strong, em, blockquote, a). No h1, no img, no script."},
@@ -85,6 +88,7 @@ SYSTEM_PROMPT = """You are the editor-in-chief of {name} ({domain}). Tagline: "{
 Beat: {niche}
 Audience: {audience}
 Voice: {tone}
+Sections: {sections} - file the story under the single best-fitting one.
 
 You receive one news story from another publisher. Write an ORIGINAL curated article about it for our readers:
 - Report the news in your own words. Never copy sentences or distinctive phrasing from the source. Do not reproduce more than a very short quoted phrase, and attribute any quote.
@@ -95,6 +99,18 @@ You receive one news story from another publisher. Write an ORIGINAL curated art
 - Never mention that you are an AI or that this is a rewrite.
 - Captions must be platform-native, mention the key takeaway, and must not include any URL (the link is appended automatically where the platform supports it).
 """
+
+
+def schema_for(site: Site) -> dict[str, Any]:
+    """The output schema with this site's own sections as the allowed categories."""
+    schema = deepcopy(OUTPUT_SCHEMA)
+    sections = site.categories or [site.category]
+    schema["properties"]["category"] = {
+        "type": "string",
+        "enum": sections,
+        "description": "The one section this story belongs in",
+    }
+    return schema
 
 
 class RewriteSkipped(Exception):
@@ -124,6 +140,7 @@ class Rewriter:
         system = SYSTEM_PROMPT.format(
             name=site.name, domain=site.domain, tagline=site.tagline,
             niche=site.niche, audience=site.audience, tone=site.tone,
+            sections=", ".join(site.categories or [site.category]),
         )
         user = (
             f"SOURCE_URL: {article.url}\n"
@@ -139,7 +156,7 @@ class Rewriter:
                 max_tokens=16000,
                 system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
                 messages=[{"role": "user", "content": user}],
-                output_config={"effort": self.effort, "format": {"type": "json_schema", "schema": OUTPUT_SCHEMA}},
+                output_config={"effort": self.effort, "format": {"type": "json_schema", "schema": schema_for(site)}},
             )
         except anthropic.RateLimitError as exc:
             raise RuntimeError(f"rate limited by Anthropic: {exc.message}") from exc
@@ -160,6 +177,8 @@ class Rewriter:
         except (json.JSONDecodeError, ValidationError) as exc:
             raise RuntimeError(f"unusable model output: {exc}") from exc
         post.tags = [t.strip() for t in post.tags if t and t.strip()][:8]
+        sections = {c.lower(): c for c in (site.categories or [site.category])}
+        post.category = sections.get(post.category.strip().lower(), site.category)
         usage = response.usage
         log.info("rewrite ok: %s (in=%s cached=%s out=%s)", post.title, usage.input_tokens,
                  getattr(usage, "cache_read_input_tokens", 0), usage.output_tokens)

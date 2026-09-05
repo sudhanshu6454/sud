@@ -6,10 +6,10 @@ import httpx2
 import pytest
 
 from autopub.extract import Article
-from autopub.rewrite import OUTPUT_SCHEMA, Rewriter, RewriteSkipped
+from autopub.rewrite import OUTPUT_SCHEMA, Rewriter, RewriteSkipped, schema_for
 
 GOOD = {
-    "title": "Brands Rethink Loyalty", "slug": "brands-rethink-loyalty", "excerpt": "x" * 130,
+    "title": "Brands Rethink Loyalty", "category": "Branding", "slug": "brands-rethink-loyalty", "excerpt": "x" * 130,
     "body_html": "<p>Body</p><p><em>Source: <a href='https://src.com/a'>Src</a></em></p>",
     "tags": ["loyalty", "brand", "psychology", "retail"], "image_headline": "Brands rethink loyalty",
     "image_kicker": "Brand Strategy",
@@ -59,7 +59,7 @@ def test_rewrite_uses_fallbacks_and_schema(site):
     kind, kw = client.calls[0]
     assert kind == "beta" and kw["fallbacks"] == "default" and kw["betas"] == ["server-side-fallback-2026-07-01"]
     assert kw["model"] == "claude-opus-5"
-    assert kw["output_config"]["format"]["schema"] is OUTPUT_SCHEMA
+    assert kw["output_config"]["format"]["schema"]["properties"]["category"]["enum"] == site.categories
     assert kw["system"][0]["cache_control"] == {"type": "ephemeral"}
     assert "Marketing Mentalist" in kw["system"][0]["text"]
     assert "SOURCE_URL: https://src.com/a" in kw["messages"][0]["content"]
@@ -101,3 +101,20 @@ def test_tags_are_clamped(site):
     data = dict(GOOD, tags=[f"t{i}" for i in range(12)] + ["  "])
     post = Rewriter(client=FakeClient(_resp(json.dumps(data)))).rewrite(site, ARTICLE)
     assert len(post.tags) == 8
+
+
+def test_schema_carries_the_sites_own_sections(site):
+    schema = schema_for(site)
+    assert schema["properties"]["category"]["enum"] == site.categories
+    assert "category" in schema["required"]
+    assert OUTPUT_SCHEMA["properties"]["category"].get("enum") is None   # the template is not mutated
+
+
+def test_category_is_snapped_to_a_real_section(site):
+    data = dict(GOOD, category="  bRaNdInG ")
+    assert Rewriter(client=FakeClient(_resp(json.dumps(data)))).rewrite(site, ARTICLE).category == "Branding"
+
+
+def test_unknown_category_falls_back_to_the_default(site):
+    data = dict(GOOD, category="Sports")
+    assert Rewriter(client=FakeClient(_resp(json.dumps(data)))).rewrite(site, ARTICLE).category == site.category

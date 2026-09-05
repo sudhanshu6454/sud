@@ -10,7 +10,7 @@ from autopub.state import State
 class FakeRewriter:
     def rewrite(self, site, article):
         return CuratedPost(
-            title=f"Curated: {article.title}", slug="curated-story", excerpt="e" * 120,
+            title=f"Curated: {article.title}", category="Campaigns", slug="curated-story", excerpt="e" * 120,
             body_html="<p>x</p>", tags=["a", "b", "c", "d"], image_headline="Curated story", image_kicker="News",
             captions=Captions(twitter="tw", facebook="fb", instagram="ig", linkedin="li", pinterest_title="pt",
                               pinterest="pi", telegram="tg", threads="th"),
@@ -21,12 +21,14 @@ class FakeWP:
     def __init__(self):
         self.posts = []
         self.media = []
+        self.terms = []
 
     def upload_media(self, path, title, alt_text="", caption=""):
         self.media.append(path)
         return {"id": len(self.media), "source_url": f"https://site/{path.name}"}
 
     def ensure_term(self, taxonomy, name):
+        self.terms.append((taxonomy, name))
         return 1
 
     def create_post(self, **kw):
@@ -78,6 +80,7 @@ def test_full_run_publishes_and_syndicates(monkeypatch, settings, site, tmp_path
     assert report.skipped == 1 and report.failed == 0
     assert report.social_ok == 2 and report.social_failed == 0
     assert len(wp.media) == 2 and wp.posts[0]["featured_media"] == 1
+    assert ("categories", "Campaigns") in wp.terms   # the model's section, not the site default
     social = Recorder.seen[0]
     assert social.link == "https://marketingmentalist.in/curated-story/"
     assert social.image_landscape.exists() and social.image_square.exists()

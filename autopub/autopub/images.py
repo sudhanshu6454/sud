@@ -109,6 +109,29 @@ def _backdrop(url: str, size: tuple[int, int], timeout: int = 20) -> Image.Image
     return Image.blend(img, overlay, 0.55)
 
 
+def _paste_logo_plate(img: Image.Image, logo_path: str, domain: str, primary: tuple[int, int, int]) -> None:
+    """Bottom-left plate carrying the real brand PNG, so the mark reads over any photo backdrop."""
+    logo = Image.open(logo_path).convert("RGBA")
+    w, h = img.size
+    margin = int(w * 0.05)
+    logo_h = int(h * (0.11 if h >= w else 0.085))
+    logo_w = int(logo.width * (logo_h / logo.height))
+    logo = logo.resize((logo_w, logo_h), Image.LANCZOS)
+    # sample the logo's own corner so the plate blends with it seamlessly (its background isn't transparent)
+    plate_color = logo.convert("RGB").getpixel((1, 1))
+    pad = int(logo_h * 0.28)
+    font = _font(int(logo_h * 0.42), bold=False)
+    draw = ImageDraw.Draw(img)
+    domain_w = draw.textlength(domain, font=font)
+    plate_w = logo_w + pad * 3 + int(domain_w)
+    plate_h = logo_h + pad * 2
+    x0, y0 = margin, h - margin - plate_h
+    draw.rectangle([x0, y0, x0 + plate_w, y0 + plate_h], fill=plate_color)
+    img.paste(logo, (x0 + pad, y0 + pad), logo)
+    text_color = tuple(int(c * 0.55) for c in plate_color)
+    draw.text((x0 + pad * 2 + logo_w, y0 + (plate_h - font.size) // 2 - 2), domain, font=font, fill=text_color)
+
+
 def render_card(headline: str, kicker: str, site: Site, out_path: Path, variant: str = "landscape",
                 backdrop_url: str | None = None) -> Path:
     size = SIZES[variant]
@@ -150,12 +173,15 @@ def render_card(headline: str, kicker: str, site: Site, out_path: Path, variant:
         draw.text((margin, y), line, font=hfont, fill=text_color)
         y += line_h
 
-    # footer: site name + domain
-    nfont = _font(int(w * 0.028), bold=True)
-    dfont = _font(int(w * 0.02), bold=False)
-    fy = h - footer_h + int(h * 0.02)
-    draw.text((margin, fy), site.name, font=nfont, fill=text_color)
-    draw.text((margin, fy + nfont.size + 6), site.domain, font=dfont, fill=(*text_color, 200))
+    # footer: the real brand mark when the site has one, otherwise the typographic name
+    if site.brand.logo:
+        _paste_logo_plate(img, site.brand.logo, site.domain, primary)
+    else:
+        nfont = _font(int(w * 0.028), bold=True)
+        dfont = _font(int(w * 0.02), bold=False)
+        fy = h - footer_h + int(h * 0.02)
+        draw.text((margin, fy), site.name, font=nfont, fill=text_color)
+        draw.text((margin, fy + nfont.size + 6), site.domain, font=dfont, fill=(*text_color, 200))
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     img.convert("RGB").save(out_path, "JPEG", quality=88, optimize=True)

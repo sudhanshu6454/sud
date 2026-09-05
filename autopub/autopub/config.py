@@ -16,6 +16,7 @@ class Brand:
     primary: str = "#0f172a"
     accent: str = "#f97316"
     text: str = "#ffffff"
+    logo: str | None = None  # path to a PNG wordmark, resolved relative to sites.yaml at load time
 
 
 @dataclass
@@ -28,6 +29,8 @@ class Site:
     audience: str = ""
     tone: str = ""
     category: str = "News"
+    categories: list[str] = field(default_factory=list)   # if set, Claude files each article under one of these
+    use_source_image: bool = True                          # share image backdrop: real source photo vs. flat gradient
     max_posts_per_run: int = 2
     max_age_hours: int = 48
     min_words: int = 250
@@ -83,12 +86,17 @@ class Settings:
         raise KeyError(f"unknown site key {key!r}; known: {[s.key for s in self.sites]}")
 
 
-def _site_from_dict(raw: dict) -> Site:
+def _site_from_dict(raw: dict, config_dir: Path) -> Site:
     data = dict(raw)
     brand = data.pop("brand", None) or {}
     site = Site(brand=Brand(**brand), **data)
     site.key = site.key.upper()
     site.niche = " ".join(site.niche.split())
+    if site.brand.logo:
+        logo_path = (config_dir / site.brand.logo).resolve()
+        site.brand.logo = str(logo_path) if logo_path.exists() else None
+    if not site.categories:
+        site.categories = [site.category]
     return site
 
 
@@ -97,7 +105,7 @@ def load(path: str | os.PathLike | None = None) -> Settings:
     with open(cfg_path, "r", encoding="utf-8") as fh:
         raw = yaml.safe_load(fh) or {}
     settings_raw = dict(raw.get("settings") or {})
-    sites = [_site_from_dict(s) for s in raw.get("sites") or []]
+    sites = [_site_from_dict(s, cfg_path.parent) for s in raw.get("sites") or []]
     if not sites:
         raise ValueError(f"no sites defined in {cfg_path}")
     keys = [s.key for s in sites]
