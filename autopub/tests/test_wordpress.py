@@ -29,6 +29,8 @@ class FakeSession:
                 q = kw["params"]["search"].lower()
                 return FakeResp(200, [t for t in self.terms[path] if q in t["name"].lower()])
             name = kw["json"]["name"]
+            if getattr(self, "forbid_create", False):
+                return FakeResp(403, {"code": "rest_cannot_create", "message": "Sorry, you are not allowed to create terms", "data": {"status": 403}})
             if any(t["name"] == name for t in self.terms[path]):
                 return FakeResp(400, {"code": "term_exists", "data": {"term_id": 5}})
             self.next_id += 1
@@ -81,3 +83,11 @@ def test_error_surface():
         assert "401" in str(exc)
     else:
         raise AssertionError
+
+
+def test_term_creation_forbidden_returns_none():
+    s = FakeSession()
+    s.forbid_create = True
+    wp = WordPress("https://marketingjunkies.in", "u", "p", session=s)
+    assert wp.ensure_term("categories", "Marketing News") == 5      # existing term still found
+    assert wp.ensure_term("tags", "Brand New Tag") is None           # cannot create -> None, no exception

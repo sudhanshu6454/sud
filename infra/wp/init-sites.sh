@@ -77,10 +77,12 @@ for LINE in "${SITE_LINES[@]}"; do
 
   echo "-- autopub user + application password"
   AUTOPUB_USER="${WP_AUTOPUB_USER:-autopub}"
+  # editor: may publish posts AND create categories/tags (author cannot manage terms -> REST 403)
   if ! wp user get "$AUTOPUB_USER" --field=ID >/dev/null 2>&1; then
-    wp user create "$AUTOPUB_USER" "autopub@${DOMAIN}" --role=author --display_name="${NAME} Desk" \
+    wp user create "$AUTOPUB_USER" "autopub@${DOMAIN}" --role=editor --display_name="${NAME} Desk" \
       --user_pass="$(openssl rand -base64 24)" >/dev/null
   fi
+  wp user set-role "$AUTOPUB_USER" editor >/dev/null
   # rotate: drop old app passwords named autopub, create a fresh one
   for uuid in $(wp user application-password list "$AUTOPUB_USER" --name=autopub --field=uuid 2>/dev/null || true); do
     wp user application-password delete "$AUTOPUB_USER" "$uuid" >/dev/null || true

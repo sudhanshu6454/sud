@@ -58,9 +58,13 @@ class WordPress:
         log.info("uploaded media %s -> id=%s url=%s", path.name, media_id, media.get("source_url"))  # type: ignore[union-attr]
         return media  # type: ignore[return-value]
 
-    def ensure_term(self, taxonomy: str, name: str) -> int:
-        """taxonomy is 'categories' or 'tags'. Returns the term id, creating it if needed."""
-        found = self._request("GET", taxonomy, params={"search": name, "per_page": 20, "context": "edit"})
+    def ensure_term(self, taxonomy: str, name: str) -> int | None:
+        """taxonomy is 'categories' or 'tags'. Returns the term id, creating it if needed.
+
+        Returns None (and logs) when the account may not create terms, so a post can still go
+        out without that category/tag instead of failing entirely.
+        """
+        found = self._request("GET", taxonomy, params={"search": name, "per_page": 20})
         for term in found:  # type: ignore[union-attr]
             if term["name"].strip().lower() == name.strip().lower():
                 return int(term["id"])
@@ -73,6 +77,9 @@ class WordPress:
                 for term in found:  # type: ignore[union-attr]
                     if term["name"].strip().lower() == name.strip().lower():
                         return int(term["id"])
+            if "403" in str(exc) or "rest_cannot_create" in str(exc) or "rest_forbidden" in str(exc):
+                log.warning("not allowed to create %s %r (give the autopub user the editor role): %s", taxonomy, name, exc)
+                return None
             raise
 
     def create_post(self, *, title: str, content: str, excerpt: str, slug: str, category_ids: list[int],

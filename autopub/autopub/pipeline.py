@@ -95,12 +95,14 @@ def publish_one(site: Site, settings: Settings, state: State, cand: sources.Cand
         tag_ids = []
         for tag in post.tags[:8]:
             try:
-                tag_ids.append(wp.ensure_term("tags", tag))
+                tid = wp.ensure_term("tags", tag)
+                if tid:
+                    tag_ids.append(tid)
             except WordPressError as exc:
                 log.warning("tag %r failed: %s", tag, exc)
         wp_post = wp.create_post(
             title=post.title, content=post.body_html, excerpt=post.excerpt, slug=stem,
-            category_ids=[cat_id], tag_ids=tag_ids,
+            category_ids=[cat_id] if cat_id else [], tag_ids=tag_ids,
             featured_media=landscape_media["id"] if landscape_media else None,
         )
     except WordPressError as exc:
