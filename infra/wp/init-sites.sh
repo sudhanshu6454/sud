@@ -24,18 +24,21 @@ upsert_env() {  # upsert_env KEY VALUE
   fi
 }
 
-# key|domain|name|tagline per line
-SITES=$(python3 - <<'PY'
+# key|domain|name|tagline per line, read into an array up front: the loop body runs docker,
+# which would otherwise swallow the rest of a piped/heredoc list and stop after the first site.
+mapfile -t SITE_LINES < <(python3 - <<'PY'
 import yaml
 for s in yaml.safe_load(open("autopub/config/sites.yaml"))["sites"]:
     print("|".join([s["key"].upper(), s["domain"], s["name"], s.get("tagline", "")]))
 PY
 )
+echo "sites to set up: ${#SITE_LINES[@]}"
 
-while IFS='|' read -r KEY DOMAIN NAME TAGLINE; do
+for LINE in "${SITE_LINES[@]}"; do
+  IFS='|' read -r KEY DOMAIN NAME TAGLINE <<< "$LINE"
   [ -z "$KEY" ] && continue
   slug=$(echo "$KEY" | tr '[:upper:]' '[:lower:]')
-  wp() { docker compose run --rm -T "cli_${slug}" "$@"; }
+  wp() { docker compose run --rm -T "cli_${slug}" "$@" </dev/null; }
   echo
   echo "=================  $DOMAIN  ================="
 
@@ -86,7 +89,7 @@ while IFS='|' read -r KEY DOMAIN NAME TAGLINE; do
   upsert_env "WP_${KEY}_USER" "$AUTOPUB_USER"
   upsert_env "WP_${KEY}_APP_PASSWORD" "$APP_PW"
   echo "-- ok: https://${DOMAIN}/wp-admin  (autopub credentials written to .env)"
-done <<< "$SITES"
+done
 
 echo
 echo "-- restarting autopub with the new credentials"
