@@ -72,6 +72,17 @@ certificates are issued by Let's Encrypt automatically once DNS has propagated.
 Social credentials can be added later: put them in `.env` on the server and run `docker compose up -d autopub`.
 Platforms without complete credentials are simply skipped (see `make check`).
 
+### No SSH available? Deploy through cloud-init only
+
+```bash
+python3 infra/linode/deploy.py          # needs LINODE_TOKEN, ANTHROPIC_API_KEY, WP_ADMIN_EMAIL in .env
+```
+
+This creates the Linode with a cloud-init that clones this (public) repository, writes the `.env`, and runs the
+full bootstrap on first boot; DNS zones are created on Linode DNS. Missing passwords are generated into `.env`.
+Then set each domain's nameservers at GoDaddy to `ns1.linode.com` … `ns5.linode.com`. Progress is logged on the
+server in `/var/log/marketing-fleet-bootstrap.log`.
+
 ### Already have a server?
 
 ```bash
