@@ -17,6 +17,8 @@ from .wordpress import WordPress, WordPressError
 
 log = logging.getLogger(__name__)
 
+MAX_CONSECUTIVE_FAILURES = 3   # stop a site's run when the model/API keeps failing
+
 
 @dataclass
 class RunReport:
@@ -163,6 +165,9 @@ def run_site(site: Site, settings: Settings, state: State, rewriter: Rewriter | 
 
     for cand in fresh:
         if len(report.published) >= limit:
+            break
+        if report.failed >= MAX_CONSECUTIVE_FAILURES and not report.published:
+            log.error("[%s] %d consecutive failures; aborting this run (will retry next cycle)", site.key, report.failed)
             break
         if not state.claim(cand.url, site.key, cand.title):
             continue

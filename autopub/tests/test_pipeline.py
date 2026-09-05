@@ -96,3 +96,23 @@ def test_gap_between_posts(monkeypatch, settings, site, tmp_path):
     monkeypatch.setattr(sources, "collect", lambda s, timeout=30: (_ for _ in ()).throw(AssertionError("should not fetch")))
     report = pipeline.run_site(site, settings, state, rewriter=FakeRewriter(), wp=FakeWP(), publishers=[])
     assert report.candidates == 0 and report.published == []
+
+
+def test_run_aborts_after_consecutive_rewrite_failures(monkeypatch, settings, site, tmp_path):
+    now = datetime.now(timezone.utc)
+    cands = [sources.Candidate(f"S{i}", f"https://pub.com/{i}", "", now, "Pub") for i in range(10)]
+    monkeypatch.setattr(sources, "collect", lambda s, timeout=30: cands)
+    monkeypatch.setattr(extract, "extract", lambda url, timeout=30: Article(url=url, title="t", text="w " * 600, sitename="Pub"))
+    monkeypatch.setattr(pipeline.time, "sleep", lambda s: None)
+
+    class Broken:
+        calls = 0
+        def rewrite(self, site, article):
+            Broken.calls += 1
+            raise RuntimeError("Anthropic API error 400")
+
+    state = State(tmp_path / "s.db")
+    report = pipeline.run_site(site, settings, state, rewriter=Broken(), wp=FakeWP(), publishers=[], work_dir=tmp_path, limit=5)
+    assert report.failed == pipeline.MAX_CONSECUTIVE_FAILURES == Broken.calls
+    assert report.published == []
+    assert not state.is_used("https://pub.com/0", site.key)   # released for retry next cycle

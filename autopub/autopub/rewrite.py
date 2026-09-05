@@ -39,11 +39,11 @@ class Captions(BaseModel):
 
 
 class CuratedPost(BaseModel):
-    title: str = Field(max_length=90)
+    title: str = Field(max_length=120)
     slug: str
     excerpt: str
     body_html: str
-    tags: list[str]
+    tags: list[str] = Field(default_factory=list)
     image_headline: str
     image_kicker: str
     captions: Captions
@@ -58,7 +58,8 @@ OUTPUT_SCHEMA: dict[str, Any] = {
         "slug": {"type": "string", "description": "lowercase-hyphenated url slug, max 8 words"},
         "excerpt": {"type": "string", "description": "Meta description / excerpt, 120-155 characters"},
         "body_html": {"type": "string", "description": "Article body as clean HTML (p, h2, h3, ul, ol, li, strong, em, blockquote, a). No h1, no img, no script."},
-        "tags": {"type": "array", "items": {"type": "string"}, "minItems": 4, "maxItems": 8},
+        # structured outputs only accept minItems 0/1 and no maxItems; the count is enforced after parsing
+        "tags": {"type": "array", "items": {"type": "string"}, "description": "4 to 8 short topical tags"},
         "image_headline": {"type": "string", "description": "Short headline for the share image, max 70 characters"},
         "image_kicker": {"type": "string", "description": "2-3 word label for the share image, e.g. 'Brand Strategy'"},
         "captions": {
@@ -158,6 +159,7 @@ class Rewriter:
             post = CuratedPost.model_validate(json.loads(text))
         except (json.JSONDecodeError, ValidationError) as exc:
             raise RuntimeError(f"unusable model output: {exc}") from exc
+        post.tags = [t.strip() for t in post.tags if t and t.strip()][:8]
         usage = response.usage
         log.info("rewrite ok: %s (in=%s cached=%s out=%s)", post.title, usage.input_tokens,
                  getattr(usage, "cache_read_input_tokens", 0), usage.output_tokens)

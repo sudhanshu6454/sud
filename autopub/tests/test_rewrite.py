@@ -82,3 +82,22 @@ def test_refusal_is_skipped(site):
 def test_bad_json_is_error(site):
     with pytest.raises(RuntimeError):
         Rewriter(client=FakeClient(_resp("not json"))).rewrite(site, ARTICLE)
+
+
+def test_schema_has_no_unsupported_array_constraints():
+    def walk(node):
+        if isinstance(node, dict):
+            if node.get("type") == "array":
+                assert node.get("minItems", 0) in (0, 1) and "maxItems" not in node
+            for v in node.values():
+                walk(v)
+        elif isinstance(node, list):
+            for v in node:
+                walk(v)
+    walk(OUTPUT_SCHEMA)
+
+
+def test_tags_are_clamped(site):
+    data = dict(GOOD, tags=[f"t{i}" for i in range(12)] + ["  "])
+    post = Rewriter(client=FakeClient(_resp(json.dumps(data)))).rewrite(site, ARTICLE)
+    assert len(post.tags) == 8
