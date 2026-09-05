@@ -119,6 +119,25 @@ docker compose exec db mariadb -uroot -p"$DB_ROOT_PASSWORD" -e \
  "CREATE DATABASE wp_growth; CREATE USER 'wp_growth'@'%' IDENTIFIED BY '<WP_GROWTH_DB_PASSWORD>'; GRANT ALL ON wp_growth.* TO 'wp_growth'@'%';"
 ```
 
+## Custom site themes
+
+`themes/marketing-junkies` is a hand-built WordPress theme for marketingjunkies.in, matching the
+brand's cream/ink/bronze palette and Archivo type (Modernist design system). It renders the exact
+fields autopub publishes (title, excerpt, category, tags, 1200x630 featured image, source
+attribution) on the homepage, single articles, category/tag archives and search, with a sticky
+table of contents generated from the article's headings, FAQ and NewsArticle schema, an
+`/llms.txt` for AI crawlers, a built-in newsletter capture (Subscribers menu in wp-admin, or point
+it at an external provider from Appearance → Customize → Marketing Junkies → Newsletter), and ad
+slots that render nothing until a tag is pasted into that same Customizer panel. Mark any post
+"sponsored" by tagging it `sponsored` in the editor; the theme adds the disclosure banner and
+`rel="sponsored"` on outbound links automatically — autopub itself never marks a post sponsored.
+
+`infra/wp/init-sites.sh` installs it automatically for marketingjunkies.in (the `LOCAL_THEMES` map
+near the top of that script) and copies fresh files into the container on every run, so editing
+the theme and re-running `./infra/wp/init-sites.sh` (or `make init`) updates the live site. To give
+another site its own theme the same way, add a `themes/<name>` directory and a `[KEY]="<name>"`
+entry to that map.
+
 ## Getting the social credentials
 
 All variables are `PLATFORM_<SITEKEY>_NAME` in `.env`. Each site can have its own accounts.

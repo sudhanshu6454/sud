@@ -16,6 +16,12 @@ set -a; source .env; set +a
 THEME="${WP_THEME:-astra}"
 PLUGINS="${WP_PLUGINS:-wordpress-seo wp-super-cache}"
 
+# Per-site custom themes shipped in themes/<dir> (repo-local, not on wordpress.org).
+# Add an entry here when a site gets its own design; every other site keeps $THEME.
+declare -A LOCAL_THEMES=(
+  [JUNKIES]="marketing-junkies"
+)
+
 upsert_env() {  # upsert_env KEY VALUE
   if grep -q "^$1=" .env; then
     sed -i "s|^$1=.*|$1=$2|" .env
@@ -67,8 +73,17 @@ for LINE in "${SITE_LINES[@]}"; do
   wp option update default_comment_status closed >/dev/null
 
   echo "-- theme + plugins"
-  wp theme is-installed "$THEME" >/dev/null 2>&1 || wp theme install "$THEME"
-  wp theme activate "$THEME" >/dev/null 2>&1 || true
+  LOCAL_THEME="${LOCAL_THEMES[$KEY]:-}"
+  if [ -n "$LOCAL_THEME" ] && [ -d "themes/$LOCAL_THEME" ]; then
+    echo "-- installing local theme $LOCAL_THEME"
+    docker compose exec -T "wp_${slug}" rm -rf "/var/www/html/wp-content/themes/${LOCAL_THEME}"
+    docker compose cp "themes/${LOCAL_THEME}" "wp_${slug}:/var/www/html/wp-content/themes/${LOCAL_THEME}"
+    docker compose exec -T "wp_${slug}" chown -R www-data:www-data "/var/www/html/wp-content/themes/${LOCAL_THEME}"
+    wp theme activate "$LOCAL_THEME"
+  else
+    wp theme is-installed "$THEME" >/dev/null 2>&1 || wp theme install "$THEME"
+    wp theme activate "$THEME" >/dev/null 2>&1 || true
+  fi
   for p in $PLUGINS; do
     wp plugin is-installed "$p" >/dev/null 2>&1 || wp plugin install "$p"
     wp plugin activate "$p" >/dev/null 2>&1 || true
