@@ -20,6 +20,12 @@ PLUGINS="${WP_PLUGINS:-wordpress-seo wp-super-cache}"
 # Add an entry here when a site gets its own design; every other site keeps $THEME.
 declare -A LOCAL_THEMES=(
   [JUNKIES]="marketing-junkies"
+  [MENTALIST]="marketing-mentalist"
+)
+
+# Per-site plugins on top of $PLUGINS (space-separated wordpress.org slugs).
+declare -A EXTRA_PLUGINS=(
+  [MENTALIST]="advanced-custom-fields redirection safe-svg"
 )
 
 upsert_env() {  # upsert_env KEY VALUE
@@ -85,11 +91,20 @@ for LINE in "${SITE_LINES[@]}"; do
     wp theme is-installed "$THEME" >/dev/null 2>&1 || wp theme install "$THEME"
     wp theme activate "$THEME" >/dev/null 2>&1 || true
   fi
-  for p in $PLUGINS; do
+  for p in $PLUGINS ${EXTRA_PLUGINS[$KEY]:-}; do
     wp plugin is-installed "$p" >/dev/null 2>&1 || wp plugin install "$p"
     wp plugin activate "$p" >/dev/null 2>&1 || true
   done
   wp plugin delete hello akismet >/dev/null 2>&1 || true
+
+  if [ "$KEY" = "MENTALIST" ]; then
+    echo "-- essential pages (submit-campaign, advertise, newsletter, about)"
+    for slug_title in "submit-campaign|Submit Campaign" "advertise|Advertise" "newsletter|Newsletter" "about|About"; do
+      slug="${slug_title%%|*}"; title="${slug_title##*|}"
+      wp post list --post_type=page --name="$slug" --field=ID --posts_per_page=1 2>/dev/null | grep -q . || \
+        wp post create --post_type=page --post_title="$title" --post_name="$slug" --post_status=publish >/dev/null
+    done
+  fi
 
   echo "-- sections + primary menu"
   # Every section exists as a category, and the header/footer menus list them all -

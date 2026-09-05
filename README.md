@@ -121,6 +121,42 @@ docker compose exec db mariadb -uroot -p"$DB_ROOT_PASSWORD" -e \
 
 ## Custom site themes
 
+`themes/marketing-mentalist` is a full WordPress theme for marketingmentalist.in: Modernist
+system in the brand's ink/paper/bone/signal palette, Instrument Sans + Literata + Courier Prime.
+It ships its own content model - custom post types for Campaigns, Breakdowns, Mentalist Takes,
+Brands, Agencies, Brand Battles and Top Lists, plus the shared taxonomies (industry, campaign
+type, psychology principle, objective, platform, emotion, market) - built by editors in wp-admin,
+independent of autopub. The `post` type (News) is untouched, at its existing root URL, so autopub
+keeps publishing exactly as it does on the other two sites.
+
+What it includes: the homepage's eleven modules (hero, trending ticker, swipe-the-strategy
+carousel, breakdowns, Mentalist take, latest campaigns with type filters, psychology lab, brand
+battle, news + top lists, newsletter, get-featured), reorderable from Appearance → Homepage
+Modules; the campaign detail page (sticky "Decode" table of contents, six structured sections,
+credits, asset carousel, related campaigns); the breakdown article page (reading-progress bar,
+sticky TOC, popular sidebar, sponsor slot); brand/agency pages; a faceted campaign archive; a
+full-screen search overlay; a public "submit a campaign" form and an "advertise" page with
+Customizer-editable media-kit numbers; NewsArticle/CreativeWork/Organization schema; `/llms.txt`
+and `/llms-full.txt`; a read-only `/wp-json/mm/v1/campaign/{slug}` endpoint; and GA4 `dataLayer`
+events for shares, signups, search, filters and the (static, per the brief's v1 scope) brand
+battle vote.
+
+Two deliberate substitutions for the original design-handoff spec, both to avoid plugin
+dependencies for content the theme owns: ACF field groups became native postmeta with plain
+meta-box editors (repeaters are one `field|field|field` per line, documented on the field), and
+the Fluent Forms submission form became a native handler that stores submissions as a private
+`mm_submission` post and emails the site admin. Not built in this pass: the static component
+library page (design screen 3a - a design reference, not a page real users visit) and the full
+13-event GA4 catalog beyond what the templates already fire events for.
+
+Verified end to end the same way as marketing-junkies: a real WordPress + SQLite install, every
+custom post type seeded with content (including a sponsored campaign), every template rendered
+and checked for PHP errors, and the rendered pages checked against the design's screens 1a-1d at
+both breakpoints. That pass caught and fixed four real bugs - a crash when a post has no terms
+(`(array) false` is `[false]`, not `[]`, in PHP), the primary nav rendering as a vertical list
+(flex was on the wrong element), the mobile sticky share pill showing on desktop, and inline
+`style="display:..."` beating the `.mm-only-desktop` responsive utility's specificity.
+
 `themes/marketing-junkies` is a hand-built WordPress theme for marketingjunkies.in, matching the
 brand's cream/ink/bronze palette and Archivo type (Modernist design system). It renders the exact
 fields autopub publishes (title, excerpt, category, tags, 1200x630 featured image, source
