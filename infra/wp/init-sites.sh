@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# Idempotent WordPress bootstrap for every site in autopub/config/sites.yaml.
+# Run on the server from the repo root AFTER `docker compose up -d`:
+#   ./infra/wp/init-sites.sh
+# It installs core, theme and plugins, creates the `autopub` author and an Application
+# Password per site, and writes WP_<KEY>_APP_PASSWORD into .env, then restarts autopub.
+set -euo pipefail
+cd "$(dirname "$0")/../.."
+
+[ -f .env ] || { echo ".env missing (copy .env.example)"; exit 1; }
+set -a; source .env; set +a
+
+: "${WP_ADMIN_USER:?set WP_ADMIN_USER in .env}"
+: "${WP_ADMIN_PASSWORD:?set WP_ADMIN_PASSWORD in .env}"
+: "${WP_ADMIN_EMAIL:?set WP_ADMIN_EMAIL in .env}"
+THEME="${WP_THEME:-astra}"
+PLUGINS="${WP_PLUGINS:-wordpress-seo wp-super-cache}"
+
+upsert_env() {  # upsert_env KEY VALUE
+  if grep -q "^$1=" .env; then
+    sed -i "s|^$1=.*|$1=$2|" .env
+  else
+    printf '\n%s=%s\n' "$1" "$2" >> .env
+  fi
+}
+
+# key|domain|name|tagline per line
+SITES=$(python3 - <<'PY'
+import yaml
+for s in yaml.safe_load(open("autopub/config/sites.yaml"))["sites"]:
+    print("|".join([s["key"].upper(), s["domain"], s["name"], s.get("tagline", "")]))
+PY
+)
+
+while IFS='|' read -r KEY DOMAIN NAME TAGLINE; do
+  [ -z "$KEY" ] && continue
+  slug=$(echo "$KEY" | tr '[:upper:]' '[:lower:]')
+  wp() { docker compose run --rm -T "cli_${slug}" "$@"; }
+  echo
+  echo "=================  $DOMAIN  ================="
+
+  echo "-- waiting for wp-config.php in wp_${slug}"
+  for i in $(seq 1 60); do
+    if docker compose exec -T "wp_${slug}" test -f /var/www/html/wp-config.php 2>/dev/null; then break; fi
+    sleep 5
+  done
+  echo "-- waiting for database"
+  until wp db check >/dev/null 2>&1; do sleep 5; done
+
+  if ! wp core is-installed >/dev/null 2>&1; then
+    echo "-- installing WordPress"
+    wp core install --url="https://${DOMAIN}" --title="${NAME}" \
+      --admin_user="${WP_ADMIN_USER}" --admin_password="${WP_ADMIN_PASSWORD}" \
+      --admin_email="${WP_ADMIN_EMAIL}" --skip-email
+  else
+    echo "-- already installed"
+  fi
+
+  wp option update blogdescription "${TAGLINE}" >/dev/null
+  wp option update timezone_string "${TZ:-Asia/Kolkata}" >/dev/null
+  wp option update blog_public 1 >/dev/null
+  wp option update permalink_structure '/%postname%/' >/dev/null
+  wp rewrite flush --hard >/dev/null 2>&1 || true
+  wp option update default_comment_status closed >/dev/null
+
+  echo "-- theme + plugins"
+  wp theme is-installed "$THEME" >/dev/null 2>&1 || wp theme install "$THEME"
+  wp theme activate "$THEME" >/dev/null 2>&1 || true
+  for p in $PLUGINS; do
+    wp plugin is-installed "$p" >/dev/null 2>&1 || wp plugin install "$p"
+    wp plugin activate "$p" >/dev/null 2>&1 || true
+  done
+  wp plugin delete hello akismet >/dev/null 2>&1 || true
+
+  echo "-- autopub user + application password"
+  AUTOPUB_USER="${WP_AUTOPUB_USER:-autopub}"
+  if ! wp user get "$AUTOPUB_USER" --field=ID >/dev/null 2>&1; then
+    wp user create "$AUTOPUB_USER" "autopub@${DOMAIN}" --role=author --display_name="${NAME} Desk" \
+      --user_pass="$(openssl rand -base64 24)" >/dev/null
+  fi
+  # rotate: drop old app passwords named autopub, create a fresh one
+  for uuid in $(wp user application-password list "$AUTOPUB_USER" --name=autopub --field=uuid 2>/dev/null || true); do
+    wp user application-password delete "$AUTOPUB_USER" "$uuid" >/dev/null || true
+  done
+  APP_PW=$(wp user application-password create "$AUTOPUB_USER" autopub --porcelain | tr -d '\r')
+  upsert_env "WP_${KEY}_USER" "$AUTOPUB_USER"
+  upsert_env "WP_${KEY}_APP_PASSWORD" "$APP_PW"
+  echo "-- ok: https://${DOMAIN}/wp-admin  (autopub credentials written to .env)"
+done <<< "$SITES"
+
+echo
+echo "-- restarting autopub with the new credentials"
+docker compose up -d --build autopub
+docker compose run --rm -T autopub python -m autopub check || true

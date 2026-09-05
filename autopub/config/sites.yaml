@@ -1,0 +1,127 @@
+# Fleet configuration. One entry per WordPress site.
+# Add site 4 and 5 by copying a block, then run `make compose` to regenerate docker-compose.yml.
+#
+# `key` is the suffix used for every environment variable that belongs to a site, e.g.
+#   WP_MENTALIST_APP_PASSWORD, TWITTER_MENTALIST_API_KEY, FACEBOOK_MENTALIST_PAGE_ID ...
+
+settings:
+  interval_minutes: 120          # how often the scheduler looks for fresh news
+  dedupe_across_sites: true      # never publish the same source story on two sites
+  request_timeout: 30
+  llm_model: claude-opus-5
+  llm_effort: medium
+  min_gap_minutes_between_posts: 20   # per site, spreads posts out so socials are not spammed
+
+sites:
+  - key: MENTALIST
+    domain: marketingmentalist.in
+    name: Marketing Mentalist
+    tagline: The psychology behind marketing that works
+    niche: >
+      Consumer psychology, behavioural science in marketing, branding, positioning,
+      persuasion, pricing psychology, storytelling and brand strategy. Explain the
+      "why" behind campaigns and buying behaviour.
+    audience: Brand managers, founders and marketers in India and worldwide who want to understand what makes people buy.
+    tone: Insightful, analytical, slightly playful, confident. Uses examples and frameworks.
+    category: Marketing Psychology
+    max_posts_per_run: 2
+    max_age_hours: 72
+    min_words: 250
+    include_keywords: []
+    exclude_keywords: [sponsored, giveaway, coupon code, casino, betting]
+    feeds:
+      - https://www.brandingstrategyinsider.com/feed
+      - https://www.behavioraleconomics.com/feed/
+      - https://insidebe.com/feed/
+      - https://www.nirandfar.com/feed/
+      - https://brandequity.economictimes.indiatimes.com/rss/marketing
+      - https://www.campaignlive.co.uk/rss/news
+      - https://www.marketingdive.com/feeds/news/
+      - https://digiday.com/feed/
+      - https://www.convinceandconvert.com/feed/
+      - https://blog.hubspot.com/marketing/rss.xml
+    google_news_queries:
+      - consumer psychology marketing
+      - brand strategy India
+    hashtags: [MarketingPsychology, Branding, ConsumerBehaviour, MarketingMentalist]
+    brand:
+      primary: "#1e1b4b"
+      accent: "#f59e0b"
+      text: "#ffffff"
+    socials: [twitter, facebook, instagram, linkedin, pinterest, telegram, threads]
+
+  - key: CRAZY
+    domain: crazy4marketing.com
+    name: Crazy4Marketing
+    tagline: Digital marketing news, growth hacks and campaigns we are crazy about
+    niche: >
+      Digital marketing and performance marketing: Google Ads, Meta Ads, SEO, AI in
+      marketing, growth hacking, e-commerce marketing, viral campaigns and creator economy.
+    audience: Digital marketers, agency folks, D2C founders and growth teams.
+    tone: Energetic, punchy, practical. Short paragraphs, clear takeaways.
+    category: Digital Marketing
+    max_posts_per_run: 2
+    max_age_hours: 48
+    min_words: 250
+    include_keywords: []
+    exclude_keywords: [sponsored, giveaway, coupon code, casino, betting]
+    feeds:
+      - https://searchengineland.com/feed
+      - https://www.searchenginejournal.com/feed/
+      - https://www.socialmediatoday.com/feeds/news/
+      - https://ppc.land/rss/
+      - https://neilpatel.com/feed/
+      - https://moz.com/blog/feed
+      - https://www.semrush.com/blog/feed/
+      - https://sproutsocial.com/insights/feed/
+      - https://buffer.com/resources/rss/
+      - https://blog.hootsuite.com/feed/
+      - https://influencermarketinghub.com/feed/
+      - https://www.smartinsights.com/feed/
+      - https://www.adweek.com/feed/
+    google_news_queries:
+      - digital marketing news
+      - performance marketing India
+    hashtags: [DigitalMarketing, GrowthHacking, PerformanceMarketing, Crazy4Marketing]
+    brand:
+      primary: "#7f1d1d"
+      accent: "#fbbf24"
+      text: "#ffffff"
+    socials: [twitter, facebook, instagram, linkedin, pinterest, telegram, threads]
+
+  - key: JUNKIES
+    domain: marketingjunkies.in
+    name: Marketing Junkies
+    tagline: Your daily fix of marketing, media and martech news
+    niche: >
+      Marketing industry news: agency moves, ad campaigns, martech and adtech launches,
+      social platform updates, influencer marketing, media and advertising trends,
+      with an Indian and global lens.
+    audience: Marketing professionals and students who want a quick, reliable daily digest.
+    tone: Newsy, crisp, informative, neutral with a friendly voice.
+    category: Marketing News
+    max_posts_per_run: 3
+    max_age_hours: 36
+    min_words: 200
+    include_keywords: []
+    exclude_keywords: [sponsored, giveaway, coupon code, casino, betting]
+    feeds:
+      - https://brandequity.economictimes.indiatimes.com/rss/topstories
+      - https://brandequity.economictimes.indiatimes.com/rss/marketing
+      - https://www.medianews4u.com/feed/
+      - https://www.campaignlive.co.uk/rss/news
+      - https://martech.org/feed/
+      - https://www.marketingdive.com/feeds/news/
+      - https://www.adweek.com/feed/
+      - https://digiday.com/feed/
+      - https://www.socialmediatoday.com/feeds/news/
+      - https://techcrunch.com/category/media-entertainment/feed/
+    google_news_queries:
+      - marketing news India
+      - advertising campaign launch
+    hashtags: [MarketingNews, AdTech, MarTech, MarketingJunkies]
+    brand:
+      primary: "#064e3b"
+      accent: "#34d399"
+      text: "#ffffff"
+    socials: [twitter, facebook, instagram, linkedin, pinterest, telegram, threads]

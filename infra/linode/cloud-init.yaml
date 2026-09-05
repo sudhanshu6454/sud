@@ -1,0 +1,14 @@
+#cloud-config
+# Minimal first boot: hardened SSH, firewall, Docker. The repo + .env are pushed by provision.sh.
+package_update: true
+package_upgrade: true
+packages: [ca-certificates, curl, git, ufw, fail2ban, python3, python3-yaml, rsync, unattended-upgrades]
+runcmd:
+  - curl -fsSL https://get.docker.com | sh
+  - systemctl enable --now docker
+  - ufw allow OpenSSH
+  - ufw allow 80/tcp
+  - ufw allow 443/tcp
+  - ufw --force enable
+  - systemctl enable --now fail2ban
+  - mkdir -p /opt/marketing-fleet

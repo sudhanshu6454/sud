@@ -1,0 +1,27 @@
+# secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# runtime data
+autopub/data/
+data/
+*.db
+*.log
+autopub/out/
+
+# editors / os
+.DS_Store
+.idea/
+.vscode/
