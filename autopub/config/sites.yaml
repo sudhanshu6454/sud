@@ -143,7 +143,7 @@ sites:
     audience: Media planners, entertainment marketers, streaming and TV professionals, and film-business followers who want the numbers, not the gossip.
     tone: Data-first, sharp, plain-spoken; explains what a number means for the business.
     category: Streaming
-    categories: [Streaming, Box Office, Television, Platforms, Ratings & Data, Deals]
+    categories: [Streaming, Box Office, Television, Platforms, Ratings and Data, Deals]
     max_posts_per_run: 3
     max_age_hours: 36
     min_words: 200
@@ -166,9 +166,9 @@ sites:
       - box office collection
       - streaming platform ad tier
     hashtags: [Streaming, OTT, BoxOffice, ScreenStat]
-    brand:                          # midnight ground, signal-cyan accent, ice type
-      primary: "#0b1220"
-      accent: "#22d3ee"
-      text: "#f1f5f9"
+    brand:                          # the Screenstat theme's tokens: ink ground, coral accent, white type
+      primary: "#16181D"
+      accent: "#EE5A3C"
+      text: "#FFFFFF"
       logo: brand/screenstat-logo.png
     socials: [twitter, facebook, instagram, linkedin, pinterest, telegram, threads]

@@ -1,0 +1,267 @@
+/*
+Theme Name: Screenstat
+Theme URI: https://screenstat.in
+Author: Screenstat
+Description: A data-first WordPress block theme for film and streaming statistics. Built for large figures, comparison tables and source attribution. Brand colours coral #EE5A3C and ink #16181D, typeset in Inter.
+Requires at least: 6.4
+Tested up to: 6.6
+Requires PHP: 7.4
+Version: 1.0.0
+License: GNU General Public License v2 or later
+License URI: https://www.gnu.org/licenses/gpl-2.0.html
+Text Domain: screenstat
+Tags: blog, news, block-patterns, full-site-editing, one-column, custom-colors, custom-logo, editor-style
+*/
+
+/* ---------------------------------------------------------------
+   1. Figures — numbers are the point of this site, so they get
+   tabular alignment everywhere they appear.
+   --------------------------------------------------------------- */
+
+body,
+.wp-block-table,
+.screenstat-figure__value {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "cv05" 1;
+}
+
+/* ---------------------------------------------------------------
+   2. Header
+   --------------------------------------------------------------- */
+
+.screenstat-header {
+  border-bottom: 1px solid var(--wp--preset--color--ink-soft);
+}
+
+.screenstat-header .wp-block-navigation {
+  font-size: var(--wp--preset--font-size--small);
+  font-weight: 500;
+}
+
+.screenstat-header .wp-block-navigation a:hover {
+  color: var(--wp--preset--color--coral);
+  text-decoration: none;
+}
+
+.screenstat-header .custom-logo,
+.screenstat-header .wp-block-site-logo img {
+  height: 34px;
+  width: auto;
+}
+
+/* ---------------------------------------------------------------
+   3. Figure block — one big number with a label and a source line.
+   Add the "Figure" block style to a Group to get this.
+   --------------------------------------------------------------- */
+
+.is-style-screenstat-figure {
+  border: 1px solid var(--wp--preset--color--border);
+  border-left: 4px solid var(--wp--preset--color--coral);
+  border-radius: 4px;
+  padding: var(--wp--preset--spacing--40);
+  background: var(--wp--preset--color--white);
+}
+
+.is-style-screenstat-figure > * {
+  margin-block: 0;
+}
+
+.is-style-screenstat-figure > :first-child {
+  font-size: var(--wp--preset--font-size--display);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: var(--wp--preset--color--ink);
+}
+
+.is-style-screenstat-figure > :nth-child(2) {
+  margin-top: 0.4em;
+  font-size: var(--wp--preset--font-size--small);
+  color: var(--wp--preset--color--muted);
+}
+
+/* ---------------------------------------------------------------
+   4. Stat card — used in grids on the homepage
+   --------------------------------------------------------------- */
+
+.is-style-screenstat-card {
+  border: 1px solid var(--wp--preset--color--border);
+  border-radius: 6px;
+  padding: var(--wp--preset--spacing--40);
+  background: var(--wp--preset--color--white);
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.is-style-screenstat-card:hover {
+  border-color: var(--wp--preset--color--coral);
+  transform: translateY(-2px);
+}
+
+/* ---------------------------------------------------------------
+   5. Source line — every figure on this site carries one
+   --------------------------------------------------------------- */
+
+.screenstat-source,
+.is-style-screenstat-source {
+  font-size: var(--wp--preset--font-size--x-small);
+  color: var(--wp--preset--color--muted);
+  border-top: 1px solid var(--wp--preset--color--border);
+  padding-top: 0.6em;
+  margin-top: var(--wp--preset--spacing--40);
+}
+
+.is-style-screenstat-source::before {
+  content: "Source: ";
+  font-weight: 600;
+  color: var(--wp--preset--color--ink);
+}
+
+/* ---------------------------------------------------------------
+   6. Data tables — collections, rankings, comparisons
+   --------------------------------------------------------------- */
+
+.wp-block-table table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.wp-block-table th {
+  text-align: left;
+  font-weight: 600;
+  font-size: var(--wp--preset--font-size--x-small);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--wp--preset--color--muted);
+  border-bottom: 2px solid var(--wp--preset--color--ink);
+  padding: 0.6em 0.8em;
+}
+
+.wp-block-table td {
+  border-bottom: 1px solid var(--wp--preset--color--border);
+  padding: 0.7em 0.8em;
+}
+
+.wp-block-table tbody tr:hover {
+  background: var(--wp--preset--color--surface);
+}
+
+/* right-align any column of numbers by adding class "num" in the
+   table's Advanced > Additional CSS class field */
+.wp-block-table.num td:not(:first-child),
+.wp-block-table.num th:not(:first-child) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------
+   7. Post meta and category pills
+   --------------------------------------------------------------- */
+
+.screenstat-meta {
+  font-size: var(--wp--preset--font-size--x-small);
+  color: var(--wp--preset--color--muted);
+  letter-spacing: 0.01em;
+}
+
+.wp-block-post-terms a {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--wp--preset--color--coral);
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  padding: 0.15em 0.55em;
+  text-decoration: none;
+}
+
+.wp-block-post-terms a:hover {
+  background: var(--wp--preset--color--coral);
+  color: var(--wp--preset--color--white);
+  text-decoration: none;
+}
+
+/* ---------------------------------------------------------------
+   8. Footer
+   --------------------------------------------------------------- */
+
+.screenstat-footer a {
+  color: var(--wp--preset--color--cream);
+}
+
+.screenstat-footer a:hover {
+  color: var(--wp--preset--color--coral);
+}
+
+/* ---------------------------------------------------------------
+   9. Small screens
+   --------------------------------------------------------------- */
+
+@media (max-width: 600px) {
+  .is-style-screenstat-figure > :first-child {
+    font-size: 2.5rem;
+  }
+
+  .wp-block-table {
+    overflow-x: auto;
+  }
+}
+
+/* ---------------------------------------------------------------
+   6. Fleet additions — cover images in cards and the homepage hero.
+   Covers are 1200x630 with the logo plate in the corner; the boxes
+   keep that ratio so the plate is never cropped off.
+   --------------------------------------------------------------- */
+.is-style-screenstat-card .wp-block-post-featured-image img,
+.screenstat-hero .wp-block-post-featured-image img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.is-style-screenstat-card .wp-block-post-featured-image {
+  margin-left: calc(-1 * var(--wp--preset--spacing--40));
+  margin-right: calc(-1 * var(--wp--preset--spacing--40));
+  margin-top: calc(-1 * var(--wp--preset--spacing--40));
+  width: auto;
+}
+
+.is-style-screenstat-card .wp-block-post-featured-image img {
+  border-radius: 6px 6px 0 0 !important;
+}
+
+.screenstat-hero .wp-block-post-title a {
+  text-decoration: none;
+}
+
+.screenstat-hero .wp-block-post-excerpt__excerpt {
+  color: var(--wp--preset--color--border);
+}
+
+.screenstat-footer .wp-block-categories {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: var(--wp--preset--font-size--small);
+}
+
+.screenstat-footer .wp-block-categories li {
+  margin: 0 0 0.35em;
+}
+
+@media (max-width: 781px) {
+  .screenstat-hero .wp-block-columns {
+    gap: var(--wp--preset--spacing--40);
+  }
+}
+
+/* Card and grid titles are ink like the design; coral is kept for hover and the hero. */
+.is-style-screenstat-card .wp-block-post-title a {
+  color: var(--wp--preset--color--ink);
+  text-decoration: none;
+}
+
+.is-style-screenstat-card:hover .wp-block-post-title a {
+  color: var(--wp--preset--color--coral);
+}

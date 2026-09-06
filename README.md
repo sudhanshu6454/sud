@@ -183,6 +183,36 @@ Takes/Insights/Breaking naming if you create those categories instead). No chang
 the theme's PHP - it was verified as-is against a real WordPress + SQLite install (every template,
 both breakpoints, mobile menu, real seeded categories/images) and had zero PHP warnings or notices.
 
+`themes/screenstat` is a supplied WordPress **block** theme (Full Site Editing: `theme.json`,
+`templates/*.html`, `parts/*.html`, patterns) for screenstat.in - a data-first design in coral
+#EE5A3C and ink #16181D, typeset in a locally bundled Inter. It shipped as a numbers site with
+hand-typed figures on the homepage (a hero reading "₹41.20 cr", three stat cards, a day-wise
+collections table and a "reserved slot" buzz box) and a footer that listed pages. On a site that
+autopub feeds those would have shown placeholder figures forever, so the templates were adapted to
+be post-driven while keeping the design system: the homepage leads on the latest story inside the
+ink hero card (cover, section label, title, excerpt, date, read time) followed by a three-column
+grid of the next nine stories with covers and pagination; index, archive and search cards gained the
+cover image; the single template shows the cover at its native 1200x630 and lost the
+"Tracker: [name]" sourcing placeholder (autopub articles end with their own linked source); the
+footer lists the sections (categories) and the site tagline. The supplied hero, stat-grid, table,
+source-note and buzz patterns stay in the inserter for editor-made pages.
+
+Two block-theme mechanics matter for the fleet. The header's Navigation block has no menu of its
+own: on first render WordPress snapshots the classic menu assigned to the `primary` location into a
+`wp_navigation` post, so the theme registers that location and `init-sites.sh` deletes stale
+snapshots after rebuilding the sections menu (otherwise the header keeps whatever it first saw - on
+a fresh install, a page list). And the classic-to-block conversion corrupts `&` in menu labels
+(WordPress core, `Ratings & Data` came out as `Ratings u0026amp; Data`), so section names avoid
+ampersands. The header/footer logo is the Site Logo block, set from
+`themes/screenstat/assets/images/logo-white.png` (`SITE_LOGOS` in `init-sites.sh`); the site icon
+is the theme's mark on ink. The theme's SVG logos were rasterised to PNG once (Chromium) so both
+WordPress and the cover renderer can use them.
+
+Verified the same way as the other themes: a real WordPress 6.x + SQLite install on PHP 8.4, eight
+real autopub articles with covers seeded across the six sections, home / single / category /
+search / 404 rendered at 1440px and 390px with zero PHP notices, zero console errors and no
+broken images.
+
 `infra/wp/init-sites.sh` installs each of these themes automatically for its site (the
 `LOCAL_THEMES` map near the top of that script) and copies fresh files into the container on every
 run, so editing a theme and re-running `./infra/wp/init-sites.sh` (or `make init`) updates the live

@@ -22,6 +22,13 @@ declare -A LOCAL_THEMES=(
   [JUNKIES]="marketing-junkies"
   [MENTALIST]="marketing-mentalist"
   [CRAZY]="crazy4marketing"
+  [SCREENSTAT]="screenstat"
+)
+
+# Per-site header logo (PNG in the repo) set as the WordPress custom logo; block themes draw it
+# with the Site Logo block, classic themes may ignore it in favour of their own asset.
+declare -A SITE_LOGOS=(
+  [SCREENSTAT]="themes/screenstat/assets/images/logo-white.png"
 )
 
 # Per-site plugins on top of $PLUGINS (space-separated wordpress.org slugs).
@@ -171,6 +178,32 @@ for LINE in "${SITE_LINES[@]}"; do
     fi
   fi
 
+  LOGO_SRC="${SITE_LOGOS[$KEY]:-}"
+  if [ -n "$LOGO_SRC" ] && [ -f "$LOGO_SRC" ]; then
+    echo "-- header logo"
+    STAGE="/var/www/html/wp-content/uploads/fleet-site-logo-src.png"
+    docker compose cp "$LOGO_SRC" "wp_${slug}:${STAGE}"
+    docker compose exec -T "wp_${slug}" chown www-data:www-data "$STAGE"
+    for old_id in $(wp post list --post_type=attachment --title="Fleet Site Logo" --field=ID 2>/dev/null); do
+      wp post delete "$old_id" --force >/dev/null 2>&1 || true
+    done
+    LOGO_ID=$(wp media import "$STAGE" --title="Fleet Site Logo" --porcelain 2>/dev/null | tr -d '\r' | tail -1)
+    docker compose exec -T "wp_${slug}" rm -f "$STAGE"
+    [ -n "$LOGO_ID" ] && wp theme mod set custom_logo "$LOGO_ID" >/dev/null && echo "   custom logo set (attachment $LOGO_ID)"
+  fi
+
+  if [ "$KEY" = "SCREENSTAT" ]; then
+    # one-off: the section was first created as "Ratings & Data"; WordPress' classic-to-block menu
+    # conversion corrupts "&" in labels, so sites.yaml now spells it without one - rename in place
+    # rather than leaving a duplicate category behind
+    old_tid=$(wp term list category --fields=term_id,name --format=csv 2>/dev/null | awk -F, '$2=="Ratings & Data" || $2=="\"Ratings &amp; Data\"" || $2=="Ratings &amp; Data" {print $1}' | head -1)
+    [ -n "$old_tid" ] && wp term update category "$old_tid" --name="Ratings and Data" --slug=ratings-and-data >/dev/null 2>&1 && echo "   renamed 'Ratings & Data' -> 'Ratings and Data'"
+    echo "-- sourcing page (linked from the footer)"
+    wp post list --post_type=page --name=sourcing --field=ID --posts_per_page=1 2>/dev/null | grep -q . || \
+      wp post create --post_type=page --post_title="How we source our data" --post_name=sourcing --post_status=publish \
+        --post_content="<!-- wp:paragraph --><p>Every story on ScreenStat is written from a named, linked source: the publication, tracker or company announcement it draws on is cited at the end of the article with the date it was recorded. Figures are reported as published by that source and are not independently audited. Where sources disagree we say so and give the range rather than choosing one.</p><!-- /wp:paragraph --><!-- wp:paragraph --><p>Corrections: if a figure is wrong, write to the address on the contact page and we will correct the article and note the change.</p><!-- /wp:paragraph -->" >/dev/null
+  fi
+
   if [ "$KEY" = "MENTALIST" ]; then
     echo "-- essential pages (submit-campaign, advertise, newsletter, about)"
     # NB: never reuse $slug here - it is the site slug the wp() helper builds the cli_ container name from
@@ -207,6 +240,11 @@ for LINE in "${SITE_LINES[@]}"; do
   done
   for loc in primary mobile footer-sections; do   # mobile exists only on Mentalist; others no-op
     wp menu location assign "$MENU" "$loc" >/dev/null 2>&1 || true
+  done
+  # block themes (screenstat) render the header from a wp_navigation snapshot of the classic menu;
+  # remove old snapshots so the next page view rebuilds it from the sections just written
+  for nav_id in $(wp post list --post_type=wp_navigation --field=ID 2>/dev/null); do
+    wp post delete "$nav_id" --force >/dev/null 2>&1 || true
   done
   echo "   sections: $CATEGORIES  ($(wp menu item list "$MENU" --format=count 2>/dev/null | tr -d '\r') menu items)"
 
