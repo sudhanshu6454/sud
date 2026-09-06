@@ -11,7 +11,7 @@ Run from the repo root:  python3 infra/wp/setup-favicons.py
 """
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageChops
 
 ROOT = Path(__file__).resolve().parents[2]
 SIZE = 512
@@ -33,8 +33,14 @@ def hex_to_rgb(value: str) -> tuple[int, int, int]:
 def build(mark_path: Path, background: str | None, mark_frac: float, tint: str | None) -> Image.Image:
     mark = Image.open(mark_path).convert("RGBA")
     if tint:  # recolour the dark (ink) pixels only, so an accent such as the bow-tie's red knot is kept
+        alpha = mark.getchannel("A")
+        r, g, b = mark.convert("RGB").split()
+        chroma = ImageChops.subtract(ImageChops.lighter(ImageChops.lighter(r, g), b), ImageChops.darker(ImageChops.darker(r, g), b))
+        grey = chroma.point(lambda v: 255 if v < 40 else 0)          # near-neutral, i.e. not the red knot
         dark = mark.convert("L").point(lambda v: 255 if v < 128 else 0)
-        mark.paste(Image.new("RGB", mark.size, hex_to_rgb(tint)), (0, 0), dark)
+        dark = ImageChops.multiply(ImageChops.multiply(dark, grey), alpha)
+        cream = Image.merge("RGBA", (*Image.new("RGB", mark.size, hex_to_rgb(tint)).split(), alpha))
+        mark = Image.composite(cream, mark, dark)  # transparent pixels stay transparent
     if background is None:
         return mark.resize((SIZE, SIZE), Image.LANCZOS).convert("RGB")
     bbox = mark.getbbox()
