@@ -89,6 +89,11 @@ for LINE in "${SITE_LINES[@]}"; do
     echo "-- already installed"
   fi
 
+  # WordPress' sample content ("Hello world!", "Sample Page") would otherwise sit in the feed and
+  # the Astra menu of a new site until someone notices
+  for pid in $(wp post list --post_type=post,page --name=hello-world,sample-page --field=ID 2>/dev/null); do
+    wp post delete "$pid" --force >/dev/null 2>&1 || true
+  done
   wp option update blogdescription "${TAGLINE}" >/dev/null
   wp option update timezone_string "${TZ:-Asia/Kolkata}" >/dev/null
   wp option update blog_public 1 >/dev/null
