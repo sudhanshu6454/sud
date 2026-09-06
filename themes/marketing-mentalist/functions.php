@@ -29,6 +29,7 @@ function mm_setup(): void {
 	add_theme_support( 'automatic-feed-links' );
 	add_theme_support( 'html5', array( 'search-form', 'gallery', 'caption', 'style', 'script', 'navigation-widgets' ) );
 	add_theme_support( 'responsive-embeds' );
+	add_theme_support( 'custom-logo', array( 'height' => 32, 'width' => 32, 'flex-width' => true ) );
 
 	set_post_thumbnail_size( 1600, 900, true );
 	add_image_size( 'mm-card', 800, 450, true );

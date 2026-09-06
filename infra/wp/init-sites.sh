@@ -119,6 +119,17 @@ for LINE in "${SITE_LINES[@]}"; do
   wp option update close_comments_days_old 30 >/dev/null
   wp option update medium_large_size_w 0 >/dev/null     # drop the never-used 768px size: fewer files per upload
 
+  echo "-- site icon (favicon)"
+  FAVICON_SRC="autopub/config/brand/favicon-$(echo "$KEY" | tr '[:upper:]' '[:lower:]').png"
+  if [ -f "$FAVICON_SRC" ]; then
+    # Upload favicon and set as site icon
+    ATTACH_ID=$(wp media import "$FAVICON_SRC" --title="Site Icon" --porcelain 2>/dev/null | head -1)
+    if [ -n "$ATTACH_ID" ]; then
+      wp option update site_icon "$ATTACH_ID" >/dev/null
+      echo "   uploaded favicon ($ATTACH_ID) as site icon"
+    fi
+  fi
+
   if [ "$KEY" = "MENTALIST" ]; then
     echo "-- essential pages (submit-campaign, advertise, newsletter, about)"
     # NB: never reuse $slug here - it is the site slug the wp() helper builds the cli_ container name from

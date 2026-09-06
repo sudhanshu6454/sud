@@ -28,6 +28,7 @@ function mj_setup(): void {
 	add_theme_support( 'html5', array( 'search-form', 'gallery', 'caption', 'style', 'script', 'navigation-widgets' ) );
 	add_theme_support( 'responsive-embeds' );
 	add_theme_support( 'post-formats', array( 'standard' ) );
+	add_theme_support( 'custom-logo', array( 'height' => 32, 'width' => 32, 'flex-width' => true ) );
 
 	// The autopub share image is 1200x630; cards use a half-size crop of it.
 	set_post_thumbnail_size( 1200, 630, true );

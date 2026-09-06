@@ -9,6 +9,7 @@
 <head>
 <meta charset="<?php bloginfo( 'charset' ); ?>">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/png" href="<?php echo esc_url( MJ_URI . '/assets/img/favicon.png' ); ?>" sizes="32x32">
 <?php wp_head(); ?>
 </head>
 <body <?php body_class(); ?>>
