@@ -121,10 +121,11 @@ for LINE in "${SITE_LINES[@]}"; do
 
   if [ "$KEY" = "MENTALIST" ]; then
     echo "-- essential pages (submit-campaign, advertise, newsletter, about)"
-    for slug_title in "submit-campaign|Submit Campaign" "advertise|Advertise" "newsletter|Newsletter" "about|About"; do
-      slug="${slug_title%%|*}"; title="${slug_title##*|}"
-      wp post list --post_type=page --name="$slug" --field=ID --posts_per_page=1 2>/dev/null | grep -q . || \
-        wp post create --post_type=page --post_title="$title" --post_name="$slug" --post_status=publish >/dev/null
+    # NB: never reuse $slug here - it is the site slug the wp() helper builds the cli_ container name from
+    for page_spec in "submit-campaign|Submit Campaign" "advertise|Advertise" "newsletter|Newsletter" "about|About"; do
+      page_slug="${page_spec%%|*}"; page_title="${page_spec##*|}"
+      wp post list --post_type=page --name="$page_slug" --field=ID --posts_per_page=1 2>/dev/null | grep -q . || \
+        wp post create --post_type=page --post_title="$page_title" --post_name="$page_slug" --post_status=publish >/dev/null
     done
   fi
 
