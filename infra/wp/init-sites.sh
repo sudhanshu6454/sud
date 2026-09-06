@@ -48,6 +48,21 @@ PY
 )
 echo "sites to set up: ${#SITE_LINES[@]}"
 
+# MariaDB's init script only runs on the very first start, so a site added later has no database
+# until this creates it. The script is idempotent (IF NOT EXISTS / ALTER USER) and reads the
+# SITE_KEYS + WP_<KEY>_DB_PASSWORD env the compose file gives the db container.
+echo "-- ensuring a database + user exists for every site"
+for LINE in "${SITE_LINES[@]}"; do   # a site added after first boot has no DB password yet: generate one
+  K="${LINE%%|*}"; V="WP_${K}_DB_PASSWORD"
+  if [ -z "${!V:-}" ]; then
+    upsert_env "$V" "$(openssl rand -hex 24)"; echo "   generated $V"
+  fi
+done
+set -a; source .env; set +a
+docker compose up -d db >/dev/null
+until docker compose exec -T db healthcheck.sh --connect --innodb_initialized >/dev/null 2>&1; do sleep 3; done
+docker compose exec -T db bash /docker-entrypoint-initdb.d/10-init-databases.sh 2>&1 | sed 's/^/   /'
+
 for LINE in "${SITE_LINES[@]}"; do
   IFS='|' read -r KEY DOMAIN NAME TAGLINE CATEGORIES <<< "$LINE"
   [ -z "$KEY" ] && continue
@@ -56,6 +71,7 @@ for LINE in "${SITE_LINES[@]}"; do
   echo
   echo "=================  $DOMAIN  ================="
 
+  docker compose up -d "wp_${slug}" >/dev/null 2>&1 || true   # a newly added site is not running yet
   echo "-- waiting for wp-config.php in wp_${slug}"
   for i in $(seq 1 60); do
     if docker compose exec -T "wp_${slug}" test -f /var/www/html/wp-config.php 2>/dev/null; then break; fi

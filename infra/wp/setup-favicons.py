@@ -11,7 +11,7 @@ Run from the repo root:  python3 infra/wp/setup-favicons.py
 """
 from pathlib import Path
 
-from PIL import Image, ImageChops
+from PIL import Image, ImageChops, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[2]
 SIZE = 512
@@ -22,7 +22,34 @@ ICONS = {
     "JUNKIES":   ("marketing-junkies",   "themes/marketing-junkies/assets/img/site-icon.png", None,      1.0,  None),
     "MENTALIST": ("marketing-mentalist", "themes/marketing-mentalist/assets/img/mark.png",    "#0a0908", 0.72, "#f7f5ef"),
     "CRAZY":     ("crazy4marketing",     "themes/crazy4marketing/assets/symbol_dark.png",     "#0a0a0a", 0.86, None),
+    "SCREENSTAT": (None,                 "autopub/config/brand/screenstat-mark.png",          "#0b1220", 0.78, None),
 }
+
+# Sites without a designed logo get a typographic one, generated here: a wordmark PNG for the cover
+# plate (brand.logo in sites.yaml) and a lettermark that ICONS above turns into the site icon.
+# key -> (wordmark text, lettermark text, ink colour, accent colour)
+TEXT_MARKS = {
+    "SCREENSTAT": ("ScreenStat", "S", "#f1f5f9", "#22d3ee"),
+}
+FONT_BOLD = next((f for f in ("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                              "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf") if Path(f).exists()), None)
+
+
+def text_mark(text: str, ink: str, accent: str, size: int, lettermark: bool) -> Image.Image:
+    """Transparent PNG: bold text in `ink`, with an accent dot after it (the brand's 'stat' point)."""
+    font = ImageFont.truetype(FONT_BOLD, size) if FONT_BOLD else ImageFont.load_default()
+    probe = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+    x0, y0, x1, y1 = probe.textbbox((0, 0), text, font=font)
+    dot = int(size * 0.22)
+    pad = int(size * 0.12)
+    w, h = (x1 - x0) + pad + dot + pad, (y1 - y0) + pad * 2
+    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    d.text((-x0 + pad // 2, -y0 + pad), text, font=font, fill=hex_to_rgb(ink))
+    cx = (x1 - x0) + pad + pad // 2
+    cy = h - pad - dot if not lettermark else h // 2 + int(size * 0.28)
+    d.ellipse([cx, cy - dot, cx + dot, cy], fill=hex_to_rgb(accent))
+    return img
 
 
 def hex_to_rgb(value: str) -> tuple[int, int, int]:
@@ -56,14 +83,21 @@ def build(mark_path: Path, background: str | None, mark_frac: float, tint: str |
 def main() -> None:
     brand_dir = ROOT / "autopub" / "config" / "brand"
     brand_dir.mkdir(parents=True, exist_ok=True)
+    for key, (word, letter, ink, accent) in TEXT_MARKS.items():
+        text_mark(word, ink, accent, 160, False).save(brand_dir / f"{key.lower()}-logo.png", "PNG", optimize=True)
+        text_mark(letter, ink, accent, 420, True).save(brand_dir / f"{key.lower()}-mark.png", "PNG", optimize=True)
+        print(f"{key:9s} generated wordmark + lettermark")
     for key, (theme, mark, background, frac, tint) in ICONS.items():
         icon = build(ROOT / mark, background, frac, tint)
         site_icon = brand_dir / f"favicon-{key.lower()}.png"
         icon.save(site_icon, "PNG", optimize=True)
-        small = ROOT / "themes" / theme / "assets" / "img" / "favicon.png"
-        small.parent.mkdir(parents=True, exist_ok=True)
-        icon.resize((32, 32), Image.LANCZOS).save(small, "PNG", optimize=True)
-        print(f"{key:9s} {site_icon.relative_to(ROOT)} ({site_icon.stat().st_size // 1024} KB)  ->  {small.relative_to(ROOT)}")
+        note = ""
+        if theme:
+            small = ROOT / "themes" / theme / "assets" / "img" / "favicon.png"
+            small.parent.mkdir(parents=True, exist_ok=True)
+            icon.resize((32, 32), Image.LANCZOS).save(small, "PNG", optimize=True)
+            note = f"  ->  {small.relative_to(ROOT)}"
+        print(f"{key:9s} {site_icon.relative_to(ROOT)} ({site_icon.stat().st_size // 1024} KB){note}")
 
 
 if __name__ == "__main__":

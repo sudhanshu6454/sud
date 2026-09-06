@@ -2,7 +2,7 @@ from autopub import config
 
 
 def test_sites_load(settings):
-    assert [s.key for s in settings.sites] == ["MENTALIST", "CRAZY", "JUNKIES"]
+    assert [s.key for s in settings.sites] == ["MENTALIST", "CRAZY", "JUNKIES", "SCREENSTAT"]
     for s in settings.sites:
         assert s.feeds, f"{s.key} has no feeds"
         assert s.domain.endswith((".in", ".com"))

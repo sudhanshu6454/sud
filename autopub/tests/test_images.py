@@ -40,7 +40,7 @@ def test_renders_both_share_sizes_as_progressive_jpegs(site, tmp_path):
     assert land.format == "JPEG" and land.info.get("progressive")
 
 
-@pytest.mark.parametrize("key", ["MENTALIST", "CRAZY", "JUNKIES"])
+@pytest.mark.parametrize("key", ["MENTALIST", "CRAZY", "JUNKIES", "SCREENSTAT"])
 def test_every_site_ships_a_real_logo(settings, key):
     site = settings.site(key)
     assert site.brand.logo and Path(site.brand.logo).exists(), f"{key} has no cover logo"

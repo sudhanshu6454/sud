@@ -131,3 +131,44 @@ sites:
       text: "#fbf8f3"
       logo: brand/marketing-junkies-logo.png
     socials: [twitter, facebook, instagram, linkedin, pinterest, telegram, threads]
+
+  - key: SCREENSTAT
+    domain: screenstat.in
+    name: ScreenStat
+    tagline: Streaming, TV and film - the numbers behind the screen
+    niche: >
+      Screen industry news and data: OTT and streaming platform moves, subscriber and viewership
+      numbers, box office, TV ratings, content deals, ad-supported streaming, creator economy on
+      video platforms, with an Indian and global lens.
+    audience: Media planners, entertainment marketers, streaming and TV professionals, and film-business followers who want the numbers, not the gossip.
+    tone: Data-first, sharp, plain-spoken; explains what a number means for the business.
+    category: Streaming
+    categories: [Streaming, Box Office, Television, Platforms, Ratings & Data, Deals]
+    max_posts_per_run: 3
+    max_age_hours: 36
+    min_words: 200
+    include_keywords: []
+    exclude_keywords: [sponsored, giveaway, coupon code, casino, betting, leaked, nude, gossip]
+    feeds:
+      - https://variety.com/feed/
+      - https://deadline.com/feed/
+      - https://www.hollywoodreporter.com/feed/
+      - https://www.indiewire.com/feed
+      - https://www.thewrap.com/feed/
+      - https://www.theverge.com/rss/entertainment/index.xml
+      - https://www.whats-on-netflix.com/feed/
+      - https://www.bollywoodhungama.com/feed/
+      - https://www.nexttv.com/feeds/all
+      - https://www.c21media.net/feed/
+      - https://www.medianama.com/feed/
+    google_news_queries:
+      - OTT streaming India subscribers
+      - box office collection
+      - streaming platform ad tier
+    hashtags: [Streaming, OTT, BoxOffice, ScreenStat]
+    brand:                          # midnight ground, signal-cyan accent, ice type
+      primary: "#0b1220"
+      accent: "#22d3ee"
+      text: "#f1f5f9"
+      logo: brand/screenstat-logo.png
+    socials: [twitter, facebook, instagram, linkedin, pinterest, telegram, threads]

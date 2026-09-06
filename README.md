@@ -1,6 +1,6 @@
 # Marketing Fleet – hands-free WordPress news sites
 
-Three (soon five) WordPress sites on one Linode, each automatically curating marketing news from
+Four (soon five) WordPress sites on one Linode, each automatically curating marketing news from
 the internet, publishing original articles, and syndicating every article to all of its social
 accounts with a generated share image. No human in the loop after setup.
 
@@ -9,6 +9,7 @@ accounts with a generated share image. No human in the loop after setup.
 | marketingmentalist.in | `MENTALIST` | Consumer psychology, branding, persuasion |
 | crazy4marketing.com   | `CRAZY`     | Digital / performance marketing, growth, AI in marketing |
 | marketingjunkies.in   | `JUNKIES`   | Marketing, media, martech industry news |
+| screenstat.in         | `SCREENSTAT`| Streaming, TV, film and box-office news and data |
 
 Domains are at GoDaddy, hosting is on Linode. Everything is defined in `autopub/config/sites.yaml`.
 
@@ -112,12 +113,12 @@ keywords). After editing: `make up` (the config is mounted into the container, a
 3. `make compose` (regenerates `docker-compose.yml` with the new WordPress + DB), then on the server:
    `python3 infra/dns.py --ip SERVER_IP --domain newdomain.com`, `make up`, `make init`.
 
-The MariaDB init script only runs on first start; for a new site on an existing server create the database once:
-
-```bash
-docker compose exec db mariadb -uroot -p"$DB_ROOT_PASSWORD" -e \
- "CREATE DATABASE wp_growth; CREATE USER 'wp_growth'@'%' IDENTIFIED BY '<WP_GROWTH_DB_PASSWORD>'; GRANT ALL ON wp_growth.* TO 'wp_growth'@'%';"
-```
+`make init` does the rest itself: it generates a missing `WP_<KEY>_DB_PASSWORD` into `.env`, creates
+the database and user (re-running the idempotent MariaDB init script inside the `db` container), and
+starts the new WordPress container before installing it. A site without a `themes/<name>` directory
+gets the default `WP_THEME` (Astra) with its sections as the menu; a site without a designed logo
+gets a generated typographic wordmark and favicon from `infra/wp/setup-favicons.py` (`TEXT_MARKS`).
+screenstat.in is set up that way.
 
 ## Custom site themes
 
