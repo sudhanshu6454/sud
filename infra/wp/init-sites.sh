@@ -97,6 +97,8 @@ for LINE in "${SITE_LINES[@]}"; do
     wp plugin activate "$p" >/dev/null 2>&1 || true
   done
   wp plugin delete hello akismet >/dev/null 2>&1 || true
+  # security fixes in plugins land without anyone logging in; core already auto-updates minors
+  wp plugin auto-updates enable --all >/dev/null 2>&1 || true
 
   echo "-- hardening + upload compression (mu-plugins, .htaccess, options)"
   # Must-use plugins load on every request and cannot be switched off from wp-admin:
@@ -108,9 +110,9 @@ for LINE in "${SITE_LINES[@]}"; do
   done
   # nothing under uploads/ may execute; wp-config/xmlrpc/readme are unreachable from the web
   docker compose cp infra/wp/uploads.htaccess "wp_${slug}:/var/www/html/wp-content/uploads/.htaccess"
-  if ! docker compose exec -T "wp_${slug}" grep -q "BEGIN Fleet hardening" /var/www/html/.htaccess 2>/dev/null; then
-    docker compose exec -T "wp_${slug}" sh -c 'cat >> /var/www/html/.htaccess' < infra/wp/hardening.htaccess
-  fi
+  # (re)apply the hardening block: drop the previous copy so rule changes in the repo reach every site
+  docker compose exec -T "wp_${slug}" sh -c "touch /var/www/html/.htaccess && sed -i '/# BEGIN Fleet hardening/,/# END Fleet hardening/d' /var/www/html/.htaccess"
+  docker compose exec -T "wp_${slug}" sh -c 'cat >> /var/www/html/.htaccess' < infra/wp/hardening.htaccess
   docker compose exec -T "wp_${slug}" chown -R www-data:www-data /var/www/html/wp-content/mu-plugins /var/www/html/wp-content/uploads/.htaccess /var/www/html/.htaccess
   wp option update users_can_register 0 >/dev/null
   wp option update comment_moderation 1 >/dev/null
@@ -201,6 +203,18 @@ for LINE in "${SITE_LINES[@]}"; do
     wp theme mod set c4_hot_take_cat "$(echo "$RAIL_SLUGS" | cut -d, -f1)" >/dev/null
   fi
 
+  echo "-- account hygiene"
+  # An author archive is reachable at /author/<nicename>/; WordPress defaults the nicename to the
+  # login, which lets anyone confirm account names. Give the admin and desk accounts a nicename that
+  # is not their login (fleet-security.php then 404s any /author/<login>/ request).
+  wp user update "$WP_ADMIN_USER" --user_nicename="$(echo "$NAME" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-')editor" >/dev/null 2>&1 || true
+  if [ "$WP_ADMIN_USER" = "admin" ]; then
+    echo "   !! WP_ADMIN_USER is 'admin' - the most brute-forced login on the web. Create a new administrator"
+    echo "      with a unique login and a long random password, then delete 'admin' (reassigning its posts):"
+    echo "        docker compose run --rm cli_${slug} user create <newlogin> ${WP_ADMIN_EMAIL} --role=administrator --user_pass=\"\$(openssl rand -base64 24)\""
+    echo "        docker compose run --rm cli_${slug} user delete admin --reassign=<newlogin-id> --yes"
+  fi
+
   echo "-- autopub user + application password"
   AUTOPUB_USER="${WP_AUTOPUB_USER:-autopub}"
   # editor: may publish posts AND create categories/tags (author cannot manage terms -> REST 403)
@@ -209,6 +223,7 @@ for LINE in "${SITE_LINES[@]}"; do
       --user_pass="$(openssl rand -base64 24)" >/dev/null
   fi
   wp user set-role "$AUTOPUB_USER" editor >/dev/null
+  wp user update "$AUTOPUB_USER" --user_nicename="$(echo "$NAME" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-')desk" >/dev/null 2>&1 || true
   # rotate: drop old app passwords named autopub, create a fresh one
   for uuid in $(wp user application-password list "$AUTOPUB_USER" --name=autopub --field=uuid 2>/dev/null || true); do
     wp user application-password delete "$AUTOPUB_USER" "$uuid" >/dev/null || true

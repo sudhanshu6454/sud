@@ -39,6 +39,22 @@ add_action( 'template_redirect', function () {
 		wp_safe_redirect( home_url( '/' ), 301 );
 		exit;
 	}
+	// /author/<slug>/ confirms an account exists. Serve an archive only for a slug that is the
+	// author's public nicename (init-sites.sh makes that differ from the login) AND only when
+	// that author has published something - so /author/admin/ and /author/autopub/ are 404s.
+	if ( is_author() ) {
+		$author = get_queried_object();
+		$slug   = get_query_var( 'author_name' );
+		$ok     = $author instanceof WP_User
+			&& ( '' === $slug || $slug === $author->user_nicename )
+			&& count_user_posts( $author->ID, 'post', true ) > 0;
+		if ( ! $ok ) {
+			global $wp_query;
+			$wp_query->set_404();
+			status_header( 404 );
+			nocache_headers();
+		}
+	}
 }, 1 );
 add_filter( 'redirect_canonical', function ( $redirect ) {
 	if ( is_404() && isset( $_GET['author'] ) ) return false; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
@@ -83,9 +99,12 @@ add_action( 'send_headers', function () {
 	header( 'Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()' );
 	header( 'X-Permitted-Cross-Domain-Policies: none' );
 	header( 'Cross-Origin-Opener-Policy: same-origin-allow-popups' );
-	if ( is_ssl() ) {
-		header( 'Strict-Transport-Security: max-age=31536000; includeSubDomains' );
-	}
+	// Clickjacking / plugin-injection guard that no theme or plugin needs to opt into. A script
+	// policy is deliberately absent: WordPress admin, Yoast and the newsletter embeds all rely on
+	// inline scripts, so a strict CSP would break them for no gain here.
+	header( "Content-Security-Policy: frame-ancestors 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests" );
+	// HSTS is sent by the nginx edge (HSTS env on each wp_ service in infra/gen_compose.py) so the
+	// browser sees exactly one Strict-Transport-Security header.
 } );
 
 /* ---- Comments: no HTML-heavy spam, no links from unknown authors, close after 30 days ---- */

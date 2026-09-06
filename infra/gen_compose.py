@@ -100,6 +100,8 @@ def build(sites: list[dict]) -> dict:
                 **wp_env(key, domain),
                 "VIRTUAL_HOST": f"{domain},www.{domain}",
                 "LETSENCRYPT_HOST": f"{domain},www.{domain}",
+                # one HSTS header, set at the edge (fleet-security.php deliberately sends none)
+                "HSTS": "max-age=31536000; includeSubDomains",
             },
             "volumes": [f"wp_{slug}_data:/var/www/html", "./infra/wp/uploads.ini:/usr/local/etc/php/conf.d/uploads.ini:ro"],
             "networks": ["web", "internal"],
@@ -130,6 +132,10 @@ def build(sites: list[dict]) -> dict:
         "volumes": ["autopub_data:/data", "./autopub/config:/app/config:ro"],
         "depends_on": [f"wp_{s['key'].lower()}" for s in sites],
         "networks": ["internal", "web"],
+        # the publisher holds the Anthropic key and every social token: no Linux capabilities,
+        # no privilege escalation, if anything in it is ever compromised
+        "cap_drop": ["ALL"],
+        "security_opt": ["no-new-privileges:true"],
     }
 
     return {

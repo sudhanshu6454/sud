@@ -226,13 +226,29 @@ load on every request and cannot be disabled from wp-admin):
   (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, HSTS),
   a link-spam comment filter, and theme/plugin editors disabled even for admins.
 
-`init-sites.sh` also appends `infra/wp/hardening.htaccess` to each site's `.htaccess` (denies
-`wp-config.php`, `xmlrpc.php`, readme/licence files; no directory listings), installs
-`infra/wp/uploads.htaccess` so nothing under `uploads/` can execute, turns on comment moderation,
-closes comments after 30 days, and installs **Limit Login Attempts Reloaded** (part of the default
-`WP_PLUGINS`) to throttle brute-force logins. `wp-config.php` gets `FORCE_SSL_ADMIN` and
-`DISALLOW_FILE_EDIT`; the nginx edge stops advertising its version (`infra/proxy/hardening.conf`).
-Re-running `./infra/wp/init-sites.sh` re-applies all of it; it is idempotent.
+`init-sites.sh` also (re)applies `infra/wp/hardening.htaccess` to each site's `.htaccess` (denies
+`wp-config.php`, `xmlrpc.php`, `install.php`, readme/licence files, direct hits on theme and
+mu-plugin PHP; no directory listings), installs `infra/wp/uploads.htaccess` so nothing under
+`uploads/` can execute, turns on comment moderation, closes comments after 30 days, enables plugin
+auto-updates, gives the admin and desk accounts a public nicename that differs from their login
+(so `/author/<login>/` is a 404 and cannot confirm account names), and installs **Limit Login
+Attempts Reloaded** (part of the default `WP_PLUGINS`) to throttle brute-force logins.
+`wp-config.php` gets `FORCE_SSL_ADMIN`, `DISALLOW_FILE_EDIT` and minor core auto-updates; HSTS is
+sent once, by the nginx edge; the edge stops advertising its version (`infra/proxy/hardening.conf`);
+the autopub container runs with every Linux capability dropped. Re-running
+`./infra/wp/init-sites.sh` re-applies all of it; it is idempotent.
+
+### Host security
+
+`infra/bootstrap.sh` runs `infra/security/harden-host.sh` on the server: unattended security
+updates, `ufw` allowing only SSH/80/443 (SSH rate-limited), a `fail2ban` jail for sshd, `.env` at
+mode 600, and - only once a root SSH key is on file - password logins off. Existing servers run it
+once by hand. `infra/security/server-audit.sh` is the read-only counterpart: it reports pending
+OS and WordPress updates, SSH and firewall posture, published container ports, image ages, secret
+lengths, administrator accounts, certificate expiry and whether a backup job exists. Every `[WARN]`
+line is a to-do. Two things it will flag that only you can fix: an administrator whose login is
+`admin` (create a new administrator with a unique login, then delete `admin`) and the absence of
+backups (enable Linode Backups on the instance).
 
 ## Getting the social credentials
 

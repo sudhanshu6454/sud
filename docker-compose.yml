@@ -91,6 +91,7 @@ services:
         '
       VIRTUAL_HOST: marketingmentalist.in,www.marketingmentalist.in
       LETSENCRYPT_HOST: marketingmentalist.in,www.marketingmentalist.in
+      HSTS: max-age=31536000; includeSubDomains
     volumes:
     - wp_mentalist_data:/var/www/html
     - ./infra/wp/uploads.ini:/usr/local/etc/php/conf.d/uploads.ini:ro
@@ -163,6 +164,7 @@ services:
         '
       VIRTUAL_HOST: crazy4marketing.com,www.crazy4marketing.com
       LETSENCRYPT_HOST: crazy4marketing.com,www.crazy4marketing.com
+      HSTS: max-age=31536000; includeSubDomains
     volumes:
     - wp_crazy_data:/var/www/html
     - ./infra/wp/uploads.ini:/usr/local/etc/php/conf.d/uploads.ini:ro
@@ -235,6 +237,7 @@ services:
         '
       VIRTUAL_HOST: marketingjunkies.in,www.marketingjunkies.in
       LETSENCRYPT_HOST: marketingjunkies.in,www.marketingjunkies.in
+      HSTS: max-age=31536000; includeSubDomains
     volumes:
     - wp_junkies_data:/var/www/html
     - ./infra/wp/uploads.ini:/usr/local/etc/php/conf.d/uploads.ini:ro
@@ -299,6 +302,10 @@ services:
     networks:
     - internal
     - web
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
 networks:
   web: {}
   internal: {}

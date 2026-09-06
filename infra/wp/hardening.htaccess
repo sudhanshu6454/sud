@@ -10,6 +10,17 @@
 <FilesMatch "^(readme\.html|license\.txt|wp-config-sample\.php|\.htaccess|\.user\.ini|php\.ini)$">
   Require all denied
 </FilesMatch>
+# The installer only says "Already Installed" once WordPress is set up, but it is a fingerprint
+# and a page nobody legitimate needs after init-sites.sh has run.
+<Files install.php>
+  Require all denied
+</Files>
+# Theme and must-use plugin PHP is only ever included by WordPress, never requested directly;
+# refusing direct hits closes the classic "call a plugin file on its own" attack path.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteRule ^wp-content/(themes|mu-plugins)/.+\.php$ - [F,L]
+</IfModule>
 <IfModule mod_headers.c>
   Header always set X-Content-Type-Options "nosniff"
   Header always set X-Frame-Options "SAMEORIGIN"
