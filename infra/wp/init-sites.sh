@@ -157,8 +157,8 @@ for LINE in "${SITE_LINES[@]}"; do
     RAIL_SLUGS=""
     for cat in "${CATS[@]}"; do
       [ -z "$cat" ] && continue
-      slug=$(wp term list category --field=slug --name="$cat" 2>/dev/null | head -1)
-      [ -n "$slug" ] && RAIL_SLUGS="${RAIL_SLUGS:+$RAIL_SLUGS,}$slug"
+      cat_slug=$(wp term list category --field=slug --name="$cat" 2>/dev/null | head -1)
+      [ -n "$cat_slug" ] && RAIL_SLUGS="${RAIL_SLUGS:+$RAIL_SLUGS,}$cat_slug"
     done
     wp theme mod set c4_rail_cats "$(echo "$RAIL_SLUGS" | cut -d, -f1-4)" >/dev/null
     wp theme mod set c4_hot_take_cat "$(echo "$RAIL_SLUGS" | cut -d, -f1)" >/dev/null
