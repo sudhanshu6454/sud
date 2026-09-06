@@ -10,6 +10,11 @@ if ( ! $mm_hero ) {
 	$mm_hero = mm_latest_of( array( 'mm_campaign', 'mm_breakdown' ) );
 }
 if ( ! $mm_hero ) {
+	// No editor-curated campaign or breakdown yet: lead on the latest News story rather than
+	// dropping the hero, which left the homepage opening on an interior module with no image.
+	$mm_hero = mm_latest_of( array( 'post' ) );
+}
+if ( ! $mm_hero ) {
 	return;
 }
 $mm_hero_post = $mm_hero[0];

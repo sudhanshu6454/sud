@@ -13,7 +13,7 @@ if ( ! $lead->have_posts() ) $lead = new WP_Query( array( 'posts_per_page' => 1,
 			<p class="dek"><?php echo esc_html( get_the_excerpt() ); ?></p>
 			<div class="meta"><?php the_author_posts_link(); ?><span>·</span><?php echo esc_html( get_the_date() ); ?><span>·</span><?php echo esc_html( c4_reading_time() ); ?></div>
 		</article>
-		<a class="thumb thumb--4x3" href="<?php the_permalink(); ?>"><?php the_post_thumbnail( 'c4-lead' ); ?></a>
+		<a class="thumb thumb--cover" href="<?php the_permalink(); ?>"><?php the_post_thumbnail( 'c4-lead' ); ?></a>
 	</div>
 	<?php endwhile; wp_reset_postdata(); ?>
 	<?php $sec = new WP_Query( array( 'posts_per_page' => 3, 'post__not_in' => $shown, 'ignore_sticky_posts' => 1, 'no_found_rows' => true ) ); if ( $sec->have_posts() ) : ?>

@@ -4,7 +4,7 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 /** Card (3:2 thumb, kicker, title, dek, meta) */
 function c4_card( $size = 'c4-card' ) { ?>
 	<article <?php post_class( 'card' ); ?>>
-		<a class="thumb thumb--3x2" href="<?php the_permalink(); ?>"><?php if ( has_post_thumbnail() ) the_post_thumbnail( $size ); ?></a>
+		<a class="thumb thumb--cover" href="<?php the_permalink(); ?>"><?php if ( has_post_thumbnail() ) the_post_thumbnail( $size ); ?></a>
 		<?php $c = c4_primary_cat(); if ( $c ) : ?><a class="kicker" href="<?php echo esc_url( get_category_link( $c ) ); ?>"><?php echo esc_html( $c->name ); ?></a><?php endif; ?>
 		<h3><a href="<?php the_permalink(); ?>"><?php the_title(); ?></a></h3>
 		<p class="dek"><?php echo esc_html( get_the_excerpt() ); ?></p>

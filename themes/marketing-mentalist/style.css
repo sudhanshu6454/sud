@@ -258,3 +258,15 @@ body.mm-menu-open{overflow:hidden}
 
 .mm-source{font-size:14px;color:var(--mm-smoke);border-top:var(--hair);padding-top:12px;margin-top:32px!important}
 .mm-source em{font-style:normal}
+
+/* ---- Mobile: collapse the templates' inline multi-column grids -------------------------------
+   The layout modules set `style="display:grid;grid-template-columns:..."` inline (the theme has no
+   ACF/builder, so each module carries its own layout). A media query cannot override an inline
+   declaration on specificity alone, so without `!important` every two- and three-column section
+   stayed side by side at 390px and headlines wrapped one word per line. An author `!important`
+   does beat a normal inline declaration, which is what makes this work.                        */
+@media (max-width:900px){
+  [style*="grid-template-columns"]{grid-template-columns:minmax(0,1fr)!important}
+  [style*="grid-template-columns"] > *{border-right:0!important}
+  .mm-section[style*="grid-template-columns"] > *{padding-left:var(--gutter)!important;padding-right:var(--gutter)!important}
+}

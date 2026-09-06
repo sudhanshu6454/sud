@@ -119,6 +119,13 @@ for LINE in "${SITE_LINES[@]}"; do
   wp option update close_comments_days_old 30 >/dev/null
   wp option update medium_large_size_w 0 >/dev/null     # drop the never-used 768px size: fewer files per upload
 
+  # A fresh WordPress drops its default block widgets (Search, Recent Posts, Recent Comments,
+  # Archives, Categories) into the first registered sidebar. Every theme here builds its own
+  # sidebar, so those render unstyled underneath it - clear them once.
+  for w in $(wp widget list sidebar-1 --format=ids 2>/dev/null | tr -d '\r'); do
+    wp widget delete "$w" >/dev/null 2>&1 || true
+  done
+
   echo "-- site icon (favicon)"
   # 512px icon built from the brand mark by infra/wp/setup-favicons.py; WordPress derives the
   # 32/180/192px tags from it. Re-runs replace the previous icon instead of piling up uploads.
