@@ -14,7 +14,7 @@ set -a; source .env; set +a
 : "${WP_ADMIN_PASSWORD:?set WP_ADMIN_PASSWORD in .env}"
 : "${WP_ADMIN_EMAIL:?set WP_ADMIN_EMAIL in .env}"
 THEME="${WP_THEME:-astra}"
-PLUGINS="${WP_PLUGINS:-wordpress-seo wp-super-cache}"
+PLUGINS="${WP_PLUGINS:-wordpress-seo wp-super-cache limit-login-attempts-reloaded}"
 
 # Per-site custom themes shipped in themes/<dir> (repo-local, not on wordpress.org).
 # Add an entry here when a site gets its own design; every other site keeps $THEME.
@@ -97,6 +97,27 @@ for LINE in "${SITE_LINES[@]}"; do
     wp plugin activate "$p" >/dev/null 2>&1 || true
   done
   wp plugin delete hello akismet >/dev/null 2>&1 || true
+
+  echo "-- hardening + upload compression (mu-plugins, .htaccess, options)"
+  # Must-use plugins load on every request and cannot be switched off from wp-admin:
+  #   fleet-security.php  - XML-RPC off, no version/user leaks, security headers, spam guard
+  #   fleet-media.php     - every upload re-encoded (<=1920px, q82) + WebP copies of all sizes
+  docker compose exec -T "wp_${slug}" mkdir -p /var/www/html/wp-content/mu-plugins /var/www/html/wp-content/uploads
+  for f in infra/wp/mu-plugins/*.php; do
+    docker compose cp "$f" "wp_${slug}:/var/www/html/wp-content/mu-plugins/$(basename "$f")"
+  done
+  # nothing under uploads/ may execute; wp-config/xmlrpc/readme are unreachable from the web
+  docker compose cp infra/wp/uploads.htaccess "wp_${slug}:/var/www/html/wp-content/uploads/.htaccess"
+  if ! docker compose exec -T "wp_${slug}" grep -q "BEGIN Fleet hardening" /var/www/html/.htaccess 2>/dev/null; then
+    docker compose exec -T "wp_${slug}" sh -c 'cat >> /var/www/html/.htaccess' < infra/wp/hardening.htaccess
+  fi
+  docker compose exec -T "wp_${slug}" chown -R www-data:www-data /var/www/html/wp-content/mu-plugins /var/www/html/wp-content/uploads/.htaccess /var/www/html/.htaccess
+  wp option update users_can_register 0 >/dev/null
+  wp option update comment_moderation 1 >/dev/null
+  wp option update comment_registration 1 >/dev/null
+  wp option update close_comments_for_old_posts 1 >/dev/null
+  wp option update close_comments_days_old 30 >/dev/null
+  wp option update medium_large_size_w 0 >/dev/null     # drop the never-used 768px size: fewer files per upload
 
   if [ "$KEY" = "MENTALIST" ]; then
     echo "-- essential pages (submit-campaign, advertise, newsletter, about)"

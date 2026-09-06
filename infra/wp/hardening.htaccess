@@ -1,0 +1,19 @@
+# Fleet hardening - appended to /var/www/html/.htaccess by infra/wp/init-sites.sh (outside the
+# "# BEGIN WordPress" block, so WordPress' own rewrite rules keep working).
+# BEGIN Fleet hardening
+<Files wp-config.php>
+  Require all denied
+</Files>
+<Files xmlrpc.php>
+  Require all denied
+</Files>
+<FilesMatch "^(readme\.html|license\.txt|wp-config-sample\.php|\.htaccess|\.user\.ini|php\.ini)$">
+  Require all denied
+</FilesMatch>
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+Options -Indexes
+# END Fleet hardening

@@ -40,5 +40,12 @@ def test_sections_and_branding(settings):
     from pathlib import Path
     assert Path(junkies.brand.logo).is_absolute() and Path(junkies.brand.logo).exists()
     mentalist = settings.site("MENTALIST")
-    assert mentalist.brand.logo is None                        # sites without a logo asset fall back to text
+    assert all(Path(s.brand.logo).exists() for s in settings.sites)   # every site ships a real cover logo
     assert mentalist.categories and mentalist.categories[0] == mentalist.category
+
+
+def test_missing_logo_asset_falls_back_to_text(tmp_path):
+    from autopub import config
+    (tmp_path / "sites.yaml").write_text(
+        "sites:\n  - key: X\n    domain: x.test\n    name: X\n    brand: {logo: brand/nope.png}\n", encoding="utf-8")
+    assert config.load(tmp_path / "sites.yaml").site("X").brand.logo is None

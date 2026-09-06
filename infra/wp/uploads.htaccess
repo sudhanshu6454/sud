@@ -1,0 +1,9 @@
+# Fleet hardening - installed as wp-content/uploads/.htaccess by infra/wp/init-sites.sh.
+# Nothing under uploads/ may ever execute, whatever its extension.
+<FilesMatch "\.(php|phtml|php[0-9]|phar|pl|py|cgi|sh|asp|aspx|jsp)$">
+  Require all denied
+</FilesMatch>
+<IfModule mod_php.c>
+  php_flag engine off
+</IfModule>
+Options -Indexes -ExecCGI

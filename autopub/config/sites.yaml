@@ -45,10 +45,11 @@ sites:
       - consumer psychology marketing
       - brand strategy India
     hashtags: [MarketingPsychology, Branding, ConsumerBehaviour, MarketingMentalist]
-    brand:
-      primary: "#1e1b4b"
-      accent: "#f59e0b"
-      text: "#ffffff"
+    brand:                          # ink ground, signal-orange accent, bone type; the bow-tie mark on covers
+      primary: "#0a0908"
+      accent: "#b8492f"
+      text: "#f7f5ef"
+      logo: brand/marketing-mentalist-logo.png
     socials: [twitter, facebook, instagram, linkedin, pinterest, telegram, threads]
 
   - key: CRAZY
@@ -85,10 +86,11 @@ sites:
       - digital marketing news
       - performance marketing India
     hashtags: [DigitalMarketing, GrowthHacking, PerformanceMarketing, Crazy4Marketing]
-    brand:
-      primary: "#7f1d1d"
-      accent: "#fbbf24"
-      text: "#ffffff"
+    brand:                          # Core Black, Signal Pink, Paper Cream - the theme's palette; lockup on covers
+      primary: "#0a0a0a"
+      accent: "#ff3366"
+      text: "#f5f1ea"
+      logo: brand/crazy4marketing-logo.png
     socials: [twitter, facebook, instagram, linkedin, pinterest, telegram, threads]
 
   - key: JUNKIES

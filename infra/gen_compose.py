@@ -32,6 +32,8 @@ def wp_env(key: str, domain: str) -> dict:
             f"define('WP_SITEURL', 'https://{domain}');\n"
             "define('WP_MEMORY_LIMIT', '256M');\n"
             "define('DISALLOW_FILE_EDIT', true);\n"
+            "define('FORCE_SSL_ADMIN', true);\n"
+            "define('WP_POST_REVISIONS', 10);\n"
             "define('WP_AUTO_UPDATE_CORE', 'minor');\n"
         ),
     }
@@ -52,6 +54,7 @@ def build(sites: list[dict]) -> dict:
                 "proxy_vhost:/etc/nginx/vhost.d",
                 "proxy_html:/usr/share/nginx/html",
                 "./infra/proxy/client_max_body_size.conf:/etc/nginx/conf.d/client_max_body_size.conf:ro",
+                "./infra/proxy/hardening.conf:/etc/nginx/conf.d/hardening.conf:ro",
             ],
             "networks": ["web"],
         },
