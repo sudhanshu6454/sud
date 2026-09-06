@@ -204,6 +204,12 @@ The logos live in `autopub/config/brand/` and are referenced from each site's `b
 Marketing Mentalist bow-tie mark (ink plates, light domain text). To change a logo, drop in a new PNG
 and rebuild autopub (`make up`).
 
+Favicons come from the same marks: `python3 infra/wp/setup-favicons.py` builds a 512px site icon per
+site in `autopub/config/brand/favicon-<key>.png` (Junkies monogram on cream, Mentalist bow-tie on ink,
+Crazy4 atom on core black) plus a 32px `assets/img/favicon.png` in each theme. `init-sites.sh` uploads
+the 512px icon and sets it as the WordPress site icon, so WordPress emits the favicon, Apple touch and
+Android icon tags itself; the theme's own `<link rel="icon">` is only printed until that icon exists.
+
 ## Uploads, compression and hardening
 
 Two must-use plugins in `infra/wp/mu-plugins/` are installed on every site by `init-sites.sh` (mu-plugins

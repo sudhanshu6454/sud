@@ -120,13 +120,24 @@ for LINE in "${SITE_LINES[@]}"; do
   wp option update medium_large_size_w 0 >/dev/null     # drop the never-used 768px size: fewer files per upload
 
   echo "-- site icon (favicon)"
-  FAVICON_SRC="autopub/config/brand/favicon-$(echo "$KEY" | tr '[:upper:]' '[:lower:]').png"
+  # 512px icon built from the brand mark by infra/wp/setup-favicons.py; WordPress derives the
+  # 32/180/192px tags from it. Re-runs replace the previous icon instead of piling up uploads.
+  FAVICON_SRC="autopub/config/brand/favicon-${slug}.png"
   if [ -f "$FAVICON_SRC" ]; then
-    # Upload favicon and set as site icon
-    ATTACH_ID=$(wp media import "$FAVICON_SRC" --title="Site Icon" --porcelain 2>/dev/null | head -1)
+    # stage it inside the WordPress volume - the cli_ container shares /var/www/html, not /tmp
+    STAGE="/var/www/html/wp-content/uploads/fleet-site-icon-src.png"
+    docker compose cp "$FAVICON_SRC" "wp_${slug}:${STAGE}"
+    docker compose exec -T "wp_${slug}" chown www-data:www-data "$STAGE"
+    for old_id in $(wp post list --post_type=attachment --title="Fleet Site Icon" --field=ID 2>/dev/null); do
+      wp post delete "$old_id" --force >/dev/null 2>&1 || true
+    done
+    ATTACH_ID=$(wp media import "$STAGE" --title="Fleet Site Icon" --porcelain 2>/dev/null | tr -d '\r' | tail -1)
+    docker compose exec -T "wp_${slug}" rm -f "$STAGE"
     if [ -n "$ATTACH_ID" ]; then
       wp option update site_icon "$ATTACH_ID" >/dev/null
-      echo "   uploaded favicon ($ATTACH_ID) as site icon"
+      echo "   site icon set (attachment $ATTACH_ID)"
+    else
+      echo "   WARNING: site icon upload failed"
     fi
   fi
 
