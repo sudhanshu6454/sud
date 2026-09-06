@@ -247,8 +247,9 @@ once by hand. `infra/security/server-audit.sh` is the read-only counterpart: it 
 OS and WordPress updates, SSH and firewall posture, published container ports, image ages, secret
 lengths, administrator accounts, certificate expiry and whether a backup job exists. Every `[WARN]`
 line is a to-do. Two things it will flag that only you can fix: an administrator whose login is
-`admin` (create a new administrator with a unique login, then delete `admin`) and the absence of
-backups (enable Linode Backups on the instance).
+`admin` (run `./infra/security/rotate-admin.sh <newlogin>` - it creates a uniquely named
+administrator with one strong generated password on every site, deletes `admin` reassigning its
+content, and updates `.env`) and the absence of backups (enable Linode Backups on the instance).
 
 ## Getting the social credentials
 
