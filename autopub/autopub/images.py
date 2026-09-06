@@ -232,7 +232,10 @@ def render_card(headline: str, kicker: str, site: Site, out_path: Path, variant:
     accent = hex_to_rgb(site.brand.accent)
     text_color = hex_to_rgb(site.brand.text)
     margin = int(w * 0.075)
-    kicker = kicker or site.category
+    # a one- or two-character kicker ("X", "-") is a model hiccup, not a section label
+    kicker = (kicker or "").strip()
+    if len(kicker) < 3:
+        kicker = site.category
 
     photo = _backdrop(backdrop_url, size) if backdrop_url else None
     if photo is not None:

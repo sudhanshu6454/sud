@@ -94,3 +94,10 @@ def test_covers_are_compressed(settings, tmp_path, monkeypatch):
     _fake_photo_fetch(monkeypatch)
     out = images.render_set("Headline", "Kicker", settings.site("JUNKIES"), tmp_path, "size", backdrop_url="https://example.com/p.jpg")
     assert out["landscape"].stat().st_size < 250_000 and out["square"].stat().st_size < 300_000
+
+
+def test_degenerate_kicker_falls_back_to_the_section(site, tmp_path, monkeypatch):
+    seen = {}
+    monkeypatch.setattr(images, "_draw_kicker", lambda draw, kicker, *a: (seen.setdefault("kicker", kicker), 0)[1])
+    images.render_card("Headline", "X", site, tmp_path / "k.jpg")
+    assert seen["kicker"] == site.category
