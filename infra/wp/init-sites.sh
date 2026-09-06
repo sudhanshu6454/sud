@@ -21,6 +21,7 @@ PLUGINS="${WP_PLUGINS:-wordpress-seo wp-super-cache}"
 declare -A LOCAL_THEMES=(
   [JUNKIES]="marketing-junkies"
   [MENTALIST]="marketing-mentalist"
+  [CRAZY]="crazy4marketing"
 )
 
 # Per-site plugins on top of $PLUGINS (space-separated wordpress.org slugs).
@@ -126,6 +127,20 @@ for LINE in "${SITE_LINES[@]}"; do
   wp menu location assign "$MENU" primary >/dev/null 2>&1 || true
   wp menu location assign "$MENU" footer-sections >/dev/null 2>&1 || true
   echo "   sections: $CATEGORIES"
+
+  if [ "$KEY" = "CRAZY" ]; then
+    echo "-- Crazy4 Marketing: point homepage rails/hot-take/about at real sections"
+    wp post list --post_type=page --name=about --field=ID --posts_per_page=1 2>/dev/null | grep -q . || \
+      wp post create --post_type=page --post_title="About" --post_name=about --page_template=page-about.php --post_status=publish >/dev/null
+    RAIL_SLUGS=""
+    for cat in "${CATS[@]}"; do
+      [ -z "$cat" ] && continue
+      slug=$(wp term list category --field=slug --name="$cat" 2>/dev/null | head -1)
+      [ -n "$slug" ] && RAIL_SLUGS="${RAIL_SLUGS:+$RAIL_SLUGS,}$slug"
+    done
+    wp theme mod set c4_rail_cats "$(echo "$RAIL_SLUGS" | cut -d, -f1-4)" >/dev/null
+    wp theme mod set c4_hot_take_cat "$(echo "$RAIL_SLUGS" | cut -d, -f1)" >/dev/null
+  fi
 
   echo "-- autopub user + application password"
   AUTOPUB_USER="${WP_AUTOPUB_USER:-autopub}"

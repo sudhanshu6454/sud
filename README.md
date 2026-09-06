@@ -168,11 +168,25 @@ slots that render nothing until a tag is pasted into that same Customizer panel.
 "sponsored" by tagging it `sponsored` in the editor; the theme adds the disclosure banner and
 `rel="sponsored"` on outbound links automatically — autopub itself never marks a post sponsored.
 
-`infra/wp/init-sites.sh` installs it automatically for marketingjunkies.in (the `LOCAL_THEMES` map
-near the top of that script) and copies fresh files into the container on every run, so editing
-the theme and re-running `./infra/wp/init-sites.sh` (or `make init`) updates the live site. To give
-another site its own theme the same way, add a `themes/<name>` directory and a `[KEY]="<name>"`
-entry to that map.
+`themes/crazy4marketing` is a pre-built WordPress theme supplied for crazy4marketing.com: a dark
+editorial design (Core Black / Signal Pink / Paper Cream, Space Grotesk) with a breaking-news
+ticker, a homepage hero + secondary leads + numbered category rails + a "Hot Take" pull-quote
+break + latest grid + trending/newsletter sidebar + Instagram strip, single-article pages with
+share/copy-link and a related-stories rail, faceted-free category archives with a most-read
+sidebar, search, 404, and an About/Contact template. It uses core `post`s and `category`s (no
+custom post types), so autopub publishes to it exactly as it does on the other two sites; the
+homepage rails, "Hot Take" section and ticker are driven by category slugs set in Appearance →
+Customize → Crazy4 Marketing, which `init-sites.sh` points at the site's real `sites.yaml`
+categories automatically (falling back to the theme's own News/Viral/Brands/Trends/Hot
+Takes/Insights/Breaking naming if you create those categories instead). No changes were needed to
+the theme's PHP - it was verified as-is against a real WordPress + SQLite install (every template,
+both breakpoints, mobile menu, real seeded categories/images) and had zero PHP warnings or notices.
+
+`infra/wp/init-sites.sh` installs each of these themes automatically for its site (the
+`LOCAL_THEMES` map near the top of that script) and copies fresh files into the container on every
+run, so editing a theme and re-running `./infra/wp/init-sites.sh` (or `make init`) updates the live
+site. To give another site its own theme the same way, add a `themes/<name>` directory and a
+`[KEY]="<name>"` entry to that map.
 
 ## Getting the social credentials
 
