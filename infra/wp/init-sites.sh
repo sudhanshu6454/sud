@@ -155,10 +155,17 @@ for LINE in "${SITE_LINES[@]}"; do
   # Every section exists as a category, and the header/footer menus list them all -
   # menus (unlike the category fallback) show sections that have no posts yet.
   MENU="Primary"
-  wp menu list --fields=name --format=csv 2>/dev/null | tail -n +2 | grep -qx "$MENU" || wp menu create "$MENU" >/dev/null
-  for item in $(wp menu item list "$MENU" --field=db_id 2>/dev/null); do
-    wp menu item delete "$item" >/dev/null 2>&1 || true
-  done
+  # exactly one menu called Primary: create it if missing, drop accidental duplicates
+  MENU_IDS=$(wp menu list --fields=term_id,name --format=csv 2>/dev/null | awk -F, -v m="$MENU" 'NR>1 && $2==m {print $1}')
+  if [ -z "$MENU_IDS" ]; then
+    wp menu create "$MENU" >/dev/null
+  else
+    for extra in $(echo "$MENU_IDS" | tail -n +2); do wp menu delete "$extra" >/dev/null 2>&1 || true; done
+  fi
+  # rebuild from scratch. NB: `menu item list` has no --field flag (WP-CLI rejects it, so the old
+  # loop silently deleted nothing and every run appended another copy of every section).
+  OLD_ITEMS=$(wp menu item list "$MENU" --format=ids 2>/dev/null | tr -d '\r')
+  [ -z "$OLD_ITEMS" ] || wp menu item delete $OLD_ITEMS >/dev/null 2>&1 || true
   IFS=',' read -ra CATS <<< "$CATEGORIES"
   for cat in "${CATS[@]}"; do
     [ -z "$cat" ] && continue
@@ -168,9 +175,10 @@ for LINE in "${SITE_LINES[@]}"; do
     fi
     wp menu item add-term "$MENU" category "$term_id" >/dev/null
   done
-  wp menu location assign "$MENU" primary >/dev/null 2>&1 || true
-  wp menu location assign "$MENU" footer-sections >/dev/null 2>&1 || true
-  echo "   sections: $CATEGORIES"
+  for loc in primary mobile footer-sections; do   # mobile exists only on Mentalist; others no-op
+    wp menu location assign "$MENU" "$loc" >/dev/null 2>&1 || true
+  done
+  echo "   sections: $CATEGORIES  ($(wp menu item list "$MENU" --format=count 2>/dev/null | tr -d '\r') menu items)"
 
   if [ "$KEY" = "CRAZY" ]; then
     echo "-- Crazy4 Marketing: point homepage rails/hot-take/about at real sections"
