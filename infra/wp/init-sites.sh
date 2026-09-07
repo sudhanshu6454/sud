@@ -36,6 +36,12 @@ declare -A EXTRA_PLUGINS=(
   [MENTALIST]="advanced-custom-fields redirection safe-svg"
 )
 
+# Per-site plugins shipped in plugins/<dir> (repo-local, not on wordpress.org). Copied fresh into the
+# container and activated on every run, like LOCAL_THEMES.
+declare -A LOCAL_PLUGINS=(
+  [SCREENSTAT]="screenstat-pulse"
+)
+
 upsert_env() {  # upsert_env KEY VALUE
   if grep -q "^$1=" .env; then
     sed -i "s|^$1=.*|$1=$2|" .env
@@ -125,6 +131,15 @@ for LINE in "${SITE_LINES[@]}"; do
     wp plugin activate "$p" >/dev/null 2>&1 || true
   done
   wp plugin delete hello akismet >/dev/null 2>&1 || true
+  for lp in ${LOCAL_PLUGINS[$KEY]:-}; do
+    if [ -d "plugins/$lp" ]; then
+      echo "-- installing local plugin $lp"
+      docker compose exec -T "wp_${slug}" rm -rf "/var/www/html/wp-content/plugins/${lp}"
+      docker compose cp "plugins/${lp}" "wp_${slug}:/var/www/html/wp-content/plugins/${lp}"
+      docker compose exec -T "wp_${slug}" chown -R www-data:www-data "/var/www/html/wp-content/plugins/${lp}"
+      wp plugin activate "$lp" >/dev/null 2>&1 || wp plugin activate "$lp"
+    fi
+  done
   # security fixes in plugins land without anyone logging in; core already auto-updates minors
   wp plugin auto-updates enable --all >/dev/null 2>&1 || true
 

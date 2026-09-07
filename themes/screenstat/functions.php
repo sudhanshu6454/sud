@@ -132,3 +132,16 @@ function screenstat_read_time() {
 	);
 }
 add_shortcode( 'screenstat_read_time', 'screenstat_read_time' );
+
+
+/**
+ * Brand guideline §3 and §9: preload the self-hosted Inter (figures sit above the fold on every
+ * page) and tint mobile browser chrome ink to match the header. The --ss-* aliases expose the
+ * theme.json palette under the names the brand guideline and embedded tools (Screenstat Pulse) use.
+ */
+function screenstat_head_brand() {
+	echo '<link rel="preload" href="' . esc_url( get_template_directory_uri() . '/assets/fonts/InterVariable.woff2' ) . '" as="font" type="font/woff2" crossorigin>' . "\n";
+	echo '<meta name="theme-color" content="#16181D">' . "\n";
+	echo '<style id="screenstat-ss-tokens">:root{--ss-coral:#EE5A3C;--ss-coral-dark:#C8412A;--ss-ink:#16181D;--ss-ink-soft:#2B2F36;--ss-muted:#5C6068;--ss-border:#E4E2DD;--ss-surface:#F7F6F3;--ss-cream:#F4EDE2;--ss-white:#FFFFFF}</style>' . "\n";
+}
+add_action( 'wp_head', 'screenstat_head_brand', 1 );

@@ -265,3 +265,13 @@ body,
 .is-style-screenstat-card:hover .wp-block-post-title a {
   color: var(--wp--preset--color--coral);
 }
+
+/* Brand guideline §5: below 640px the lockup would have to shrink past its 120px minimum, so the
+   header swaps to the mark alone. */
+@media (max-width: 639px) {
+  .screenstat-header .wp-block-site-logo img {
+    content: url("assets/images/mark-white.svg");
+    height: 28px;
+    width: auto;
+  }
+}

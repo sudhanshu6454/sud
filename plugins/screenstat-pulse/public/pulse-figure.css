@@ -1,0 +1,17 @@
+/* Screenstat Pulse — public figure block (brand guideline §7 "Figure block"). Consumes the theme's
+   --ss-* tokens; fallbacks are the same values. */
+.ss-figure{--f-coral:var(--ss-coral,#EE5A3C);--f-coral-dark:var(--ss-coral-dark,#C8412A);--f-ink:var(--ss-ink,#16181D);--f-muted:var(--ss-muted,#5C6068);--f-border:var(--ss-border,#E4E2DD);
+  margin:1.5rem 0;padding:1.5rem;border:1px solid var(--f-border);border-left:4px solid var(--f-coral);border-radius:4px;background:#fff;color:var(--f-ink);
+  font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1,"cv05" 1}
+.ss-figure__value{font-size:clamp(2.75rem,6vw,4rem);font-weight:600;line-height:1;letter-spacing:-.03em;color:var(--f-ink)}
+.ss-figure__value .ss-figure__est,.ss-figure__value .ss-figure__unit{font-size:1rem;font-weight:500;letter-spacing:0;color:var(--f-muted);margin-left:.35em}
+.ss-figure__label{margin-top:.4em;font-size:.9375rem;color:var(--f-muted)}
+.ss-figure__range{margin-top:.25em;font-size:.9375rem;color:var(--f-muted)}
+.ss-figure__change{font-weight:600;color:var(--f-ink);white-space:nowrap}
+.ss-figure__change.is-up{color:var(--f-coral-dark)}          /* coral-dark: body-size text on white (guideline §2) */
+.ss-figure__actual{display:flex;flex-wrap:wrap;gap:.5em 1.5em;margin-top:.8em;padding-top:.6em;border-top:1px solid var(--f-border);font-size:.9375rem;color:var(--f-muted)}
+.ss-figure__actual b{color:var(--f-ink);font-weight:600}
+.ss-figure__source{margin-top:.8em;padding-top:.6em;border-top:1px solid var(--f-border);font-size:.8125rem;color:var(--f-muted)}
+.ss-figure__source b{color:var(--f-ink);font-weight:600}
+.ss-figure__placeholder{padding:1rem;border:1px dashed var(--f-border);color:var(--f-muted);font-size:.9375rem}
+@media (prefers-reduced-motion:reduce){.ss-figure *{transition-duration:.01ms!important}}

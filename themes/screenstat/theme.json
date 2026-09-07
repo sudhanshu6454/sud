@@ -105,7 +105,7 @@
     },
     "elements": {
       "link": {
-        "color": { "text": "var(--wp--preset--color--coral)" },
+        "color": { "text": "var(--wp--preset--color--coral-dark)" },
         "typography": { "textDecoration": "none" },
         ":hover": {
           "color": { "text": "var(--wp--preset--color--coral-dark)" },
