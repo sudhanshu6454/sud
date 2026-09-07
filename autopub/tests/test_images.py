@@ -85,7 +85,7 @@ def test_tiny_or_broken_images_fall_back_to_the_gradient(site, tmp_path, monkeyp
     out = images.render_card("Headline", "Kicker", site, tmp_path / "tiny.jpg", backdrop_url="https://example.com/px.gif")
     assert not _has_green(out)
 
-    monkeypatch.setattr(images, "_backdrop", lambda url, size, timeout=20: None)
+    monkeypatch.setattr(images, "_backdrop", lambda url, size, timeout=20, **kw: None)
     out = images.render_card("Headline", "Kicker", site, tmp_path / "x.jpg", backdrop_url="https://example.com/x.jpg")
     assert out.exists() and Image.open(out).size == (1200, 630)
 
@@ -101,3 +101,58 @@ def test_degenerate_kicker_falls_back_to_the_section(site, tmp_path, monkeypatch
     monkeypatch.setattr(images, "_draw_kicker", lambda draw, kicker, *a: (seen.setdefault("kicker", kicker), 0)[1])
     images.render_card("Headline", "X", site, tmp_path / "k.jpg")
     assert seen["kicker"] == site.category
+
+
+# ---- face-aware crops ------------------------------------------------------------------------
+
+def test_cover_fit_keeps_the_focus_box_inside_the_crop_with_headroom():
+    # a tall photo whose "face" sits in the top quarter: a centre crop would cut it off
+    tall = Image.new("RGB", (800, 2000), (30, 30, 30))
+    face = (300, 200, 500, 400)
+    crop, f = images._cover_fit(tall, (1200, 630), focus=face)
+    assert crop.size == (1200, 630) and f is not None
+    fl, ft, fr, fb = f
+    assert 0 <= fl and fr <= 1200 and 0 <= ft and fb <= 630, "face must be fully inside the crop"
+    assert ft >= 630 * 0.05, "some headroom above the face"
+
+
+def test_cover_fit_keeps_faces_out_of_the_text_zone_on_the_square():
+    tall = Image.new("RGB", (1000, 1600), (30, 30, 30))   # portrait source: the window can slide vertically
+    face = (400, 900, 600, 1100)         # face low in the frame
+    crop, f = images._cover_fit(tall, (1080, 1080), focus=face, clear_bottom=0.40)
+    assert f is not None and f[3] <= 1080 * 0.60 + 1, "face bottom must stay above the headline gradient"
+
+
+def test_cover_fit_without_focus_is_the_old_centre_crop():
+    wide = Image.new("RGB", (3000, 1000), (30, 30, 30))
+    crop, f = images._cover_fit(wide, (1200, 630))
+    assert crop.size == (1200, 630) and f is None
+
+
+def test_overlays_move_away_from_faces():
+    w, h = 1200, 630
+    assert images._overlay_sides(None, w, h) == ("left", "left")
+    assert images._overlay_sides((40, 40, 400, 400), w, h) == ("right", "left")        # face top-left -> kicker right
+    assert images._overlay_sides((60, 380, 420, 620), w, h) == ("left", "right")       # face bottom-left -> plate right
+    assert images._overlay_sides((800, 40, 1150, 600), w, h) == ("left", "left")       # face on the right -> both left
+
+
+def test_salient_box_finds_the_detailed_region():
+    img = Image.new("RGB", (1200, 800), (40, 40, 40))
+    px = img.load()
+    for y in range(80, 380):                 # a noisy block top-right, flat elsewhere
+        for x in range(700, 1150):
+            px[x, y] = ((x * 7 + y * 13) % 256, (x * 3) % 256, (y * 5) % 256)
+    box = images._salient_box(img)
+    cx, cy = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
+    assert cx > 600 and cy < 400
+
+
+def test_detects_a_real_face_when_opencv_is_present():
+    if images.cv2 is None:
+        pytest.skip("OpenCV not installed")
+    sample = Path(__file__).parent / "fixtures" / "face.jpg"
+    if not sample.exists():
+        pytest.skip("no face fixture")
+    faces = images._detect_faces(Image.open(sample).convert("RGB"))
+    assert faces, "expected at least one face in the fixture"

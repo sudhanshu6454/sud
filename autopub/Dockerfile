@@ -5,7 +5,8 @@ ENV PYTHONUNBUFFERED=1 \
     AUTOPUB_CONFIG=/app/config/sites.yaml \
     AUTOPUB_DATA_DIR=/data
 
-RUN apt-get update && apt-get install -y --no-install-recommends fonts-dejavu-core ca-certificates \
+# libglib2.0-0: the one system library opencv-python-headless still needs on a slim image
+RUN apt-get update && apt-get install -y --no-install-recommends fonts-dejavu-core ca-certificates libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

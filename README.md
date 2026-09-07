@@ -230,6 +230,15 @@ headline over a soft bottom gradient because Instagram shows no title. Without a
 (missing, blocked, or smaller than 400x250) the cover falls back to a branded gradient card with the
 headline. Output is progressive JPEG at quality 82, typically 60-120 KB.
 
+Photos are cropped around the people in them, not around the centre. `images.py` runs the YuNet face
+detector (OpenCV DNN, model in `autopub/autopub/models/`, Apache-2.0) on the source photo and places
+the crop window so every face stays inside it with headroom above; on the square it also keeps faces
+out of the bottom 40% that the headline gradient covers. When there are no faces the crop follows
+the most detailed region of the picture with a slight upward bias. The kicker and the logo plate go
+to whichever side of their band holds less face, so a person at the left edge is never covered by
+the plate. Without OpenCV the code degrades to the centre crop; with an OpenCV build that lacks
+the model it falls back to Haar cascades, then to the salient region.
+
 The logos live in `autopub/config/brand/` and are referenced from each site's `brand.logo` in
 `sites.yaml`: the Marketing Junkies wordmark (cream plate), the Crazy4 Marketing lockup and the
 Marketing Mentalist bow-tie mark (ink plates, light domain text). To change a logo, drop in a new PNG
