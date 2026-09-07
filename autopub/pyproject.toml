@@ -12,6 +12,9 @@ dynamic = ["dependencies"]
 [tool.setuptools]
 packages = ["autopub", "autopub.social"]
 
+[tool.setuptools.package-data]
+autopub = ["models/*.onnx", "models/*.md"]   # the YuNet face model ships inside the package
+
 [tool.setuptools.dynamic]
 dependencies = { file = ["requirements.txt"] }
 
