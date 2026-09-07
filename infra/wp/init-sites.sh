@@ -238,6 +238,14 @@ for LINE in "${SITE_LINES[@]}"; do
     fi
     wp menu item add-term "$MENU" category "$term_id" >/dev/null
   done
+  # the first section is the default category, and WordPress' "Uncategorized" goes: it would
+  # otherwise surface in section lists (block themes) and catch any post filed without a category
+  first_id=$(wp term list category --field=term_id --name="${CATS[0]}" 2>/dev/null | head -1)
+  if [ -n "$first_id" ]; then
+    wp option update default_category "$first_id" >/dev/null
+    unc_id=$(wp term list category --field=term_id --slug=uncategorized 2>/dev/null | head -1)
+    [ -n "$unc_id" ] && [ "$unc_id" != "$first_id" ] && wp term delete category "$unc_id" >/dev/null 2>&1 || true
+  fi
   for loc in primary mobile footer-sections; do   # mobile exists only on Mentalist; others no-op
     wp menu location assign "$MENU" "$loc" >/dev/null 2>&1 || true
   done
