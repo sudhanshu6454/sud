@@ -202,15 +202,26 @@ final class SSPulse_Rest {
 		return self::row_to_film( self::film_row( $id ), true );
 	}
 
-	/** The three fictional example films, for onboarding (HANDOVER.md §10 step 4). Skipped if already present. */
+	/**
+	 * The three fictional example films, for onboarding (HANDOVER.md §10 step 4). An example already
+	 * on the desk is left alone; one that was archived (DELETE archives rather than drops, so its
+	 * readings survive) is brought back with its history instead of being skipped or duplicated.
+	 */
 	public static function load_examples() {
 		global $wpdb;
 		$file = SSPULSE_DIR . 'data/examples.json';
 		$examples = is_readable( $file ) ? json_decode( (string) file_get_contents( $file ), true ) : null;
 		if ( ! is_array( $examples ) ) { return new WP_Error( 'sspulse_no_examples', 'data/examples.json is missing or unreadable in the plugin directory', array( 'status' => 500 ) ); }
-		$made = array();
+		$made = array(); $restored = array();
 		foreach ( $examples as $ex ) {
-			if ( $wpdb->get_var( $wpdb->prepare( 'SELECT id FROM ' . SSPulse_DB::table( 'films' ) . ' WHERE is_example = 1 AND title = %s', $ex['title'] ) ) ) { continue; } // phpcs:ignore WordPress.DB
+			$prior = $wpdb->get_row( $wpdb->prepare( 'SELECT id, status FROM ' . SSPulse_DB::table( 'films' ) . ' WHERE is_example = 1 AND title = %s', $ex['title'] ), ARRAY_A ); // phpcs:ignore WordPress.DB
+			if ( $prior ) {
+				if ( $prior['status'] === 'archived' ) {
+					$wpdb->update( SSPulse_DB::table( 'films' ), array( 'status' => 'tracking', 'updated_at' => SSPulse_DB::now() ), array( 'id' => (int) $prior['id'] ) );
+					$restored[] = (int) $prior['id'];
+				}
+				continue;
+			}
 			$req = new WP_REST_Request( 'POST' ); $req->set_body( wp_json_encode( array( 'title' => $ex['title'], 'tag' => $ex['tag'], 'signals' => $ex['s'], 'is_example' => true ) ) ); $req->set_header( 'content-type', 'application/json' );
 			$res = self::create_film( $req ); if ( is_wp_error( $res ) ) { return $res; }
 			$film = $res->get_data(); $id = $film['id'];
@@ -222,7 +233,7 @@ final class SSPulse_Rest {
 			}
 			$made[] = $id;
 		}
-		return array( 'created' => $made, 'films' => self::list_films() );
+		return array( 'created' => $made, 'restored' => $restored, 'films' => self::list_films() );
 	}
 
 	/* ---------------------------------------------------------------- calendar */

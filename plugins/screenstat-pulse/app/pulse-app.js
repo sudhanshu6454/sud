@@ -133,7 +133,7 @@ $('#filmTabs').addEventListener('click',e=>{
     return;
   }
   if(t.id==='loadExamples'){
-    api('POST','/films/examples',{}).then(r=>{state.films=r.films.map(fromApi);state.active=state.films[state.films.length-1]?.id;remember();renderAll();flash('Example films loaded');}).catch(()=>{});
+    api('POST','/films/examples',{}).then(r=>{state.films=r.films.map(fromApi);state.active=state.films[state.films.length-1]?.id;remember();renderAll();const n=(r.created||[]).length,b=(r.restored||[]).length;flash(n||b?('Example films '+(n?'loaded':'')+(n&&b?' and ':'')+(b?'restored':'')):'Example films already on the desk');}).catch(()=>{});
     return;
   }
   state.active=+t.dataset.id; remember(); renderAll();
