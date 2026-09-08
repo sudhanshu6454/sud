@@ -33,6 +33,7 @@ register_deactivation_hook( __FILE__, array( 'SSPulse_Cron', 'unschedule' ) );
 add_action( 'plugins_loaded', static function () {
 	SSPulse_DB::maybe_upgrade();
 	SSPulse_Caps::ensure();            // idempotent: roles created after activation still get the caps
+	SSPulse_Seed::maybe_calendar();    // one option read per request; imports calendar.json once per version of the file
 	SSPulse_Cron::init();
 	SSPulse_Rest::init();
 	SSPulse_Admin::init();

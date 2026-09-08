@@ -8,10 +8,23 @@
 defined( 'ABSPATH' ) || exit;
 
 final class SSPulse_Seed {
+	const OPTION = 'sspulse_calendar_seeded';   // set to the data file's mtime once its rows are in
+
+	/** Runs on every load but only does work until the current calendar.json has been imported once. */
+	public static function maybe_calendar(): void {
+		$file = SSPULSE_DIR . 'data/calendar.json';
+		if ( ! is_readable( $file ) ) { return; }
+		$stamp = (string) filemtime( $file );
+		if ( get_option( self::OPTION ) === $stamp ) { return; }
+		if ( self::calendar() >= 0 ) { update_option( self::OPTION, $stamp, false ); }
+	}
+
 	public static function calendar(): int {
 		global $wpdb;
-		$rows = json_decode( (string) file_get_contents( SSPULSE_DIR . 'data/calendar.json' ), true );
-		if ( ! is_array( $rows ) ) { return 0; }
+		$file = SSPULSE_DIR . 'data/calendar.json';
+		if ( ! is_readable( $file ) ) { error_log( 'screenstat-pulse: data/calendar.json missing, calendar not seeded' ); return -1; }
+		$rows = json_decode( (string) file_get_contents( $file ), true );
+		if ( ! is_array( $rows ) ) { return -1; }
 		$t = SSPulse_DB::table( 'calendar' ); $added = 0;
 		foreach ( $rows as $r ) {
 			$exists = $wpdb->get_var( $wpdb->prepare( "SELECT id FROM $t WHERE title = %s AND release_date = %s", $r['title'], $r['release_date'] ) ); // phpcs:ignore WordPress.DB

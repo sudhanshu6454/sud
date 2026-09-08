@@ -17,6 +17,8 @@ build/
 # runtime data
 autopub/data/
 data/
+# plugin seed files (calendar.json, examples.json) are source, not runtime data
+!plugins/*/data/
 *.db
 *.log
 autopub/out/

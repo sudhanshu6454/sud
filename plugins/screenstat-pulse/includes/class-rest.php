@@ -205,7 +205,9 @@ final class SSPulse_Rest {
 	/** The three fictional example films, for onboarding (HANDOVER.md §10 step 4). Skipped if already present. */
 	public static function load_examples() {
 		global $wpdb;
-		$examples = json_decode( (string) file_get_contents( SSPULSE_DIR . 'data/examples.json' ), true );
+		$file = SSPULSE_DIR . 'data/examples.json';
+		$examples = is_readable( $file ) ? json_decode( (string) file_get_contents( $file ), true ) : null;
+		if ( ! is_array( $examples ) ) { return new WP_Error( 'sspulse_no_examples', 'data/examples.json is missing or unreadable in the plugin directory', array( 'status' => 500 ) ); }
 		$made = array();
 		foreach ( $examples as $ex ) {
 			if ( $wpdb->get_var( $wpdb->prepare( 'SELECT id FROM ' . SSPulse_DB::table( 'films' ) . ' WHERE is_example = 1 AND title = %s', $ex['title'] ) ) ) { continue; } // phpcs:ignore WordPress.DB

@@ -1,0 +1,178 @@
+[
+ {
+  "title": "Raktdhaar",
+  "tag": "Big-star action tentpole",
+  "s": {
+   "tr24": 38,
+   "trTotal": 96,
+   "likeRatio": 41,
+   "search": 82,
+   "posts": 210,
+   "sentiment": 71,
+   "bms": 1400,
+   "song": 140,
+   "star": 84,
+   "screens": 4200,
+   "shows": 5,
+   "seats": 200,
+   "atp": 240,
+   "budget": 260,
+   "days": 12,
+   "holiday": "1",
+   "comp": "none",
+   "kInt": 3.8,
+   "bias": 0.25
+  },
+  "samples": [
+   {
+    "src": "ig",
+    "t": -8,
+    "n": 2140,
+    "def": 920,
+    "prob": 640,
+    "ott": 400,
+    "no": 180
+   },
+   {
+    "src": "yt",
+    "t": -6,
+    "n": 860,
+    "def": 361,
+    "prob": 249,
+    "ott": 172,
+    "no": 78
+   },
+   {
+    "src": "x",
+    "t": -2,
+    "n": 1310,
+    "def": 590,
+    "prob": 360,
+    "ott": 230,
+    "no": 130
+   }
+  ],
+  "hist": [
+   [
+    -9,
+    72,
+    3600000,
+    420
+   ],
+   [
+    -7,
+    75,
+    3900000,
+    455
+   ],
+   [
+    -5,
+    78,
+    4300000,
+    500
+   ],
+   [
+    -3,
+    81,
+    4700000,
+    545
+   ],
+   [
+    -1,
+    84,
+    5100000,
+    590
+   ]
+  ]
+ },
+ {
+  "title": "Dilli Se Dubai",
+  "tag": "Mid-budget romcom",
+  "s": {
+   "tr24": 9,
+   "trTotal": 31,
+   "likeRatio": 33,
+   "search": 41,
+   "posts": 38,
+   "sentiment": 64,
+   "bms": 140,
+   "song": 62,
+   "star": 48,
+   "screens": 2100,
+   "shows": 4,
+   "seats": 190,
+   "atp": 190,
+   "budget": 70,
+   "days": 5,
+   "holiday": "0",
+   "comp": "moderate",
+   "kInt": 3.8,
+   "bias": 0.25
+  },
+  "samples": [
+   {
+    "src": "ig",
+    "t": -4,
+    "n": 640,
+    "def": 141,
+    "prob": 198,
+    "ott": 224,
+    "no": 77
+   }
+  ],
+  "hist": [
+   [
+    -6,
+    44,
+    520000,
+    48
+   ],
+   [
+    -4,
+    46,
+    560000,
+    51
+   ],
+   [
+    -2,
+    47,
+    590000,
+    53
+   ]
+  ]
+ },
+ {
+  "title": "Kaali Raat",
+  "tag": "Small horror-comedy",
+  "s": {
+   "tr24": 2.4,
+   "trTotal": 11,
+   "likeRatio": 52,
+   "search": 22,
+   "posts": 12,
+   "sentiment": 79,
+   "bms": 46,
+   "song": 9,
+   "star": 22,
+   "screens": 900,
+   "shows": 3,
+   "seats": 170,
+   "atp": 160,
+   "budget": 22,
+   "days": 26,
+   "holiday": "0",
+   "comp": "heavy",
+   "kInt": 3.8,
+   "bias": 0.25
+  },
+  "samples": [],
+  "hist": [
+   [
+    -3,
+    33,
+    140000,
+    13
+   ]
+  ]
+ }
+]
