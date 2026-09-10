@@ -281,3 +281,20 @@ def test_each_site_gets_its_own_section_rail(settings):
     rails = {site.key: site.brand.rail for site in settings.sites}
     assert len(set(rails.values())) > 1, "every site draws the same rule; the grid is unrecognisable"
     assert set(rails.values()) <= {"solid", "double", "inset", "bars"}
+
+
+def test_the_posted_asset_meets_every_documented_instagram_constraint(settings, tmp_path):
+    """Meta validates the file and refuses it outright, so the renderer must not be able to emit
+    one that breaks the spec: JPEG, under 8MB, ratio 0.80-1.91, width 320-1440, no alpha."""
+    for site in settings.sites:
+        card = images.render_card("Retail media takes a fifth of digital budgets this quarter",
+                                  "Media", site, tmp_path / f"{site.key}.jpg", "portrait",
+                                  standfirst="And the shift is still accelerating.")
+        feed = images.instagram_asset(card, out_path=tmp_path / f"{site.key}-ig.jpg")
+        with Image.open(feed) as im:
+            ratio = im.width / im.height
+            assert im.format == "JPEG", site.key
+            assert im.mode == "RGB", f"{site.key} carries an alpha channel or a non-sRGB mode"
+            assert 0.80 <= round(ratio, 4) <= 1.91, f"{site.key} ratio {ratio}"
+            assert 320 <= im.width <= 1440, f"{site.key} width {im.width}"
+        assert feed.stat().st_size < 8 * 1024 * 1024, site.key

@@ -154,3 +154,35 @@ def test_instagram_stops_when_the_daily_quota_is_gone(monkeypatch):
     pub = REGISTRY["instagram"]({"USER_ID": "1", "ACCESS_TOKEN": "t"})
     res = pub.publish(_post(image_urls={"square": "https://cdn/s.jpg"}))
     assert not res.ok and "quota" in res.error
+
+
+def test_instagram_captions_cannot_break_the_documented_limits():
+    """2200 chars, 30 hashtags, 20 mentions - Meta rejects the caption rather than trimming it."""
+    from autopub.social.instagram import MAX_HASHTAGS, MAX_MENTIONS
+    pub = REGISTRY["instagram"]({})
+    caption = pub.caption(_post(captions={"instagram": ("word " * 900) + " ".join(f"#t{i}" for i in range(60))
+                                          + " " + " ".join(f"@u{i}" for i in range(40))}))
+    assert len(caption) <= pub.text_limit
+    assert caption.count("#") <= MAX_HASHTAGS
+    assert caption.count("@") <= MAX_MENTIONS
+
+
+def test_instagram_refuses_an_unfetchable_image_before_calling_meta(monkeypatch):
+    """Meta cURLs the URL itself; a 404 there is the commonest cause of a failed container."""
+    from autopub.social import instagram as ig
+    calls = []
+
+    class Resp:
+        status_code = 404
+        headers = {"Content-Type": "text/html"}
+        def json(self):
+            return {"data": [{"config": {"quota_total": 100}, "quota_usage": 0}]}
+        def close(self):
+            pass
+
+    monkeypatch.setattr(ig.requests, "get", lambda *a, **k: Resp())
+    monkeypatch.setattr(ig.requests, "post", lambda *a, **k: calls.append(a) or Resp())
+    pub = REGISTRY["instagram"]({"USER_ID": "1", "ACCESS_TOKEN": "t"})
+    res = pub.publish(_post(image_urls={"square": "https://cdn/gone.jpg"}))
+    assert not res.ok and "404" in res.error
+    assert not calls, "we asked Meta to fetch an image we already knew it could not get"
