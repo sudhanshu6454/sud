@@ -298,3 +298,32 @@ def test_the_posted_asset_meets_every_documented_instagram_constraint(settings, 
             assert 0.80 <= round(ratio, 4) <= 1.91, f"{site.key} ratio {ratio}"
             assert 320 <= im.width <= 1440, f"{site.key} width {im.width}"
         assert feed.stat().st_size < 8 * 1024 * 1024, site.key
+
+
+def test_a_face_in_the_band_the_4_5_crop_removes_sends_the_card_the_other_way(site, tmp_path, monkeypatch):
+    """The master can look fine while the asset Instagram actually gets is a decapitation."""
+    _fake_photo_fetch(monkeypatch, size=(1600, 900))
+    monkeypatch.setattr(images, "_detect_faces", lambda img: [(700, 0, 900, 120)])   # head at the top edge
+    card = images.render_card("A headline", "Section", site, tmp_path / "top.jpg", "portrait",
+                              backdrop_url="https://x/p.jpg")
+    with Image.open(card) as im:
+        band = im.crop((0, 0, im.width, int(images.PORTRAIT_BLEED * images.CARD_SCALE)))
+        assert not any(g > 150 and r < 80 and b < 80 for r, g, b in band.convert("RGB").getdata())
+
+
+def test_an_unknown_instagram_ratio_does_not_silently_square_crop_the_card(site, tmp_path):
+    card = images.render_card("A headline", "Section", site, tmp_path / "r.jpg", "portrait")
+    for ratio in ("4:5", "nonsense", ""):
+        out = images.instagram_asset(card, ratio=ratio, out_path=tmp_path / f"{ratio or 'blank'}.jpg")
+        with Image.open(out) as im:
+            assert round(im.width / im.height, 3) == 0.8, f"{ratio!r} produced {im.size}"
+    assert images.instagram_asset(card, ratio="3:4") == card
+
+
+def test_a_headline_of_any_length_renders_promptly(site, tmp_path):
+    """The balanced wrap is cubic; without a cap a long field stalls the whole run."""
+    import time as _time
+    started = _time.monotonic()
+    images.render_card("A headline of quite absurd length " * 30, "Section", site,
+                       tmp_path / "slow.jpg", "portrait")
+    assert _time.monotonic() - started < 5.0

@@ -399,8 +399,10 @@ Preview a card without publishing anything:
 python -m autopub cards --site CRAZY --headline "Meta ad costs jump 23%" --image https://example.com/photo.jpg
 ```
 
-A headline too long for the panel spends the photograph rather than the type size: the card falls
-back to the type-led template with the photo veiled behind it. One that is longer still is trimmed
+A headline too long for the panel spends the photograph rather than the type size: both routes are
+measured before anything is drawn, and a headline that will not fit beside a picture is set in full
+on the type-led card with the photo veiled behind it. A photo whose subject sits in the band the 4:5
+crop removes takes that route too, because no crop of it can add the headroom the posted asset needs. One that is longer still is trimmed
 with an ellipsis rather than drawn through the footer, a word wider than the column is broken by
 character, and a source photo smaller than 800x500 is refused rather than blown up. The bundled
 fonts are Latin only, so a headline in Devanagari or Arabic would not render - the sites publish in

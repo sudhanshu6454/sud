@@ -44,6 +44,8 @@ log = logging.getLogger(__name__)
 
 SIZES = {"landscape": (1200, 630), "square": (1080, 1080), "portrait": (1080, 1440)}
 IG_FEED_HEIGHT = 1350   # 4:5 at 1080 wide: the tallest single image Instagram's API will accept
+# what `instagram_ratio` may say, and the width/height it means. None = post the 3:4 master whole.
+IG_RATIOS = {"3:4": None, "4:5": 0.8, "1:1": 1.0}
 PORTRAIT_BLEED = (SIZES["portrait"][1] - IG_FEED_HEIGHT) // 2   # the 45px band a 4:5 crop takes off each end
 JPEG_QUALITY = 82          # visually lossless for photos at these sizes, ~35% smaller than q88
 MAX_BACKDROP_BYTES = 15 * 1024 * 1024
@@ -466,20 +468,26 @@ HEADLINE_LADDER_TEXT = [(36, 132, 140, 3), (62, 116, 124, 4), (88, 100, 108, 5),
                         (10 ** 6, 80, 88, 8)]
 
 # a line may not end on one of these: it leaves the reader hanging mid-phrase
+BALANCE_LIMIT = 40      # words: beyond this the balanced wrap costs more than it is worth
+HEADLINE_LIMIT = 300    # characters: a headline longer than this is a bug upstream, not a card
+
 DANGLERS = {"a", "an", "the", "and", "or", "but", "of", "to", "in", "on", "at", "by", "for", "from",
             "with", "as", "is", "are", "was", "were", "its", "it", "that", "this", "into", "over",
             "after", "before", "than", "per", "via"}
 
-SMART = ((" - ", " \u2013 "), ("--", "\u2014"), ("...", "\u2026"), ('"', "\u201d"), ("  ", " "))
+SMART = ((" - ", " \u2013 "), ("--", "\u2014"), ("...", "\u2026"), ("  ", " "))
+QUOTED = re.compile(r'"([^"]*)"')
 
 
 def tidy(text: str) -> str:
     """Normalise CMS punctuation: straight quotes, hyphens for dashes and three dots all look
     machine-made on a card, and a ' | Publication' suffix is web furniture, not a headline."""
-    text = " ".join((text or "").split())
+    text = " ".join((text or "").split())[:HEADLINE_LIMIT]
     text = re.split(r"\s+[|\u2013\u2014]\s+(?:[A-Z][\w&.'-]*\s?){1,4}$", text)[0] if text.count("|") else text
     for old, new in SMART:
         text = text.replace(old, new)
+    # pairwise, or every opening quote on every card is drawn backwards
+    text = QUOTED.sub("\u201c\\1\u201d", text).replace('"', "\u201d")
     return text.strip().strip("|").strip()
 
 
@@ -490,10 +498,16 @@ def _balanced_lines(draw, words: list[str], font, max_width: float, max_lines: i
     the break points costs nothing at headline length and gives the balanced rag a subeditor would.
     """
     n = len(words)
-    widths = [[0.0] * (n + 1) for _ in range(n + 1)]
-    for i in range(n):
-        for j in range(i + 1, n + 1):
-            widths[i][j] = draw.textlength(" ".join(words[i:j]), font=font)
+    if n > BALANCE_LIMIT:      # the DP is cubic; past this a greedy wrap is the only sane answer
+        lines = _wrap(draw, " ".join(words), font, max_width)
+        return lines if len(lines) <= max_lines else None
+    widths: dict[tuple[int, int], float] = {}
+
+    def width_of(i: int, j: int) -> float:
+        if (i, j) not in widths:
+            widths[i, j] = draw.textlength(" ".join(words[i:j]), font=font)
+        return widths[i, j]
+
     best: dict[tuple[int, int], tuple[float, list[int]]] = {}
 
     def solve(start: int, lines_left: int) -> tuple[float, list[int]]:
@@ -506,7 +520,7 @@ def _balanced_lines(draw, words: list[str], font, max_width: float, max_lines: i
             return best[key]
         answer = (float("inf"), [])
         for end in range(start + 1, n + 1):
-            width = widths[start][end]
+            width = width_of(start, end)
             if width > max_width:
                 break
             slack = (max_width - width) / max_width
@@ -706,11 +720,53 @@ def _render_portrait(headline: str, kicker: str, standfirst: str | None, site: S
         source = _source_photo(backdrop_url, 20)
         if source and source[0].width >= PHOTO_MIN[0] and source[0].height >= PHOTO_MIN[1]:
             got = _backdrop(backdrop_url, (w, S(PHOTO_H)))
-            photo = got[0] if got else None
+            if got:
+                photo, faces = got
+                # the posted asset is a 4:5 crop of this card, so a face inside the band that crop
+                # removes is beheaded on Instagram even though the master looks right here. No crop
+                # of a photo whose subject touches its top edge can add headroom, so the card takes
+                # the other route rather than publishing a decapitation.
+                if faces and faces[1] < S(PORTRAIT_BLEED) + S(8):
+                    log.info("a face sits in the band the 4:5 crop removes; using the type card instead")
+                    photo = None
         elif source:
             log.info("photo %sx%s is smaller than the card aperture; using the type card instead",
                      source[0].width, source[0].height)
-    on_photo = photo is not None and len(headline) <= HEADLINE_LADDER[-1][0]
+    column = w - S(SIDE) * 2
+    kick_h = S(KICKER_SIZE) + S(20) * 2
+    bottom_limit = S(FOOT_BOTTOM) - S(56) - S(36) - S(40)
+    measure = ImageDraw.Draw(img)
+
+    def lay_out(ladder, top_limit, roomy):
+        """Choose a ladder step and wrap the type. Returns the block and whether it fits."""
+        for attempt in range(len(ladder)):
+            font, lines, line_h = _headline_block(measure, headline, family, column, ladder[attempt:],
+                                                  weight=site.brand.heading_weight)
+            slines: list[str] = []
+            if standfirst:
+                # the budget only stretches to a standfirst behind a short headline
+                room = {1: 2, 2: 2}.get(len(lines), 2 if roomy and len(lines) <= 4 else 0)
+                if room:
+                    sfont = _font(S(36), bold=False, family=family)
+                    slines = _wrap(measure, standfirst, sfont, column)
+                    if len(slines) > room:
+                        slines = _wrap(measure, _shorten(standfirst, room, measure, sfont, column),
+                                       sfont, column)[:room]
+            block_h = len(lines) * line_h + (S(20) + len(slines) * S(50) if slines else 0)
+            fits = top_limit + kick_h + block_h <= bottom_limit
+            if fits:
+                break
+        return font, lines, line_h, slines, block_h, fits
+
+    on_photo = False
+    if photo is not None:
+        top_photo = S(PHOTO_H) + S(RAIL_H) + S(56)
+        block = lay_out(HEADLINE_LADDER, top_photo, roomy=False)
+        on_photo = block[5]
+        if not on_photo:
+            # the panel under a photo has a third of the room the type card has: rather than cut the
+            # headline to fit beside the picture, spend the picture and set the headline in full
+            log.info("headline does not fit beside a photo; using the type card so it can be read whole")
 
     if on_photo:
         img.paste(photo.filter(ImageFilter.UnsharpMask(radius=1.2, percent=45, threshold=3)), (0, 0))
@@ -729,7 +785,6 @@ def _render_portrait(headline: str, kicker: str, standfirst: str | None, site: S
             ImageDraw.Draw(img).text((box[0] + pad, box[1] + pad), label, font=cfont, fill=(240, 240, 240))
         _rail(img, site, accent, photo_bottom, S)
         top_limit = photo_bottom + S(RAIL_H) + S(56)
-        ladder = HEADLINE_LADDER
     else:
         if photo is not None:
             # too long for the panel: keep the picture as a ground and give the type the whole card
@@ -742,28 +797,11 @@ def _render_portrait(headline: str, kicker: str, standfirst: str | None, site: S
             ImageDraw.Draw(img, "RGBA").polygon([(w * 0.58, h), (w, h * 0.55), (w, h)], fill=(*accent, 30))
         _rail(img, site, accent, S(290), S)
         top_limit = S(290) + S(RAIL_H) + S(56)
-        ladder = HEADLINE_LADDER_TEXT
+        block = lay_out(HEADLINE_LADDER_TEXT, top_limit, roomy=True)
 
-    band_top = _card_footer(img, site, primary, text_color, S)
+    _card_footer(img, site, primary, text_color, S)
     draw = ImageDraw.Draw(img, "RGBA")
-    column = w - S(SIDE) * 2
-    bottom_limit = band_top - S(40)
-    kick_h = S(KICKER_SIZE) + S(20) * 2
-
-    for attempt in range(len(ladder)):
-        hfont, lines, line_h = _headline_block(draw, headline, family, column, ladder[attempt:],
-                                               weight=site.brand.heading_weight)
-        slines: list[str] = []
-        if standfirst:
-            # the budget only stretches to a standfirst behind a short headline
-            room = {1: 2, 2: 2}.get(len(lines), 2 if not on_photo and len(lines) <= 4 else 0)
-            if room:
-                slines = _wrap(draw, standfirst, sfont := _font(S(36), bold=False, family=family), column)
-                if len(slines) > room:
-                    slines = _wrap(draw, _shorten(standfirst, room, draw, sfont, column), sfont, column)[:room]
-        block_h = len(lines) * line_h + (S(20) + len(slines) * S(50) if slines else 0)
-        if top_limit + kick_h + block_h <= bottom_limit or attempt == len(ladder) - 1:
-            break
+    hfont, lines, line_h, slines, block_h, _fits = block
     sfont = _font(S(36), bold=False, family=family)
 
     # last resort: a headline that still does not fit is cut here rather than drawn over the footer
@@ -873,11 +911,15 @@ def render_set(headline: str, kicker: str, site: Site, out_dir: Path, stem: str,
                backdrop_url: str | None = None, standfirst: str | None = None, credit: str | None = None,
                date_text: str | None = None, variants: tuple[str, ...] | None = None) -> dict[str, Path]:
     """Render the cards asked for; every shape by default. Each is drawn from one download."""
-    return {
-        variant: render_card(headline, kicker, site, out_dir / f"{stem}-{variant}.jpg", variant, backdrop_url,
-                             standfirst, credit, date_text)
-        for variant in (variants or tuple(SIZES))
-    }
+    global _LAST_PHOTO
+    try:
+        return {
+            variant: render_card(headline, kicker, site, out_dir / f"{stem}-{variant}.jpg", variant, backdrop_url,
+                                 standfirst, credit, date_text)
+            for variant in (variants or tuple(SIZES))
+        }
+    finally:
+        _LAST_PHOTO = None   # the cache exists to serve one article's cards, not to hold a photo forever
 
 
 def instagram_asset(card: Path, ratio: str = "4:5", out_path: Path | None = None) -> Path:
@@ -888,11 +930,14 @@ def instagram_asset(card: Path, ratio: str = "4:5", out_path: Path | None = None
     top and bottom `PORTRAIT_BLEED` bands free of content precisely so this crop costs nothing.
     Pass ratio="3:4" to post the full card once Meta accepts it - `instagram-probe` says when.
     """
-    if ratio == "3:4":
+    if ratio not in IG_RATIOS:
+        log.warning("unknown instagram_ratio %r; posting the 4:5 asset instead of guessing", ratio)
+        ratio = "4:5"
+    if IG_RATIOS[ratio] is None:
         return card
     with Image.open(card) as im:
         w, h = im.size
-        target = int(round(w / 0.8)) if ratio == "4:5" else int(round(w / 1.0))
+        target = int(round(w / IG_RATIOS[ratio]))
         if h <= target:
             return card
         top = (h - target) // 2

@@ -86,12 +86,42 @@ def test_instagram_asks_for_the_tallest_card_first():
     assert REGISTRY["twitter"].image_shapes[0] == "landscape"
 
 
+def _graph(routes):
+    """Stand in for requests.request against the Graph API. `routes` maps a URL fragment to a
+    (status, payload) pair or a callable taking (method, url, kwargs)."""
+    class Resp:
+        def __init__(self, status, payload, text=None):
+            self.status_code, self._payload, self.text = status, payload, text or ""
+            self.headers = {"Content-Type": "image/jpeg"}
+
+        def json(self):
+            if self._payload is None:
+                raise ValueError("no json")
+            return self._payload
+
+        def close(self):
+            pass
+
+    def call(method, url, **kwargs):
+        for fragment, answer in routes.items():
+            if fragment in url:
+                status, payload = answer(method, url, kwargs) if callable(answer) else answer
+                return Resp(status, payload)
+        return Resp(200, {})
+    return call, Resp
+
+
 def test_instagram_caption_stays_inside_the_platform_limits():
-    from autopub.social.instagram import MAX_HASHTAGS, trim_hashtags
+    from autopub.social.instagram import HASHTAG, MAX_HASHTAGS, MAX_MENTIONS, MENTION, trim_tags
     pub = REGISTRY["instagram"]({})
-    tags = " ".join(f"#tag{i}" for i in range(45))
-    assert trim_hashtags(f"body text {tags}").count("#") == MAX_HASHTAGS
-    caption = pub.caption(_post(captions={"instagram": "hook line " * 400 + tags}))
+    # the shape the rewriter is actually prompted to produce: a hook, then hashtags on their own line
+    body = "A hook line that sits at the top of the caption.\n\n"
+    tags = "\n".join(" ".join(f"#tag{i * 5 + j}" for j in range(5)) for i in range(9))
+    trimmed = trim_tags(body + tags + "\n" + " ".join(f"@user{i}" for i in range(28)))
+    assert len(HASHTAG.findall(trimmed)) == MAX_HASHTAGS   # 45 offered, on nine separate lines
+    assert len(MENTION.findall(trimmed)) == MAX_MENTIONS
+    assert trimmed.startswith("A hook line")
+    caption = pub.caption(_post(captions={"instagram": body + tags}))
     assert len(caption) <= pub.text_limit and caption.endswith("https://marketingjunkies.in/x/")
 
 
@@ -100,89 +130,104 @@ def test_instagram_walks_down_to_the_next_shape_when_a_card_is_refused(monkeypat
     from autopub.social import instagram as ig
     tried = []
 
-    class Resp:
-        status_code = 200
-        headers = {"Content-Type": "image/jpeg"}
+    def media(method, url, kwargs):
+        image = kwargs.get("data", {}).get("image_url", "")
+        tried.append(image)
+        if "portrait" in image:
+            return 200, {"error": {"code": 36003, "error_subcode": 2207009,
+                                   "message": "The submitted image with aspect ratio 0.75 cannot be published."}}
+        return 200, {"id": "container-1"}
 
-        def __init__(self, payload):
-            self._payload = payload
-
-        def json(self):
-            return self._payload
-
-        def close(self):
-            pass
-
-    def fake_post(url, data=None, **kw):
-        if url.endswith("/media"):
-            tried.append(data["image_url"])
-            if "portrait" in data["image_url"]:
-                return Resp({"error": {"code": 36003, "error_subcode": 2207009,
-                                       "message": "The submitted image with aspect ratio 0.75 cannot be published."}})
-            return Resp({"id": "container-1"})
-        return Resp({"id": "media-9"})
-
-    def fake_get(url, params=None, **kw):
-        if url.endswith("/content_publishing_limit"):
-            return Resp({"data": [{"config": {"quota_total": 100}, "quota_usage": 3}]})
-        if "container-1" in url:
-            return Resp({"status_code": "FINISHED"})
-        if url.startswith("https://cdn/"):
-            return Resp({})
-        return Resp({"permalink": "https://instagram.com/p/abc/"})
-
-    monkeypatch.setattr(ig.requests, "post", fake_post)
-    monkeypatch.setattr(ig.requests, "get", fake_get)
-    pub = REGISTRY["instagram"]({"USER_ID": "1", "ACCESS_TOKEN": "t"})
+    call, Resp = _graph({
+        "/content_publishing_limit": (200, {"data": [{"config": {"quota_total": 100}, "quota_usage": 3}]}),
+        "/media_publish": (200, {"id": "media-9"}),
+        "/media-9": (200, {"permalink": "https://instagram.com/p/abc/"}),
+        "container-1": (200, {"status_code": "FINISHED"}),
+        "/media": media,
+    })
+    monkeypatch.setattr(ig.requests, "request", call)
+    monkeypatch.setattr(ig.requests, "get", lambda *a, **k: Resp(200, {}))
+    pub = REGISTRY["instagram"]({"USER_ID": "17", "ACCESS_TOKEN": "t"})
     res = pub.publish(_post(image_urls={"portrait": "https://cdn/portrait.jpg", "square": "https://cdn/square.jpg"}))
-    assert res.ok and res.url == "https://instagram.com/p/abc/"
+    assert res.ok and res.remote_id == "media-9"
     assert tried == ["https://cdn/portrait.jpg", "https://cdn/square.jpg"]
 
 
 def test_instagram_stops_when_the_daily_quota_is_gone(monkeypatch):
     from autopub.social import instagram as ig
-
-    class Resp:
-        status_code = 200
-        headers = {"Content-Type": "image/jpeg"}
-        def json(self):
-            return {"data": [{"config": {"quota_total": 100}, "quota_usage": 100}]}
-        def close(self):
-            pass
-
-    monkeypatch.setattr(ig.requests, "get", lambda *a, **k: Resp())
+    call, _ = _graph({"/content_publishing_limit": (200, {"data": [{"config": {"quota_total": 100},
+                                                                   "quota_usage": 100}]})})
+    monkeypatch.setattr(ig.requests, "request", call)
     pub = REGISTRY["instagram"]({"USER_ID": "1", "ACCESS_TOKEN": "t"})
     res = pub.publish(_post(image_urls={"square": "https://cdn/s.jpg"}))
     assert not res.ok and "quota" in res.error
 
 
+def test_a_network_blip_is_not_treated_as_a_file_meta_will_never_accept(monkeypatch):
+    """Our own egress failing says nothing about what Meta's fetcher can reach."""
+    from autopub.social import instagram as ig
+    seen = []
+
+    def refuse(*a, **k):
+        raise ig.requests.ConnectionError("hairpin NAT is unreliable")
+
+    call, _ = _graph({
+        "/content_publishing_limit": (200, {"data": [{"config": {"quota_total": 100}, "quota_usage": 0}]}),
+        "/media_publish": (200, {"id": "m1"}),
+        "/media": lambda m, u, k: (seen.append(k.get("data", {}).get("image_url")), (200, {"id": "c1"}))[1],
+        "c1": (200, {"status_code": "FINISHED"}),
+    })
+    monkeypatch.setattr(ig.requests, "request", call)
+    monkeypatch.setattr(ig.requests, "get", refuse)          # the preflight cannot reach the URL
+    pub = REGISTRY["instagram"]({"USER_ID": "1", "ACCESS_TOKEN": "t"})
+    res = pub.publish(_post(image_urls={"portrait": "https://cdn/p.jpg", "square": "https://cdn/s.jpg"}))
+    assert res.ok, "a local fetch failure lost the post"
+    assert seen == ["https://cdn/p.jpg"], "Meta was never asked about the card we could not fetch"
+
+
+def test_a_non_json_error_page_from_meta_is_transient_not_fatal(monkeypatch):
+    from autopub.social import instagram as ig
+    call, Resp = _graph({"/media": (502, None)})
+    monkeypatch.setattr(ig.requests, "request", call)
+    monkeypatch.setattr(ig.requests, "get", lambda *a, **k: Resp(200, {}))
+    monkeypatch.setattr(ig.time, "sleep", lambda s: None)
+    pub = REGISTRY["instagram"]({"USER_ID": "1", "ACCESS_TOKEN": "t"})
+    res = pub.publish(_post(image_urls={"square": "https://cdn/s.jpg"}))
+    assert not res.ok and "502" in res.error   # reported, not raised as an unclassified crash
+
+
 def test_instagram_captions_cannot_break_the_documented_limits():
     """2200 chars, 30 hashtags, 20 mentions - Meta rejects the caption rather than trimming it."""
-    from autopub.social.instagram import MAX_HASHTAGS, MAX_MENTIONS
+    from autopub.social.instagram import HASHTAG, MAX_HASHTAGS, MAX_MENTIONS, MENTION
     pub = REGISTRY["instagram"]({})
-    caption = pub.caption(_post(captions={"instagram": ("word " * 900) + " ".join(f"#t{i}" for i in range(60))
-                                          + " " + " ".join(f"@u{i}" for i in range(40))}))
-    assert len(caption) <= pub.text_limit
-    assert caption.count("#") <= MAX_HASHTAGS
-    assert caption.count("@") <= MAX_MENTIONS
+    # short enough that fit_text cannot do the trimming for us: the limits must be enforced directly
+    caption = pub.caption(_post(captions={"instagram": ("hook. " * 30) + "\n"
+                                          + "\n".join(f"#t{i}" for i in range(45)) + "\n"
+                                          + " ".join(f"@u{i}" for i in range(30))}))
+    assert len(caption) < pub.text_limit, "truncation did the work instead of the limits"
+    assert len(HASHTAG.findall(caption)) <= MAX_HASHTAGS
+    assert len(MENTION.findall(caption)) <= MAX_MENTIONS
 
 
-def test_instagram_refuses_an_unfetchable_image_before_calling_meta(monkeypatch):
-    """Meta cURLs the URL itself; a 404 there is the commonest cause of a failed container."""
+def test_a_missing_image_is_caught_before_meta_is_asked_to_fetch_it(monkeypatch):
+    """A server that answers and says the file is gone is the one case worth pre-empting."""
     from autopub.social import instagram as ig
-    calls = []
+    asked = []
 
-    class Resp:
+    call, _ = _graph({
+        "/content_publishing_limit": (200, {"data": [{"config": {"quota_total": 100}, "quota_usage": 0}]}),
+        "/media": lambda m, u, k: (asked.append(u), (200, {"id": "c1"}))[1],
+    })
+
+    class Gone:
         status_code = 404
         headers = {"Content-Type": "text/html"}
-        def json(self):
-            return {"data": [{"config": {"quota_total": 100}, "quota_usage": 0}]}
         def close(self):
             pass
 
-    monkeypatch.setattr(ig.requests, "get", lambda *a, **k: Resp())
-    monkeypatch.setattr(ig.requests, "post", lambda *a, **k: calls.append(a) or Resp())
+    monkeypatch.setattr(ig.requests, "request", call)
+    monkeypatch.setattr(ig.requests, "get", lambda *a, **k: Gone())
     pub = REGISTRY["instagram"]({"USER_ID": "1", "ACCESS_TOKEN": "t"})
     res = pub.publish(_post(image_urls={"square": "https://cdn/gone.jpg"}))
     assert not res.ok and "404" in res.error
-    assert not calls, "we asked Meta to fetch an image we already knew it could not get"
+    assert not asked, "we asked Meta to fetch an image we already knew was gone"
