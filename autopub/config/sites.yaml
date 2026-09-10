@@ -93,6 +93,7 @@ sites:
       text: "#f5f1ea"
       logo: brand/crazy4marketing-logo.png
       font: SpaceGrotesk   # the typeface the site itself uses, for the share cards
+      rail: double         # the site's own ticker rule, under the card's photo
     socials: [twitter, facebook, instagram, linkedin, pinterest, telegram, threads]
 
   - key: JUNKIES
@@ -134,6 +135,7 @@ sites:
       logo: brand/marketing-junkies-logo.png
       font: Archivo   # the typeface the site itself uses, for the share cards
       heading_weight: 800   # matches --font-heading-weight in the theme
+      rail: inset           # a typographic rule inside the column, like the site's
     socials: [twitter, facebook, instagram, linkedin, pinterest, telegram, threads]
 
   - key: SCREENSTAT
@@ -177,4 +179,5 @@ sites:
       logo: brand/screenstat-logo.png
       font: Inter   # the typeface the site itself uses, for the share cards
       heading_weight: 600   # the theme sets headings at 600, not 700
+      rail: bars            # a numbers brand: the section rule is a bar chart
     socials: [twitter, facebook, instagram, linkedin, pinterest, telegram, threads]

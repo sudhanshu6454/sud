@@ -239,3 +239,45 @@ def test_logos_are_trimmed_so_every_mark_reads_at_the_same_size(settings):
         logo, _plate = images._load_logo(site.brand.logo)
         edge = logo.convert("RGBA").getbbox()
         assert edge == (0, 0, logo.width, logo.height), f"{site.key} logo still carries a dead margin"
+
+
+def test_an_impossible_headline_is_trimmed_not_drawn_over_the_footer(site, tmp_path):
+    """Whatever the model hands us, the card must not run type through its own masthead."""
+    monster = "A headline of quite absurd length " * 9
+    card = images.render_card(monster, "Section", site, tmp_path / "m.jpg", "portrait")
+    with Image.open(card) as im:
+        # the footer band is the bottom ~10%: it must still be the masthead, not headline text
+        foot = im.crop((0, int(im.height * 0.90), im.width, im.height)).convert("L")
+        ink = sum(1 for px in foot.convert("L").tobytes() if px > 170)
+    assert ink < foot.width * foot.height * 0.08, "headline is running into the footer"
+
+
+def test_a_word_wider_than_the_column_is_broken_rather_than_run_off_the_card(site, tmp_path):
+    from PIL import ImageDraw
+    draw = ImageDraw.Draw(Image.new("RGB", (1440, 1920)))
+    column = 952 * images.CARD_SCALE
+    font = images._font(int(104 * images.CARD_SCALE), bold=True, family=site.brand.font)
+    lines = images._wrap(draw, "Donaudampfschifffahrtsgesellschaftskapitaenswitwe", font, column)
+    assert len(lines) > 1
+    assert all(draw.textlength(line, font=font) <= column for line in lines)
+
+
+def test_an_empty_headline_falls_back_rather_than_rendering_a_blank_card(site, tmp_path):
+    card = images.render_card("", "Section", site, tmp_path / "e.jpg", "portrait",
+                              standfirst="The summary carries the card when there is no headline.")
+    with Image.open(card) as im:
+        body = im.crop((0, int(im.height * 0.2), im.width, int(im.height * 0.85))).convert("L")
+        assert any(px > 170 for px in body.tobytes()), "nothing was drawn"
+
+
+def test_a_photo_too_small_for_the_aperture_is_not_blown_up(site, tmp_path, monkeypatch):
+    _fake_photo_fetch(monkeypatch, size=(420, 260))       # a wire thumbnail, not a cover
+    card = images.render_card("A headline", "Section", site, tmp_path / "small.jpg", "portrait",
+                              backdrop_url="https://x/tiny.jpg")
+    assert not _has_green(card), "a thumbnail was upscaled into the photo aperture"
+
+
+def test_each_site_gets_its_own_section_rail(settings):
+    rails = {site.key: site.brand.rail for site in settings.sites}
+    assert len(set(rails.values())) > 1, "every site draws the same rule; the grid is unrecognisable"
+    assert set(rails.values()) <= {"solid", "double", "inset", "bars"}

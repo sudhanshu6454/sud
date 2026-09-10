@@ -19,6 +19,7 @@ class Brand:
     logo: str | None = None  # path to a PNG wordmark, resolved relative to sites.yaml at load time
     font: str | None = None  # typeface for the share cards: a file stem in autopub/fonts (e.g. "Inter")
     heading_weight: int = 700   # the weight that site's own headings use, so the cards match it
+    rail: str = "solid"         # the card's section rule: solid | double | inset | bars
 
 
 @dataclass

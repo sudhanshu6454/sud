@@ -104,8 +104,31 @@ def _ink_on(background: tuple[int, int, int], dark: tuple[int, int, int] = (12, 
     return dark if contrast_ratio(background, dark) >= contrast_ratio(background, light) else light
 
 
+def _split_long_word(draw: ImageDraw.ImageDraw, word: str, font, max_width: float) -> list[str]:
+    """Break a word too wide for the column. German compounds and URLs do this; without it the
+    glyphs simply run off the card."""
+    parts, current = [], ""
+    for char in word:
+        if draw.textlength(current + char, font=font) > max_width and current:
+            parts.append(current)
+            current = char
+        else:
+            current += char
+    if current:
+        parts.append(current)
+    return parts
+
+
+def _fit_words(draw: ImageDraw.ImageDraw, words: list[str], font, max_width: float) -> list[str]:
+    out = []
+    for word in words:
+        out.extend(_split_long_word(draw, word, font, max_width) if draw.textlength(word, font=font) > max_width
+                   else [word])
+    return out
+
+
 def _wrap(draw: ImageDraw.ImageDraw, text: str, font, max_width: int) -> list[str]:
-    words = text.split()
+    words = _fit_words(draw, text.split(), font, max_width)
     lines: list[str] = []
     cur = ""
     for word in words:
@@ -426,14 +449,21 @@ CARD_W, CARD_H = 1080, 1440
 PHOTO_H = 780            # full-bleed photo, then a solid brand panel under it
 SIDE = 64                # content column: 952px, which also clears the Explore 2:3 side crop
 FOOT_BOTTOM = 1376       # footer baseline anchor; everything above grows upward from here
-CREDIT_SIZE = 28         # the floor for legible type in the feed
+CREDIT_SIZE = 28         # the floor for legible type in the feed: below this it is gone
+KICKER_SIZE = 28         # same floor - a kicker set as a fraction of the width fell under it
+RAIL_H = 12              # the section rule; at 6px it renders sub-pixel in a profile thumbnail
+PHOTO_MIN = (800, 500)   # below this the photo is a thumbnail and blowing it up shows
 
 # headline ladder: discrete steps keyed to length. Continuously autosizing every headline gives a
 # different size on every card, which across a grid reads as broken rather than responsive.
-HEADLINE_LADDER = [(36, 104, 110, 2), (62, 92, 99, 3), (88, 80, 88, 4), (10 ** 6, 72, 80, 5)]
+# (max chars, size, line height, max lines). The panel under a photo has 346px of vertical budget,
+# so four lines at 86 is the floor: a fifth line would run through the footer rule. A headline too
+# long for the ladder spends the photograph instead of the type size - see the routing below.
+HEADLINE_LADDER = [(36, 104, 110, 2), (62, 92, 99, 3), (88, 80, 86, 4)]
 # a card with no photo is a different template with twice the room, so it gets its own ladder
 # rather than a headline of ordinary size marooned in the middle of an empty panel
-HEADLINE_LADDER_TEXT = [(36, 132, 140, 3), (62, 116, 124, 4), (88, 100, 108, 5), (10 ** 6, 88, 96, 6)]
+HEADLINE_LADDER_TEXT = [(36, 132, 140, 3), (62, 116, 124, 4), (88, 100, 108, 5), (140, 88, 96, 6),
+                        (10 ** 6, 80, 88, 8)]
 
 # a line may not end on one of these: it leaves the reader hanging mid-phrase
 DANGLERS = {"a", "an", "the", "and", "or", "but", "of", "to", "in", "on", "at", "by", "for", "from",
@@ -519,24 +549,71 @@ def _shorten(text: str, lines: int, draw, font, max_width: float) -> str:
 def _headline_block(draw, headline: str, family: str | None, max_width: float, ladder=None, weight: int = 700):
     """Pick the ladder step this headline belongs on and wrap it there."""
     ladder = ladder or HEADLINE_LADDER
-    words = headline.split()
     for limit, size, line_h, max_lines in ladder:
         if len(headline) > limit:
             continue
         font = _font(int(size * CARD_SCALE), bold=True, family=family, weight=weight)
-        lines = _balanced_lines(draw, words, font, max_width, max_lines)
+        lines = _balanced_lines(draw, _fit_words(draw, headline.split(), font, max_width), font, max_width, max_lines)
         if lines:
             return font, lines, int(line_h * CARD_SCALE)
     # nothing fits: keep the smallest step and let it run long rather than lose the card
     size, line_h, max_lines = ladder[-1][1:]
     font = _font(int(size * CARD_SCALE), bold=True, family=family, weight=weight)
-    log.warning("headline %r does not fit the card ladder; it will be crowded", headline[:80])
-    lines = _balanced_lines(draw, words, font, max_width, max_lines + 2) or _wrap(draw, headline, font, max_width)
-    return font, lines[:max_lines + 2], int(line_h * CARD_SCALE)
+    if headline:
+        log.info("headline is longer than the card can set at full size; it will be trimmed: %r", headline[:80])
+    words = _fit_words(draw, headline.split(), font, max_width)
+    lines = _balanced_lines(draw, words, font, max_width, max_lines) or _wrap(draw, headline, font, max_width)
+    return font, lines, int(line_h * CARD_SCALE)
 
 
-def _card_logo(img: Image.Image, site: Site, primary, x: int, baseline: int, height: int) -> int:
-    """The masthead in the footer, on its own plate when the PNG bakes one in. Returns its width."""
+def _tracked(draw: ImageDraw.ImageDraw, xy: tuple[int, int], text: str, font, fill, track: float) -> float:
+    """Draw text with letter-spacing, which Pillow has no notion of.
+
+    Kickers are short, upper case and set wide on all four of these sites; without tracking they
+    read as a generic chip. Advances are measured from the run so kerning pairs survive.
+    """
+    x, y = xy
+    for i, char in enumerate(text):
+        draw.text((x, y), char, font=font, fill=fill)
+        x += draw.textlength(text[:i + 1], font=font) - draw.textlength(text[:i], font=font) + track
+    return x - xy[0] - track
+
+
+def _tracked_len(draw: ImageDraw.ImageDraw, text: str, font, track: float) -> float:
+    return draw.textlength(text, font=font) + track * max(0, len(text) - 1)
+
+
+def _rail(img: Image.Image, site: Site, accent, y: int, scale) -> None:
+    """The section rule under the photo: the one mark that still reads at thumbnail size.
+
+    Each site expresses it in its own grammar, so a row of three cards in the profile grid is
+    identifiable before any type is legible. Driven by brand.rail in sites.yaml.
+    """
+    draw = ImageDraw.Draw(img, "RGBA")
+    w, h = img.width, scale(RAIL_H)
+    style = (site.brand.rail or "solid").lower()
+    if style == "double":                       # the ticker rule the Crazy4 site runs under its bars
+        draw.rectangle([0, y, w, y + h], fill=accent)
+        draw.rectangle([0, y + h + scale(8), w, y + h + scale(12)], fill=accent)
+    elif style == "inset":                      # a typographic rule inside the column, not a band
+        draw.rectangle([scale(SIDE), y, w - scale(SIDE), y + h], fill=accent)
+    elif style == "bars":                       # ScreenStat is a numbers brand: the rule is a chart
+        cols, gap = 6, scale(32)
+        col_w = (w - scale(SIDE) * 2 - gap * (cols - 1)) / cols
+        for i in range(cols):
+            x = scale(SIDE) + i * (col_w + gap)
+            draw.rectangle([x, y, x + col_w, y + h], fill=(*accent, 255 if i < 4 else 70))
+    else:
+        draw.rectangle([0, y, w, y + h], fill=accent)
+
+
+def _card_logo(img: Image.Image, site: Site, primary, x: int, baseline: int, height: int,
+               on_band: bool = False) -> int:
+    """The masthead in the footer. Returns its width.
+
+    `on_band` says the footer is already painted in the logo's own ground, so the mark needs no
+    plate of its own - that is what turns the Junkies lockup from a sticker into a masthead.
+    """
     if not site.brand.logo:
         font = _font(int(height * 1.05), bold=True, family=site.brand.font)
         draw = ImageDraw.Draw(img)
@@ -547,13 +624,57 @@ def _card_logo(img: Image.Image, site: Site, primary, x: int, baseline: int, hei
         height = int(height * 1.35)   # a near-square mark needs more height than a wide wordmark to read as its equal
     w = int(logo.width * (height / logo.height))
     logo = logo.resize((max(1, w), height), Image.LANCZOS)
-    if plate and contrast_ratio(plate, primary) > 1.6:
-        # a mark drawn for a different ground (the cream Junkies lockup) keeps that ground, as a
-        # deliberate chip: knocking the background out would leave dark artwork on a dark panel
+    if plate and not on_band and contrast_ratio(plate, primary) > 1.6:
+        # a mark drawn for a different ground keeps that ground rather than being knocked out,
+        # which would leave dark artwork invisible on a dark panel
         pad = int(height * 0.34)
         ImageDraw.Draw(img).rectangle([x - pad, baseline - height - pad, x + w + pad, baseline + pad], fill=plate)
     img.paste(logo, (x, baseline - height), logo)
     return w
+
+
+def _card_kicker(img: Image.Image, kicker: str, site: Site, accent, x: int, y: int, scale) -> None:
+    """Section label: a tracked, upper-case chip in the brand accent, square-cornered."""
+    draw = ImageDraw.Draw(img)
+    text = (kicker or "").strip().upper()[:24]
+    font = _font(scale(KICKER_SIZE), bold=True, family=site.brand.font)
+    track = scale(KICKER_SIZE) * 0.08
+    pad_x, pad_y = scale(16), scale(10)
+    width = _tracked_len(draw, text, font, track)
+    draw.rectangle([x, y, x + width + pad_x * 2, y + font.size + pad_y * 2], fill=accent)
+    _tracked(draw, (x + pad_x, y + pad_y), text, font, _ink_on(accent), track)
+
+
+def _card_footer(img: Image.Image, site: Site, primary, text_color, scale) -> int:
+    """Masthead, domain and date, anchored to the bottom so every card in the grid shares it.
+
+    A mark drawn for its own ground (the cream Junkies lockup) turns the whole footer into that
+    ground rather than sitting on the panel as a stray sticker.
+    """
+    w = img.width
+    baseline, logo_h = scale(FOOT_BOTTOM), scale(56)
+    plate = None
+    if site.brand.logo:
+        try:
+            _logo, plate = _load_logo(site.brand.logo)
+        except OSError:
+            plate = None
+    band_top = baseline - logo_h - scale(36)
+    draw = ImageDraw.Draw(img, "RGBA")
+    if plate and contrast_ratio(plate, primary) > 1.6:
+        draw.rectangle([0, band_top, w, img.height], fill=plate)
+        ink = _ink_on(plate)
+        meta_colour = tuple(int(c * 0.75 + p * 0.25) for c, p in zip(ink, plate))
+    else:
+        draw.rectangle([scale(SIDE), band_top, w - scale(SIDE), band_top + max(2, scale(2))],
+                       fill=(*text_color, 60))
+        meta_colour = tuple(int(c * 0.72) for c in text_color)
+    _card_logo(img, site, primary, scale(SIDE), baseline, logo_h, on_band=plate is not None)
+    font = _font(scale(CREDIT_SIZE), bold=False, family=site.brand.font)
+    meta = f"{site.domain}   {time.strftime('%d %b %Y')}"
+    draw.text((w - scale(SIDE) - draw.textlength(meta, font=font), baseline - font.size), meta,
+              font=font, fill=meta_colour)
+    return band_top
 
 
 def _render_portrait(headline: str, kicker: str, standfirst: str | None, site: Site, out_path: Path,
@@ -563,77 +684,104 @@ def _render_portrait(headline: str, kicker: str, standfirst: str | None, site: S
 
     Nothing that matters is drawn in the top or bottom `PORTRAIT_BLEED` band, so the 4:5 asset the
     API actually accepts (see instagram_asset) is a straight centre crop with nothing lost.
+
+    Two routes, not two dozen templates. With a usable photo and a headline the ladder can hold, the
+    photo runs full bleed across the top and the type sits in the panel under it. Otherwise the type
+    takes the whole card and the photo, if there is one, stays as a veiled ground. A headline too
+    long for the panel spends the photograph; it never spends the type size, because a headline two
+    steps smaller than its neighbours is the loudest sign a machine made the card.
     """
     def S(v: float) -> int:
         return int(round(v * CARD_SCALE))
 
     w, h = S(CARD_W), S(CARD_H)
     family = site.brand.font
-    img = Image.new("RGB", (w, h), primary)
     headline, standfirst = tidy(headline), tidy(standfirst or "") or None
+    if not headline:                       # nothing to set: the standfirst becomes the headline
+        headline, standfirst = standfirst or site.name, None
+    img = Image.new("RGB", (w, h), primary)
 
-    photo_bottom = 0
-    got = _backdrop(backdrop_url, (w, S(PHOTO_H))) if backdrop_url else None
-    if got is not None:
-        photo, _faces = got
-        img.paste(photo, (0, 0))
+    photo = None
+    if backdrop_url:
+        source = _source_photo(backdrop_url, 20)
+        if source and source[0].width >= PHOTO_MIN[0] and source[0].height >= PHOTO_MIN[1]:
+            got = _backdrop(backdrop_url, (w, S(PHOTO_H)))
+            photo = got[0] if got else None
+        elif source:
+            log.info("photo %sx%s is smaller than the card aperture; using the type card instead",
+                     source[0].width, source[0].height)
+    on_photo = photo is not None and len(headline) <= HEADLINE_LADDER[-1][0]
+
+    if on_photo:
+        img.paste(photo.filter(ImageFilter.UnsharpMask(radius=1.2, percent=45, threshold=3)), (0, 0))
         photo_bottom = S(PHOTO_H)
+        _shade_bottom(img.crop((0, photo_bottom - S(24), w, photo_bottom)), 0.0, 0.18)
         if credit:
             cfont = _font(S(CREDIT_SIZE), bold=False, family=family)
             label = f"Photo: {credit}"[:48]
-            tw = ImageDraw.Draw(img).textlength(label, font=cfont)
+            draw = ImageDraw.Draw(img, "RGBA")
+            tw = draw.textlength(label, font=cfont)
             pad = S(10)
-            box = (w - S(SIDE) - int(tw) - pad, photo_bottom - S(48), w - S(SIDE) + pad, photo_bottom - S(48) + cfont.size + pad * 2)
-            scrim = Image.new("RGBA", (box[2] - box[0], box[3] - box[1]), (0, 0, 0, 130))
-            img.paste(Image.alpha_composite(img.crop(box).convert("RGBA"), scrim).convert("RGB"), box[:2])
+            box = (int(w - S(SIDE) - tw - pad * 2), photo_bottom - S(32) - cfont.size - pad * 2,
+                   w - S(SIDE), photo_bottom - S(32))
+            chip = Image.new("RGBA", (box[2] - box[0], box[3] - box[1]), (0, 0, 0, 170))
+            img.paste(Image.alpha_composite(img.crop(box).convert("RGBA"), chip).convert("RGB"), box[:2])
             ImageDraw.Draw(img).text((box[0] + pad, box[1] + pad), label, font=cfont, fill=(240, 240, 240))
-        ImageDraw.Draw(img).rectangle([0, photo_bottom, w, photo_bottom + S(6)], fill=accent)
+        _rail(img, site, accent, photo_bottom, S)
+        top_limit = photo_bottom + S(RAIL_H) + S(56)
+        ladder = HEADLINE_LADDER
     else:
-        # no photo: the panel is the whole card, with the brand's own geometry carrying recognition
-        img.paste(_gradient((w, h), primary, _darken(primary, 0.55)), (0, 0))
-        d = ImageDraw.Draw(img, "RGBA")
-        d.polygon([(w * 0.58, h), (w, h * 0.55), (w, h)], fill=(*accent, 30))
-        d.rectangle([0, 0, w, S(8)], fill=accent)
+        if photo is not None:
+            # too long for the panel: keep the picture as a ground and give the type the whole card
+            veil = _cover_fit(photo.resize((w, S(PHOTO_H)), Image.LANCZOS), (w, h))[0]
+            img.paste(veil)
+            img.paste(Image.new("RGB", (w, h), primary), (0, 0),
+                      Image.new("L", (w, h), 210))
+        else:
+            img.paste(_gradient((w, h), primary, _darken(primary, 0.55)), (0, 0))
+            ImageDraw.Draw(img, "RGBA").polygon([(w * 0.58, h), (w, h * 0.55), (w, h)], fill=(*accent, 30))
+        _rail(img, site, accent, S(290), S)
+        top_limit = S(290) + S(RAIL_H) + S(56)
+        ladder = HEADLINE_LADDER_TEXT
 
+    band_top = _card_footer(img, site, primary, text_color, S)
     draw = ImageDraw.Draw(img, "RGBA")
     column = w - S(SIDE) * 2
+    bottom_limit = band_top - S(40)
+    kick_h = S(KICKER_SIZE) + S(20) * 2
 
-    # footer first: it is the fixed point every card shares, and the text block grows up from it
-    foot_baseline = S(FOOT_BOTTOM)
-    logo_h = S(56)
-    _card_logo(img, site, primary, S(SIDE), foot_baseline, logo_h)
-    stamp_font = _font(S(CREDIT_SIZE), bold=False, family=family)
-    stamp = date_text or time.strftime("%d %b %Y")
-    stamp_w = draw.textlength(stamp, font=stamp_font)
-    draw.text((w - S(SIDE) - stamp_w, foot_baseline - stamp_font.size), stamp, font=stamp_font, fill=(*text_color, 170))
-    rule_y = foot_baseline - logo_h - S(36)
-    draw.rectangle([S(SIDE), rule_y, w - S(SIDE), rule_y + max(2, S(2))], fill=(*text_color, 60))
-
-    hfont, lines, line_h = _headline_block(draw, headline, family, column,
-                                           HEADLINE_LADDER if photo_bottom else HEADLINE_LADDER_TEXT,
-                                           weight=site.brand.heading_weight)
+    for attempt in range(len(ladder)):
+        hfont, lines, line_h = _headline_block(draw, headline, family, column, ladder[attempt:],
+                                               weight=site.brand.heading_weight)
+        slines: list[str] = []
+        if standfirst:
+            # the budget only stretches to a standfirst behind a short headline
+            room = {1: 2, 2: 2}.get(len(lines), 2 if not on_photo and len(lines) <= 4 else 0)
+            if room:
+                slines = _wrap(draw, standfirst, sfont := _font(S(36), bold=False, family=family), column)
+                if len(slines) > room:
+                    slines = _wrap(draw, _shorten(standfirst, room, draw, sfont, column), sfont, column)[:room]
+        block_h = len(lines) * line_h + (S(20) + len(slines) * S(50) if slines else 0)
+        if top_limit + kick_h + block_h <= bottom_limit or attempt == len(ladder) - 1:
+            break
     sfont = _font(S(36), bold=False, family=family)
-    slines: list[str] = []
-    if standfirst:
-        # the vertical budget only stretches to a standfirst behind a short headline
-        room_for = {1: 2, 2: 2, 3: 1}.get(len(lines), 2 if not photo_bottom and len(lines) <= 4 else 0)
-        if room_for:
-            slines = _wrap(draw, standfirst, sfont, column)
-            if len(slines) > room_for:
-                slines = _wrap(draw, _shorten(standfirst, room_for, draw, sfont, column), sfont, column)[:room_for]
 
-    block_h = len(lines) * line_h + (S(20) + len(slines) * S(50) if slines else 0)
-    kick_h = S(38)
-    top_limit = photo_bottom + S(56) if photo_bottom else S(PORTRAIT_BLEED + 90)
-    if photo_bottom:
-        # with a photo the text hangs off the footer, so every card in the grid shares a baseline
-        y = max(rule_y - S(40) - block_h, top_limit + kick_h + S(24))
+    # last resort: a headline that still does not fit is cut here rather than drawn over the footer
+    room = max(1, (bottom_limit - top_limit - kick_h - (S(20) + len(slines) * S(50) if slines else 0)) // line_h)
+    if len(lines) > room:
+        log.warning("headline needed %d lines and the card has room for %d; trimming", len(lines), room)
+        lines = lines[:room]
+        lines[-1] = lines[-1].rstrip(",;:- ") + "\u2026"
+        block_h = len(lines) * line_h + (S(20) + len(slines) * S(50) if slines else 0)
+
+    if on_photo:
+        y = max(bottom_limit - block_h, top_limit + kick_h)
     else:
-        # without one the card is all type: centring it beats a headline marooned at the bottom
-        group = kick_h + S(26) + block_h
-        y = top_limit + max(0, (rule_y - S(40) - top_limit - group)) // 2 + kick_h + S(26)
+        y = top_limit + kick_h + max(0, (bottom_limit - top_limit - kick_h - block_h)) // 2
+    # the block may not run into the footer, whatever the headline does
+    y = min(y, max(top_limit + kick_h, bottom_limit - block_h))
 
-    _draw_kicker(draw, kicker, S(SIDE), y - kick_h - S(26), w, accent, primary, family=family)
+    _card_kicker(img, kicker, site, accent, S(SIDE), y - kick_h + S(6), S)
     for line in lines:
         draw.text((S(SIDE), y), line, font=hfont, fill=text_color)
         y += line_h

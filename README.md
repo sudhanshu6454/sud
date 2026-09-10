@@ -359,7 +359,13 @@ a panel in the site's own ink carrying the kicker, the headline, an optional one
 and a footer with the masthead, the date and the photo credit. Without a usable photo the panel
 becomes the whole card and the headline steps up a size rather than sitting marooned in the middle.
 
-Headline sizes come from a fixed ladder of four steps keyed to length, never from continuously
+Each site's rule under the photo is its own: a solid bar for Mentalist, the double ticker rule
+Crazy4Marketing runs on its site, a rule inset to the column for Junkies, and six coral bars - a bar
+chart - for ScreenStat, which is a numbers brand. That rule is the one mark still legible at profile
+thumbnail size, so it is what makes a row of cards recognisable before any type can be read. It is
+set per site as `brand.rail` in `sites.yaml`.
+
+Headline sizes come from a fixed ladder of steps keyed to length, never from continuously
 shrinking type to fit - a 79px headline next to a 92px one is the clearest sign a machine made the
 card. Lines are wrapped by a short dynamic program that evens out the rag and refuses to break after
 "the", "of" or "and". Punctuation is normalised on the way in: straight quotes, double hyphens,
@@ -392,6 +398,13 @@ Preview a card without publishing anything:
 ```
 python -m autopub cards --site CRAZY --headline "Meta ad costs jump 23%" --image https://example.com/photo.jpg
 ```
+
+A headline too long for the panel spends the photograph rather than the type size: the card falls
+back to the type-led template with the photo veiled behind it. One that is longer still is trimmed
+with an ellipsis rather than drawn through the footer, a word wider than the column is broken by
+character, and a source photo smaller than 800x500 is refused rather than blown up. The bundled
+fonts are Latin only, so a headline in Devanagari or Arabic would not render - the sites publish in
+English, but it is worth knowing.
 
 The square and portrait cards are only uploaded to WordPress when a platform that fetches images by
 URL (Instagram, Facebook, Pinterest, Threads) has credentials for that site; otherwise they would
