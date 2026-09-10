@@ -10,6 +10,18 @@ from typing import ClassVar
 log = logging.getLogger(__name__)
 
 
+SHAPES = ("portrait", "square", "landscape")   # every card shape autopub renders, tallest first
+
+
+def _first(available: dict, preferred: tuple[str, ...]):
+    """The first preferred shape that exists, else any other shape rather than nothing."""
+    for shape in (*preferred, *SHAPES):
+        got = available.get(shape)
+        if got:
+            return got
+    return None
+
+
 @dataclass
 class SocialPost:
     """Everything a publisher might need for one article."""
@@ -17,22 +29,19 @@ class SocialPost:
     link: str
     captions: dict[str, str]                 # platform -> caption (no link inside)
     hashtags: list[str] = field(default_factory=list)
-    image_landscape: Path | None = None
-    image_square: Path | None = None
-    image_landscape_url: str | None = None   # public URLs (WordPress media) for API's that need a URL
-    image_square_url: str | None = None
+    images: dict[str, Path] = field(default_factory=dict)       # shape -> rendered card on disk
+    image_urls: dict[str, str] = field(default_factory=dict)    # shape -> public URL, for API's that need one
     pinterest_title: str | None = None
+    alt_text: str | None = None                                 # what the card says, for screen readers
 
     def caption_for(self, platform: str) -> str:
         return (self.captions.get(platform) or self.captions.get("facebook") or self.title).strip()
 
-    def image_path(self, prefer_square: bool) -> Path | None:
-        first, second = (self.image_square, self.image_landscape) if prefer_square else (self.image_landscape, self.image_square)
-        return first or second
+    def image_path(self, *shapes: str) -> Path | None:
+        return _first(self.images, shapes)
 
-    def image_url(self, prefer_square: bool) -> str | None:
-        first, second = (self.image_square_url, self.image_landscape_url) if prefer_square else (self.image_landscape_url, self.image_square_url)
-        return first or second
+    def image_url(self, *shapes: str) -> str | None:
+        return _first(self.image_urls, shapes)
 
 
 @dataclass
@@ -65,7 +74,8 @@ class Publisher(ABC):
     supports_image: ClassVar[bool] = True
     supports_link: ClassVar[bool] = True      # clickable link in the post body
     requires_image: ClassVar[bool] = False
-    prefers_square: ClassVar[bool] = False
+    image_shapes: ClassVar[tuple[str, ...]] = ("landscape", "square")   # which card this platform wants, best first
+    needs_public_url: ClassVar[bool] = False   # true when the API fetches the image itself instead of taking an upload
     text_limit: ClassVar[int] = 2000
 
     def __init__(self, creds: dict[str, str], timeout: int = 60):
@@ -89,7 +99,7 @@ class Publisher(ABC):
 
     def publish(self, post: SocialPost) -> PublishResult:
         try:
-            if self.requires_image and not (post.image_url(self.prefers_square) or post.image_path(self.prefers_square)):
+            if self.requires_image and not (post.image_url(*self.image_shapes) or post.image_path(*self.image_shapes)):
                 return PublishResult(self.platform, False, error="platform requires an image and none is available")
             return self._publish(post)
         except Exception as exc:  # noqa: BLE001 - one platform failing must not stop the others

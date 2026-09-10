@@ -84,15 +84,35 @@ def publish_one(site: Site, settings: Settings, state: State, cand: sources.Cand
         use_source_image = site.use_source_image
     try:
         cards = images.render_set(post.image_headline or post.title, post.image_kicker or post.category or site.category, site,
-                                  work_dir / site.slug, stem, backdrop_url=article.image if use_source_image else None)
+                                  work_dir / site.slug, stem, backdrop_url=article.image if use_source_image else None,
+                                  standfirst=post.excerpt, credit=article.sitename if use_source_image else None,
+                                  date_text=time.strftime("%d %b %Y"))
     except Exception as exc:  # noqa: BLE001
         log.error("[%s] image generation failed: %s", site.key, exc)
         cards = {}
 
+    # 3b. the card Instagram will actually accept, trimmed out of the 3:4 master
+    if cards.get("portrait"):
+        try:
+            cards["portrait"] = images.instagram_asset(cards["portrait"], ratio=settings.instagram_ratio)
+        except Exception as exc:  # noqa: BLE001 - fall back to the master; the publisher walks shapes anyway
+            log.warning("[%s] could not derive the Instagram asset: %s", site.key, exc)
+
     # 4. WordPress
     try:
         landscape_media = wp.upload_media(cards["landscape"], post.title, alt_text=post.image_headline) if cards.get("landscape") else None
-        square_media = wp.upload_media(cards["square"], f"{post.title} (square)", alt_text=post.image_headline) if cards.get("square") else None
+        # the square and portrait cards exist for the social APIs that fetch an image by URL, so
+        # they are only worth uploading when such a platform is actually switched on for this site.
+        # With no credentials configured they would just accumulate in the media library forever.
+        hosted = {shape for pub in publishers if pub.needs_public_url for shape in pub.image_shapes}
+        media_by_shape: dict[str, dict] = {}
+        for shape, title in (("square", f"{post.title} (square)"), ("portrait", f"{post.title} (portrait)")):
+            if not cards.get(shape) or shape not in hosted:
+                continue
+            try:
+                media_by_shape[shape] = wp.upload_media(cards[shape], title, alt_text=post.image_headline)
+            except WordPressError as exc:
+                log.warning("[%s] %s card upload failed: %s", site.key, shape, exc)
         cat_id = wp.ensure_term("categories", post.category or site.category)
         tag_ids = []
         for tag in post.tags[:8]:
@@ -128,10 +148,11 @@ def publish_one(site: Site, settings: Settings, state: State, cand: sources.Cand
             "threads": post.captions.threads,
         },
         hashtags=site.hashtags,
-        image_landscape=cards.get("landscape"), image_square=cards.get("square"),
-        image_landscape_url=(landscape_media or {}).get("source_url"),
-        image_square_url=(square_media or {}).get("source_url"),
+        images={shape: path for shape, path in cards.items() if path},
+        image_urls={shape: media["source_url"] for shape, media in
+                    (("landscape", landscape_media or {}), *media_by_shape.items()) if media.get("source_url")},
         pinterest_title=post.captions.pinterest_title,
+        alt_text=f"{post.image_kicker or post.category or site.category}: {post.image_headline or post.title}",
     )
     for res in dispatch(publishers, social):
         state.record_social(url, site.key, res.platform, res.ok, res.remote_id, res.url, res.error)

@@ -50,6 +50,7 @@ sites:
       accent: "#b8492f"
       text: "#f7f5ef"
       logo: brand/marketing-mentalist-logo.png
+      font: InstrumentSans   # the typeface the site itself uses, for the share cards
     socials: [twitter, facebook, instagram, linkedin, pinterest, telegram, threads]
 
   - key: CRAZY
@@ -91,6 +92,7 @@ sites:
       accent: "#ff3366"
       text: "#f5f1ea"
       logo: brand/crazy4marketing-logo.png
+      font: SpaceGrotesk   # the typeface the site itself uses, for the share cards
     socials: [twitter, facebook, instagram, linkedin, pinterest, telegram, threads]
 
   - key: JUNKIES
@@ -130,6 +132,8 @@ sites:
       accent: "#8a6d47"
       text: "#fbf8f3"
       logo: brand/marketing-junkies-logo.png
+      font: Archivo   # the typeface the site itself uses, for the share cards
+      heading_weight: 800   # matches --font-heading-weight in the theme
     socials: [twitter, facebook, instagram, linkedin, pinterest, telegram, threads]
 
   - key: SCREENSTAT
@@ -171,4 +175,6 @@ sites:
       accent: "#EE5A3C"
       text: "#FFFFFF"
       logo: brand/screenstat-logo.png
+      font: Inter   # the typeface the site itself uses, for the share cards
+      heading_weight: 600   # the theme sets headings at 600, not 700
     socials: [twitter, facebook, instagram, linkedin, pinterest, telegram, threads]

@@ -14,13 +14,14 @@ class ThreadsPublisher(Publisher):
     platform = "threads"
     env_prefix = "THREADS"
     required_env = ("USER_ID", "ACCESS_TOKEN")
-    prefers_square = True
+    image_shapes = ("square", "portrait")
+    needs_public_url = True
     text_limit = 500
 
     def _publish(self, post: SocialPost) -> PublishResult:
         uid, token = self.creds["USER_ID"], self.creds["ACCESS_TOKEN"]
         text = self._text_with_link(post)
-        image_url = post.image_url(prefer_square=True)
+        image_url = post.image_url(*self.image_shapes)
         payload = {"text": text, "access_token": token}
         if image_url:
             payload.update({"media_type": "IMAGE", "image_url": image_url})

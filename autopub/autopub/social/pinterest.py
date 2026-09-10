@@ -13,11 +13,12 @@ class PinterestPublisher(Publisher):
     env_prefix = "PINTEREST"
     required_env = ("ACCESS_TOKEN", "BOARD_ID")
     requires_image = True
-    prefers_square = True
+    needs_public_url = True
+    image_shapes = ("portrait", "square")   # Pinterest gives tall pins more room
     text_limit = 800
 
     def _publish(self, post: SocialPost) -> PublishResult:
-        image_url = post.image_url(prefer_square=True)
+        image_url = post.image_url(*self.image_shapes)
         if not image_url:
             raise RuntimeError("Pinterest needs a publicly reachable image URL")
         body = {

@@ -54,7 +54,7 @@ class LinkedInPublisher(Publisher):
             "lifecycleState": "PUBLISHED",
             "isReshareDisabledByAuthor": False,
         }
-        image = post.image_path(prefer_square=False)
+        image = post.image_path(*self.image_shapes)
         if image:
             image_urn = self._upload_image(image)
             body["content"] = {"media": {"title": post.title[:200], "id": image_urn}}

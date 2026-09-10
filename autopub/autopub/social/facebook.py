@@ -12,13 +12,14 @@ class FacebookPublisher(Publisher):
     platform = "facebook"
     env_prefix = "FACEBOOK"
     required_env = ("PAGE_ID", "PAGE_TOKEN")
+    needs_public_url = True
     text_limit = 5000
 
     def _publish(self, post: SocialPost) -> PublishResult:
         page, token = self.creds["PAGE_ID"], self.creds["PAGE_TOKEN"]
         message = self._text_with_link(post)
-        image_url = post.image_url(prefer_square=False)
-        image_path = post.image_path(prefer_square=False)
+        image_url = post.image_url(*self.image_shapes)
+        image_path = post.image_path(*self.image_shapes)
         if image_url:
             resp = requests.post(f"{GRAPH}/{page}/photos", data={"url": image_url, "message": message, "access_token": token}, timeout=self.timeout)
         elif image_path:

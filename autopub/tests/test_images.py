@@ -98,7 +98,7 @@ def test_covers_are_compressed(settings, tmp_path, monkeypatch):
 
 def test_degenerate_kicker_falls_back_to_the_section(site, tmp_path, monkeypatch):
     seen = {}
-    monkeypatch.setattr(images, "_draw_kicker", lambda draw, kicker, *a: (seen.setdefault("kicker", kicker), 0)[1])
+    monkeypatch.setattr(images, "_draw_kicker", lambda draw, kicker, *a, **kw: (seen.setdefault("kicker", kicker), 0)[1])
     images.render_card("Headline", "X", site, tmp_path / "k.jpg")
     assert seen["kicker"] == site.category
 
@@ -156,3 +156,86 @@ def test_detects_a_real_face_when_opencv_is_present():
         pytest.skip("no face fixture")
     faces = images._detect_faces(Image.open(sample).convert("RGB"))
     assert faces, "expected at least one face in the fixture"
+
+
+# ---- the Instagram news card -------------------------------------------------------------------
+
+
+def test_portrait_card_is_a_true_3_4_rendered_above_1080(site, tmp_path):
+    card = images.render_card("A headline for the feed", "Section", site, tmp_path / "p.jpg", "portrait")
+    with Image.open(card) as im:
+        assert im.size == (1440, 1920)                  # 1080-wide uploads go soft on a 3x phone
+        assert round(im.width / im.height, 3) == 0.750
+
+
+def test_instagram_asset_is_the_tallest_shape_the_api_accepts(site, tmp_path):
+    card = images.render_card("A headline for the feed", "Section", site, tmp_path / "p.jpg", "portrait")
+    feed = images.instagram_asset(card, out_path=tmp_path / "ig.jpg")
+    with Image.open(feed) as im:
+        assert round(im.width / im.height, 3) == 0.800  # 4:5 exactly: Meta refuses anything taller
+        assert im.width == 1440
+    # and the 3:4 master is posted unchanged once Meta accepts it
+    assert images.instagram_asset(card, ratio="3:4") == card
+
+
+def test_the_bleed_bands_a_4_5_crop_removes_carry_no_content(settings, tmp_path):
+    """The card is drawn 3:4 but posted 4:5, so the trimmed bands must be background only."""
+    for key in ("MENTALIST", "CRAZY", "JUNKIES", "SCREENSTAT"):
+        site = settings.site(key)
+        card = images.render_card("Scarcity marketing has stopped working on younger buyers", "Section",
+                                  site, tmp_path / f"{key}.jpg", "portrait")
+        with Image.open(card) as im:
+            band = int(images.PORTRAIT_BLEED * images.CARD_SCALE)
+            for strip in (im.crop((0, 0, im.width, band)), im.crop((0, im.height - band, im.width, im.height))):
+                # a band holding type or a logo has far more distinct tones than a flat/graded ground
+                assert len(strip.convert("RGB").getcolors(maxcolors=1 << 20)) < 400, f"{key} draws into the bleed"
+
+
+def test_headline_sizes_come_from_a_ladder_not_from_continuous_shrinking(site, tmp_path):
+    short = images.render_card("Meta ad costs jump", "Section", site, tmp_path / "s.jpg", "portrait")
+    long = images.render_card("Zepto hands its creative duties to Lowe Lintas after a three-way pitch review",
+                              "Section", site, tmp_path / "l.jpg", "portrait")
+    sizes = {step[1] for step in images.HEADLINE_LADDER} | {step[1] for step in images.HEADLINE_LADDER_TEXT}
+    assert len(sizes) >= 4 and short.exists() and long.exists()
+
+    from PIL import ImageDraw
+    draw = ImageDraw.Draw(Image.new("RGB", (1440, 1920)))
+    fs, _, _ = images._headline_block(draw, "Meta ad costs jump", site.brand.font, 952 * images.CARD_SCALE)
+    fl, _, _ = images._headline_block(draw, "Zepto hands its creative duties to Lowe Lintas after a three-way review",
+                                      site.brand.font, 952 * images.CARD_SCALE)
+    assert fs.size > fl.size
+
+
+def test_lines_do_not_break_after_a_dangling_word(site):
+    from PIL import ImageDraw
+    draw = ImageDraw.Draw(Image.new("RGB", (1440, 1920)))
+    column = 952 * images.CARD_SCALE
+    font = images._font(int(92 * images.CARD_SCALE), bold=True, family=site.brand.font)
+    lines = images._balanced_lines(draw, "Zepto hands the creative duties to Lowe Lintas".split(), font, column, 3)
+    assert lines and not any(line.split()[-1].lower() in images.DANGLERS for line in lines[:-1])
+
+
+def test_headline_punctuation_is_normalised():
+    assert images.tidy("Meta costs jump -- again... | Crazy4Marketing") == "Meta costs jump — again…"
+    assert images.tidy("  spaced   out  ") == "spaced out"
+
+
+def test_kicker_chip_text_is_readable_on_every_brand_accent(settings):
+    for site in settings.sites:
+        accent = images.hex_to_rgb(site.brand.accent)
+        assert images.contrast_ratio(accent, images._ink_on(accent)) >= 4.5, site.key
+
+
+def test_every_site_ships_the_typeface_its_website_uses(settings):
+    from autopub import typography
+    for site in settings.sites:
+        assert site.brand.font, f"{site.key} has no brand.font"
+        loaded = typography.load(site.brand.font, 64, typography.BOLD)
+        assert Path(loaded.path).parent == typography.FONT_DIR, f"{site.key} fell back to DejaVu: font file missing"
+
+
+def test_logos_are_trimmed_so_every_mark_reads_at_the_same_size(settings):
+    for site in settings.sites:
+        logo, _plate = images._load_logo(site.brand.logo)
+        edge = logo.convert("RGBA").getbbox()
+        assert edge == (0, 0, logo.width, logo.height), f"{site.key} logo still carries a dead margin"

@@ -17,7 +17,7 @@ class TelegramPublisher(Publisher):
     def _publish(self, post: SocialPost) -> PublishResult:
         token, chat = self.creds["BOT_TOKEN"], self.creds["CHAT_ID"]
         text = self._text_with_link(post)
-        image = post.image_path(prefer_square=False)
+        image = post.image_path(*self.image_shapes)
         if image:
             with open(image, "rb") as fh:
                 resp = requests.post(f"{API}/bot{token}/sendPhoto", data={"chat_id": chat, "caption": text},

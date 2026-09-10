@@ -17,6 +17,8 @@ class Brand:
     accent: str = "#f97316"
     text: str = "#ffffff"
     logo: str | None = None  # path to a PNG wordmark, resolved relative to sites.yaml at load time
+    font: str | None = None  # typeface for the share cards: a file stem in autopub/fonts (e.g. "Inter")
+    heading_weight: int = 700   # the weight that site's own headings use, so the cards match it
 
 
 @dataclass
@@ -77,6 +79,10 @@ class Settings:
     llm_model: str = "claude-opus-5"
     llm_effort: str = "medium"
     min_gap_minutes_between_posts: int = 20
+    # Instagram's API documents a 4:5 floor for feed images and hard-refuses anything taller
+    # (error 36003/2207009). The cards are drawn 3:4; this says which shape actually gets posted.
+    # Flip to "3:4" once `python -m autopub instagram-probe` shows Meta accepting 0.75.
+    instagram_ratio: str = "4:5"
     data_dir: Path = DEFAULT_DATA_DIR
 
     def site(self, key: str) -> Site:

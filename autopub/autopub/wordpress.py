@@ -58,6 +58,10 @@ class WordPress:
         log.info("uploaded media %s -> id=%s url=%s", path.name, media_id, media.get("source_url"))  # type: ignore[union-attr]
         return media  # type: ignore[return-value]
 
+    def delete_media(self, media_id: int) -> None:
+        """Bin an attachment for good. Used by the Instagram probe, which uploads a throwaway card."""
+        self._request("DELETE", f"media/{media_id}", params={"force": "true"})
+
     def ensure_term(self, taxonomy: str, name: str) -> int | None:
         """taxonomy is 'categories' or 'tags'. Returns the term id, creating it if needed.
 

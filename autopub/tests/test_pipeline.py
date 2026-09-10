@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
 
+from PIL import Image
+
 from autopub import extract, pipeline, sources
 from autopub.extract import Article
 from autopub.rewrite import Captions, CuratedPost
@@ -46,10 +48,11 @@ class Recorder(Publisher):
 
 
 class ImageOnly(Publisher):
-    platform = "imgonly"; env_prefix = "IMG"; required_env = (); requires_image = True; prefers_square = True; supports_link = False
+    platform = "imgonly"; env_prefix = "IMG"; required_env = (); requires_image = True; image_shapes = ("portrait", "square"); supports_link = False; needs_public_url = True
 
     def _publish(self, post):
-        assert post.image_url(prefer_square=True).endswith("-square.jpg")
+        # the portrait slot carries the 4:5 asset Instagram accepts, cropped out of the 3:4 card
+        assert post.image_url(*self.image_shapes).endswith("-instagram.jpg")
         return PublishResult(self.platform, True, remote_id="i1")
 
 
@@ -79,11 +82,14 @@ def test_full_run_publishes_and_syndicates(monkeypatch, settings, site, tmp_path
     assert report.published == ["https://marketingmentalist.in/curated-story/"]
     assert report.skipped == 1 and report.failed == 0
     assert report.social_ok == 2 and report.social_failed == 0
-    assert len(wp.media) == 2 and wp.posts[0]["featured_media"] == 1
+    assert len(wp.media) == 3 and wp.posts[0]["featured_media"] == 1   # landscape + square + portrait
     assert ("categories", "Campaigns") in wp.terms   # the model's section, not the site default
     social = Recorder.seen[0]
     assert social.link == "https://marketingmentalist.in/curated-story/"
-    assert social.image_landscape.exists() and social.image_square.exists()
+    assert all(social.images[shape].exists() for shape in ("landscape", "square", "portrait"))
+    with Image.open(social.images["portrait"]) as ig:
+        assert round(ig.width / ig.height, 3) == 0.8   # what actually goes to Instagram
+    assert set(social.image_urls) == {"landscape", "square", "portrait"}
     assert state.count("MENTALIST") == 1
     assert [r["platform"] for r in state.social_results("https://pub.com/one", "MENTALIST")] == ["rec", "imgonly"]
     # second run: nothing new
@@ -119,3 +125,22 @@ def test_run_aborts_after_consecutive_rewrite_failures(monkeypatch, settings, si
     assert report.failed == pipeline.MAX_CONSECUTIVE_FAILURES == Broken.calls
     assert report.published == []
     assert not state.is_used("https://pub.com/0", site.key)   # released for retry next cycle
+
+
+def test_cards_are_only_uploaded_when_a_platform_needs_a_hosted_url(monkeypatch, settings, site, tmp_path):
+    """With no URL-fetching platform enabled, the square and portrait would be orphaned media."""
+    now = datetime.now(timezone.utc)
+    monkeypatch.setattr(sources, "collect", lambda s, timeout=30:
+                        [sources.Candidate("Story one", "https://pub.com/one", "", now, "Pub")])
+    monkeypatch.setattr(extract, "extract", lambda url, timeout=30:
+                        Article(url=url, title="t", text="w " * 600, sitename="Pub", image=None))
+    monkeypatch.setattr(pipeline.time, "sleep", lambda s: None)
+    wp = FakeWP()
+    Recorder.seen.clear()
+    report = pipeline.run_site(site, settings, State(tmp_path / "s.db"), rewriter=FakeRewriter(), wp=wp,
+                               publishers=[Recorder({})], work_dir=tmp_path / "img", limit=1)
+    assert len(report.published) == 1
+    assert len(wp.media) == 1                       # the featured image, and nothing spare
+    social = Recorder.seen[0]
+    assert set(social.image_urls) == {"landscape"}
+    assert social.images["portrait"].exists()       # still rendered, ready to post by hand

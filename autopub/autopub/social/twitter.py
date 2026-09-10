@@ -21,7 +21,7 @@ class TwitterPublisher(Publisher):
         client = tweepy.Client(consumer_key=c["API_KEY"], consumer_secret=c["API_SECRET"],
                                access_token=c["ACCESS_TOKEN"], access_token_secret=c["ACCESS_SECRET"])
         media_ids = None
-        image = post.image_path(self.prefers_square)
+        image = post.image_path(*self.image_shapes)
         if image:
             media = api_v1.media_upload(filename=str(image))
             media_ids = [media.media_id]
