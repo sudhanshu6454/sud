@@ -450,7 +450,9 @@ CARD_SCALE = 4 / 3
 CARD_W, CARD_H = 1080, 1440
 PHOTO_H = 780            # full-bleed photo, then a solid brand panel under it
 SIDE = 64                # content column: 952px, which also clears the Explore 2:3 side crop
-FOOT_BOTTOM = 1376       # footer baseline anchor; everything above grows upward from here
+# footer baseline anchor; everything above grows upward from here. Set so that the 4:5 asset the
+# API actually posts still carries a bottom margin close to the 64px at its sides.
+FOOT_BOTTOM = 1332
 CREDIT_SIZE = 28         # the floor for legible type in the feed: below this it is gone
 KICKER_SIZE = 28         # same floor - a kicker set as a fraction of the width fell under it
 RAIL_H = 12              # the section rule; at 6px it renders sub-pixel in a profile thumbnail
@@ -473,7 +475,8 @@ HEADLINE_LIMIT = 300    # characters: a headline longer than this is a bug upstr
 
 DANGLERS = {"a", "an", "the", "and", "or", "but", "of", "to", "in", "on", "at", "by", "for", "from",
             "with", "as", "is", "are", "was", "were", "its", "it", "that", "this", "into", "over",
-            "after", "before", "than", "per", "via"}
+            "after", "before", "than", "per", "via",
+            "rs", "\u20b9", "$", "\u00a3", "\u20ac", "usd", "inr"}   # never orphan a currency mark from its figure
 
 SMART = ((" - ", " \u2013 "), ("--", "\u2014"), ("...", "\u2026"), ("  ", " "))
 QUOTED = re.compile(r'"([^"]*)"')
@@ -589,12 +592,14 @@ def _tracked(draw: ImageDraw.ImageDraw, xy: tuple[int, int], text: str, font, fi
     x, y = xy
     for i, char in enumerate(text):
         draw.text((x, y), char, font=font, fill=fill)
-        x += draw.textlength(text[:i + 1], font=font) - draw.textlength(text[:i], font=font) + track
+        advance = draw.textlength(text[:i + 1], font=font) - draw.textlength(text[:i], font=font)
+        # the word space has to grow with the tracking or "AGENCY NEWS" reads as one word
+        x += advance + track * (2.6 if char == " " else 1)
     return x - xy[0] - track
 
 
 def _tracked_len(draw: ImageDraw.ImageDraw, text: str, font, track: float) -> float:
-    return draw.textlength(text, font=font) + track * max(0, len(text) - 1)
+    return draw.textlength(text, font=font) + track * (max(0, len(text) - 1) + 1.6 * text.count(" "))
 
 
 def _rail(img: Image.Image, site: Site, accent, y: int, scale) -> None:
@@ -773,16 +778,18 @@ def _render_portrait(headline: str, kicker: str, standfirst: str | None, site: S
         photo_bottom = S(PHOTO_H)
         _shade_bottom(img.crop((0, photo_bottom - S(24), w, photo_bottom)), 0.0, 0.18)
         if credit:
+            # a soft gradient across the foot of the photo, not a slab: a hard-edged chip cuts a
+            # rectangle out of the picture and is the clearest tell of a generated card
+            band_h = S(180)
+            band = img.crop((0, photo_bottom - band_h, w, photo_bottom))
+            _shade_bottom(band, 0.0, 0.62)
+            img.paste(band, (0, photo_bottom - band_h))
             cfont = _font(S(CREDIT_SIZE), bold=False, family=family)
             label = f"Photo: {credit}"[:48]
-            draw = ImageDraw.Draw(img, "RGBA")
+            draw = ImageDraw.Draw(img)
             tw = draw.textlength(label, font=cfont)
-            pad = S(10)
-            box = (int(w - S(SIDE) - tw - pad * 2), photo_bottom - S(32) - cfont.size - pad * 2,
-                   w - S(SIDE), photo_bottom - S(32))
-            chip = Image.new("RGBA", (box[2] - box[0], box[3] - box[1]), (0, 0, 0, 170))
-            img.paste(Image.alpha_composite(img.crop(box).convert("RGBA"), chip).convert("RGB"), box[:2])
-            ImageDraw.Draw(img).text((box[0] + pad, box[1] + pad), label, font=cfont, fill=(240, 240, 240))
+            draw.text((w - S(SIDE) - tw, photo_bottom - S(30) - cfont.size), label,
+                      font=cfont, fill=(238, 238, 238))
         _rail(img, site, accent, photo_bottom, S)
         top_limit = photo_bottom + S(RAIL_H) + S(56)
     else:
