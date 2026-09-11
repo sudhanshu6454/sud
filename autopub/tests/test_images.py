@@ -192,18 +192,27 @@ def test_the_bleed_bands_a_4_5_crop_removes_carry_no_content(settings, tmp_path)
 
 
 def test_headline_sizes_come_from_a_ladder_not_from_continuous_shrinking(site, tmp_path):
-    short = images.render_card("Meta ad costs jump", "Section", site, tmp_path / "s.jpg", "portrait")
-    long = images.render_card("Zepto hands its creative duties to Lowe Lintas after a three-way pitch review",
-                              "Section", site, tmp_path / "l.jpg", "portrait")
-    sizes = {step[1] for step in images.HEADLINE_LADDER} | {step[1] for step in images.HEADLINE_LADDER_TEXT}
-    assert len(sizes) >= 4 and short.exists() and long.exists()
-
+    """The claim under test is discreteness: a headline's font size is always one of the ladder's
+    fixed steps, never something arbitrary a continuous autosize loop would produce."""
     from PIL import ImageDraw
     draw = ImageDraw.Draw(Image.new("RGB", (1440, 1920)))
-    fs, _, _ = images._headline_block(draw, "Meta ad costs jump", site.brand.font, 952 * images.CARD_SCALE)
-    fl, _, _ = images._headline_block(draw, "Zepto hands its creative duties to Lowe Lintas after a three-way review",
-                                      site.brand.font, 952 * images.CARD_SCALE)
-    assert fs.size > fl.size
+    column = 952 * images.CARD_SCALE
+    allowed = {int(step[1] * images.CARD_SCALE) for step in images.HEADLINE_LADDER}
+    headlines = [
+        "Meta ad costs jump",
+        "Zepto hands its creative duties to Lowe Lintas after a three-way pitch review",
+        "Ghamasaan opens Friday as the model reads a strong opening weekend at the box office",
+    ]
+    sizes = set()
+    for headline in headlines:
+        font, lines, _ = images._headline_block(draw, headline, site.brand.font, column, images.HEADLINE_LADDER)
+        assert font.size in allowed, f"{headline!r} rendered at {font.size}px, not a ladder step"
+        sizes.add(font.size)
+    assert len(sizes) >= 2, "every headline landed on the same step; the ladder is not being exercised"
+
+    # and a real render of both ends of that range still produces a file
+    assert images.render_card(headlines[0], "Section", site, tmp_path / "s.jpg", "portrait").exists()
+    assert images.render_card(headlines[1], "Section", site, tmp_path / "l.jpg", "portrait").exists()
 
 
 def test_lines_do_not_break_after_a_dangling_word(site):
