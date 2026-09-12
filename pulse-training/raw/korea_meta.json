@@ -1,0 +1,37 @@
+{
+ "annual_admissions_m": {
+  "2015": 217.3
+ },
+ "urls_used": [
+  "https://en.wikipedia.org/wiki/List_of_highest-grossing_films_in_South_Korea",
+  "https://en.wikipedia.org/wiki/List_of_2016_box_office_number-one_films_in_South_Korea",
+  "https://en.wikipedia.org/wiki/List_of_2017_box_office_number-one_films_in_South_Korea",
+  "https://en.wikipedia.org/wiki/List_of_2018_box_office_number-one_films_in_South_Korea",
+  "https://en.wikipedia.org/wiki/List_of_2019_box_office_number-one_films_in_South_Korea",
+  "https://en.wikipedia.org/wiki/List_of_2020_box_office_number-one_films_in_South_Korea",
+  "https://en.wikipedia.org/wiki/List_of_2021_box_office_number-one_films_in_South_Korea",
+  "https://en.wikipedia.org/wiki/List_of_2022_box_office_number-one_films_in_South_Korea",
+  "https://en.wikipedia.org/wiki/List_of_2023_box_office_number-one_films_in_South_Korea",
+  "https://en.wikipedia.org/wiki/List_of_2024_box_office_number-one_films_in_South_Korea",
+  "https://en.wikipedia.org/wiki/List_of_2025_box_office_number-one_films_in_South_Korea",
+  "https://en.wikipedia.org/wiki/Cinema_of_South_Korea"
+ ],
+ "fetch_errors": [
+  "https://en.wikipedia.org/wiki/List_2019_box_office_number-one_films_in_South_Korea — URL_NOT_FOUND: 'This domain is cache-only and cannot be fetched' (typo variant tried once; the canonical List_of_2019_... URL was in cache and used)"
+ ],
+ "notes": [
+  "All pages were fetched with WebFetch only (Wikipedia cache). All 12 target pages (all-time list, 2016–2025 yearly pages, Cinema of South Korea) were served from cache.",
+  "annual_admissions_m: Cinema_of_South_Korea infobox gives only 2015 — 'Number of admissions (2015) Total: 217,300,000; National films: 113,430,600 (52%)'; 'Gross box office (2015) Total: ₩1.59 trillion; National films: ₩830 billion (52%)'; 'No. of screens (2024): 3475'. No annual admissions for 2016–2025 were present on any fetched page, so those years are absent.",
+  "All-time page tables used: 'Highest-grossing domestic films (by admissions)' (100 rows: rank, English title, Korean title, director, main cast, admissions, year), 'Foreign films' (50 rows), 'Animated films' (20 rows, with country), 'Highest-grossing Korean animated films' (10 rows), 'Highest-grossing films by year' (year, English title, Korean title, distributor only — no admissions or gross column). None of the all-time tables has a gross (₩ or US$) or distributor column.",
+  "all_time_rank = rank within the all-time domestic (100-row) table for origin=Korean rows, or within the all-time foreign (50-row) table for origin=Foreign rows; rows sourced only from the animated tables have all_time_rank=null (their animated-table rank is in notes).",
+  "Wikipedia inconsistency: the all-time 'Animated films' table lists Inside Out 2 (8,799,611), Zootopia 2 (8,604,185), Elemental (7,238,453), Demon Slayer: Infinity Castle (5,686,958), Suzume (5,542,245) which would qualify for the foreign top-50 but are not in it; figures recorded as printed.",
+  "Yearly pages: 2016 and 2017 have 'Highest-grossing films of YYYY (by admissions)' (rank, title, country, admissions, domestic gross US$) plus a 'domestic films' table; 2018 has separate domestic and foreign top-10 tables (rank, title, release date, admissions, domestic gross US$) and no combined table; 2019 and 2020 have NO top-10 table, only weekly number-one tables (week, date, film, weekend gross US$ — no admissions column), so each distinct weekly #1 film was recorded as a row with admissions/gross null and weekend figures in as_printed/notes; 2021, 2022, 2023 have 'Highest-grossing films of YYYY' (rank, title, distributor, domestic gross US$ — no admissions); 2024 and 2025 have 'Highest-grossing films of YYYY (In year release)' (rank, title, distributor, domestic gross US$) plus weekly tables that include weekend admissions (used only to annotate rows).",
+  "Yearly-table grosses (and 2016–2018 yearly admissions) are calendar-year figures; where a film spans two calendar years the row is keyed to its release year, admissions_m uses the cumulative all-time-page figure when available, and the other year's portion is recorded in notes (e.g. Along With the Gods: The Two Worlds, 1987: When the Day Comes, Avatar: The Way of Water, Harbin, Ashfall, Bohemian Rhapsody, Aquaman, Master, Pandora).",
+  "Where the all-time page and a yearly page print slightly different admissions for the same film, the all-time page figure is used for admissions_m and the yearly figure is kept in as_printed/notes.",
+  "Weekly-only films on the 2024 and 2025 pages (e.g. Wish, Kung Fu Panda 4, Dark Nuns, Boss) were not added as rows because those years have a top-10 table; their weekend data are on the pages.",
+  "gross_krw_bn is null for every row: no fetched table printed ₩ figures. gross_usd_m values ending in 'million' were printed rounded to 0.1 (2016–2018); 2021–2025 values are exact dollar amounts converted to millions.",
+  "No ranged values ('x–y') were encountered, so no lower-bound substitutions were needed.",
+  "Rows include pre-2016 and 2026 films from the all-time tables (years 1999–2026) since the all-time tables were requested in full; filter on year for 2016–2025 training use.",
+  "origin for 2019/2020 weekly rows and 2021–2025 gross-only rows was assigned from the film's production country (Korean vs Foreign) since those tables have no country column; Mickey 17 (US production, Korean director) is classified Foreign."
+ ]
+}

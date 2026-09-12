@@ -1,0 +1,702 @@
+[
+ {
+  "id": "ig-yrf",
+  "name": "Yash Raj Films",
+  "username": "yrf",
+  "industries": [
+   "Hindi"
+  ]
+ },
+ {
+  "id": "ig-dharma",
+  "name": "Dharma Productions",
+  "username": "dharmamovies",
+  "industries": [
+   "Hindi"
+  ]
+ },
+ {
+  "id": "ig-tseries",
+  "name": "T-Series",
+  "username": "tseries.official",
+  "industries": [
+   "Hindi"
+  ]
+ },
+ {
+  "id": "ig-redchillies",
+  "name": "Red Chillies Entertainment",
+  "username": "redchilliesent",
+  "industries": [
+   "Hindi"
+  ]
+ },
+ {
+  "id": "ig-excel",
+  "name": "Excel Entertainment",
+  "username": "excelmovies",
+  "industries": [
+   "Hindi"
+  ]
+ },
+ {
+  "id": "ig-maddock",
+  "name": "Maddock Films",
+  "username": "maddockfilms",
+  "industries": [
+   "Hindi"
+  ]
+ },
+ {
+  "id": "ig-nadiadwala",
+  "name": "Nadiadwala Grandson",
+  "username": "nadiadwalagrandson",
+  "industries": [
+   "Hindi"
+  ]
+ },
+ {
+  "id": "ig-zeestudios",
+  "name": "Zee Studios",
+  "username": "zeestudiosofficial",
+  "industries": [
+   "Hindi",
+   "Telugu",
+   "Tamil",
+   "Kannada",
+   "Malayalam"
+  ]
+ },
+ {
+  "id": "ig-jiostudios",
+  "name": "Jio Studios",
+  "username": "officialjiostudios",
+  "industries": [
+   "Hindi"
+  ]
+ },
+ {
+  "id": "ig-penmovies",
+  "name": "Pen Studios",
+  "username": "penmovies",
+  "industries": [
+   "Hindi"
+  ]
+ },
+ {
+  "id": "ig-zeemusic",
+  "name": "Zee Music Company",
+  "username": "zeemusiccompany",
+  "industries": [
+   "Hindi"
+  ]
+ },
+ {
+  "id": "ig-sonymusicindia",
+  "name": "Sony Music India",
+  "username": "sonymusicindia",
+  "industries": [
+   "Hindi"
+  ]
+ },
+ {
+  "id": "ig-saregama",
+  "name": "Saregama",
+  "username": "saregama_official",
+  "industries": [
+   "Hindi",
+   "Telugu",
+   "Tamil",
+   "Kannada",
+   "Malayalam"
+  ]
+ },
+ {
+  "id": "ig-tips",
+  "name": "Tips Official",
+  "username": "tipsofficial",
+  "industries": [
+   "Hindi"
+  ]
+ },
+ {
+  "id": "ig-rsvp",
+  "name": "RSVP Movies",
+  "username": "rsvpmovies",
+  "industries": [
+   "Hindi"
+  ]
+ },
+ {
+  "id": "ig-roykapur",
+  "name": "Roy Kapur Films",
+  "username": "roykapurfilms",
+  "industries": [
+   "Hindi"
+  ]
+ },
+ {
+  "id": "ig-balaji",
+  "name": "Balaji Motion Pictures",
+  "username": "balajimotionpictures",
+  "industries": [
+   "Hindi"
+  ]
+ },
+ {
+  "id": "ig-junglee",
+  "name": "Junglee Pictures",
+  "username": "jungleepictures",
+  "industries": [
+   "Hindi"
+  ]
+ },
+ {
+  "id": "ig-aanand-l-rai",
+  "name": "Colour Yellow Productions",
+  "username": "cypplofficial",
+  "industries": [
+   "Hindi"
+  ]
+ },
+ {
+  "id": "ig-mythri",
+  "name": "Mythri Movie Makers",
+  "username": "mythriofficial",
+  "industries": [
+   "Telugu"
+  ]
+ },
+ {
+  "id": "ig-geethaarts",
+  "name": "Geetha Arts",
+  "username": "geethaarts",
+  "industries": [
+   "Telugu"
+  ]
+ },
+ {
+  "id": "ig-sithara",
+  "name": "Sithara Entertainments",
+  "username": "sitharaentertainments",
+  "industries": [
+   "Telugu"
+  ]
+ },
+ {
+  "id": "ig-svc",
+  "name": "Sri Venkateswara Creations",
+  "username": "svc_official",
+  "industries": [
+   "Telugu"
+  ]
+ },
+ {
+  "id": "ig-vyjayanthi",
+  "name": "Vyjayanthi Movies",
+  "username": "vyjayanthimovies",
+  "industries": [
+   "Telugu"
+  ]
+ },
+ {
+  "id": "ig-dvv",
+  "name": "DVV Entertainment",
+  "username": "dvvmovies",
+  "industries": [
+   "Telugu"
+  ]
+ },
+ {
+  "id": "ig-uv",
+  "name": "UV Creations",
+  "username": "uvcreationsofficial",
+  "industries": [
+   "Telugu"
+  ]
+ },
+ {
+  "id": "ig-hombale",
+  "name": "Hombale Films",
+  "username": "hombalefilms",
+  "industries": [
+   "Kannada",
+   "Telugu"
+  ]
+ },
+ {
+  "id": "ig-kvn",
+  "name": "KVN Productions",
+  "username": "kvnproductions",
+  "industries": [
+   "Kannada"
+  ]
+ },
+ {
+  "id": "ig-paramvah",
+  "name": "Paramvah Studios",
+  "username": "paramvahstudios",
+  "industries": [
+   "Kannada"
+  ]
+ },
+ {
+  "id": "ig-sunpictures",
+  "name": "Sun Pictures",
+  "username": "sunpictures",
+  "industries": [
+   "Tamil"
+  ]
+ },
+ {
+  "id": "ig-lyca",
+  "name": "Lyca Productions",
+  "username": "lycaproductions",
+  "industries": [
+   "Tamil"
+  ]
+ },
+ {
+  "id": "ig-redgiant",
+  "name": "Red Giant Movies",
+  "username": "redgiantmovies_",
+  "industries": [
+   "Tamil"
+  ]
+ },
+ {
+  "id": "ig-ags",
+  "name": "AGS Entertainment",
+  "username": "agsentertainment",
+  "industries": [
+   "Tamil"
+  ]
+ },
+ {
+  "id": "ig-sevenscreen",
+  "name": "Seven Screen Studio",
+  "username": "sevenscreenstudio",
+  "industries": [
+   "Tamil"
+  ]
+ },
+ {
+  "id": "ig-wunderbar",
+  "name": "Wunderbar Films",
+  "username": "wunderbarfilms",
+  "industries": [
+   "Tamil"
+  ]
+ },
+ {
+  "id": "ig-2d",
+  "name": "2D Entertainment",
+  "username": "2d_entertainment",
+  "industries": [
+   "Tamil"
+  ]
+ },
+ {
+  "id": "ig-thinkmusic",
+  "name": "Think Music",
+  "username": "thinkmusicofficial",
+  "industries": [
+   "Tamil"
+  ]
+ },
+ {
+  "id": "ig-adityamusic",
+  "name": "Aditya Music",
+  "username": "adityamusic",
+  "industries": [
+   "Telugu"
+  ]
+ },
+ {
+  "id": "ig-laharimusic",
+  "name": "Lahari Music",
+  "username": "laharimusic",
+  "industries": [
+   "Telugu",
+   "Kannada"
+  ]
+ },
+ {
+  "id": "ig-aashirvad",
+  "name": "Aashirvad Cinemas",
+  "username": "aashirvadcine",
+  "industries": [
+   "Malayalam"
+  ]
+ },
+ {
+  "id": "ig-wayfarer",
+  "name": "Wayfarer Films",
+  "username": "wayfarerfilms.official",
+  "industries": [
+   "Malayalam"
+  ]
+ },
+ {
+  "id": "ig-netflix-in",
+  "name": "Netflix India",
+  "username": "netflix_in",
+  "industries": [
+   "Hindi",
+   "Telugu",
+   "Tamil",
+   "Kannada",
+   "Malayalam",
+   "Hollywood-India"
+  ]
+ },
+ {
+  "id": "ig-primevideo-in",
+  "name": "Prime Video India",
+  "username": "primevideoin",
+  "industries": [
+   "Hindi",
+   "Telugu",
+   "Tamil",
+   "Kannada",
+   "Malayalam",
+   "Hollywood-India"
+  ]
+ },
+ {
+  "id": "ig-jiohotstar",
+  "name": "JioHotstar",
+  "username": "jiohotstar",
+  "industries": [
+   "Hindi",
+   "Telugu",
+   "Tamil",
+   "Kannada",
+   "Malayalam",
+   "Hollywood-India"
+  ]
+ },
+ {
+  "id": "ig-zee5",
+  "name": "ZEE5",
+  "username": "zee5",
+  "industries": [
+   "Hindi",
+   "Telugu",
+   "Tamil",
+   "Kannada",
+   "Malayalam",
+   "Hollywood-India"
+  ]
+ },
+ {
+  "id": "ig-sonyliv",
+  "name": "Sony LIV",
+  "username": "sonylivindia",
+  "industries": [
+   "Hindi",
+   "Telugu",
+   "Tamil",
+   "Kannada",
+   "Malayalam",
+   "Hollywood-India"
+  ]
+ },
+ {
+  "id": "ig-bms",
+  "name": "BookMyShow",
+  "username": "bookmyshowin",
+  "industries": [
+   "Hindi",
+   "Telugu",
+   "Tamil",
+   "Kannada",
+   "Malayalam",
+   "Hollywood-India"
+  ]
+ },
+ {
+  "id": "ig-pvrinox",
+  "name": "PVR INOX",
+  "username": "pvrcinemas_official",
+  "industries": [
+   "Hindi",
+   "Telugu",
+   "Tamil",
+   "Kannada",
+   "Malayalam",
+   "Hollywood-India"
+  ]
+ },
+ {
+  "id": "ig-filmfare",
+  "name": "Filmfare",
+  "username": "filmfare",
+  "industries": [
+   "Hindi"
+  ]
+ },
+ {
+  "id": "ig-pinkvilla",
+  "name": "Pinkvilla",
+  "username": "pinkvilla",
+  "industries": [
+   "Hindi"
+  ]
+ },
+ {
+  "id": "ig-viralbhayani",
+  "name": "Viral Bhayani",
+  "username": "viralbhayani",
+  "industries": [
+   "Hindi"
+  ]
+ },
+ {
+  "id": "ig-varinder",
+  "name": "Varinder Chawla",
+  "username": "varindertchawla",
+  "industries": [
+   "Hindi"
+  ]
+ },
+ {
+  "id": "ig-instantbollywood",
+  "name": "Instant Bollywood",
+  "username": "instantbollywood",
+  "industries": [
+   "Hindi"
+  ]
+ },
+ {
+  "id": "ig-bollywoodhungama",
+  "name": "Bollywood Hungama",
+  "username": "realbollywoodhungama",
+  "industries": [
+   "Hindi"
+  ]
+ },
+ {
+  "id": "ig-koimoi",
+  "name": "Koimoi",
+  "username": "koimoi",
+  "industries": [
+   "Hindi"
+  ]
+ },
+ {
+  "id": "ig-ottplay",
+  "name": "OTTplay",
+  "username": "ottplayapp",
+  "industries": [
+   "Hindi",
+   "Telugu",
+   "Tamil",
+   "Kannada",
+   "Malayalam",
+   "Hollywood-India"
+  ]
+ },
+ {
+  "id": "ig-filmygyan",
+  "name": "Filmygyan",
+  "username": "filmygyan",
+  "industries": [
+   "Hindi"
+  ]
+ },
+ {
+  "id": "ig-bollywoodnow",
+  "name": "Bollywood Now",
+  "username": "bollywoodnow",
+  "industries": [
+   "Hindi"
+  ]
+ },
+ {
+  "id": "ig-manavmanglani",
+  "name": "Manav Manglani",
+  "username": "manav.manglani",
+  "industries": [
+   "Hindi"
+  ]
+ },
+ {
+  "id": "ig-etimes",
+  "name": "ETimes",
+  "username": "etimes",
+  "industries": [
+   "Hindi",
+   "Telugu",
+   "Tamil",
+   "Kannada",
+   "Malayalam"
+  ]
+ },
+ {
+  "id": "ig-behindwoods",
+  "name": "Behindwoods",
+  "username": "behindwoodsofficial",
+  "industries": [
+   "Tamil"
+  ]
+ },
+ {
+  "id": "ig-gulte",
+  "name": "Gulte",
+  "username": "gulteofficial",
+  "industries": [
+   "Telugu"
+  ]
+ },
+ {
+  "id": "ig-onmanorama",
+  "name": "Onmanorama",
+  "username": "onmanorama",
+  "industries": [
+   "Malayalam"
+  ]
+ },
+ {
+  "id": "ig-marvel",
+  "name": "Marvel Studios",
+  "username": "marvelstudios",
+  "industries": [
+   "Global",
+   "Hollywood-India"
+  ]
+ },
+ {
+  "id": "ig-disney",
+  "name": "Disney",
+  "username": "disney",
+  "industries": [
+   "Global",
+   "Hollywood-India"
+  ]
+ },
+ {
+  "id": "ig-wb",
+  "name": "Warner Bros. Pictures",
+  "username": "wbpictures",
+  "industries": [
+   "Global",
+   "Hollywood-India"
+  ]
+ },
+ {
+  "id": "ig-universal",
+  "name": "Universal Pictures",
+  "username": "universalpictures",
+  "industries": [
+   "Global",
+   "Hollywood-India"
+  ]
+ },
+ {
+  "id": "ig-sony",
+  "name": "Sony Pictures",
+  "username": "sonypictures",
+  "industries": [
+   "Global",
+   "Hollywood-India"
+  ]
+ },
+ {
+  "id": "ig-paramount",
+  "name": "Paramount Pictures",
+  "username": "paramountpics",
+  "industries": [
+   "Global",
+   "Hollywood-India"
+  ]
+ },
+ {
+  "id": "ig-lionsgate",
+  "name": "Lionsgate",
+  "username": "lionsgate",
+  "industries": [
+   "Global"
+  ]
+ },
+ {
+  "id": "ig-a24",
+  "name": "A24",
+  "username": "a24",
+  "industries": [
+   "Global"
+  ]
+ },
+ {
+  "id": "ig-netflix",
+  "name": "Netflix",
+  "username": "netflix",
+  "industries": [
+   "Global"
+  ]
+ },
+ {
+  "id": "ig-primevideo",
+  "name": "Prime Video",
+  "username": "primevideo",
+  "industries": [
+   "Global"
+  ]
+ },
+ {
+  "id": "ig-imdb",
+  "name": "IMDb",
+  "username": "imdb",
+  "industries": [
+   "Global"
+  ]
+ },
+ {
+  "id": "ig-rottentomatoes",
+  "name": "Rotten Tomatoes",
+  "username": "rottentomatoes",
+  "industries": [
+   "Global"
+  ]
+ },
+ {
+  "id": "ig-letterboxd",
+  "name": "Letterboxd",
+  "username": "letterboxd",
+  "industries": [
+   "Global"
+  ]
+ },
+ {
+  "id": "ig-discussingfilm",
+  "name": "DiscussingFilm",
+  "username": "discussingfilm",
+  "industries": [
+   "Global"
+  ]
+ },
+ {
+  "id": "ig-cjenm",
+  "name": "CJ ENM Movie (Korea)",
+  "username": "cjenm_movie",
+  "industries": [
+   "Global"
+  ]
+ },
+ {
+  "id": "ig-lotte-ent",
+  "name": "Lotte Entertainment (Korea)",
+  "username": "lotte_ent",
+  "industries": [
+   "Global"
+  ]
+ },
+ {
+  "id": "ig-toho",
+  "name": "TOHO (Japan)",
+  "username": "toho_movie",
+  "industries": [
+   "Global"
+  ]
+ }
+]

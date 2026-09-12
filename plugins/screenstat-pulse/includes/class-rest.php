@@ -347,7 +347,7 @@ final class SSPulse_Rest {
 			$res = self::create_film( $req ); if ( is_wp_error( $res ) ) { return $res; }
 			$film = $res->get_data(); $id = $film['id'];
 			foreach ( $ex['samples'] as $smp ) {
-				$wpdb->insert( SSPulse_DB::table( 'samples' ), array( 'film_id' => $id, 'src' => $smp['src'], 'taken_on' => gmdate( 'Y-m-d', time() + $smp['t'] * 86400 ), 'n' => $smp['n'], 'def_ct' => $smp['def'], 'prob_ct' => $smp['prob'], 'ott_ct' => $smp['ott'], 'no_ct' => $smp['no'], 'created_by' => get_current_user_id(), 'created_at' => SSPulse_DB::now() ) );
+				$wpdb->insert( SSPulse_DB::table( 'samples' ), array( 'film_id' => $id, 'src' => $smp['src'], 'taken_on' => gmdate( 'Y-m-d', time() + $smp['t'] * 86400 ), 'n' => $smp['n'], 'def_ct' => $smp['def'], 'prob_ct' => $smp['prob'], 'ott_ct' => $smp['ott'], 'no_ct' => $smp['no'], 'note' => (string) ( $smp['note'] ?? '' ), 'created_by' => get_current_user_id(), 'created_at' => SSPulse_DB::now() ) );
 			}
 			foreach ( $ex['hist'] as $h ) {   // [daysAgo, buzz, intent, life]
 				self::upsert_reading( $id, array( 'read_on' => gmdate( 'Y-m-d', time() + $h[0] * 86400 ), 'buzz' => $h[1], 'intent' => $h[2], 'life_p50' => $h[3], 'signals' => $ex['s'] ), 'manual' );

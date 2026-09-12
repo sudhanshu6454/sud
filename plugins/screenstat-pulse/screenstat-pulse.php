@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Screenstat Pulse
- * Description: Pre-release intelligence for Hindi films - Buzz Index, ticket intent and projected collection with uncertainty bands. Private admin app for the Screenstat desk, read-only figures for the site via [pulse] and the Pulse Figure block.
- * Version: 1.0.0
+ * Description: Pre-release intelligence for Indian films across six industries - Buzz Index, ticket intent and projected collection with uncertainty bands. Private admin app for the Screenstat desk, read-only figures for the site via [pulse] and the Pulse Figure block.
+ * Version: 1.7.0
  * Requires at least: 6.4
  * Requires PHP: 8.0
  * Author: Screenstat

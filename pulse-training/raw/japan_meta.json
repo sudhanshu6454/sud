@@ -1,0 +1,35 @@
+{
+  "annual_gross_jpy_bn": {
+    "2025": 274.4
+  },
+  "annual_admissions_m": {
+    "2025": 188.756
+  },
+  "urls_used": [
+    "https://en.wikipedia.org/wiki/List_of_highest-grossing_films_in_Japan",
+    "https://en.wikipedia.org/wiki/List_of_2016_box_office_number-one_films_in_Japan",
+    "https://en.wikipedia.org/wiki/List_of_2017_box_office_number-one_films_in_Japan",
+    "https://en.wikipedia.org/wiki/List_of_2018_box_office_number-one_films_in_Japan",
+    "https://en.wikipedia.org/wiki/List_of_2019_box_office_number-one_films_in_Japan",
+    "https://en.wikipedia.org/wiki/List_of_2020_box_office_number-one_films_in_Japan",
+    "https://en.wikipedia.org/wiki/List_of_2021_box_office_number-one_films_in_Japan",
+    "https://en.wikipedia.org/wiki/List_of_2022_box_office_number-one_films_in_Japan",
+    "https://en.wikipedia.org/wiki/List_of_2023_box_office_number-one_films_in_Japan",
+    "https://en.wikipedia.org/wiki/List_of_2024_box_office_number-one_films_in_Japan",
+    "https://en.wikipedia.org/wiki/List_of_2025_box_office_number-one_films_in_Japan",
+    "https://en.wikipedia.org/wiki/Cinema_of_Japan"
+  ],
+  "fetch_errors": [],
+  "notes": [
+    "All pages fetched successfully via WebFetch (Wikipedia cache); no fetch errors.",
+    "Main all-time list page: https://en.wikipedia.org/wiki/List_of_highest-grossing_films_in_Japan table columns as printed are Rank | Title | Gross revenue (¥ billion) | Year | Ref -- no Distributor/Studio column exists in the source, so distributor=null for all rows in this dataset.",
+    "On the all-time list, Japanese-origin films are marked in the source with a small 'Japan' flag icon before the title (rendered as literal text 'Japan' by the fetch tool); this was used to set origin=Japanese vs Foreign for all-time-list rows. Per-year page rows (2016-2025) do not carry any flag icon or explicit anime label in the source tables; origin and anime for those rows were classified from general knowledge of each film (well-established public information about the title), not from an explicit in-table marker, since the per-year tables have no such column.",
+    "anime=false for all non-Japanese-origin (Foreign) titles by definition (anime denotes Japanese animation); anime=true only for titles that are Japanese animated theatrical films/franchises; anime=false for Japanese live-action titles. No row required anime=null (a marker was always determinable), though none of this is an explicit table column -- see note above.",
+    "Three 2026-release entries appear in the all-time list (Detective Conan: Fallen Angel of the Highway, Toy Story 5, Chiikawa the Movie: The Secret of the Mermaid Island), each marked with a '†' footnote symbol in the source, understood to denote an incomplete/still-running theatrical gross as of the page's last snapshot; recorded as printed (this is the lower/incomplete figure) and flagged in each row's notes.",
+    "Where a film's gross differs between the all-time-list page and a per-year page (e.g. One Piece Film: Red, Suzume, Top Gun: Maverick in 2022; The First Slam Dunk in 2023; Kokuho, Chainsaw Man - The Movie: Reze Arc, Demon Slayer: Infinity Castle in 2025), this is because the per-year page's figure is a year-end/earlier snapshot while the all-time page reflects a later, higher final cumulative gross (the film's run continued past the year-end snapshot or into a subsequent year). Both values were kept as printed on their respective source pages (not reconciled); the per-year figure is the lower bound and is flagged as such in that row's notes field.",
+    "2016 per-year page's 'Highest-grossing films' table has only two columns (Film, Gross in yen); no Rank, Distributor, or USD column present in source -- rank_in_year for 2016 rows was inferred from the table's printed top-to-bottom order (1-10).",
+    "2017-2025 per-year pages' tables include Rank | Title | Gross (¥ billion, with a USD-million parenthetical) -- no Distributor column in any of these pages either, so distributor=null throughout the dataset.",
+    "Cinema_of_Japan page has an annual gross/admissions table but it only covers 2009-2015 (outside the requested 2016-2025 range) and was not otherwise usable; the article's intro summary section separately states 2025 stats (694 feature films produced, ¥274.4 billion gross box office, 188,756,000 admissions, 3,697 screens), which were captured in annual_gross_jpy_bn / annual_admissions_m above. No other year in 2016-2024 had a gross/admissions figure paired with it anywhere in that article's text per an explicit full-text scan.",
+    "The 'as_printed' field for all-time-list rows reproduces rank, the literal 'Japan ' flag-prefix when present, title, a '†' suffix when present, the printed yen-billion figure, and year, pipe-separated, approximating the source row's cell order (Ref/citation-marker column omitted since it was blank/citation-only in every fetched row)."
+  ]
+}

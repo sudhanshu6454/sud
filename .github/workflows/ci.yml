@@ -15,6 +15,13 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y fonts-dejavu-core
       - run: pip install -r autopub/requirements-dev.txt
       - run: cd autopub && python -m pytest -q
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: cd pulse-worker && npm test
+      # runs the validation tests and, through them, node tests/model-equality.mjs - the eight
+      # HANDOVER-WORLD acceptance fixtures plus the plugin/worker model-copy hash check
+      - run: php plugins/screenstat-pulse/tests/run-tests.php
       - run: python infra/gen_compose.py --check
       - run: python -m py_compile infra/dns.py infra/gen_compose.py
       - run: bash -n infra/bootstrap.sh infra/wp/init-sites.sh infra/linode/provision.sh infra/db/init-databases.sh

@@ -1,0 +1,52 @@
+{
+ "total": 256,
+ "by_type": {
+  "tracker": 9,
+  "trade_press": 20,
+  "social": 14,
+  "research": 12,
+  "aggregator": 5,
+  "ticketing": 9,
+  "api": 18,
+  "dataset": 1,
+  "public_page": 1,
+  "review": 13,
+  "ott_tracker": 6,
+  "music": 9,
+  "official_stat": 15,
+  "calendar": 6,
+  "instagram": 80,
+  "youtube": 38
+ },
+ "by_status": {
+  "integrated": 53,
+  "manual": 43,
+  "reference": 50,
+  "dead": 5,
+  "planned": 105
+ },
+ "by_access": {
+  "clipper": 21,
+  "rss": 21,
+  "public_page": 35,
+  "manual": 20,
+  "paid": 13,
+  "api": 52,
+  "dataset": 1,
+  "csv": 9,
+  "owned": 84
+ },
+ "by_industry": {
+  "Hindi": 131,
+  "Telugu": 104,
+  "Tamil": 99,
+  "Kannada": 86,
+  "Malayalam": 87,
+  "Hollywood-India": 84,
+  "Global": 101
+ },
+ "verified": 176,
+ "reachable": 131,
+ "with_rss": 46,
+ "youtube_channel_ids": 33
+}

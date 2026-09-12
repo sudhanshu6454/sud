@@ -1,0 +1,48 @@
+{
+ "d1_model": {
+  "r2": 0.551,
+  "resid_sd": 0.696,
+  "coef": {
+   "star_pull": 0.392,
+   "franchise": 0.4902,
+   "holiday": 0.2902,
+   "lb": 0.3149,
+   "dubbed": 0.0905,
+   "remake": -0.2025,
+   "g_comedy": -0.0809,
+   "g_drama": -0.2063,
+   "g_epic": 0.2696,
+   "g_romance": 0.1384,
+   "g_thriller": -0.1106
+  },
+  "intercept": -0.6366
+ },
+ "life_model": {
+  "r2": 0.861,
+  "resid_sd": 0.399,
+  "coef": {
+   "ld1": 0.9158,
+   "imdb": 0.2522,
+   "holiday": -0.0422,
+   "franchise": 0.2039
+  },
+  "intercept": 0.7265
+ },
+ "hit_logit_pre": {
+  "acc": 0.724,
+  "odds": {
+   "star_pull": 2.211,
+   "franchise": 2.274,
+   "holiday": 1.351,
+   "lb": 0.25,
+   "dubbed": 5.795,
+   "remake": 0.656,
+   "g_comedy": 1.584,
+   "g_drama": 1.222,
+   "g_epic": 2.928,
+   "g_romance": 1.077,
+   "g_thriller": 0.92
+  },
+  "intercept": 2.3618
+ }
+}

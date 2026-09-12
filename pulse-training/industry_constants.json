@@ -1,0 +1,134 @@
+{
+ "nett_share_of_ww": {
+  "hindi_all": 0.676,
+  "hindi_original": 0.68,
+  "hindi_dubbed_south": 0.261,
+  "hindi_ww_over_300cr": 0.558,
+  "n": 270,
+  "provenance": "fitted: lifetime India nett \u00f7 worldwide gross, Hindi set 2016\u20132025"
+ },
+ "india_share_of_ww_south": {
+  "by_industry": {
+   "Telugu": {
+    "n": 11,
+    "median_india_gross_share": 0.79,
+    "implied_nett_share": 0.648
+   },
+   "Tamil": {
+    "n": 4,
+    "median_india_gross_share": 0.646,
+    "implied_nett_share": 0.53
+   },
+   "Malayalam": {
+    "n": 8,
+    "median_india_gross_share": 0.614,
+    "implied_nett_share": 0.503
+   }
+  },
+  "provenance": "fitted on the few Wikipedia rows printing both India and worldwide gross; implied_nett_share divides by the 1.22 gross\u2192nett ratio established on the Hindi set. Thin data (n=23 across four industries) \u2014 treat as a prior, not a constant"
+ },
+ "scale_ww_cr": {
+  "by_industry": {
+   "Hindi": {
+    "n": 270,
+    "median_ww_cr": 110.0,
+    "p90_ww_cr": 453.7,
+    "median_year_topper_ww_cr": 999.0,
+    "years": 10
+   },
+   "Telugu": {
+    "n": 100,
+    "median_ww_cr": 107.725,
+    "p90_ww_cr": 297.6,
+    "median_year_topper_ww_cr": 383.0,
+    "years": 10
+   },
+   "Tamil": {
+    "n": 87,
+    "median_ww_cr": 105.0,
+    "p90_ww_cr": 324.4,
+    "median_year_topper_ww_cr": 380.0,
+    "years": 10
+   },
+   "Kannada": {
+    "n": 60,
+    "median_ww_cr": 30.0,
+    "p90_ww_cr": 240.8,
+    "median_year_topper_ww_cr": 84.0,
+    "years": 8
+   },
+   "Malayalam": {
+    "n": 38,
+    "median_ww_cr": 83.775,
+    "p90_ww_cr": 238.4,
+    "median_year_topper_ww_cr": 125.5,
+    "years": 9
+   }
+  },
+  "provenance": "from Wikipedia highest-grossing lists per language (worldwide gross, conservative estimates); these lists are top-of-market, so the median is the median of NOTABLE films, not of all releases"
+ },
+ "ww_gross_over_budget": {
+  "by_industry": {
+   "Hindi": {
+    "n": 257,
+    "median_ww_over_budget": 1.571,
+    "p25": 0.86,
+    "p75": 3.48
+   },
+   "Telugu": {
+    "n": 40,
+    "median_ww_over_budget": 2.204,
+    "p25": 1.52,
+    "p75": 3.32
+   },
+   "Tamil": {
+    "n": 35,
+    "median_ww_over_budget": 1.667,
+    "p25": 1.19,
+    "p75": 2.38
+   },
+   "Kannada": {
+    "n": 18,
+    "median_ww_over_budget": 1.734,
+    "p25": 1.45,
+    "p75": 4.59
+   },
+   "Malayalam": {
+    "n": 12,
+    "median_ww_over_budget": 4.692,
+    "p25": 1.83,
+    "p75": 9.68
+   }
+  },
+  "provenance": "fitted where both figures exist; budgets are the least reliable field everywhere (\u00b130%)"
+ },
+ "korea": {
+  "n_pairs": 66,
+  "usd_per_admission": 7.422,
+  "median_top10_admissions_m": 6.736,
+  "provenance": "fitted from Wikipedia Korean box-office tables (admissions and US$ gross where both printed)"
+ },
+ "japan": {
+  "median_year_topper_jpy_bn": 15.835,
+  "median_top10_jpy_bn": 5.665,
+  "anime_share_of_top10": 0.32,
+  "provenance": "fitted from Wikipedia Japanese year tables (\u00a5bn distributor gross)"
+ },
+ "global": {
+  "n": 100,
+  "n_with_budget": 94,
+  "median_ww_over_budget": 5.456,
+  "franchise_share_of_top10": 0.83,
+  "median_ww_musd": 864.144,
+  "median_rt": 77,
+  "provenance": "Wikipedia highest-grossing films per year 2016\u20132025, top 10 each"
+ },
+ "south_verdict_words": {
+  "counts": {
+   "hit": 94,
+   "flop": 14,
+   "unclear": 20
+  },
+  "provenance": "keyword read of Wikipedia lead sentences \u2014 indicative only, never used as a fitted target"
+ }
+}

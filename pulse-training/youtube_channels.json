@@ -1,0 +1,326 @@
+[
+ {
+  "id": "yt-tseries",
+  "name": "T-Series",
+  "handle": "@tseries",
+  "channel_id": "UCq-Fj5jknLsUf-MWSy4_brA",
+  "industries": [
+   "Hindi"
+  ]
+ },
+ {
+  "id": "yt-zeemusic",
+  "name": "Zee Music Company",
+  "handle": "@zeemusiccompany",
+  "channel_id": "UCFFbwnve3yF62-tVXkTyHqg",
+  "industries": [
+   "Hindi"
+  ]
+ },
+ {
+  "id": "yt-sonymusicindia",
+  "name": "Sony Music India",
+  "handle": "@SonyMusicIndiaVEVO",
+  "channel_id": "UC3MLnJtqc_phABBriLRhtgQ",
+  "industries": [
+   "Hindi"
+  ]
+ },
+ {
+  "id": "yt-saregama",
+  "name": "Saregama Music",
+  "handle": "@saregama",
+  "channel_id": "UC_A7K2dXFsTMAciGmnNxy-Q",
+  "industries": [
+   "Hindi"
+  ]
+ },
+ {
+  "id": "yt-yrf",
+  "name": "YRF",
+  "handle": "@yrf",
+  "channel_id": "UCbTLwN10NoCU4WDzLf1JMOA",
+  "industries": [
+   "Hindi"
+  ]
+ },
+ {
+  "id": "yt-dharma",
+  "name": "Dharma Productions",
+  "handle": "@DharmaProductions",
+  "channel_id": "UCGdHCtXEzkCB7-g_NXYZPcw",
+  "industries": [
+   "Hindi"
+  ]
+ },
+ {
+  "id": "yt-maddock",
+  "name": "Maddock Films",
+  "handle": "@MaddockFilms",
+  "channel_id": "UC-LOdiPoxninevJ0DkleCLg",
+  "industries": [
+   "Hindi"
+  ]
+ },
+ {
+  "id": "yt-redchillies",
+  "name": "Red Chillies Entertainment",
+  "handle": "@RedChilliesEntertainment",
+  "channel_id": "UCjJKg01HAP01xCLVhDmnLhw",
+  "industries": [
+   "Hindi"
+  ]
+ },
+ {
+  "id": "yt-goldmines",
+  "name": "Goldmines Telefilms",
+  "handle": "@GoldminesTelefilms",
+  "channel_id": "UCyoXW-Dse7fURq30EWl_CUA",
+  "industries": [
+   "Hindi",
+   "Telugu",
+   "Tamil"
+  ]
+ },
+ {
+  "id": "yt-adityamusic",
+  "name": "Aditya Music",
+  "handle": "@adityamusic",
+  "channel_id": "UCNApqoVYJbYSrni4YsbXzyQ",
+  "industries": [
+   "Telugu"
+  ]
+ },
+ {
+  "id": "yt-laharimusic",
+  "name": "Lahari Music",
+  "handle": "@LahariMusic",
+  "channel_id": "UCnSqxrSfo1sK4WZ7nBpYW1Q",
+  "industries": [
+   "Telugu",
+   "Kannada"
+  ]
+ },
+ {
+  "id": "yt-mythri",
+  "name": "Mythri Movie Makers",
+  "handle": "@MythriMovieMakers",
+  "channel_id": "UCKZSn5C-RzrLjuWJF8wWiDw",
+  "industries": [
+   "Telugu"
+  ]
+ },
+ {
+  "id": "yt-geethaarts",
+  "name": "Geetha Arts",
+  "handle": "@GeethaArts",
+  "channel_id": "UCiJfiEg1FImWsVuEu0L8X6Q",
+  "industries": [
+   "Telugu"
+  ]
+ },
+ {
+  "id": "yt-thinkmusic",
+  "name": "Think Music India",
+  "handle": "@ThinkMusicIndia",
+  "channel_id": "UCLbdVvreihwZRL6kwuEUYsA",
+  "industries": [
+   "Tamil"
+  ]
+ },
+ {
+  "id": "yt-sonymusicsouth",
+  "name": "Sony Music South",
+  "handle": "@SonyMusicSouth",
+  "channel_id": "UCTNtRdBAiZtHP9w7JinzfUg",
+  "industries": [
+   "Telugu",
+   "Tamil",
+   "Kannada",
+   "Malayalam"
+  ]
+ },
+ {
+  "id": "yt-saregamatamil",
+  "name": "Saregama Tamil",
+  "handle": "@SaregamaTamil",
+  "channel_id": "UCzee67JnEcuvjErRyWP3GpQ",
+  "industries": [
+   "Tamil"
+  ]
+ },
+ {
+  "id": "yt-lyca",
+  "name": "Lyca Productions",
+  "handle": "@LycaProductions",
+  "channel_id": "UCA7gwgLgmCZ8DSmdf2bhb8g",
+  "industries": [
+   "Tamil"
+  ]
+ },
+ {
+  "id": "yt-muzik247",
+  "name": "Muzik247",
+  "handle": "@Muzik247",
+  "channel_id": "UChRi1dpwnsZcIo1LSwzY0Iw",
+  "industries": [
+   "Malayalam"
+  ]
+ },
+ {
+  "id": "yt-manoramamusic",
+  "name": "Manorama Music",
+  "handle": "@ManoramaMusicSongs",
+  "channel_id": "UCyx6Udkt-zEqwEaoq-uWubQ",
+  "industries": [
+   "Malayalam"
+  ]
+ },
+ {
+  "id": "yt-anandaudio",
+  "name": "Anand Audio",
+  "handle": "@AnandAudio",
+  "channel_id": "UCLtCejNl8eAg4PO_9lf2TIg",
+  "industries": [
+   "Kannada"
+  ]
+ },
+ {
+  "id": "yt-marvel",
+  "name": "Marvel Entertainment",
+  "handle": "@marvel",
+  "channel_id": "UCvC4D8onUfXzvjTOM-dBfEA",
+  "industries": [
+   "Global",
+   "Hollywood-India"
+  ]
+ },
+ {
+  "id": "yt-wb",
+  "name": "Warner Bros. Pictures",
+  "handle": "@warnerbrospictures",
+  "channel_id": "UCjmJDM5pRKbUlVIzDYYWb6g",
+  "industries": [
+   "Global",
+   "Hollywood-India"
+  ]
+ },
+ {
+  "id": "yt-universal",
+  "name": "Universal Pictures",
+  "handle": "@UniversalPictures",
+  "channel_id": "UCq0OueAsdxH6b8nyAspwViw",
+  "industries": [
+   "Global",
+   "Hollywood-India"
+  ]
+ },
+ {
+  "id": "yt-sony",
+  "name": "Sony Pictures Entertainment",
+  "handle": "@SonyPictures",
+  "channel_id": "UCz97F7dMxBNOfGYu3rx8aCw",
+  "industries": [
+   "Global",
+   "Hollywood-India"
+  ]
+ },
+ {
+  "id": "yt-paramount",
+  "name": "Paramount Pictures",
+  "handle": "@ParamountPictures",
+  "channel_id": "UCF9imwPMSGz4Vq1NiTWCC7g",
+  "industries": [
+   "Global",
+   "Hollywood-India"
+  ]
+ },
+ {
+  "id": "yt-20th",
+  "name": "20th Century Studios",
+  "handle": "@20thCenturyStudios",
+  "channel_id": "UC2-BeLxzUBSs0uSrmzWhJuQ",
+  "industries": [
+   "Global",
+   "Hollywood-India"
+  ]
+ },
+ {
+  "id": "yt-lionsgate",
+  "name": "Lionsgate Movies",
+  "handle": "@LionsgateMovies",
+  "channel_id": "UCJ6nMHaJPZvsJ-HmUmj1SeA",
+  "industries": [
+   "Global"
+  ]
+ },
+ {
+  "id": "yt-a24",
+  "name": "A24",
+  "handle": "@A24",
+  "channel_id": "UCuPivVjnfNo4mb3Oog_frZg",
+  "industries": [
+   "Global"
+  ]
+ },
+ {
+  "id": "yt-netflix",
+  "name": "Netflix",
+  "handle": "@Netflix",
+  "channel_id": "UCWOA1ZGywLbqmigxE4Qlvuw",
+  "industries": [
+   "Global"
+  ]
+ },
+ {
+  "id": "yt-netflix-in",
+  "name": "Netflix India",
+  "handle": "@NetflixIndiaOfficial",
+  "channel_id": "UCZSNzBgFub_WWil6TOTYwAg",
+  "industries": [
+   "Hindi",
+   "Telugu",
+   "Tamil",
+   "Kannada",
+   "Malayalam",
+   "Hollywood-India"
+  ]
+ },
+ {
+  "id": "yt-primevideo-in",
+  "name": "Prime Video India",
+  "handle": "@PrimeVideoIN",
+  "channel_id": "UC4zWG9LccdWGUlF77LZ8toA",
+  "industries": [
+   "Hindi",
+   "Telugu",
+   "Tamil",
+   "Kannada",
+   "Malayalam",
+   "Hollywood-India"
+  ]
+ },
+ {
+  "id": "yt-jiohotstar",
+  "name": "JioHotstar",
+  "handle": "@JioHotstar",
+  "channel_id": "UC0PTktRYpZXb6On0_zFKWIg",
+  "industries": [
+   "Hindi",
+   "Telugu",
+   "Tamil",
+   "Kannada",
+   "Malayalam",
+   "Hollywood-India"
+  ]
+ },
+ {
+  "id": "yt-rt-trailers",
+  "name": "Rotten Tomatoes Trailers",
+  "handle": "@RottenTomatoesTrailers",
+  "channel_id": "UCi8e0iOVk1fEOogdfu4YgfA",
+  "industries": [
+   "Global"
+  ]
+ }
+]

@@ -50,10 +50,10 @@ final class SSPulse_Seed {
 	public static function industry(): int {
 		global $wpdb;
 		$rows = array(
-			array( 'hindi', 'Hindi', 180, 4000, 190, 0.68, 'f', 1.00, 'f', 1.00, 'train', 'the fitted set: 270 releases, 2016-2025' ),
-			array( 'telugu', 'Telugu', 150, 2400, 200, 0.65, 'f', 0.50, 'f', 1.35, 'telugu', '100 films from Wikipedia Telugu lists; worldwide gross' ),
+			array( 'hindi', 'Hindi', 180, 4000, 190, 0.68, 'f', 1.00, 'f', 1.00, 'train', 'the fitted set: 270 releases, 2016–2025' ),
+			array( 'telugu', 'Telugu', 150, 2400, 200, 0.65, 'f', 0.50, 'f', 1.35, 'telugu', '100 films from Wikipedia’s Telugu lists; worldwide gross' ),
 			array( 'tamil', 'Tamil', 140, 2200, 200, 0.53, 'f', 0.52, 'f', 1.35, 'tamil', '87 films; worldwide gross' ),
-			array( 'kannada', 'Kannada', 130, 1100, 190, 0.55, 'd', 0.12, 'f', 1.60, 'kannada', '60 films from 2018 on; fat-tailed - KGF and Kantara sit 20x the median' ),
+			array( 'kannada', 'Kannada', 130, 1100, 190, 0.55, 'd', 0.12, 'f', 1.60, 'kannada', '60 films from 2018 on; fat-tailed — KGF and Kantara sit 20× the median' ),
 			array( 'malayalam', 'Malayalam', 130, 900, 180, 0.50, 'f', 0.22, 'f', 1.50, 'malayalam', '38 films, dense only from 2023; highest return on budget in India' ),
 			array( 'hollywood', 'Hollywood in India', 230, 2000, 190, 0.16, 'd', 0.45, 'd', 1.60, 'global', 'India nett for a global release; comps are the global top ten of each year' ),
 		);

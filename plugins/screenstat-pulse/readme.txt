@@ -45,6 +45,29 @@ connectors on the schedule in pulse-worker/README.md §5. Deploy it as its own c
 connector's credentials and what happens with none configured (nothing to ingest, but the daily
 reading still runs against whatever signals are already in WordPress).
 
+== Data ==
+
+data/calendar.json    Seeds the release calendar on activation (idempotent, re-imported when the
+                      file's mtime changes).
+data/examples.json    The three fictional example films behind "Load example films". Their signals
+                      are the handover's reference EXAMPLES verbatim, and tests/model-equality.mjs
+                      reads this file for acceptance fixtures A-E - so if it goes stale, the test
+                      suite fails rather than the button.
+data/training.csv     270 Hindi releases 2016-2025, the v1.4 fit input. Embedded in the model as
+                      TRAIN; shipped here because the Comparable releases panel is specified to
+                      read it.
+data/world_films.csv  1,124 rows covering every industry plus Korea and Japan as reference markets.
+                      Embedded in the model as WORLD/GLOBAL/WREF (HANDOVER-WORLD.md section 2 names
+                      this path).
+
+Both CSVs are public Wikipedia-derived aggregates and the same figures already ship inside
+app/pulse-model.js, so nothing here is protected that is not already readable. The rest of the
+corpus - the 256-row source registry, the fitted constants, the analyses and the raw traceability
+output - deliberately lives at pulse-training/ in the repo root instead, where it is version
+controlled but never deployed. See pulse-training/README.md, which also records the known issues in
+the data (a truncated registry column, a duplicated Kannada comparable, a stale sample-size column
+in INDUSTRIES.md).
+
 == Capabilities ==
 
 edit_pulse   Editor, Administrator  - films, signals, samples, readings, actuals, ingest, clip
@@ -60,9 +83,16 @@ in this repo.
 
 == Tests ==
 
-php tests/run-tests.php        (validation rules, public field whitelist, model-equality)
-node tests/model-equality.mjs  (pins app/pulse-model.js against the HANDOVER-WORLD.md §5 fixtures -
-                                 there is no PHP compute() to test against, see "Architecture" above)
+php tests/run-tests.php        (validation rules, public field whitelist, then model-equality)
+node tests/model-equality.mjs  (all eight HANDOVER-WORLD.md §5 acceptance fixtures A-H against
+                                 app/pulse-model.js - there is no PHP compute() to test against,
+                                 see "Architecture" above - plus two integrity checks: that the
+                                 plugin and pulse-worker copies of pulse-model.js are byte-identical,
+                                 and that class-seed.php's industry notes match the model's strings
+                                 exactly, which an ASCII-flattening edit would otherwise break
+                                 silently)
+
+Both run in CI (.github/workflows/ci.yml), alongside the worker's own suite.
 
 pulse-worker/ has its own suite: cd pulse-worker && npm test.
 
@@ -76,6 +106,21 @@ driven from pulse-model.js's GROUPS/RELEASE/CAL, plus a hand-added block for the
 industry, genre, cert, event, franchise, remake, dubbed) reads and writes every v1.7 signal, but a
 film's ingest provenance (meta), trending flag and post-release actual_days are stored and returned
 by the REST API without a panel in this admin app yet.
+
+Two further gaps are known and deliberately left, rather than half-built:
+
+* The sspulse_industry table is a seeded mirror, not a control surface. HANDOVER-WORLD.md section 1
+  describes the model reading the table over REST and falling back to its embedded copy, but
+  pulse-model.js resolves industries through a module-scope constant with no setter, so editing a
+  row changes nothing the model computes. The table is also missing the `mult` column the model
+  reads for the four South comparables pools. Adding that column only becomes meaningful alongside
+  the injection point, so both wait for the same piece of work.
+* pulse-worker/config/sources.example.json says it was generated from the source registry, and it
+  genuinely was - but no generator ships, so the config cannot track the registry. Writing one is
+  not quite mechanical: scripts/discovery-check.js writes verification state (followers, enabled,
+  errors) back into config/sources.json, so a generator has to merge rather than overwrite, and it
+  needs a decision on how the registry's Global-tagged accounts map onto per-film industry
+  selection. See pulse-training/README.md.
 
 == Uninstall ==
 

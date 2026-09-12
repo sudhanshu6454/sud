@@ -1,0 +1,594 @@
+{
+ "foreign_in_india": [
+  {
+   "rank": 15,
+   "foreign_rank": 1,
+   "title": "Spider-Man: Brand New Day",
+   "year": 2026,
+   "india_amount_cr": 575,
+   "as_printed": "₹575 crore (title printed as \"Spider-Man: Brand New Day*\")",
+   "basis": "India domestic total gross (all language versions in India), column \"Total gross\" — not net, not worldwide",
+   "distributor": null
+  },
+  {
+   "rank": 20,
+   "foreign_rank": 2,
+   "title": "Avatar: The Way of Water",
+   "year": 2022,
+   "india_amount_cr": 484.36,
+   "as_printed": "₹484.36 crore",
+   "basis": "India domestic total gross (all language versions in India), column \"Total gross\" — not net, not worldwide",
+   "distributor": null
+  },
+  {
+   "rank": 23,
+   "foreign_rank": 3,
+   "title": "Avengers: Endgame",
+   "year": 2019,
+   "india_amount_cr": 442.3,
+   "as_printed": "₹442.30 crore",
+   "basis": "India domestic total gross (all language versions in India), column \"Total gross\" — not net, not worldwide",
+   "distributor": null
+  }
+ ],
+ "indian_all_time": [
+  {
+   "rank": 1,
+   "title": "Dangal",
+   "year": 2016,
+   "languages": "Hindi",
+   "ww_gross_cr": 1968,
+   "ww_gross_cr_high": 2054,
+   "as_printed": "₹1,968–2,054 crore"
+  },
+  {
+   "rank": 2,
+   "title": "Dhurandhar: The Revenge",
+   "year": 2026,
+   "languages": "Hindi",
+   "ww_gross_cr": 1852.44,
+   "ww_gross_cr_high": null,
+   "as_printed": "₹1,852.44 crore"
+  },
+  {
+   "rank": 3,
+   "title": "Baahubali 2: The Conclusion",
+   "year": 2017,
+   "languages": "Telugu",
+   "ww_gross_cr": 1810.43,
+   "ww_gross_cr_high": null,
+   "as_printed": "₹1,810.43 crore"
+  },
+  {
+   "rank": 4,
+   "title": "Pushpa 2: The Rule",
+   "year": 2024,
+   "languages": "Telugu",
+   "ww_gross_cr": 1642,
+   "ww_gross_cr_high": 1800,
+   "as_printed": "₹1,642–1,800 crore"
+  },
+  {
+   "rank": 5,
+   "title": "Dhurandhar",
+   "year": 2025,
+   "languages": "Hindi",
+   "ww_gross_cr": 1350.83,
+   "ww_gross_cr_high": 1428,
+   "as_printed": "₹1,350.83–1,428 crore"
+  },
+  {
+   "rank": 6,
+   "title": "RRR",
+   "year": 2022,
+   "languages": "Telugu",
+   "ww_gross_cr": 1300,
+   "ww_gross_cr_high": 1387,
+   "as_printed": "₹1,300–1,387 crore"
+  },
+  {
+   "rank": 7,
+   "title": "KGF: Chapter 2",
+   "year": 2022,
+   "languages": "Kannada",
+   "ww_gross_cr": 1200,
+   "ww_gross_cr_high": 1250,
+   "as_printed": "₹1,200–1,250 crore"
+  },
+  {
+   "rank": 8,
+   "title": "Jawan",
+   "year": 2023,
+   "languages": "Hindi",
+   "ww_gross_cr": 1148.32,
+   "ww_gross_cr_high": null,
+   "as_printed": "₹1,148.32 crore"
+  },
+  {
+   "rank": 9,
+   "title": "Pathaan",
+   "year": 2023,
+   "languages": "Hindi",
+   "ww_gross_cr": 1050.3,
+   "ww_gross_cr_high": null,
+   "as_printed": "₹1,050.30 crore"
+  },
+  {
+   "rank": 10,
+   "title": "Kalki 2898 AD",
+   "year": 2024,
+   "languages": "Telugu",
+   "ww_gross_cr": 1042,
+   "ww_gross_cr_high": 1100,
+   "as_printed": "₹1,042–1,100 crore"
+  },
+  {
+   "rank": 11,
+   "title": "Animal",
+   "year": 2023,
+   "languages": "Hindi",
+   "ww_gross_cr": 917.82,
+   "ww_gross_cr_high": null,
+   "as_printed": "₹917.82 crore"
+  },
+  {
+   "rank": 12,
+   "title": "Bajrangi Bhaijaan",
+   "year": 2015,
+   "languages": "Hindi",
+   "ww_gross_cr": 900.9,
+   "ww_gross_cr_high": 969.06,
+   "as_printed": "₹900.90–969.06 crore"
+  },
+  {
+   "rank": 13,
+   "title": "Stree 2",
+   "year": 2024,
+   "languages": "Hindi",
+   "ww_gross_cr": 874.58,
+   "ww_gross_cr_high": null,
+   "as_printed": "₹874.58 crore"
+  },
+  {
+   "rank": 14,
+   "title": "Secret Superstar",
+   "year": 2017,
+   "languages": "Hindi",
+   "ww_gross_cr": 858.43,
+   "ww_gross_cr_high": 966,
+   "as_printed": "₹858.43–966 crore"
+  },
+  {
+   "rank": 15,
+   "title": "Kantara: Chapter 1",
+   "year": 2025,
+   "languages": "Kannada",
+   "ww_gross_cr": 850,
+   "ww_gross_cr_high": 852,
+   "as_printed": "₹850–852 crore"
+  },
+  {
+   "rank": 16,
+   "title": "Chhaava",
+   "year": 2025,
+   "languages": "Hindi",
+   "ww_gross_cr": 797.34,
+   "ww_gross_cr_high": 809,
+   "as_printed": "₹797.34–809 crore"
+  },
+  {
+   "rank": 17,
+   "title": "PK",
+   "year": 2014,
+   "languages": "Hindi",
+   "ww_gross_cr": 750.6,
+   "ww_gross_cr_high": 769.89,
+   "as_printed": "₹750.60–769.89 crore"
+  },
+  {
+   "rank": 18,
+   "title": "2.0",
+   "year": 2018,
+   "languages": "Tamil",
+   "ww_gross_cr": 699.89,
+   "ww_gross_cr_high": 800,
+   "as_printed": "₹699.89–800 crore"
+  },
+  {
+   "rank": 19,
+   "title": "Gadar 2",
+   "year": 2023,
+   "languages": "Hindi",
+   "ww_gross_cr": 691.08,
+   "ww_gross_cr_high": null,
+   "as_printed": "₹691.08 crore"
+  },
+  {
+   "rank": 20,
+   "title": "Sultan",
+   "year": 2016,
+   "languages": "Hindi",
+   "ww_gross_cr": 615.71,
+   "ww_gross_cr_high": 623.33,
+   "as_printed": "₹615.71–623.33 crore"
+  },
+  {
+   "rank": 21,
+   "title": "Salaar: Part 1 – Ceasefire",
+   "year": 2023,
+   "languages": "Telugu",
+   "ww_gross_cr": 614,
+   "ww_gross_cr_high": 702,
+   "as_printed": "₹614–702 crore"
+  },
+  {
+   "rank": 22,
+   "title": "Jailer",
+   "year": 2023,
+   "languages": "Tamil",
+   "ww_gross_cr": 605,
+   "ww_gross_cr_high": 650,
+   "as_printed": "₹605–650 crore"
+  },
+  {
+   "rank": 23,
+   "title": "Baahubali: The Beginning",
+   "year": 2015,
+   "languages": "Telugu/Tamil",
+   "ww_gross_cr": 599.72,
+   "ww_gross_cr_high": 650,
+   "as_printed": "₹599.72–650 crore"
+  },
+  {
+   "rank": 24,
+   "title": "Leo",
+   "year": 2023,
+   "languages": "Tamil",
+   "ww_gross_cr": 595,
+   "ww_gross_cr_high": 615,
+   "as_printed": "₹595–615 crore"
+  },
+  {
+   "rank": 25,
+   "title": "Sanju",
+   "year": 2018,
+   "languages": "Hindi",
+   "ww_gross_cr": 586.85,
+   "ww_gross_cr_high": null,
+   "as_printed": "₹586.85 crore"
+  },
+  {
+   "rank": 26,
+   "title": "Saiyaara",
+   "year": 2025,
+   "languages": "Hindi",
+   "ww_gross_cr": 579.23,
+   "ww_gross_cr_high": null,
+   "as_printed": "₹579.23 crore"
+  },
+  {
+   "rank": 27,
+   "title": "Tiger Zinda Hai",
+   "year": 2017,
+   "languages": "Hindi",
+   "ww_gross_cr": 565.19,
+   "ww_gross_cr_high": null,
+   "as_printed": "₹565.19 crore"
+  },
+  {
+   "rank": 28,
+   "title": "Padmaavat",
+   "year": 2018,
+   "languages": "Hindi",
+   "ww_gross_cr": 563.55,
+   "ww_gross_cr_high": 571.98,
+   "as_printed": "₹563.55–571.98 crore"
+  },
+  {
+   "rank": 29,
+   "title": "Dhoom 3",
+   "year": 2013,
+   "languages": "Hindi",
+   "ww_gross_cr": 556.74,
+   "ww_gross_cr_high": 558.42,
+   "as_printed": "₹556.74–558.42 crore"
+  },
+  {
+   "rank": 30,
+   "title": "Coolie",
+   "year": 2025,
+   "languages": "Tamil",
+   "ww_gross_cr": 514,
+   "ww_gross_cr_high": 675,
+   "as_printed": "₹514–675 crore"
+  },
+  {
+   "rank": 31,
+   "title": "Ponniyin Selvan: I",
+   "year": 2022,
+   "languages": "Tamil",
+   "ww_gross_cr": 500,
+   "ww_gross_cr_high": null,
+   "as_printed": "₹500 crore"
+  },
+  {
+   "rank": 32,
+   "title": "War",
+   "year": 2019,
+   "languages": "Hindi",
+   "ww_gross_cr": 474.79,
+   "ww_gross_cr_high": 475.62,
+   "as_printed": "₹474.79–475.62 crore"
+  },
+  {
+   "rank": 33,
+   "title": "Dunki",
+   "year": 2023,
+   "languages": "Hindi",
+   "ww_gross_cr": 470.6,
+   "ww_gross_cr_high": null,
+   "as_printed": "₹470.60 crore"
+  },
+  {
+   "rank": 34,
+   "title": "Tiger 3",
+   "year": 2023,
+   "languages": "Hindi",
+   "ww_gross_cr": 466.63,
+   "ww_gross_cr_high": null,
+   "as_printed": "₹466.63 crore"
+  },
+  {
+   "rank": 35,
+   "title": "Border 2",
+   "year": 2026,
+   "languages": "Hindi",
+   "ww_gross_cr": 464.5,
+   "ww_gross_cr_high": null,
+   "as_printed": "₹464.50 crore"
+  },
+  {
+   "rank": 36,
+   "title": "Andhadhun",
+   "year": 2018,
+   "languages": "Hindi",
+   "ww_gross_cr": 444.48,
+   "ww_gross_cr_high": 456.89,
+   "as_printed": "₹444.48–456.89 crore"
+  },
+  {
+   "rank": 37,
+   "title": "The Greatest of All Time",
+   "year": 2024,
+   "languages": "Tamil",
+   "ww_gross_cr": 440,
+   "ww_gross_cr_high": 460,
+   "as_printed": "₹440–460 crore"
+  },
+  {
+   "rank": 38,
+   "title": "Saaho",
+   "year": 2019,
+   "languages": "Telugu/Hindi",
+   "ww_gross_cr": 434,
+   "ww_gross_cr_high": 439,
+   "as_printed": "₹434–439 crore"
+  },
+  {
+   "rank": 39,
+   "title": "Vikram",
+   "year": 2022,
+   "languages": "Tamil",
+   "ww_gross_cr": 424,
+   "ww_gross_cr_high": 500,
+   "as_printed": "₹424–500 crore"
+  },
+  {
+   "rank": 40,
+   "title": "Bhool Bhulaiyaa 3",
+   "year": 2024,
+   "languages": "Hindi",
+   "ww_gross_cr": 423.85,
+   "ww_gross_cr_high": null,
+   "as_printed": "₹423.85 crore"
+  },
+  {
+   "rank": 41,
+   "title": "Brahmāstra: Part One – Shiva",
+   "year": 2022,
+   "languages": "Hindi",
+   "ww_gross_cr": 418.8,
+   "ww_gross_cr_high": 430.77,
+   "as_printed": "₹418.80–430.77 crore"
+  },
+  {
+   "rank": 42,
+   "title": "Kantara",
+   "year": 2022,
+   "languages": "Kannada",
+   "ww_gross_cr": 400,
+   "ww_gross_cr_high": 450,
+   "as_printed": "₹400–450 crore"
+  },
+  {
+   "rank": 43,
+   "title": "3 Idiots",
+   "year": 2009,
+   "languages": "Hindi",
+   "ww_gross_cr": 400.61,
+   "ww_gross_cr_high": 460,
+   "as_printed": "₹400.61–460 crore"
+  },
+  {
+   "rank": 44,
+   "title": "Chennai Express",
+   "year": 2013,
+   "languages": "Hindi",
+   "ww_gross_cr": 395.92,
+   "ww_gross_cr_high": 424.54,
+   "as_printed": "₹395.92–424.54 crore"
+  },
+  {
+   "rank": 45,
+   "title": "Krrish 3",
+   "year": 2013,
+   "languages": "Hindi",
+   "ww_gross_cr": 393.37,
+   "ww_gross_cr_high": null,
+   "as_printed": "₹393.37 crore"
+  },
+  {
+   "rank": 46,
+   "title": "Adipurush",
+   "year": 2023,
+   "languages": "Hindi/Telugu",
+   "ww_gross_cr": 392.7,
+   "ww_gross_cr_high": null,
+   "as_printed": "₹392.70 crore"
+  },
+  {
+   "rank": 47,
+   "title": "Simmba",
+   "year": 2018,
+   "languages": "Hindi",
+   "ww_gross_cr": 391.68,
+   "ww_gross_cr_high": 400.19,
+   "as_printed": "₹391.68–400.19 crore"
+  },
+  {
+   "rank": 48,
+   "title": "Singham Again",
+   "year": 2024,
+   "languages": "Hindi",
+   "ww_gross_cr": 389.64,
+   "ww_gross_cr_high": null,
+   "as_printed": "₹389.64 crore"
+  },
+  {
+   "rank": 49,
+   "title": "Devara: Part 1",
+   "year": 2024,
+   "languages": "Telugu",
+   "ww_gross_cr": 380,
+   "ww_gross_cr_high": 521,
+   "as_printed": "₹380–521 crore"
+  },
+  {
+   "rank": 50,
+   "title": "Pushpa: The Rise",
+   "year": 2021,
+   "languages": "Telugu",
+   "ww_gross_cr": 360,
+   "ww_gross_cr_high": null,
+   "as_printed": "₹360 crore"
+  }
+ ],
+ "indian_by_year": [
+  {
+   "year": 2016,
+   "title": "Dangal",
+   "language": "Hindi",
+   "ww_gross_cr": 1968,
+   "ww_gross_cr_high": 2054,
+   "as_printed": "₹1,968 crore – ₹2,054 crore"
+  },
+  {
+   "year": 2017,
+   "title": "Baahubali 2: The Conclusion",
+   "language": "Telugu",
+   "ww_gross_cr": 1810.43,
+   "ww_gross_cr_high": null,
+   "as_printed": "₹1,810.43 crore"
+  },
+  {
+   "year": 2018,
+   "title": "2.0",
+   "language": "Tamil",
+   "ww_gross_cr": 699.89,
+   "ww_gross_cr_high": 800,
+   "as_printed": "₹699.89 crore – ₹800 crore"
+  },
+  {
+   "year": 2019,
+   "title": "War",
+   "language": "Hindi",
+   "ww_gross_cr": 475.62,
+   "ww_gross_cr_high": null,
+   "as_printed": "₹475.62 crore"
+  },
+  {
+   "year": 2020,
+   "title": "Tanhaji",
+   "language": "Hindi",
+   "ww_gross_cr": 368,
+   "ww_gross_cr_high": null,
+   "as_printed": "₹368 crore"
+  },
+  {
+   "year": 2021,
+   "title": "Pushpa: The Rise",
+   "language": "Telugu",
+   "ww_gross_cr": 350,
+   "ww_gross_cr_high": 360,
+   "as_printed": "₹350 crore – ₹360 crore"
+  },
+  {
+   "year": 2022,
+   "title": "RRR",
+   "language": "Telugu",
+   "ww_gross_cr": 1300,
+   "ww_gross_cr_high": 1387,
+   "as_printed": "₹1,300 crore – ₹1,387 crore"
+  },
+  {
+   "year": 2023,
+   "title": "Jawan",
+   "language": "Hindi",
+   "ww_gross_cr": 1148.32,
+   "ww_gross_cr_high": null,
+   "as_printed": "₹1,148.32 crore"
+  },
+  {
+   "year": 2024,
+   "title": "Pushpa 2: The Rule",
+   "language": "Telugu",
+   "ww_gross_cr": 1642,
+   "ww_gross_cr_high": 1800,
+   "as_printed": "₹1,642 crore – ₹1,800 crore"
+  },
+  {
+   "year": 2025,
+   "title": "Dhurandhar",
+   "language": "Hindi",
+   "ww_gross_cr": 1350.83,
+   "ww_gross_cr_high": 1428,
+   "as_printed": "₹1,350.83 crore – ₹1,428 crore"
+  }
+ ],
+ "hindi_dubbed_south": [],
+ "urls_used": [
+  "https://en.wikipedia.org/wiki/List_of_highest-grossing_films_in_India",
+  "https://en.wikipedia.org/wiki/List_of_highest-grossing_Indian_films",
+  "https://en.wikipedia.org/wiki/List_of_highest-grossing_Hindi_films",
+  "https://en.wikipedia.org/wiki/List_of_highest-grossing_South_Indian_films",
+  "https://en.wikipedia.org/wiki/List_of_highest-grossing_Telugu_films"
+ ],
+ "fetch_errors": [
+  "https://en.wikipedia.org/wiki/List_of_highest-grossing_foreign_films_in_India — WebFetch: URL_NOT_FOUND ('This domain is cache-only and cannot be fetched'); page not in cache, so fell back to List_of_highest-grossing_films_in_India",
+  "https://en.wikipedia.org/wiki/List_of_highest-grossing_Hollywood_films_in_India — WebFetch: URL_NOT_FOUND (cache-only)",
+  "https://en.wikipedia.org/wiki/List_of_highest-grossing_non-Indian_films_in_India — WebFetch: URL_NOT_FOUND (cache-only)",
+  "https://en.wikipedia.org/wiki/List_of_highest-grossing_English-language_films_in_India — WebFetch: URL_NOT_FOUND (cache-only)",
+  "https://en.wikipedia.org/wiki/List_of_highest-grossing_Hindi-dubbed_films — WebFetch: URL_NOT_FOUND (cache-only)",
+  "https://en.wikipedia.org/wiki/List_of_highest-grossing_dubbed_films_in_India — WebFetch: URL_NOT_FOUND (cache-only)",
+  "Direct curl to en.wikipedia.org blocked by egress proxy (CONNECT 403), so raw HTML/wikitext could not be pulled to double-check rowspans"
+ ],
+ "notes": [
+  "foreign_in_india: no dedicated foreign-films page or section was reachable. Data comes from the main 50-row table of 'List of highest-grossing films in India' (columns: Rank | Title | Year | Total gross | Language(s) | Ref.), whose legend says 'Background shading indicates a foreign film.' Only three foreign (English-language) films appear in that top 50; 'rank' is the film's overall rank in India among all films, 'foreign_rank' is its order among foreign films. Basis is India domestic gross (page intro: 'based on domestic box office estimates'); the page does not print net figures and has no distributor column, so distributor is null for all rows. Spider-Man: Brand New Day is printed with an asterisk and is stated in prose to be 'the highest grossing foreign film in India'; the asterisk's exact meaning was not recoverable from the markdown conversion (page also has a 'currently showing in theatres' shading legend).",
+  "indian_all_time / indian_by_year: figures are WORLDWIDE gross (column 'Worldwide gross'), not India-only and not net. Where Wikipedia prints a range of estimates, ww_gross_cr holds the low end and ww_gross_cr_high the high end; as_printed holds the verbatim cell (US$ conversions in the by-year table were dropped).",
+  "Merged cells: Wikipedia uses rowspan for repeated Language/Year values; the markdown conversion left those cells blank. Blank Language/Year cells were filled with the value of the nearest preceding row in that column (standard rowspan semantics). Affected all-time rows: 2, 4, 7, 9, 12, 13, 14, 16, 17, 20, 22, 26, 27, 28, 29, 33, 34, 35, 41, 42, 44, 45, 48, 49, 50. Affected by-year rows: 2016 (Hindi), 2020 (Hindi), 2022 (Telugu). No numeric value was inferred.",
+  "indian_by_year: the language column on that table is headed 'Industry'. Only 2016–2025 are returned as requested (the table itself runs 1940–2026; 2026 is Dhurandhar: The Revenge, Hindi, ₹1,852.44 crore).",
+  "hindi_dubbed_south: no 'Highest-grossing Hindi-dubbed South Indian films' (or any dubbed-films) table exists on List_of_highest-grossing_Indian_films, List_of_highest-grossing_Hindi_films, List_of_highest-grossing_South_Indian_films, or List_of_highest-grossing_Telugu_films; candidate standalone pages were not fetchable (cache-only). Returned empty rather than guessed.",
+  "The task's request to fetch List_of_highest-grossing_Indian_films 'for each year 2016–2025' was satisfied by one page fetch: the page is a single live article whose 'Highest-grossing films by year' table covers all years; there are no per-year versions of the URL.",
+  "Fetches went through WebFetch's small summarizing model against a cached copy of each page (Wikipedia is cache-only in this environment); all-time rows were fetched twice (1–25 with NULL and MERGED markers, 26–50 once) and matched."
+ ]
+}
