@@ -1,4 +1,4 @@
-.PHONY: help compose up down logs init run check sources status test provision
+.PHONY: help compose up down logs init plugins run check sources status test provision
 
 PY ?= python3
 
@@ -19,6 +19,9 @@ logs:            ## follow the publisher logs
 
 init:            ## install WordPress on every site + create autopub app passwords
 	./infra/wp/init-sites.sh
+
+plugins:         ## copy repo-local plugins into their containers ("make up" does not)
+	./infra/wp/deploy-plugins.sh
 
 run:             ## publish one cycle right now (all sites)
 	docker compose run --rm autopub python -m autopub run
