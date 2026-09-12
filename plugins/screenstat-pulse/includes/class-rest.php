@@ -30,7 +30,10 @@ final class SSPulse_Rest {
 		register_rest_route( self::NS, '/films/(?P<id>\d+)/samples', array( 'methods' => 'POST', 'callback' => array( __CLASS__, 'post_sample' ), 'permission_callback' => $edit, 'args' => $id ) );
 		register_rest_route( self::NS, '/films/(?P<id>\d+)/samples/(?P<sid>\d+)', array( 'methods' => 'DELETE', 'callback' => array( __CLASS__, 'delete_sample' ), 'permission_callback' => $edit ) );
 		register_rest_route( self::NS, '/films/(?P<id>\d+)/actuals', array( 'methods' => 'PUT', 'callback' => array( __CLASS__, 'put_actuals' ), 'permission_callback' => $edit, 'args' => $id ) );
+		register_rest_route( self::NS, '/films/(?P<id>\d+)/ingest', array( 'methods' => 'POST', 'callback' => array( __CLASS__, 'ingest' ), 'permission_callback' => $edit, 'args' => $id ) );
 		register_rest_route( self::NS, '/films/examples', array( 'methods' => 'POST', 'callback' => array( __CLASS__, 'load_examples' ), 'permission_callback' => $edit ) );
+		register_rest_route( self::NS, '/clip', array( 'methods' => 'POST', 'callback' => array( __CLASS__, 'clip' ), 'permission_callback' => $edit ) );
+		register_rest_route( self::NS, '/industry', array( 'methods' => 'GET', 'callback' => array( __CLASS__, 'list_industry' ), 'permission_callback' => $edit ) );
 		register_rest_route( self::NS, '/calendar', array(
 			array( 'methods' => 'GET', 'callback' => array( __CLASS__, 'list_calendar' ), 'permission_callback' => $edit ),
 			array( 'methods' => 'POST', 'callback' => array( __CLASS__, 'create_calendar' ), 'permission_callback' => $manage ),
@@ -52,8 +55,11 @@ final class SSPulse_Rest {
 		$out = array(
 			'id' => (int) $r['id'], 'title' => $r['title'], 'slug' => $r['slug'], 'tag' => $r['tag'], 'release_date' => $r['release_date'],
 			'calendar_id' => $r['calendar_id'] ? (int) $r['calendar_id'] : null, 'calendar_title' => $r['calendar_title'] ?? null,
+			'industry' => $r['industry'] ?? 'hindi',
 			'is_example' => (bool) $r['is_example'], 'unfilled' => (bool) $r['unfilled'], 'signals' => self::json( $r['signals'] ) ?: array(),
-			'locked' => self::json( $r['locked'] ), 'actual' => self::json( $r['actual'] ), 'status' => $r['status'], 'updated_at' => $r['updated_at'],
+			'meta' => self::json( $r['meta'] ?? null ) ?: array(), 'trending' => self::json( $r['trending'] ?? null ),
+			'locked' => self::json( $r['locked'] ), 'actual' => self::json( $r['actual'] ),
+			'actual_days' => self::json( $r['actual_days'] ?? null ), 'status' => $r['status'], 'updated_at' => $r['updated_at'],
 		);
 		if ( $full ) {
 			$out['samples']  = array_map( array( __CLASS__, 'row_to_sample' ), $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM ' . SSPulse_DB::table( 'samples' ) . ' WHERE film_id = %d ORDER BY taken_on, id', $r['id'] ), ARRAY_A ) ); // phpcs:ignore WordPress.DB
@@ -81,9 +87,18 @@ final class SSPulse_Rest {
 		while ( $wpdb->get_var( $wpdb->prepare( "SELECT id FROM $t WHERE slug = %s AND id <> %d", $slug, $exclude_id ) ) ) { $slug = "$base-$n"; $n++; } // phpcs:ignore WordPress.DB
 		return $slug;
 	}
-	/** Default signal set for a newly tracked film (the reference UI's "Track" defaults). */
+	/** Default signal set for a newly tracked film - the reference UI's own "Track"
+	 *  defaults (screenstat-pulse.html, state.films.push), so a film created from the admin
+	 *  or from the calendar starts identical either way. */
 	public static function default_signals( ?string $release ): array {
-		$s = array( 'tr24' => 0, 'trTotal' => 0, 'likeRatio' => 35, 'search' => 0, 'posts' => 0, 'sentiment' => 60, 'bms' => 0, 'song' => 0, 'star' => 50, 'screens' => 2000, 'shows' => 4, 'seats' => 190, 'atp' => 190, 'budget' => 60, 'days' => 30, 'release' => $release ?: '', 'holiday' => '0', 'comp' => 'none', 'kInt' => 3.8, 'bias' => 0.25 );
+		$s = array(
+			'tr24' => 5, 'trTotal' => 15, 'likeRatio' => 35, 'search' => 35, 'wiki' => 3, 'imdb' => 0, 'gsc' => 0, 'tmdb' => 0,
+			'posts' => 20, 'net' => 20, 'official' => 0, 'reddit' => 0, 'sentiment' => 62, 'bms' => 80, 'antic' => 0, 'adv' => 0,
+			'song' => 20, 'spot' => 0, 'star' => 40, 'screens' => 1500, 'shows' => 4, 'seats' => 190, 'atp' => 180, 'budget' => 50,
+			'days' => 30, 'release' => $release ?: '', 'runtime' => 140, 'holiday' => 'auto', 'comp' => 'auto', 'cert' => 'UA',
+			'event' => 'none', 'franchise' => '0', 'remake' => '0', 'genre' => 'action', 'dubbed' => '0', 'industry' => 'hindi',
+			'advShare' => 0.42, 'advFrac' => 0.5, 'kInt' => 3.8, 'bias' => 0.25,
+		);
 		if ( $release ) { $s['days'] = max( 0, SSPulse_Model::days_until( $release ) ); }
 		return $s;
 	}
@@ -112,6 +127,7 @@ final class SSPulse_Rest {
 		$now = SSPulse_DB::now();
 		$ok = $wpdb->insert( SSPulse_DB::table( 'films' ), array(
 			'title' => $title, 'slug' => 'pending', 'tag' => mb_substr( (string) ( $b['tag'] ?? '' ), 0, 300 ), 'release_date' => $release ?: null, 'calendar_id' => $cal_id ?: null,
+			'industry' => in_array( $signals['industry'] ?? null, SSPulse_Model::INDKEYS, true ) ? $signals['industry'] : 'hindi',
 			'is_example' => ! empty( $b['is_example'] ) ? 1 : 0, 'unfilled' => ! empty( $b['unfilled'] ) ? 1 : 0, 'signals' => wp_json_encode( $signals ), 'status' => 'tracking',
 			'created_by' => get_current_user_id(), 'created_at' => $now, 'updated_at' => $now,
 		) );
@@ -140,6 +156,7 @@ final class SSPulse_Rest {
 			$upd['signals'] = wp_json_encode( $merged );
 			foreach ( $b['signals'] as $k => $v ) { if ( $k !== 'release' && $k !== 'days' ) { $upd['unfilled'] = 0; } }
 			if ( ! empty( $b['signals']['release'] ) ) { $upd['release_date'] = $b['signals']['release']; }
+			if ( isset( $b['signals']['industry'] ) ) { $upd['industry'] = $b['signals']['industry']; }   // mirrored for the KEY index; the client's source of truth stays signals.industry
 		}
 		if ( ! $upd ) { return self::row_to_film( $cur, true ); }
 		$upd['updated_at'] = SSPulse_DB::now();
@@ -168,7 +185,8 @@ final class SSPulse_Rest {
 		$id = (int) $req['id']; if ( ! self::film_row( $id ) ) { return self::err( 'film not found', 404 ); }
 		$b = $req->get_json_params() ?: array();
 		$e = SSPulse_Validate::reading( $b ); if ( $e ) { return self::err( $e ); }
-		self::upsert_reading( $id, $b, 'manual' );
+		$source = is_string( $b['source'] ?? null ) ? mb_substr( $b['source'], 0, 32 ) : 'manual'; // pulse-worker's daily-reading job posts source:'cron'
+		self::upsert_reading( $id, $b, $source );
 		return new WP_REST_Response( self::row_to_film( self::film_row( $id ), true ), 201 );
 	}
 	public static function post_sample( WP_REST_Request $req ) {
@@ -200,6 +218,109 @@ final class SSPulse_Rest {
 		}
 		$wpdb->update( SSPulse_DB::table( 'films' ), $upd, array( 'id' => $id ) );
 		return self::row_to_film( self::film_row( $id ), true );
+	}
+
+	/* ---------------------------------------------------------------- ingestion (HANDOVER-INGESTION.md §2) */
+
+	/**
+	 * The pulse-worker's write path: automated signal values, each with provenance. The whole
+	 * payload is rejected (422) if any field fails validation - a partial apply would hide a
+	 * broken connector rather than surface it. `raw` (the API response a value was read from)
+	 * goes to the ingest log, never onto the film row.
+	 */
+	public static function ingest( WP_REST_Request $req ) {
+		global $wpdb;
+		$id = (int) $req['id']; $cur = self::film_row( $id ); if ( ! $cur ) { return self::err( 'film not found', 404 ); }
+		$b = $req->get_json_params() ?: array();
+		$signals = is_array( $b['signals'] ?? null ) ? $b['signals'] : array();
+		$meta_in = is_array( $b['meta'] ?? null ) ? $b['meta'] : array();
+		if ( ! $signals ) { return self::err( 'signals must carry at least one field' ); }
+		$e = SSPulse_Validate::signals( $signals, true );
+		if ( $e ) { return self::err( $e, 422 ); }   // named field failure: the whole payload is rejected, per spec
+		$fetched_at = is_string( $b['fetched_at'] ?? null ) && SSPulse_Validate::is_datetime( $b['fetched_at'] ) ? $b['fetched_at'] : SSPulse_DB::now();
+		$source_tag = is_string( $b['source'] ?? null ) ? mb_substr( $b['source'], 0, 64 ) : 'pulse-worker';
+
+		$merged_signals = array_merge( self::json( $cur['signals'] ) ?: array(), $signals );
+		$merged_meta    = self::json( $cur['meta'] ?? null ) ?: array();
+		foreach ( $signals as $field => $value ) {
+			$field_meta = $meta_in[ $field ] ?? array();
+			$merged_meta[ $field ] = array( 'source' => (string) ( $field_meta['source'] ?? $source_tag ), 'at' => (string) ( $field_meta['at'] ?? $fetched_at ) );
+			$wpdb->insert( SSPulse_DB::table( 'ingest_log' ), array(
+				'film_id' => $id, 'field' => mb_substr( (string) $field, 0, 16 ), 'value' => (float) $value, 'source' => mb_substr( (string) ( $field_meta['source'] ?? $source_tag ), 0, 64 ),
+				'fetched_at' => $fetched_at, 'raw' => isset( $field_meta['raw'] ) ? wp_json_encode( $field_meta['raw'] ) : null,
+			) );
+		}
+		// samples[] (HANDOVER-INGESTION.md §4.15): the pooled comment-intent sample replaces the
+		// same-day 'comments' row rather than stacking - each run is one poll, not an accumulation.
+		if ( is_array( $b['samples'] ?? null ) ) {
+			foreach ( $b['samples'] as $smp ) {
+				$err = SSPulse_Validate::sample( $smp ); if ( $err ) { continue; }   // a malformed sample is skipped, not fatal to the ingest
+				$wpdb->delete( SSPulse_DB::table( 'samples' ), array( 'film_id' => $id, 'src' => $smp['src'], 'taken_on' => $smp['taken_on'] ) );
+				$wpdb->insert( SSPulse_DB::table( 'samples' ), array(
+					'film_id' => $id, 'src' => $smp['src'], 'taken_on' => $smp['taken_on'], 'n' => (int) $smp['n'],
+					'def_ct' => (int) ( $smp['def_ct'] ?? 0 ), 'prob_ct' => (int) ( $smp['prob_ct'] ?? 0 ), 'ott_ct' => (int) ( $smp['ott_ct'] ?? 0 ), 'no_ct' => (int) ( $smp['no_ct'] ?? 0 ),
+					'note' => (string) ( $smp['note'] ?? '' ), 'created_by' => 0, 'created_at' => SSPulse_DB::now(),
+				) );
+			}
+		}
+		$wpdb->update( SSPulse_DB::table( 'films' ), array(
+			'signals' => wp_json_encode( $merged_signals ), 'meta' => wp_json_encode( $merged_meta ), 'unfilled' => 0, 'updated_at' => SSPulse_DB::now(),
+		), array( 'id' => $id ) );
+		return new WP_REST_Response( self::row_to_film( self::film_row( $id ), true ), 200 );
+	}
+
+	/**
+	 * The Pulse clipper's write path (HANDOVER-INGESTION.md §4.6, §4.7): a browser bookmarklet reads
+	 * a page a human is already looking at and posts the aggregate. `film_id` is required here (the
+	 * fuzzy "which film?" resolver the full bookmarklet UI would need is not built in this pass);
+	 * `imdb_list` needs no film match at all - it is stored against the calendar.
+	 */
+	public static function clip( WP_REST_Request $req ) {
+		global $wpdb;
+		$b = $req->get_json_params() ?: array();
+		if ( is_array( $b['imdb_list'] ?? null ) ) {
+			$list = $b['imdb_list']; $items = is_array( $list['items'] ?? null ) ? $list['items'] : array();
+			$on = SSPulse_Validate::is_date( $list['at'] ?? '' ) ? $list['at'] : gmdate( 'Y-m-d' );
+			$n = 0;
+			foreach ( $items as $it ) {
+				if ( ! isset( $it['rank'], $it['title'] ) || ! is_numeric( $it['rank'] ) ) { continue; }
+				$wpdb->insert( SSPulse_DB::table( 'imdb_list' ), array( 'clipped_on' => $on, 'rank' => (int) $it['rank'], 'title' => mb_substr( (string) $it['title'], 0, 200 ), 'calendar_id' => null ) );
+				$n++;
+			}
+			return array( 'stored' => $n );
+		}
+		$film_id = (int) ( $b['film_id'] ?? 0 );
+		$cur = $film_id ? self::film_row( $film_id ) : null;
+		if ( ! $cur ) { return self::err( 'film_id must name a tracked film (fuzzy title matching is not built yet - pass the id)', 404 ); }
+		if ( isset( $b['film'] ) && is_string( $b['film'] ) && trim( $b['film'] ) !== '' && mb_strtolower( trim( $b['film'] ) ) !== mb_strtolower( $cur['title'] ) ) {
+			return self::err( "clip is for '{$b['film']}' but film_id resolves to '{$cur['title']}' - refusing to guess", 409 );
+		}
+		$signals = array();
+		if ( isset( $b['bms'] ) && is_numeric( $b['bms'] ) ) { $signals['bms'] = (float) $b['bms']; }
+		if ( isset( $b['imdb'] ) && is_numeric( $b['imdb'] ) ) { $signals['imdb'] = (float) $b['imdb']; }
+		if ( ! $signals ) { return self::err( 'clip must carry bms, imdb or imdb_list' ); }
+		$e = SSPulse_Validate::signals( $signals, true ); if ( $e ) { return self::err( $e, 422 ); }
+		$now = SSPulse_DB::now(); $merged = array_merge( self::json( $cur['signals'] ) ?: array(), $signals );
+		$meta = self::json( $cur['meta'] ?? null ) ?: array();
+		foreach ( $signals as $field => $value ) {
+			$src = $field === 'bms' ? 'BookMyShow page (clipped in browser)' : 'IMDb title page (clipped in browser)';
+			$meta[ $field ] = array( 'source' => $src, 'at' => $now );
+			$wpdb->insert( SSPulse_DB::table( 'ingest_log' ), array( 'film_id' => $film_id, 'field' => $field, 'value' => $value, 'source' => $src, 'fetched_at' => $now, 'raw' => isset( $b['url'] ) ? wp_json_encode( array( 'url' => $b['url'] ) ) : null ) );
+		}
+		$wpdb->update( SSPulse_DB::table( 'films' ), array( 'signals' => wp_json_encode( $merged ), 'meta' => wp_json_encode( $meta ), 'unfilled' => 0, 'updated_at' => $now ), array( 'id' => $film_id ) );
+		return self::row_to_film( self::film_row( $film_id ), true );
+	}
+
+	/** The industry constant table (HANDOVER-WORLD.md §1) - read-only over REST; edited directly
+	 *  in the database for now (no admin editor screen in this pass). */
+	public static function list_industry(): array {
+		global $wpdb;
+		$rows = $wpdb->get_results( 'SELECT * FROM ' . SSPulse_DB::table( 'industry' ) . ' ORDER BY ind_key', ARRAY_A ); // phpcs:ignore WordPress.DB
+		return array_map( static fn( $r ) => array(
+			'key' => $r['ind_key'], 'name' => $r['name'], 'atp' => (float) $r['atp'], 'screens' => (int) $r['screens'], 'seats' => (int) $r['seats'],
+			'nett' => array( (float) $r['nett_share'], $r['nett_src'] ), 'scale' => array( (float) $r['scale'], $r['scale_src'] ),
+			'sd' => (float) $r['sd_mult'], 'comps' => $r['comps_pool'], 'note' => $r['note'],
+		), $rows );
 	}
 
 	/**

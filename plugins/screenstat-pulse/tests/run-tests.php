@@ -26,6 +26,6 @@ foreach ( get_class_methods( $t ) as $m ) {
 	try { $t->$m(); echo "  ok   $m\n"; } catch ( Throwable $e ) { $fail++; echo "  FAIL $m: {$e->getMessage()}\n"; }
 }
 echo "\nvalidation: $n tests, $fail failed\n";
-echo "model equality vs pulse-model.js:\n";
-passthru( PHP_BINARY . ' ' . escapeshellarg( __DIR__ . '/model-equality.php' ), $code );
+echo "model equality vs pulse-model.js (Node, since v1.7 has no PHP compute()):\n";
+passthru( 'node ' . escapeshellarg( __DIR__ . '/model-equality.mjs' ), $code );
 exit( $fail || $code ? 1 : 0 );

@@ -1,0 +1,35 @@
+{
+  "12": {
+    "title": "Haiwaan",
+    "aliases": [
+      "haiwaan movie",
+      "haiwaan film",
+      "हैवान"
+    ],
+    "cast": [
+      "Akshay Kumar",
+      "Saif Ali Khan"
+    ],
+    "wiki_title": "Haiwaan_(film)",
+    "wiki_title_hi": "",
+    "yt_trailer_ids": [],
+    "yt_teaser_ids": [],
+    "yt_song_ids": [],
+    "spotify_track_ids": [],
+    "yt_official_channels": [],
+    "hashtags": [
+      "haiwaan",
+      "haiwaantrailer",
+      "haiwaanmovie"
+    ],
+    "hashtag_account": "",
+    "trends_benchmark": "Jawan",
+    "release_date": "2026-09-11",
+    "tmdb_id": null,
+    "imdb_id": "",
+    "industries": [
+      "Hindi"
+    ],
+    "_note": "industries picks which official Instagram accounts meta-discovery reads for this film (Hindi, Telugu, Tamil, Kannada, Malayalam, Hollywood, Global). tmdb_id and imdb_id are optional — leave them out and the connectors resolve by title and year."
+  }
+}

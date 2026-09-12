@@ -8,7 +8,7 @@ require_once __DIR__ . '/../includes/class-validate.php';
 
 class ValidateTest extends TestCase {
 	private function good(): array {
-		return array( 'tr24' => 38, 'trTotal' => 96, 'likeRatio' => 41, 'search' => 82, 'posts' => 210, 'sentiment' => 71, 'bms' => 1400, 'song' => 140, 'star' => 84, 'screens' => 4200, 'shows' => 5, 'seats' => 200, 'atp' => 240, 'budget' => 260, 'days' => 12, 'holiday' => '1', 'comp' => 'none', 'kInt' => 3.8, 'bias' => 0.25 );
+		return array( 'tr24' => 38, 'trTotal' => 96, 'likeRatio' => 41, 'search' => 82, 'wiki' => 64, 'imdb' => 38, 'gsc' => 42, 'tmdb' => 410, 'posts' => 210, 'net' => 78, 'official' => 82, 'reddit' => 340, 'sentiment' => 71, 'bms' => 1400, 'antic' => 46, 'adv' => 0, 'song' => 140, 'spot' => 71, 'star' => 84, 'screens' => 4200, 'shows' => 5, 'seats' => 200, 'atp' => 240, 'budget' => 260, 'runtime' => 158, 'days' => 12, 'holiday' => '1', 'comp' => 'none', 'franchise' => '1', 'remake' => '0', 'genre' => 'action', 'dubbed' => '0', 'cert' => 'UA', 'event' => 'none', 'advShare' => 0.42, 'advFrac' => 0.5, 'kInt' => 3.8, 'bias' => 0.25 );
 	}
 	public function test_full_signals_accepted() { $this->assertNull( SSPulse_Validate::signals( $this->good() ) ); }
 	public function test_missing_signal_rejected_when_not_partial() { $s = $this->good(); unset( $s['bms'] ); $this->assertStringContainsString( "missing signal 'bms'", SSPulse_Validate::signals( $s ) ); }
@@ -30,6 +30,25 @@ class ValidateTest extends TestCase {
 		$this->assertNull( SSPulse_Validate::signals( array( 'holiday' => '0', 'comp' => 'heavy' ), true ) );
 		$this->assertNotNull( SSPulse_Validate::signals( array( 'holiday' => 'yes' ), true ) );
 		$this->assertNotNull( SSPulse_Validate::signals( array( 'comp' => 'brutal' ), true ) );
+	}
+	public function test_v17_enum_fields() {
+		$this->assertNull( SSPulse_Validate::signals( array( 'holiday' => 'auto', 'comp' => 'auto' ), true ), 'auto is a valid holiday/comp value in v1.7' );
+		$this->assertNull( SSPulse_Validate::signals( array( 'franchise' => '1', 'remake' => '0', 'dubbed' => '1' ), true ) );
+		$this->assertNotNull( SSPulse_Validate::signals( array( 'franchise' => 'yes' ), true ) );
+		$this->assertNull( SSPulse_Validate::signals( array( 'genre' => 'thriller' ), true ) );
+		$this->assertNotNull( SSPulse_Validate::signals( array( 'genre' => 'sci-fi' ), true ) );
+		$this->assertNull( SSPulse_Validate::signals( array( 'cert' => 'A' ), true ) );
+		$this->assertNotNull( SSPulse_Validate::signals( array( 'cert' => 'U' ), true ) );
+		$this->assertNull( SSPulse_Validate::signals( array( 'event' => 'controversy' ), true ) );
+		$this->assertNotNull( SSPulse_Validate::signals( array( 'event' => 'scandal' ), true ) );
+	}
+	public function test_industry_enum() {
+		foreach ( SSPulse_Model::INDKEYS as $ind ) { $this->assertNull( SSPulse_Validate::signals( array( 'industry' => $ind ), true ), $ind ); }
+		$this->assertNotNull( SSPulse_Validate::signals( array( 'industry' => 'punjabi' ), true ) );
+	}
+	public function test_full_signals_require_v17_enums_when_not_partial() {
+		$s = $this->good(); unset( $s['genre'] );
+		$this->assertStringContainsString( "missing signal 'genre'", SSPulse_Validate::signals( $s ) );
 	}
 	public function test_unknown_signal_rejected() { $this->assertStringContainsString( "unknown signal 'foo'", SSPulse_Validate::signals( array( 'foo' => 1 ), true ) ); }
 	public function test_non_numeric_rejected() { $this->assertStringContainsString( 'bms must be numeric', SSPulse_Validate::signals( array( 'bms' => 'lots' ), true ) ); }

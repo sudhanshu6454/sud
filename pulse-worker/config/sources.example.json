@@ -1,0 +1,999 @@
+{
+ "_readme": "Generated from training/sources_registry.csv. self_ig_user_id: any Instagram professional account you own (take an ig_user_id from config/assets.json) — Business Discovery queries are made through it. Set enabled:false on any account you do not want read. Handles were compiled from public knowledge and NOT verified account-by-account in this build: run `node scripts/discovery-check.js` once before trusting them.",
+ "self_ig_user_id": "",
+ "instagram": [
+  {
+   "username": "yrf",
+   "name": "Yash Raj Films",
+   "industries": [
+    "Hindi"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "dharmamovies",
+   "name": "Dharma Productions",
+   "industries": [
+    "Hindi"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "tseries.official",
+   "name": "T-Series",
+   "industries": [
+    "Hindi"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "redchilliesent",
+   "name": "Red Chillies Entertainment",
+   "industries": [
+    "Hindi"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "excelmovies",
+   "name": "Excel Entertainment",
+   "industries": [
+    "Hindi"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "maddockfilms",
+   "name": "Maddock Films",
+   "industries": [
+    "Hindi"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "nadiadwalagrandson",
+   "name": "Nadiadwala Grandson",
+   "industries": [
+    "Hindi"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "zeestudiosofficial",
+   "name": "Zee Studios",
+   "industries": [
+    "Hindi",
+    "Telugu",
+    "Tamil",
+    "Kannada",
+    "Malayalam"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "officialjiostudios",
+   "name": "Jio Studios",
+   "industries": [
+    "Hindi"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "penmovies",
+   "name": "Pen Studios",
+   "industries": [
+    "Hindi"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "zeemusiccompany",
+   "name": "Zee Music Company",
+   "industries": [
+    "Hindi"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "sonymusicindia",
+   "name": "Sony Music India",
+   "industries": [
+    "Hindi"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "saregama_official",
+   "name": "Saregama",
+   "industries": [
+    "Hindi",
+    "Telugu",
+    "Tamil",
+    "Kannada",
+    "Malayalam"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "tipsofficial",
+   "name": "Tips Official",
+   "industries": [
+    "Hindi"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "rsvpmovies",
+   "name": "RSVP Movies",
+   "industries": [
+    "Hindi"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "roykapurfilms",
+   "name": "Roy Kapur Films",
+   "industries": [
+    "Hindi"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "balajimotionpictures",
+   "name": "Balaji Motion Pictures",
+   "industries": [
+    "Hindi"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "jungleepictures",
+   "name": "Junglee Pictures",
+   "industries": [
+    "Hindi"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "cypplofficial",
+   "name": "Colour Yellow Productions",
+   "industries": [
+    "Hindi"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "mythriofficial",
+   "name": "Mythri Movie Makers",
+   "industries": [
+    "Telugu"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "geethaarts",
+   "name": "Geetha Arts",
+   "industries": [
+    "Telugu"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "sitharaentertainments",
+   "name": "Sithara Entertainments",
+   "industries": [
+    "Telugu"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "svc_official",
+   "name": "Sri Venkateswara Creations",
+   "industries": [
+    "Telugu"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "vyjayanthimovies",
+   "name": "Vyjayanthi Movies",
+   "industries": [
+    "Telugu"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "dvvmovies",
+   "name": "DVV Entertainment",
+   "industries": [
+    "Telugu"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "uvcreationsofficial",
+   "name": "UV Creations",
+   "industries": [
+    "Telugu"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "hombalefilms",
+   "name": "Hombale Films",
+   "industries": [
+    "Kannada",
+    "Telugu"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "kvnproductions",
+   "name": "KVN Productions",
+   "industries": [
+    "Kannada"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "paramvahstudios",
+   "name": "Paramvah Studios",
+   "industries": [
+    "Kannada"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "sunpictures",
+   "name": "Sun Pictures",
+   "industries": [
+    "Tamil"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "lycaproductions",
+   "name": "Lyca Productions",
+   "industries": [
+    "Tamil"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "redgiantmovies_",
+   "name": "Red Giant Movies",
+   "industries": [
+    "Tamil"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "agsentertainment",
+   "name": "AGS Entertainment",
+   "industries": [
+    "Tamil"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "sevenscreenstudio",
+   "name": "Seven Screen Studio",
+   "industries": [
+    "Tamil"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "wunderbarfilms",
+   "name": "Wunderbar Films",
+   "industries": [
+    "Tamil"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "2d_entertainment",
+   "name": "2D Entertainment",
+   "industries": [
+    "Tamil"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "thinkmusicofficial",
+   "name": "Think Music",
+   "industries": [
+    "Tamil"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "adityamusic",
+   "name": "Aditya Music",
+   "industries": [
+    "Telugu"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "laharimusic",
+   "name": "Lahari Music",
+   "industries": [
+    "Telugu",
+    "Kannada"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "aashirvadcine",
+   "name": "Aashirvad Cinemas",
+   "industries": [
+    "Malayalam"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "wayfarerfilms.official",
+   "name": "Wayfarer Films",
+   "industries": [
+    "Malayalam"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "netflix_in",
+   "name": "Netflix India",
+   "industries": [
+    "Hindi",
+    "Telugu",
+    "Tamil",
+    "Kannada",
+    "Malayalam",
+    "Hollywood"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "primevideoin",
+   "name": "Prime Video India",
+   "industries": [
+    "Hindi",
+    "Telugu",
+    "Tamil",
+    "Kannada",
+    "Malayalam",
+    "Hollywood"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "jiohotstar",
+   "name": "JioHotstar",
+   "industries": [
+    "Hindi",
+    "Telugu",
+    "Tamil",
+    "Kannada",
+    "Malayalam",
+    "Hollywood"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "zee5",
+   "name": "ZEE5",
+   "industries": [
+    "Hindi",
+    "Telugu",
+    "Tamil",
+    "Kannada",
+    "Malayalam",
+    "Hollywood"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "sonylivindia",
+   "name": "Sony LIV",
+   "industries": [
+    "Hindi",
+    "Telugu",
+    "Tamil",
+    "Kannada",
+    "Malayalam",
+    "Hollywood"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "bookmyshowin",
+   "name": "BookMyShow",
+   "industries": [
+    "Hindi",
+    "Telugu",
+    "Tamil",
+    "Kannada",
+    "Malayalam",
+    "Hollywood"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "pvrcinemas_official",
+   "name": "PVR INOX",
+   "industries": [
+    "Hindi",
+    "Telugu",
+    "Tamil",
+    "Kannada",
+    "Malayalam",
+    "Hollywood"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "filmfare",
+   "name": "Filmfare",
+   "industries": [
+    "Hindi"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "pinkvilla",
+   "name": "Pinkvilla",
+   "industries": [
+    "Hindi"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "viralbhayani",
+   "name": "Viral Bhayani",
+   "industries": [
+    "Hindi"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "varindertchawla",
+   "name": "Varinder Chawla",
+   "industries": [
+    "Hindi"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "instantbollywood",
+   "name": "Instant Bollywood",
+   "industries": [
+    "Hindi"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "realbollywoodhungama",
+   "name": "Bollywood Hungama",
+   "industries": [
+    "Hindi"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "koimoi",
+   "name": "Koimoi",
+   "industries": [
+    "Hindi"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "ottplayapp",
+   "name": "OTTplay",
+   "industries": [
+    "Hindi",
+    "Telugu",
+    "Tamil",
+    "Kannada",
+    "Malayalam",
+    "Hollywood"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "filmygyan",
+   "name": "Filmygyan",
+   "industries": [
+    "Hindi"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "bollywoodnow",
+   "name": "Bollywood Now",
+   "industries": [
+    "Hindi"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "manav.manglani",
+   "name": "Manav Manglani",
+   "industries": [
+    "Hindi"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "etimes",
+   "name": "ETimes",
+   "industries": [
+    "Hindi",
+    "Telugu",
+    "Tamil",
+    "Kannada",
+    "Malayalam"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "behindwoodsofficial",
+   "name": "Behindwoods",
+   "industries": [
+    "Tamil"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "gulteofficial",
+   "name": "Gulte",
+   "industries": [
+    "Telugu"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "onmanorama",
+   "name": "Onmanorama",
+   "industries": [
+    "Malayalam"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "marvelstudios",
+   "name": "Marvel Studios",
+   "industries": [
+    "Global",
+    "Hollywood"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "disney",
+   "name": "Disney",
+   "industries": [
+    "Global",
+    "Hollywood"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "wbpictures",
+   "name": "Warner Bros. Pictures",
+   "industries": [
+    "Global",
+    "Hollywood"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "universalpictures",
+   "name": "Universal Pictures",
+   "industries": [
+    "Global",
+    "Hollywood"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "sonypictures",
+   "name": "Sony Pictures",
+   "industries": [
+    "Global",
+    "Hollywood"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "paramountpics",
+   "name": "Paramount Pictures",
+   "industries": [
+    "Global",
+    "Hollywood"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "lionsgate",
+   "name": "Lionsgate",
+   "industries": [
+    "Global"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "a24",
+   "name": "A24",
+   "industries": [
+    "Global"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "netflix",
+   "name": "Netflix",
+   "industries": [
+    "Global"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "primevideo",
+   "name": "Prime Video",
+   "industries": [
+    "Global"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "imdb",
+   "name": "IMDb",
+   "industries": [
+    "Global"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "rottentomatoes",
+   "name": "Rotten Tomatoes",
+   "industries": [
+    "Global"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "letterboxd",
+   "name": "Letterboxd",
+   "industries": [
+    "Global"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "discussingfilm",
+   "name": "DiscussingFilm",
+   "industries": [
+    "Global"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "cjenm_movie",
+   "name": "CJ ENM Movie (Korea)",
+   "industries": [
+    "Global"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "lotte_ent",
+   "name": "Lotte Entertainment (Korea)",
+   "industries": [
+    "Global"
+   ],
+   "enabled": true
+  },
+  {
+   "username": "toho_movie",
+   "name": "TOHO (Japan)",
+   "industries": [
+    "Global"
+   ],
+   "enabled": true
+  }
+ ],
+ "youtube_channels": [
+  {
+   "channel_id": "UCq-Fj5jknLsUf-MWSy4_brA",
+   "handle": "@tseries",
+   "name": "T-Series",
+   "industries": [
+    "Hindi"
+   ]
+  },
+  {
+   "channel_id": "UCFFbwnve3yF62-tVXkTyHqg",
+   "handle": "@zeemusiccompany",
+   "name": "Zee Music Company",
+   "industries": [
+    "Hindi"
+   ]
+  },
+  {
+   "channel_id": "UC3MLnJtqc_phABBriLRhtgQ",
+   "handle": "@SonyMusicIndiaVEVO",
+   "name": "Sony Music India",
+   "industries": [
+    "Hindi"
+   ]
+  },
+  {
+   "channel_id": "UC_A7K2dXFsTMAciGmnNxy-Q",
+   "handle": "@saregama",
+   "name": "Saregama Music",
+   "industries": [
+    "Hindi"
+   ]
+  },
+  {
+   "channel_id": "UCbTLwN10NoCU4WDzLf1JMOA",
+   "handle": "@yrf",
+   "name": "YRF",
+   "industries": [
+    "Hindi"
+   ]
+  },
+  {
+   "channel_id": "UCGdHCtXEzkCB7-g_NXYZPcw",
+   "handle": "@DharmaProductions",
+   "name": "Dharma Productions",
+   "industries": [
+    "Hindi"
+   ]
+  },
+  {
+   "channel_id": "UC-LOdiPoxninevJ0DkleCLg",
+   "handle": "@MaddockFilms",
+   "name": "Maddock Films",
+   "industries": [
+    "Hindi"
+   ]
+  },
+  {
+   "channel_id": "UCjJKg01HAP01xCLVhDmnLhw",
+   "handle": "@RedChilliesEntertainment",
+   "name": "Red Chillies Entertainment",
+   "industries": [
+    "Hindi"
+   ]
+  },
+  {
+   "channel_id": "UCyoXW-Dse7fURq30EWl_CUA",
+   "handle": "@GoldminesTelefilms",
+   "name": "Goldmines Telefilms",
+   "industries": [
+    "Hindi",
+    "Telugu",
+    "Tamil"
+   ]
+  },
+  {
+   "channel_id": "UCNApqoVYJbYSrni4YsbXzyQ",
+   "handle": "@adityamusic",
+   "name": "Aditya Music",
+   "industries": [
+    "Telugu"
+   ]
+  },
+  {
+   "channel_id": "UCnSqxrSfo1sK4WZ7nBpYW1Q",
+   "handle": "@LahariMusic",
+   "name": "Lahari Music",
+   "industries": [
+    "Telugu",
+    "Kannada"
+   ]
+  },
+  {
+   "channel_id": "UCKZSn5C-RzrLjuWJF8wWiDw",
+   "handle": "@MythriMovieMakers",
+   "name": "Mythri Movie Makers",
+   "industries": [
+    "Telugu"
+   ]
+  },
+  {
+   "channel_id": "UCiJfiEg1FImWsVuEu0L8X6Q",
+   "handle": "@GeethaArts",
+   "name": "Geetha Arts",
+   "industries": [
+    "Telugu"
+   ]
+  },
+  {
+   "channel_id": "UCLbdVvreihwZRL6kwuEUYsA",
+   "handle": "@ThinkMusicIndia",
+   "name": "Think Music India",
+   "industries": [
+    "Tamil"
+   ]
+  },
+  {
+   "channel_id": "UCTNtRdBAiZtHP9w7JinzfUg",
+   "handle": "@SonyMusicSouth",
+   "name": "Sony Music South",
+   "industries": [
+    "Telugu",
+    "Tamil",
+    "Kannada",
+    "Malayalam"
+   ]
+  },
+  {
+   "channel_id": "UCzee67JnEcuvjErRyWP3GpQ",
+   "handle": "@SaregamaTamil",
+   "name": "Saregama Tamil",
+   "industries": [
+    "Tamil"
+   ]
+  },
+  {
+   "channel_id": "UCA7gwgLgmCZ8DSmdf2bhb8g",
+   "handle": "@LycaProductions",
+   "name": "Lyca Productions",
+   "industries": [
+    "Tamil"
+   ]
+  },
+  {
+   "channel_id": "UChRi1dpwnsZcIo1LSwzY0Iw",
+   "handle": "@Muzik247",
+   "name": "Muzik247",
+   "industries": [
+    "Malayalam"
+   ]
+  },
+  {
+   "channel_id": "UCyx6Udkt-zEqwEaoq-uWubQ",
+   "handle": "@ManoramaMusicSongs",
+   "name": "Manorama Music",
+   "industries": [
+    "Malayalam"
+   ]
+  },
+  {
+   "channel_id": "UCLtCejNl8eAg4PO_9lf2TIg",
+   "handle": "@AnandAudio",
+   "name": "Anand Audio",
+   "industries": [
+    "Kannada"
+   ]
+  },
+  {
+   "channel_id": "UCvC4D8onUfXzvjTOM-dBfEA",
+   "handle": "@marvel",
+   "name": "Marvel Entertainment",
+   "industries": [
+    "Global",
+    "Hollywood"
+   ]
+  },
+  {
+   "channel_id": "UCjmJDM5pRKbUlVIzDYYWb6g",
+   "handle": "@warnerbrospictures",
+   "name": "Warner Bros. Pictures",
+   "industries": [
+    "Global",
+    "Hollywood"
+   ]
+  },
+  {
+   "channel_id": "UCq0OueAsdxH6b8nyAspwViw",
+   "handle": "@UniversalPictures",
+   "name": "Universal Pictures",
+   "industries": [
+    "Global",
+    "Hollywood"
+   ]
+  },
+  {
+   "channel_id": "UCz97F7dMxBNOfGYu3rx8aCw",
+   "handle": "@SonyPictures",
+   "name": "Sony Pictures Entertainment",
+   "industries": [
+    "Global",
+    "Hollywood"
+   ]
+  },
+  {
+   "channel_id": "UCF9imwPMSGz4Vq1NiTWCC7g",
+   "handle": "@ParamountPictures",
+   "name": "Paramount Pictures",
+   "industries": [
+    "Global",
+    "Hollywood"
+   ]
+  },
+  {
+   "channel_id": "UC2-BeLxzUBSs0uSrmzWhJuQ",
+   "handle": "@20thCenturyStudios",
+   "name": "20th Century Studios",
+   "industries": [
+    "Global",
+    "Hollywood"
+   ]
+  },
+  {
+   "channel_id": "UCJ6nMHaJPZvsJ-HmUmj1SeA",
+   "handle": "@LionsgateMovies",
+   "name": "Lionsgate Movies",
+   "industries": [
+    "Global"
+   ]
+  },
+  {
+   "channel_id": "UCuPivVjnfNo4mb3Oog_frZg",
+   "handle": "@A24",
+   "name": "A24",
+   "industries": [
+    "Global"
+   ]
+  },
+  {
+   "channel_id": "UCWOA1ZGywLbqmigxE4Qlvuw",
+   "handle": "@Netflix",
+   "name": "Netflix",
+   "industries": [
+    "Global"
+   ]
+  },
+  {
+   "channel_id": "UCZSNzBgFub_WWil6TOTYwAg",
+   "handle": "@NetflixIndiaOfficial",
+   "name": "Netflix India",
+   "industries": [
+    "Hindi",
+    "Telugu",
+    "Tamil",
+    "Kannada",
+    "Malayalam",
+    "Hollywood"
+   ]
+  },
+  {
+   "channel_id": "UC4zWG9LccdWGUlF77LZ8toA",
+   "handle": "@PrimeVideoIN",
+   "name": "Prime Video India",
+   "industries": [
+    "Hindi",
+    "Telugu",
+    "Tamil",
+    "Kannada",
+    "Malayalam",
+    "Hollywood"
+   ]
+  },
+  {
+   "channel_id": "UC0PTktRYpZXb6On0_zFKWIg",
+   "handle": "@JioHotstar",
+   "name": "JioHotstar",
+   "industries": [
+    "Hindi",
+    "Telugu",
+    "Tamil",
+    "Kannada",
+    "Malayalam",
+    "Hollywood"
+   ]
+  },
+  {
+   "channel_id": "UCi8e0iOVk1fEOogdfu4YgfA",
+   "handle": "@RottenTomatoesTrailers",
+   "name": "Rotten Tomatoes Trailers",
+   "industries": [
+    "Global"
+   ]
+  }
+ ]
+}

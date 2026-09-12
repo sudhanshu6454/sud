@@ -1,0 +1,17 @@
+{
+  "name": "pulse-worker",
+  "version": "1.0.0",
+  "description": "Screenstat Pulse ingestion worker — fills film signals from YouTube, Wikimedia, Meta Graph, Google Trends and Search Console, then posts them to WordPress (or writes a payload for the Pulse UI).",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "run": "node run.js",
+    "dry": "node run.js --dry-run",
+    "test": "node --test \"test/*.test.js\"",
+    "inventory": "node scripts/meta-inventory.js",
+    "daily-reading": "node scripts/daily-reading.js",
+    "scheduler": "node scripts/scheduler.js"
+  },
+  "license": "UNLICENSED",
+  "private": true
+}

@@ -1,0 +1,6 @@
+.env
+config/films.json
+config/assets.json
+config/google-service-account.json
+data/
+node_modules/

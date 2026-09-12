@@ -138,6 +138,20 @@ def build(sites: list[dict]) -> dict:
         "security_opt": ["no-new-privileges:true"],
     }
 
+    services["pulse_worker"] = {
+        "build": "./pulse-worker",
+        "container_name": "pulse_worker",
+        "restart": "unless-stopped",
+        "env_file": [{"path": ".env", "required": False}],
+        "environment": {"TZ": "${TZ:-Asia/Kolkata}"},
+        "volumes": ["pulse_worker_data:/app/data", "./pulse-worker/config:/app/config:ro"],
+        "networks": ["web"],
+        # holds YouTube/Meta/Reddit/Spotify/TMDB/Trakt tokens and a WordPress application password
+        "cap_drop": ["ALL"],
+        "security_opt": ["no-new-privileges:true"],
+    }
+    volumes["pulse_worker_data"] = {}
+
     return {
         "name": "marketing-fleet",
         "services": services,

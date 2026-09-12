@@ -381,6 +381,24 @@ services:
     - ALL
     security_opt:
     - no-new-privileges:true
+  pulse_worker:
+    build: ./pulse-worker
+    container_name: pulse_worker
+    restart: unless-stopped
+    env_file:
+    - path: .env
+      required: false
+    environment:
+      TZ: ${TZ:-Asia/Kolkata}
+    volumes:
+    - pulse_worker_data:/app/data
+    - ./pulse-worker/config:/app/config:ro
+    networks:
+    - web
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
 networks:
   web: {}
   internal: {}
@@ -395,3 +413,4 @@ volumes:
   wp_crazy_data: {}
   wp_junkies_data: {}
   wp_screenstat_data: {}
+  pulse_worker_data: {}

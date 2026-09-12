@@ -3,8 +3,9 @@
  * schema imported from pulse-model.js (unchanged) and localStorage replaced by the REST storage
  * adapter below (HANDOVER.md §6). Rendering, formulas and labels are the reference's.
  */
-import { compute, poolSamples, wilson, daysUntil, GROUPS, RELEASE, CAL, SOURCES, OPTS, clamp } from './pulse-model.js';
+import { compute, poolSamples, wilson, daysUntil, GROUPS, RELEASE, CAL, SOURCES, OPTS, clamp, INDKEYS, INDUSTRY } from './pulse-model.js';
 
+const INDUSTRY_OPTS = INDKEYS.map(k => [k, INDUSTRY[k]?.name || k]);
 const CFG = window.SSPULSE || {};
 const $ = s => document.querySelector(s);
 
@@ -73,7 +74,7 @@ async function load() {
   let want = null; try { want = +localStorage.getItem(ACTIVE_KEY); } catch (e) { /* preference only */ }
   state.active = state.films.find(f => f.id === want) ? want : (state.films[0]?.id ?? null);
   if (!state.films.length) {   // empty desk: start with one blank film so the readouts have something to show
-    const f = await api('POST', '/films', { title: '', signals: { tr24: 5, trTotal: 15, likeRatio: 35, search: 35, posts: 20, sentiment: 62, bms: 80, song: 20, star: 40, screens: 1500, shows: 4, seats: 190, atp: 180, budget: 50, days: 30, holiday: '0', comp: 'none', kInt: 3.8, bias: 0.25 } });
+    const f = await api('POST', '/films', { title: '' }); // server fills in default_signals() (class-rest.php)
     state.films.push(fromApi(f)); state.active = f.id;
   }
   setSaveState('ok', 'Loaded · ' + state.films.length + ' film' + (state.films.length === 1 ? '' : 's'));
@@ -104,7 +105,11 @@ function renderDesk(){
     h+=`<div class="group"><h3><span>${g.name}</span><span class="w">weight ${g.w}</span></h3>${g.fields.map(x=>field(x,s[x.k])).join('')}</div>`;
   });
   h+=`<div class="group"><h3><span>Release setup</span><span class="w">supply side</span></h3><div class="row2">${RELEASE.map(x=>field(x,s[x.k])).join('')}</div>
-      <div class="row2">${field({k:'holiday',label:'Holiday opening',options:[['0','No'],['1','Yes / extended weekend']]},s.holiday)}${field({k:'comp',label:'Competition that week',options:[['none','None'],['moderate','Moderate'],['heavy','Heavy']]},s.comp)}</div></div>`;
+      <div class="row2">${field({k:'holiday',label:'Holiday opening',options:[['0','No'],['1','Yes'],['auto','Auto (from the calendar)']]},s.holiday)}${field({k:'comp',label:'Competition that week',options:[['none','None'],['moderate','Moderate'],['heavy','Heavy'],['auto','Auto (from the calendar)']]},s.comp)}</div>
+      <div class="row2">${field({k:'industry',label:'Industry',options:INDUSTRY_OPTS},s.industry)}${field({k:'genre',label:'Genre',options:[['action','Action'],['comedy','Comedy'],['romance','Romance'],['drama','Drama'],['thriller','Thriller'],['epic','Epic']]},s.genre)}</div>
+      <div class="row2">${field({k:'cert',label:'Certificate',options:[['UA','UA'],['A','A']]},s.cert)}${field({k:'event',label:'Leak / controversy',options:[['none','None'],['leak','Leak'],['controversy','Controversy'],['both','Both']]},s.event)}</div>
+      <div class="row2">${field({k:'franchise',label:'Franchise / sequel',options:[['0','No'],['1','Yes']]},s.franchise)}${field({k:'remake',label:'Remake',options:[['0','No'],['1','Yes']]},s.remake)}</div>
+      <div class="row2">${field({k:'dubbed',label:'Wide dubbed release',options:[['0','No'],['1','Yes']]},s.dubbed)}</div></div>`;
   h+=`<div class="group"><h3><span>Calibration</span><span class="w">tune after release</span></h3><div class="row2">${CAL.map(x=>field(x,s[x.k])).join('')}</div></div>`;
   $('#signals').innerHTML=h;
 }
@@ -128,7 +133,7 @@ function renderTabs(){
 $('#filmTabs').addEventListener('click',e=>{
   const t=e.target.closest('.tab'); if(!t)return;
   if(t.id==='addFilm'){
-    api('POST','/films',{title:'',signals:{tr24:5,trTotal:15,likeRatio:35,search:35,posts:20,sentiment:62,bms:80,song:20,star:40,screens:1500,shows:4,seats:190,atp:180,budget:50,days:30,holiday:'0',comp:'none',kInt:3.8,bias:0.25}})
+    api('POST','/films',{title:''})   // server fills in default_signals() (class-rest.php)
       .then(f=>{state.films.push(fromApi(f));state.active=f.id;remember();renderAll();$('#fTitle').focus();}).catch(()=>{});
     return;
   }
