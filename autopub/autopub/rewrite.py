@@ -1,9 +1,18 @@
-"""Turn a source story into an original, attributed article + social captions with Claude."""
+"""Turn a source story into an original, attributed article + social captions.
+
+Speaks the Anthropic Messages API, which also reaches other providers through ANTHROPIC_BASE_URL
+(DeepSeek exposes one at https://api.deepseek.com/anthropic). Those compatibility layers implement
+the core of the API but not its extras: DeepSeek ignores `cache_control` and, crucially, ignores
+`output_config.format`, answering a schema-constrained request with ordinary prose. So the schema
+travels twice - as `output_config.format` for providers that enforce it, and in the prompt for
+providers that do not - and the response is parsed defensively either way.
+"""
 from __future__ import annotations
 
 import json
 import logging
 import os
+import re
 from copy import deepcopy
 from typing import Any
 
@@ -101,6 +110,28 @@ You receive one news story from another publisher. Write an ORIGINAL curated art
 """
 
 
+JSON_CONTRACT = """
+Reply with ONE JSON object and nothing else: no markdown code fences, no commentary before or after
+it. It must validate against this JSON Schema:
+
+{schema}
+"""
+
+_FENCE = re.compile(r"\A\s*```(?:json)?\s*|\s*```\s*\Z", re.IGNORECASE)
+
+
+def _text_block(response) -> str:
+    """The assistant's text. Reasoning models put a `thinking` block first; it is not the answer."""
+    return next((b.text for b in response.content if getattr(b, "type", None) == "text"), "")
+
+
+def json_object(text: str) -> str:
+    """The JSON out of a reply that may have arrived fenced, or with prose either side of it."""
+    stripped = _FENCE.sub("", text.strip())
+    start, end = stripped.find("{"), stripped.rfind("}")
+    return stripped[start : end + 1] if start != -1 and end > start else stripped
+
+
 def schema_for(site: Site) -> dict[str, Any]:
     """The output schema with this site's own sections as the allowed categories."""
     schema = deepcopy(OUTPUT_SCHEMA)
@@ -123,7 +154,11 @@ class Rewriter:
         self.model = model or os.environ.get("ANTHROPIC_MODEL", "claude-opus-5")
         self.effort = os.environ.get("ANTHROPIC_EFFORT", effort)
         if use_fallbacks is None:
-            use_fallbacks = os.environ.get("ANTHROPIC_FALLBACKS", "default").lower() != "off"
+            # Server-side fallbacks are an Anthropic feature. A compatibility endpoint reached
+            # through ANTHROPIC_BASE_URL ignores the beta header; do not spend a request on it.
+            base = os.environ.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
+            first_party = "api.anthropic.com" in base
+            use_fallbacks = first_party and os.environ.get("ANTHROPIC_FALLBACKS", "default").lower() != "off"
         self.use_fallbacks = use_fallbacks
         self.client = client or anthropic.Anthropic(max_retries=3, timeout=300.0)
 
@@ -137,11 +172,13 @@ class Rewriter:
         return self.client.messages.create(**kwargs)
 
     def rewrite(self, site: Site, article: Article) -> CuratedPost:
+        schema = schema_for(site)
+        # Appended after .format() so the schema's own braces are never read as format placeholders.
         system = SYSTEM_PROMPT.format(
             name=site.name, domain=site.domain, tagline=site.tagline,
             niche=site.niche, audience=site.audience, tone=site.tone,
             sections=", ".join(site.categories or [site.category]),
-        )
+        ) + JSON_CONTRACT.format(schema=json.dumps(schema))
         user = (
             f"SOURCE_URL: {article.url}\n"
             f"SOURCE_NAME: {article.sitename or article.url.split('/')[2]}\n"
@@ -150,32 +187,41 @@ class Rewriter:
             f"SITE_HASHTAGS (use some in instagram/twitter captions): {' '.join('#' + h for h in site.hashtags)}\n\n"
             f"SOURCE_TEXT:\n{article.text}"
         )
-        try:
-            response = self._create(
-                model=self.model,
-                max_tokens=16000,
-                system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
-                messages=[{"role": "user", "content": user}],
-                output_config={"effort": self.effort, "format": {"type": "json_schema", "schema": schema_for(site)}},
-            )
-        except anthropic.RateLimitError as exc:
-            raise RuntimeError(f"rate limited by Anthropic: {exc.message}") from exc
-        except anthropic.APIStatusError as exc:
-            raise RuntimeError(f"Anthropic API error {exc.status_code}: {exc.message}") from exc
-        except anthropic.APIConnectionError as exc:
-            raise RuntimeError(f"Anthropic connection error: {exc}") from exc
+        messages: list[dict[str, Any]] = [{"role": "user", "content": user}]
+        for attempt in (1, 2):   # one corrective round: a provider that ignores the schema often obeys the prompt
+            try:
+                response = self._create(
+                    model=self.model,
+                    max_tokens=16000,
+                    system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
+                    messages=messages,
+                    output_config={"effort": self.effort, "format": {"type": "json_schema", "schema": schema}},
+                )
+            except anthropic.RateLimitError as exc:
+                raise RuntimeError(f"rate limited by the model API: {exc.message}") from exc
+            except anthropic.APIStatusError as exc:
+                raise RuntimeError(f"model API error {exc.status_code}: {exc.message}") from exc
+            except anthropic.APIConnectionError as exc:
+                raise RuntimeError(f"model API connection error: {exc}") from exc
 
-        if response.stop_reason == "refusal":
-            details = getattr(response, "stop_details", None)
-            raise RewriteSkipped(f"model declined ({getattr(details, 'category', None)})")
-        if response.stop_reason == "max_tokens":
-            raise RuntimeError("model output truncated at max_tokens")
+            if response.stop_reason == "refusal":
+                details = getattr(response, "stop_details", None)
+                raise RewriteSkipped(f"model declined ({getattr(details, 'category', None)})")
+            if response.stop_reason == "max_tokens":
+                raise RuntimeError("model output truncated at max_tokens")
 
-        text = next((b.text for b in response.content if b.type == "text"), "")
-        try:
-            post = CuratedPost.model_validate(json.loads(text))
-        except (json.JSONDecodeError, ValidationError) as exc:
-            raise RuntimeError(f"unusable model output: {exc}") from exc
+            text = _text_block(response)
+            try:
+                post = CuratedPost.model_validate(json.loads(json_object(text)))
+                break
+            except (json.JSONDecodeError, ValidationError) as exc:
+                if attempt == 2:
+                    raise RuntimeError(f"unusable model output: {exc}") from exc
+                log.warning("model did not return the schema (%s); asking once more", type(exc).__name__)
+                messages = messages + [
+                    {"role": "assistant", "content": text or "(no text returned)"},
+                    {"role": "user", "content": "That did not parse as the required JSON object. Reply with ONLY the JSON object, no fences and no commentary."},
+                ]
         post.tags = [t.strip() for t in post.tags if t and t.strip()][:8]
         sections = {c.lower(): c for c in (site.categories or [site.category])}
         post.category = sections.get(post.category.strip().lower(), site.category)

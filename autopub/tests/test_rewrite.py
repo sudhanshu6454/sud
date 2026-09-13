@@ -84,6 +84,90 @@ def test_bad_json_is_error(site):
         Rewriter(client=FakeClient(_resp("not json"))).rewrite(site, ARTICLE)
 
 
+class SequenceClient(FakeClient):
+    """Returns a different response per call, so a corrective retry can be observed. Both the beta
+    and plain routes walk the same sequence, since which one is used depends on the endpoint."""
+
+    def __init__(self, results):
+        super().__init__(results[0])
+        self.results = list(results)
+        self.beta = SimpleNamespace(messages=SimpleNamespace(create=self._beta_create))
+
+    def _next(self):
+        return self.results[min(len(self.calls), len(self.results)) - 1]
+
+    def _beta_create(self, **kw):
+        self.calls.append(("beta", kw))
+        return self._next()
+
+    def _create(self, **kw):
+        self.calls.append(("plain", kw))
+        return self._next()
+
+
+def _thinking_resp(text=""):
+    """What a reasoning model returns: a thinking block, then (maybe) the answer."""
+    blocks = [SimpleNamespace(type="thinking", thinking="We need answer user...")]
+    if text:
+        blocks.append(SimpleNamespace(type="text", text=text))
+    return SimpleNamespace(stop_reason="end_turn", stop_details=None, content=blocks,
+                           usage=SimpleNamespace(input_tokens=1, output_tokens=1, cache_read_input_tokens=0))
+
+
+def test_the_schema_also_travels_in_the_prompt(site):
+    """DeepSeek ignores output_config.format, so the schema has to be in the system prompt too."""
+    client = FakeClient(_resp(json.dumps(GOOD)))
+    Rewriter(client=client).rewrite(site, ARTICLE)
+    system = client.calls[0][1]["system"][0]["text"]
+    assert "JSON Schema" in system
+    assert '"image_kicker"' in system and site.categories[0] in system
+
+
+def test_fenced_json_is_accepted(site):
+    fenced = "```json\n" + json.dumps(GOOD) + "\n```"
+    assert Rewriter(client=FakeClient(_resp(fenced))).rewrite(site, ARTICLE).title == GOOD["title"]
+
+
+def test_json_with_prose_around_it_is_accepted(site):
+    noisy = "Sure, here you go:\n" + json.dumps(GOOD) + "\nHope that helps!"
+    assert Rewriter(client=FakeClient(_resp(noisy))).rewrite(site, ARTICLE).title == GOOD["title"]
+
+
+def test_a_thinking_block_is_not_mistaken_for_the_answer(site):
+    """A reasoning model puts thinking first; the answer is the text block."""
+    assert Rewriter(client=FakeClient(_thinking_resp(json.dumps(GOOD)))).rewrite(site, ARTICLE).title == GOOD["title"]
+
+
+def test_prose_reply_is_retried_once_and_then_succeeds(site):
+    client = SequenceClient([_thinking_resp("I'd be happy to write that article!"), _resp(json.dumps(GOOD))])
+    post = Rewriter(client=client).rewrite(site, ARTICLE)
+    assert post.title == GOOD["title"]
+    assert len(client.calls) == 2
+    retry_messages = client.calls[1][1]["messages"]
+    assert len(retry_messages) == 3 and "ONLY the JSON object" in retry_messages[-1]["content"]
+
+
+def test_two_bad_replies_raise_rather_than_loop(site):
+    client = SequenceClient([_resp("nope"), _resp("still nope")])
+    with pytest.raises(RuntimeError):
+        Rewriter(client=client).rewrite(site, ARTICLE)
+    assert len(client.calls) == 2
+
+
+def test_fallbacks_are_off_for_a_third_party_endpoint(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.deepseek.com/anthropic")
+    assert Rewriter(client=FakeClient(_resp("{}"))).use_fallbacks is False
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
+    assert Rewriter(client=FakeClient(_resp("{}"))).use_fallbacks is True
+
+
+def test_third_party_endpoint_never_calls_the_beta_route(site, monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.deepseek.com/anthropic")
+    client = FakeClient(_resp(json.dumps(GOOD)))
+    Rewriter(client=client).rewrite(site, ARTICLE)
+    assert [c[0] for c in client.calls] == ["plain"]
+
+
 def test_schema_has_no_unsupported_array_constraints():
     def walk(node):
         if isinstance(node, dict):
