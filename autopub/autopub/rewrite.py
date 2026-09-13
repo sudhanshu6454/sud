@@ -120,6 +120,12 @@ it. It must validate against this JSON Schema:
 _FENCE = re.compile(r"\A\s*```(?:json)?\s*|\s*```\s*\Z", re.IGNORECASE)
 
 
+def effective_model(configured: str | None = None) -> str:
+    """The model actually used. ANTHROPIC_MODEL wins over sites.yaml so that moving provider is one
+    coherent edit to .env - base URL, key and the model name that belongs with them travel together."""
+    return os.environ.get("ANTHROPIC_MODEL") or configured or "claude-opus-5"
+
+
 def _text_block(response) -> str:
     """The assistant's text. Reasoning models put a `thinking` block first; it is not the answer."""
     return next((b.text for b in response.content if getattr(b, "type", None) == "text"), "")

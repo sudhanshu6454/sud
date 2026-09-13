@@ -6,7 +6,7 @@ import httpx2
 import pytest
 
 from autopub.extract import Article
-from autopub.rewrite import OUTPUT_SCHEMA, Rewriter, RewriteSkipped, schema_for
+from autopub.rewrite import OUTPUT_SCHEMA, Rewriter, RewriteSkipped, effective_model, schema_for
 
 GOOD = {
     "title": "Brands Rethink Loyalty", "category": "Branding", "slug": "brands-rethink-loyalty", "excerpt": "x" * 130,
@@ -152,6 +152,16 @@ def test_two_bad_replies_raise_rather_than_loop(site):
     with pytest.raises(RuntimeError):
         Rewriter(client=client).rewrite(site, ARTICLE)
     assert len(client.calls) == 2
+
+
+def test_env_model_overrides_sites_yaml(monkeypatch):
+    """The provider switch has to be one coherent .env edit: base URL, key and model together.
+    pipeline.py passes settings.llm_model explicitly, so without this the env value is ignored."""
+    monkeypatch.delenv("ANTHROPIC_MODEL", raising=False)
+    assert effective_model("claude-opus-5") == "claude-opus-5"
+    monkeypatch.setenv("ANTHROPIC_MODEL", "deepseek-v4-pro")
+    assert effective_model("claude-opus-5") == "deepseek-v4-pro"
+    assert effective_model(None) == "deepseek-v4-pro"
 
 
 def test_fallbacks_are_off_for_a_third_party_endpoint(monkeypatch):

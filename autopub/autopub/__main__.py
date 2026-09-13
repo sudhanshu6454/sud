@@ -12,6 +12,7 @@ from pathlib import Path
 
 from . import config, images, sources
 from .pipeline import make_wordpress, run_all
+from .rewrite import effective_model
 from .social import build_publishers
 from .state import State
 
@@ -59,7 +60,11 @@ def cmd_serve(settings, args) -> int:
 def cmd_check(settings, args) -> int:
     """Verify config, WordPress credentials and which socials are wired per site."""
     ok = True
-    print(f"model={settings.llm_model} effort={settings.llm_effort} anthropic_key={'set' if os.environ.get('ANTHROPIC_API_KEY') else 'MISSING'}")
+    # the model actually used, not just what sites.yaml says - ANTHROPIC_MODEL overrides it
+    model = effective_model(settings.llm_model)
+    endpoint = os.environ.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
+    print(f"model={model} effort={settings.llm_effort} endpoint={endpoint} "
+          f"api_key={'set' if os.environ.get('ANTHROPIC_API_KEY') else 'MISSING'}")
     if not os.environ.get("ANTHROPIC_API_KEY"):
         ok = False
     for site in settings.sites:

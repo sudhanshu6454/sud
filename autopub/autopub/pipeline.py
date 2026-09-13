@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -10,7 +11,7 @@ from slugify import slugify
 
 from . import extract, images, sources
 from .config import Settings, Site
-from .rewrite import CuratedPost, Rewriter, RewriteSkipped
+from .rewrite import CuratedPost, Rewriter, RewriteSkipped, effective_model
 from .social import SocialPost, build_publishers, dispatch
 from .state import State
 from .wordpress import WordPress, WordPressError
@@ -183,7 +184,7 @@ def run_site(site: Site, settings: Settings, state: State, rewriter: Rewriter | 
         log.info("[%s] nothing new", site.key)
         return report
 
-    rewriter = rewriter or Rewriter(model=settings.llm_model, effort=settings.llm_effort)
+    rewriter = rewriter or Rewriter(model=effective_model(settings.llm_model), effort=settings.llm_effort)
     wp = wp or make_wordpress(site)
     publishers = build_publishers(site) if publishers is None else publishers
     log.info("[%s] %d fresh candidates; socials: %s", site.key, len(fresh), [p.platform for p in publishers] or "none")
