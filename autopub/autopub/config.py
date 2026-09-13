@@ -80,6 +80,10 @@ class Settings:
     llm_model: str = "claude-opus-5"
     llm_effort: str = "medium"
     min_gap_minutes_between_posts: int = 20
+    # Candidate headlines are scored 0-10 against the site's beat before anything is written
+    # (autopub/rank.py). 0 disables it and restores plain newest-first selection.
+    min_relevance: int = 5
+    rank_pool: int = 40
     # Instagram's API documents a 4:5 floor for feed images and hard-refuses anything taller
     # (error 36003/2207009). The cards are drawn 3:4; this says which shape actually gets posted.
     # Flip to "3:4" once `python -m autopub instagram-probe` shows Meta accepting 0.75.

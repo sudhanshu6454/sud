@@ -10,7 +10,7 @@ import time
 
 from pathlib import Path
 
-from . import config, images, sources
+from . import config, images, rank, sources
 from .pipeline import make_wordpress, run_all
 from .rewrite import effective_model
 from .social import build_publishers
@@ -90,6 +90,19 @@ def cmd_sources(settings, args) -> int:
             continue
         cands = sources.collect(site, timeout=settings.request_timeout)
         print(f"\n[{site.key}] {len(cands)} candidates")
+        if args.rank:
+            # what the beat filter would actually keep, without writing or publishing anything
+            scored = rank.rank(site, cands, model=settings.llm_model, pool=settings.rank_pool)
+            if scored is None:
+                print("  (ranking unavailable; showing newest first)")
+            else:
+                on_beat = sum(1 for s in scored if s.score >= settings.min_relevance)
+                print(f"  {on_beat}/{len(scored)} at or above min_relevance={settings.min_relevance}")
+                for s in scored[: args.limit or 15]:
+                    mark = "KEEP" if s.score >= settings.min_relevance else "drop"
+                    age = f"{s.candidate.age_hours:.0f}h" if s.candidate.age_hours is not None else "?"
+                    print(f"  {mark} {s.score:>2}/10 {age:>4} {s.reason[:22]:<22} {s.candidate.title[:70]}")
+                continue
         for c in cands[: args.limit or 15]:
             age = f"{c.age_hours:.0f}h" if c.age_hours is not None else "?"
             print(f"  {age:>4} {c.source[:28]:<28} {c.title[:80]}  {c.url}")
@@ -181,6 +194,7 @@ def main(argv=None) -> int:
     r = sub.add_parser("run", help="one cycle now"); r.add_argument("--site"); r.add_argument("--limit", type=int)
     sub.add_parser("check", help="validate credentials and connectivity")
     so = sub.add_parser("sources", help="list current candidate stories"); so.add_argument("--site"); so.add_argument("--limit", type=int)
+    so.add_argument("--rank", action="store_true", help="score each candidate against the site beat and show what would be kept")
     st = sub.add_parser("status", help="show what has been published"); st.add_argument("--limit", type=int)
     c = sub.add_parser("cards", help="render the share cards for a site so they can be eyeballed")
     c.add_argument("--site"); c.add_argument("--headline"); c.add_argument("--kicker")

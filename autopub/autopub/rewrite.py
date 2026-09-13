@@ -126,7 +126,7 @@ def effective_model(configured: str | None = None) -> str:
     return os.environ.get("ANTHROPIC_MODEL") or configured or "claude-opus-5"
 
 
-def _text_block(response) -> str:
+def text_block(response) -> str:
     """The assistant's text. Reasoning models put a `thinking` block first; it is not the answer."""
     return next((b.text for b in response.content if getattr(b, "type", None) == "text"), "")
 
@@ -216,7 +216,7 @@ class Rewriter:
             if response.stop_reason == "max_tokens":
                 raise RuntimeError("model output truncated at max_tokens")
 
-            text = _text_block(response)
+            text = text_block(response)
             try:
                 post = CuratedPost.model_validate(json.loads(json_object(text)))
                 break

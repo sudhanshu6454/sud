@@ -9,7 +9,7 @@ from pathlib import Path
 
 from slugify import slugify
 
-from . import extract, images, sources
+from . import extract, images, rank, sources
 from .config import Settings, Site
 from .rewrite import CuratedPost, Rewriter, RewriteSkipped, effective_model
 from .social import SocialPost, build_publishers, dispatch
@@ -164,6 +164,29 @@ def publish_one(site: Site, settings: Settings, state: State, cand: sources.Cand
     return True
 
 
+def _by_relevance(site: Site, settings: Settings, fresh: list[sources.Candidate]) -> list[sources.Candidate]:
+    """Fresh candidates in beat order, with the off-beat ones dropped.
+
+    Publishing nothing beats publishing somebody else's story, so a site with no on-beat candidate
+    stays quiet this cycle. A ranking that could not run is different: it returns None, and the
+    recency order is used unchanged rather than letting an API hiccup silence the fleet.
+    """
+    if settings.min_relevance <= 0:
+        return fresh
+    scored = rank.rank(site, fresh, model=settings.llm_model, pool=settings.rank_pool)
+    if scored is None:
+        return fresh
+    keep = [s for s in scored if s.score >= settings.min_relevance]
+    for s in keep[:3]:
+        log.info("[%s] on beat (%d/10, %s): %s", site.key, s.score, s.reason, s.candidate.title[:80])
+    if not keep:
+        best = scored[0] if scored else None
+        log.warning("[%s] nothing on beat this cycle: %d candidates scored below %d%s", site.key,
+                    len(scored), settings.min_relevance,
+                    f"; best was {best.score}/10 {best.candidate.title[:60]!r}" if best else "")
+    return [s.candidate for s in keep]
+
+
 def run_site(site: Site, settings: Settings, state: State, rewriter: Rewriter | None = None,
              wp: WordPress | None = None, publishers=None, work_dir: Path | None = None,
              limit: int | None = None) -> RunReport:
@@ -182,6 +205,10 @@ def run_site(site: Site, settings: Settings, state: State, rewriter: Rewriter | 
     fresh = [c for c in candidates if not state.is_used(c.url, site.key)]
     if not fresh:
         log.info("[%s] nothing new", site.key)
+        return report
+
+    fresh = _by_relevance(site, settings, fresh)
+    if not fresh:
         return report
 
     rewriter = rewriter or Rewriter(model=effective_model(settings.llm_model), effort=settings.llm_effort)

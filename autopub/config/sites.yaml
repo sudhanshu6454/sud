@@ -11,6 +11,12 @@ settings:
   llm_model: claude-opus-5
   llm_effort: medium
   min_gap_minutes_between_posts: 20   # per site, spreads posts out so socials are not spammed
+  # Candidates are scored 0-10 against each site's beat before anything is written, so selection is
+  # not just "newest item that survived the keyword filter". Inspect it without publishing:
+  #   python -m autopub sources --site SCREENSTAT --rank
+  # Raise for a narrower site, lower if a site goes quiet, 0 to switch it off.
+  min_relevance: 5
+  rank_pool: 40                       # how many of the newest candidates get scored
 
 sites:
   - key: MENTALIST
