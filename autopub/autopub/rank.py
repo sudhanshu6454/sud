@@ -86,18 +86,30 @@ def rank(site: Site, candidates: list[Candidate], model: str | None = None, effo
         sections=", ".join(site.categories or [site.category]),
     )
     client = client or anthropic.Anthropic(max_retries=2, timeout=120.0)
-    try:
-        response = client.messages.create(
-            model=effective_model(model),
-            max_tokens=8000,
-            system=[{"type": "text", "text": system}],
-            messages=[{"role": "user", "content": listing}],
-            output_config={"effort": effort, "format": {"type": "json_schema", "schema": RANK_SCHEMA}},
-        )
-        rows = json.loads(json_object(text_block(response)))["scores"]
-    except Exception as exc:  # noqa: BLE001 - ranking is an improvement, never a gate on publishing
-        log.warning("[%s] could not rank candidates (%s); falling back to newest first", site.key, exc)
-        return None
+    # Falling back means publishing by recency again - the very thing this exists to stop - so a
+    # scoring pass is worth one retry before giving that up. A reasoning model spends an
+    # unpredictable number of tokens thinking before it answers, and a reply truncated at
+    # max_tokens parses no better than an API error, so both failures retry the same way.
+    rows = None
+    for attempt in (1, 2):
+        try:
+            response = client.messages.create(
+                model=effective_model(model),
+                max_tokens=16000,
+                system=[{"type": "text", "text": system}],
+                messages=[{"role": "user", "content": listing}],
+                output_config={"effort": effort, "format": {"type": "json_schema", "schema": RANK_SCHEMA}},
+            )
+            if getattr(response, "stop_reason", None) == "max_tokens":
+                raise ValueError(f"reply truncated at max_tokens while scoring {len(shortlist)} headlines")
+            rows = json.loads(json_object(text_block(response)))["scores"]
+            break
+        except Exception as exc:  # noqa: BLE001 - ranking is an improvement, never a gate on publishing
+            if attempt == 1:
+                log.warning("[%s] ranking attempt failed (%s); retrying once", site.key, exc)
+                continue
+            log.warning("[%s] could not rank candidates (%s); falling back to newest first", site.key, exc)
+            return None
 
     by_index = {}
     for row in rows:

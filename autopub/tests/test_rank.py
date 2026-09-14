@@ -19,15 +19,29 @@ def _resp(payload):
 
 
 class FakeClient:
-    def __init__(self, payload=None, raises=None):
-        self.payload, self.raises, self.calls = payload, raises, []
+    def __init__(self, payload=None, raises=None, stop_reason="end_turn"):
+        self.payload, self.raises, self.calls, self.stop_reason = payload, raises, [], stop_reason
         self.messages = SimpleNamespace(create=self._create)
 
     def _create(self, **kw):
         self.calls.append(kw)
         if self.raises:
             raise self.raises
-        return _resp(self.payload)
+        r = _resp(self.payload)
+        r.stop_reason = self.stop_reason
+        return r
+
+
+class FlakyClient(FakeClient):
+    """Fails the first call, succeeds the second - the shape of a truncated or rate-limited reply."""
+
+    def _create(self, **kw):
+        self.calls.append(kw)
+        if len(self.calls) == 1:
+            raise RuntimeError("truncated")
+        r = _resp(self.payload)
+        r.stop_reason = "end_turn"
+        return r
 
 
 SCORES = json.dumps({"scores": [{"i": 1, "s": 2, "why": "celebrity gossip"},
@@ -66,7 +80,23 @@ def test_an_unscored_headline_keeps_its_place_rather_than_vanishing(site):
 
 
 def test_api_failure_returns_none_so_the_caller_can_fall_back(site):
-    assert rank.rank(site, _cands("a"), client=FakeClient(raises=RuntimeError("502"))) is None
+    client = FakeClient(raises=RuntimeError("502"))
+    assert rank.rank(site, _cands("a"), client=client) is None
+    assert len(client.calls) == 2, "should retry once before giving up and publishing by recency"
+
+
+def test_a_transient_failure_is_retried_rather_than_dropping_the_filter(site):
+    """Falling back means publishing off-beat again, so one flaky call must not cost the filter."""
+    client = FlakyClient(SCORES)
+    out = rank.rank(site, _cands("a", "b", "c"), client=client)
+    assert out is not None and [s.score for s in out] == [9, 6, 2]
+    assert len(client.calls) == 2
+
+
+def test_a_reply_truncated_at_max_tokens_is_treated_as_a_failure(site):
+    """A reasoning model can spend the whole budget thinking; the partial reply is not a ranking."""
+    client = FakeClient(SCORES, stop_reason="max_tokens")
+    assert rank.rank(site, _cands("a", "b", "c"), client=client) is None
 
 
 def test_unusable_output_returns_none(site):
