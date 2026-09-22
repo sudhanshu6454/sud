@@ -85,27 +85,37 @@ def cmd_check(settings, args) -> int:
 
 
 def cmd_sources(settings, args) -> int:
+    """What each site could publish right now, seen the way the live run sees it.
+
+    A story the site has already used is marked `used`, so a feed that looks rich here but produces
+    nothing in the log ("nothing on beat this cycle: 1 candidates") is explained rather than puzzling.
+    """
+    state = State(settings.data_dir / "autopub.db", settings.dedupe_across_sites)
     for site in settings.sites:
         if args.site and site.key != args.site.upper():
             continue
         cands = sources.collect(site, timeout=settings.request_timeout)
-        print(f"\n[{site.key}] {len(cands)} candidates")
+        used = {c.url for c in cands if state.is_used(c.url, site.key)}
+        print(f"\n[{site.key}] {len(cands)} candidates, {len(cands) - len(used)} not yet used")
         if args.rank:
             # what the beat filter would actually keep, without writing or publishing anything
-            scored = rank.rank(site, cands, model=settings.llm_model, pool=settings.rank_pool)
+            scored = rank.rank(site, cands, model=effective_model(settings.llm_model), pool=settings.rank_pool)
             if scored is None:
                 print("  (ranking unavailable; showing newest first)")
             else:
-                on_beat = sum(1 for s in scored if s.score >= settings.min_relevance)
-                print(f"  {on_beat}/{len(scored)} at or above min_relevance={settings.min_relevance}")
+                fresh = [s for s in scored if s.candidate.url not in used]
+                on_beat = sum(1 for s in fresh if s.score >= settings.min_relevance)
+                print(f"  {on_beat}/{len(fresh)} unused stories at or above min_relevance={settings.min_relevance}"
+                      f" (the live run publishes only from these)")
                 for s in scored[: args.limit or 15]:
-                    mark = "KEEP" if s.score >= settings.min_relevance else "drop"
+                    mark = "used" if s.candidate.url in used else ("KEEP" if s.score >= settings.min_relevance else "drop")
                     age = f"{s.candidate.age_hours:.0f}h" if s.candidate.age_hours is not None else "?"
                     print(f"  {mark} {s.score:>2}/10 {age:>4} {s.reason[:22]:<22} {s.candidate.title[:70]}")
                 continue
         for c in cands[: args.limit or 15]:
             age = f"{c.age_hours:.0f}h" if c.age_hours is not None else "?"
-            print(f"  {age:>4} {c.source[:28]:<28} {c.title[:80]}  {c.url}")
+            mark = "used" if c.url in used else "    "
+            print(f"  {mark} {age:>4} {c.source[:28]:<28} {c.title[:80]}  {c.url}")
     return 0
 
 
