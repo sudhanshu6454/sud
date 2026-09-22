@@ -144,7 +144,7 @@ def build(sites: list[dict]) -> dict:
         "restart": "unless-stopped",
         "env_file": [{"path": ".env", "required": False}],
         "environment": {"TZ": "${TZ:-Asia/Kolkata}"},
-        "volumes": ["pulse_worker_data:/app/data", "./pulse-worker/config:/app/config:ro"],
+        "volumes": ["pulse_worker_data:/app/data", "./pulse-worker/config:/app/config"],
         "networks": ["web"],
         # holds YouTube/Meta/Reddit/Spotify/TMDB/Trakt tokens and a WordPress application password
         "cap_drop": ["ALL"],

@@ -392,7 +392,7 @@ services:
       TZ: ${TZ:-Asia/Kolkata}
     volumes:
     - pulse_worker_data:/app/data
-    - ./pulse-worker/config:/app/config:ro
+    - ./pulse-worker/config:/app/config
     networks:
     - web
     cap_drop:
