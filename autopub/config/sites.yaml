@@ -5,12 +5,13 @@
 #   WP_MENTALIST_APP_PASSWORD, TWITTER_MENTALIST_API_KEY, FACEBOOK_MENTALIST_PAGE_ID ...
 
 settings:
-  interval_minutes: 120          # how often the scheduler looks for fresh news
+  interval_minutes: 60           # how often the scheduler looks for fresh news: one cycle an hour
   dedupe_across_sites: true      # never publish the same source story on two sites
   request_timeout: 30
   llm_model: claude-opus-5
   llm_effort: medium
-  min_gap_minutes_between_posts: 20   # per site, spreads posts out so socials are not spammed
+  min_gap_minutes_between_posts: 20   # per site, checked when a cycle starts; with max_posts_per_run 1
+                                      # each site publishes at most one article per cycle, so an hour apart
   # Candidates are scored 0-10 against each site's beat before anything is written, so selection is
   # not just "newest item that survived the keyword filter". Inspect it without publishing:
   #   python -m autopub sources --site SCREENSTAT --rank
@@ -31,7 +32,7 @@ sites:
     tone: Insightful, analytical, slightly playful, confident. Uses examples and frameworks.
     category: Marketing Psychology
     categories: [Marketing Psychology, Branding, Consumer Behaviour, Pricing Psychology, Storytelling]
-    max_posts_per_run: 2
+    max_posts_per_run: 1
     max_age_hours: 72
     min_words: 250
     include_keywords: []
@@ -70,7 +71,7 @@ sites:
     tone: Energetic, punchy, practical. Short paragraphs, clear takeaways.
     category: Digital Marketing
     categories: [Digital Marketing, SEO, Social Media, AI in Marketing, Growth Hacking, E-commerce]
-    max_posts_per_run: 2
+    max_posts_per_run: 1
     max_age_hours: 48
     min_words: 250
     include_keywords: []
@@ -114,7 +115,7 @@ sites:
     tone: Newsy, crisp, informative, neutral with a friendly voice.
     category: Marketing News
     categories: [Marketing News, Campaigns, Martech, Media, Agencies, Features]
-    max_posts_per_run: 3
+    max_posts_per_run: 1
     max_age_hours: 36
     min_words: 200
     include_keywords: []
@@ -156,7 +157,7 @@ sites:
     tone: Data-first, sharp, plain-spoken; explains what a number means for the business.
     category: Streaming
     categories: [Streaming, Box Office, Television, Platforms, Ratings and Data, Deals]
-    max_posts_per_run: 3
+    max_posts_per_run: 1
     max_age_hours: 36
     min_words: 200
     include_keywords: []
