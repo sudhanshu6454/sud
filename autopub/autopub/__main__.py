@@ -126,6 +126,10 @@ SAMPLE_CARD = cards.CardIdeas(
     takeaways=["Status signals beat discounts for the top quartile", "Scarcity cues work only when the story is credible",
                "Pricing anchors reset faster than loyalty does"],
     question="Why does a higher price make some products feel more trustworthy?",
+    left_value="₹1,299", left_label="what shoppers said they would pay", right_value="₹1,899", right_label="what they actually paid",
+    term="Anchoring bias", definition="The first number a buyer sees becomes the reference every later price is judged against, whether or not it was ever a real price.",
+    dos=["Show the premium option first", "Explain what the price buys", "Anchor on value, not on discount"],
+    donts=["Lead with the cheapest tier", "Change prices without a story", "Discount the flagship"],
 )
 
 

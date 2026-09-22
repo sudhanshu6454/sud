@@ -110,7 +110,7 @@ You receive one news story from another publisher. Write an ORIGINAL curated art
 - End the body with a paragraph: <p><em>Source: <a href="SOURCE_URL" rel="nofollow noopener" target="_blank">SOURCE_NAME</a></em></p> using the real source URL and publisher name.
 - Never mention that you are an AI or that this is a rewrite.
 - Captions must be platform-native, mention the key takeaway, and must not include any URL (the link is appended automatically where the platform supports it).
-- `card` holds material for the Instagram image, and only what the source genuinely contains: a verbatim quotation with who said it, the single most striking figure exactly as written with what it measures, exactly three takeaways, the real question the piece answers. Leave out any part the source does not support. A card with nothing to say is better than one that invents a number or a quote.
+- `card` holds material for the Instagram image, and only what the source genuinely contains: a verbatim quotation with who said it, the single most striking figure exactly as written with what it measures, exactly three takeaways, the real question the piece answers, a direct two-way comparison the source itself makes (left/right value and label), a concept the piece explains (term and a one-sentence definition in your words), and do/don't advice when the piece actually gives it. Leave out any part the source does not support. A card with nothing to say is better than one that invents a number, a quote or a comparison.
 """
 
 

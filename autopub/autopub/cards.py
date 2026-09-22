@@ -20,11 +20,13 @@ from dataclasses import dataclass, field
 from pydantic import BaseModel, Field
 
 HEADLINE, QUOTE, STAT, LIST, QUESTION = "headline", "quote", "stat", "list", "question"
-FORMATS = (HEADLINE, QUOTE, STAT, LIST, QUESTION)
+INVERSE, POSTER, VERSUS, TERM, CHECKLIST = "inverse", "poster", "versus", "term", "checklist"
+FORMATS = (HEADLINE, QUOTE, STAT, LIST, QUESTION, INVERSE, POSTER, VERSUS, TERM, CHECKLIST)
 HISTORY = 2            # how many recent formats the log line shows; the chooser itself is least-recently-used
 # what each format is called on the card, in the kicker chip, when the article's own kicker is
 # not more specific. Headline cards keep the article's section label.
-KICKERS = {QUOTE: "In their words", STAT: "By the numbers", LIST: "Takeaways", QUESTION: "The question"}
+KICKERS = {QUOTE: "In their words", STAT: "By the numbers", LIST: "Takeaways", QUESTION: "The question",
+           VERSUS: "Side by side", TERM: "The term", CHECKLIST: "Do and don't"}
 
 
 class CardIdeas(BaseModel):
@@ -36,6 +38,14 @@ class CardIdeas(BaseModel):
     stat_context: str | None = Field(default=None, max_length=140)
     takeaways: list[str] = Field(default_factory=list)
     question: str | None = Field(default=None, max_length=110)
+    left_value: str | None = Field(default=None, max_length=24)
+    left_label: str | None = Field(default=None, max_length=60)
+    right_value: str | None = Field(default=None, max_length=24)
+    right_label: str | None = Field(default=None, max_length=60)
+    term: str | None = Field(default=None, max_length=40)
+    definition: str | None = Field(default=None, max_length=220)
+    dos: list[str] = Field(default_factory=list)
+    donts: list[str] = Field(default_factory=list)
 
 
 CARD_SCHEMA = {
@@ -50,6 +60,14 @@ CARD_SCHEMA = {
         "stat_context": {"type": "string", "description": "One line of context for the figure, max 120 characters. Optional."},
         "takeaways": {"type": "array", "items": {"type": "string"}, "description": "Exactly three takeaways, each max 70 characters, no trailing full stop, or an empty array."},
         "question": {"type": "string", "description": "The genuine question this article answers, phrased for a reader, max 90 characters, ending with '?'. Omit if it would be contrived."},
+        "left_value": {"type": "string", "description": "For a genuine two-way comparison in the source (before/after, this year/last year, brand A/brand B): the first figure or short phrase, max 14 characters. Omit unless the source compares two things directly."},
+        "left_label": {"type": "string", "description": "What the first value is, max 40 characters. Required with left_value."},
+        "right_value": {"type": "string", "description": "The second figure or short phrase, max 14 characters. Required with left_value."},
+        "right_label": {"type": "string", "description": "What the second value is, max 40 characters. Required with right_value."},
+        "term": {"type": "string", "description": "A concept the article turns on and explains, as a name of 1-4 words (e.g. 'Anchoring bias', 'Retail media'). Omit if the piece explains no concept."},
+        "definition": {"type": "string", "description": "That concept in one plain sentence of max 180 characters, in your own words. Required with term."},
+        "dos": {"type": "array", "items": {"type": "string"}, "description": "Two or three things the article says to do, each max 60 characters, imperative, or an empty array. Only when the piece genuinely gives practical advice."},
+        "donts": {"type": "array", "items": {"type": "string"}, "description": "Two or three things the article says not to do, each max 60 characters, or an empty array. Required with dos."},
     },
 }
 
@@ -68,6 +86,14 @@ class CardBrief:
     stat_context: str | None = None
     items: list[str] = field(default_factory=list)
     question: str | None = None
+    left_value: str | None = None
+    left_label: str | None = None
+    right_value: str | None = None
+    right_label: str | None = None
+    term: str | None = None
+    definition: str | None = None
+    dos: list[str] = field(default_factory=list)
+    donts: list[str] = field(default_factory=list)
 
 
 def _clean(text: str | None, limit: int) -> str | None:
@@ -75,28 +101,45 @@ def _clean(text: str | None, limit: int) -> str | None:
     return text[:limit].strip() or None
 
 
-def supported(ideas: CardIdeas | None) -> list[str]:
-    """The formats this article's material can honestly fill. Headline always can."""
-    out = [HEADLINE]
+def _items(raw: list[str], limit: int) -> list[str]:
+    return [t for t in (_clean(t, limit) for t in raw) if t]
+
+
+def supported(ideas: CardIdeas | None, photo: bool = False) -> list[str]:
+    """The formats this article's material can honestly fill.
+
+    Headline and inverse always can: they need nothing but the headline, which is what keeps the
+    grid mixing even when a story offers no quote, figure or list. Poster needs a usable photo.
+    """
+    out = [HEADLINE, INVERSE]
+    if photo:
+        out.append(POSTER)
     if ideas is None:
         return out
     if _clean(ideas.quote, 160) and _clean(ideas.quote_by, 80):
         out.append(QUOTE)
     if _clean(ideas.stat, 24) and _clean(ideas.stat_label, 70):
         out.append(STAT)
-    items = [t for t in (_clean(t, 90) for t in ideas.takeaways) if t]
-    if len(items) >= 3:
+    if len(_items(ideas.takeaways, 90)) >= 3:
         out.append(LIST)
     q = _clean(ideas.question, 110)
     if q and q.endswith("?") and len(q) >= 12:
         out.append(QUESTION)
+    if all(_clean(v, 60) for v in (ideas.left_value, ideas.left_label, ideas.right_value, ideas.right_label)):
+        out.append(VERSUS)
+    if _clean(ideas.term, 40) and _clean(ideas.definition, 220):
+        out.append(TERM)
+    if len(_items(ideas.dos, 70)) >= 2 and len(_items(ideas.donts, 70)) >= 2:
+        out.append(CHECKLIST)
     return out
 
 
-PREFERENCE = (QUOTE, STAT, LIST, QUESTION, HEADLINE)   # among never-used formats, the more striking first
+# among never-used formats, the more striking first; the two that need no material come last so a
+# site opens with something the story itself supplied
+PREFERENCE = (QUOTE, STAT, VERSUS, TERM, LIST, CHECKLIST, QUESTION, POSTER, INVERSE, HEADLINE)
 
 
-def choose(kind_history: list[str], ideas: CardIdeas | None) -> str:
+def choose(kind_history: list[str], ideas: CardIdeas | None, photo: bool = False) -> str:
     """Pick the format this article's material supports that the site has used least recently.
 
     Least-recently-used is what makes the grid mix: with full material the five formats come round
@@ -106,7 +149,7 @@ def choose(kind_history: list[str], ideas: CardIdeas | None) -> str:
     whose material only ever fills headline cards keeps posting headline cards: variety never costs
     a post, and nothing is invented to fill a template.
     """
-    can = supported(ideas)
+    can = supported(ideas, photo)
 
     def last_seen(kind: str) -> int:
         return max((i for i, h in enumerate(kind_history) if h == kind), default=-1)
@@ -117,19 +160,29 @@ def choose(kind_history: list[str], ideas: CardIdeas | None) -> str:
 def brief(kind: str, ideas: CardIdeas | None, headline: str, kicker: str, standfirst: str | None) -> CardBrief:
     """Assemble the renderer's input for `kind` from the article's material."""
     ideas = ideas or CardIdeas()
+    label = kicker or KICKERS.get(kind, "")
     if kind == QUOTE:
-        return CardBrief(kind, headline, kicker or KICKERS[QUOTE], standfirst,
+        return CardBrief(kind, headline, label, standfirst,
                          quote=_clean(ideas.quote, 160), quote_by=_clean(ideas.quote_by, 80))
     if kind == STAT:
-        return CardBrief(kind, headline, kicker or KICKERS[STAT], standfirst,
+        return CardBrief(kind, headline, label, standfirst,
                          stat=_clean(ideas.stat, 24), stat_label=_clean(ideas.stat_label, 70),
                          stat_context=_clean(ideas.stat_context, 140))
     if kind == LIST:
-        items = [t for t in (_clean(t, 90) for t in ideas.takeaways) if t][:3]
-        return CardBrief(kind, headline, kicker or KICKERS[LIST], standfirst, items=items)
+        return CardBrief(kind, headline, label, standfirst, items=_items(ideas.takeaways, 90)[:3])
     if kind == QUESTION:
-        return CardBrief(kind, headline, kicker or KICKERS[QUESTION], standfirst, question=_clean(ideas.question, 110))
-    return CardBrief(HEADLINE, headline, kicker, standfirst)
+        return CardBrief(kind, headline, label, standfirst, question=_clean(ideas.question, 110))
+    if kind == VERSUS:
+        return CardBrief(kind, headline, label, standfirst,
+                         left_value=_clean(ideas.left_value, 24), left_label=_clean(ideas.left_label, 60),
+                         right_value=_clean(ideas.right_value, 24), right_label=_clean(ideas.right_label, 60))
+    if kind == TERM:
+        return CardBrief(kind, headline, label, standfirst,
+                         term=_clean(ideas.term, 40), definition=_clean(ideas.definition, 220))
+    if kind == CHECKLIST:
+        return CardBrief(kind, headline, label, standfirst, dos=_items(ideas.dos, 70)[:3], donts=_items(ideas.donts, 70)[:3])
+    # headline, inverse and poster all set the headline itself, under the article's own section label
+    return CardBrief(kind if kind in (INVERSE, POSTER) else HEADLINE, headline, kicker, standfirst)
 
 
 def remember(kind_history: list[str], kind: str, keep: int = 6) -> list[str]:

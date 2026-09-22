@@ -86,7 +86,7 @@ def publish_one(site: Site, settings: Settings, state: State, cand: sources.Cand
     if use_source_image is None:
         use_source_image = site.use_source_image
     history = cards.parse_history(state.note(site.key, "card_formats"))
-    kind = cards.choose(history, post.card)
+    kind = cards.choose(history, post.card, photo=bool(use_source_image and article.image))
     kicker = post.image_kicker or post.category or site.category
     brief = cards.brief(kind, post.card, post.image_headline or post.title,
                         kicker if kind == cards.HEADLINE else cards.KICKERS.get(kind, kicker), post.excerpt)

@@ -105,10 +105,13 @@ make logs       # follow the publisher
 
 ### Instagram card formats
 
-The Instagram card is one of five formats, all drawn in the site's own palette, typeface, kicker chip,
-section rail and footer, and all inside the same safe bands for the 4:5 crop: **headline** (photo and
-brand panel, or a type card), **quote** (a verbatim line and who said it), **stat** (one figure and what
-it measures), **list** (three takeaways) and **question** (the question the piece answers). The rewriter
+The Instagram card is one of ten formats, all drawn in the site's own palette, typeface, kicker chip
+and footer, and all inside the same safe bands for the 4:5 crop. Five are type-led on the dark ground:
+**headline** (photo and brand panel, or a type card), **quote** (a verbatim line and who said it),
+**stat** (one figure and what it measures), **list** (three takeaways), **question** (the question the
+piece answers), **versus** (two figures side by side), **term** (a concept and its definition) and
+**checklist** (do and don't). Two change the ground itself: **inverse** (accent ground, ink type) and
+**poster** (the article photo full-bleed, headline over a gradient). The rewriter
 fills `card` in its JSON only with material the source genuinely contains, and `autopub/cards.py`
 picks the format that material supports which the site has used least recently, so the grid mixes
 without inventing a number or a quote to fill a template. A site whose stories only ever yield

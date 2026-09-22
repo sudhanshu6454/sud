@@ -35,7 +35,7 @@ except ImportError:  # pragma: no cover
     cv2 = None  # type: ignore
     np = None  # type: ignore
 
-from .cards import HEADLINE, CardBrief
+from .cards import HEADLINE, INVERSE, POSTER, CardBrief
 from .config import Site
 from .sources import USER_AGENT
 from .typography import BOLD, REGULAR
@@ -62,6 +62,36 @@ def hex_to_rgb(value: str) -> tuple[int, int, int]:
 def _font(size: int, bold: bool = True, family: str | None = None, weight: int | None = None):
     """The site's own typeface where it ships one (see typography.py), DejaVu otherwise."""
     return load_font(family, size, weight or (BOLD if bold else REGULAR))
+
+
+def _has_glyph(font, char: str) -> bool:
+    """Whether `font` draws `char` as itself rather than as the .notdef box.
+
+    Two of the four brand faces have no rupee sign, and Pillow draws a missing glyph as a hollow
+    box without complaint. Comparing the rendered mask with the mask of a codepoint no font
+    covers tells the two apart without needing the font's tables.
+    """
+    try:
+        drawn, notdef = font.getmask(char), font.getmask("\ue000")   # U+E000: private use, mapped by none of these faces
+        return (drawn.size, bytes(drawn)) != (notdef.size, bytes(notdef))
+    except Exception:  # noqa: BLE001 - a face that cannot even render the probe gets the fallback
+        return False
+
+
+def _figure_font(text: str, size: int, family: str | None, weight: int):
+    """The brand face for a figure, unless it lacks a glyph the figure needs (usually the rupee sign),
+    in which case the fleet's fallback face draws the whole figure so it does not switch mid-word."""
+    font = _font(size, bold=True, family=family, weight=weight)
+    if family and not all(_has_glyph(font, ch) for ch in set(text) if not ch.isspace()):
+        return _font(size, bold=True, family=None, weight=weight)
+    return font
+
+
+def _spell_out(text: str, family: str | None) -> str:
+    """Running text keeps the brand face; a rupee sign it cannot draw becomes 'Rs'."""
+    if "\u20b9" in text and family and not _has_glyph(_font(40, bold=True, family=family), "\u20b9"):
+        return text.replace("\u20b9", "Rs ").replace("Rs  ", "Rs ")
+    return text
 
 
 def _gradient(size: tuple[int, int], start: tuple[int, int, int], end: tuple[int, int, int]) -> Image.Image:
@@ -714,12 +744,19 @@ def _render_portrait(headline: str, kicker: str, standfirst: str | None, site: S
     def S(v: float) -> int:
         return int(round(v * CARD_SCALE))
 
+    if card is not None and card.kind == POSTER:
+        done = _render_poster(card, site, out_path, primary, accent, text_color, backdrop_url, S)
+        if done is not None:
+            return done
+        card = None     # no usable photo after all: the headline card is the honest fallback
+    if card is not None and card.kind == INVERSE:
+        return _render_inverse(card, site, out_path, primary, accent, text_color, S)
     if card is not None and card.kind != HEADLINE:
         return _render_format(card, site, out_path, primary, accent, text_color, backdrop_url, S)
 
     w, h = S(CARD_W), S(CARD_H)
     family = site.brand.font
-    headline, standfirst = tidy(headline), tidy(standfirst or "") or None
+    headline, standfirst = _spell_out(tidy(headline), family), _spell_out(tidy(standfirst or ""), family) or None
     if not headline:                       # nothing to set: the standfirst becomes the headline
         headline, standfirst = standfirst or site.name, None
     img = Image.new("RGB", (w, h), primary)
@@ -895,6 +932,16 @@ def _render_format(card: CardBrief, site: Site, out_path: Path, primary, accent,
                    backdrop_url: str | None, S) -> Path:
     w, h = S(CARD_W), S(CARD_H)
     family, weight = site.brand.font, site.brand.heading_weight
+    # running text stays in the brand face; a rupee sign it lacks is spelt out (figures are handled
+    # separately and keep the sign in a face that has it)
+    for attr in ("headline", "quote", "quote_by", "stat_label", "stat_context", "question", "left_label",
+                 "right_label", "term", "definition"):
+        val = getattr(card, attr)
+        if val:
+            setattr(card, attr, _spell_out(val, family))
+    card.items = [_spell_out(t, family) for t in card.items]
+    card.dos = [_spell_out(t, family) for t in card.dos]
+    card.donts = [_spell_out(t, family) for t in card.donts]
     img = Image.new("RGB", (w, h), primary)
     _type_ground(img, _portrait_photo(backdrop_url, w, S), primary, accent, S)
     _rail(img, site, accent, S(TYPE_TOP), S)
@@ -933,10 +980,10 @@ def _render_format(card: CardBrief, site: Site, out_path: Path, primary, accent,
     elif card.kind == "stat":
         figure = (card.stat or "").strip()
         size = next(sz for limit, sz in STAT_STEPS if len(figure) <= limit)
-        ffont = _font(S(size), bold=True, family=family, weight=max(weight, 700))
+        ffont = _figure_font(figure, S(size), family, max(weight, 700))
         while draw.textlength(figure, font=ffont) > column and size > 72:
             size -= 8
-            ffont = _font(S(size), bold=True, family=family, weight=max(weight, 700))
+            ffont = _figure_font(figure, S(size), family, max(weight, 700))
         lfont, llines, lline_h, lblock = _block(draw, tidy(card.stat_label or card.headline), family, column,
                                                 [(48, 60, 68, 2), (10 ** 6, 48, 56, 3)], weight)
         cfont = _font(S(36), bold=False, family=family)
@@ -977,6 +1024,87 @@ def _render_format(card: CardBrief, site: Site, out_path: Path, primary, accent,
                 yy += S(54)
             y += rh
 
+    elif card.kind == "versus":
+        tfont, tlines, tline_h, tblock = _block(draw, tidy(card.headline), family, column, LIST_TITLE_LADDER, weight)
+        gap = S(48)
+        col_w = (column - gap) // 2
+        vfont_size = 132
+        values = [card.left_value or "", card.right_value or ""]
+        vfont = _figure_font("".join(values), S(vfont_size), family, max(weight, 700))
+        while any(draw.textlength(v, font=vfont) > col_w for v in values) and vfont_size > 56:
+            vfont_size -= 8
+            vfont = _figure_font("".join(values), S(vfont_size), family, max(weight, 700))
+        lfont = _font(S(34), bold=False, family=family)
+        labels = [_wrap(draw, tidy(card.left_label or ""), lfont, col_w)[:3], _wrap(draw, tidy(card.right_label or ""), lfont, col_w)[:3]]
+        val_h = S(vfont_size * 1.05)
+        lab_h = max(len(l) for l in labels) * S(44)
+        total = tblock + S(72) + val_h + S(20) + lab_h
+        y = top + max(0, (room - total) // 2)
+        for line in tlines:
+            draw.text((x, y), line, font=tfont, fill=text_color)
+            y += tline_h
+        y += S(72)
+        pair_top = y
+        for i in range(2):
+            cx = x + i * (col_w + gap)
+            draw.text((cx - S(4), y - S(vfont_size * 0.14)), values[i], font=vfont, fill=accent if i == 0 else text_color)
+            ly = y + val_h + S(20)
+            for line in labels[i]:
+                draw.text((cx, ly), line, font=lfont, fill=muted)
+                ly += S(44)
+        # the divider, with a small "vs" chip on it
+        dx = x + col_w + gap // 2
+        draw.rectangle([dx - S(2), pair_top, dx + S(2), pair_top + val_h + S(20) + lab_h], fill=(*accent, 150))
+        vfont2 = _font(S(26), bold=True, family=family)
+        draw.rectangle([dx - S(34), pair_top + val_h // 2 - S(22), dx + S(34), pair_top + val_h // 2 + S(22)], fill=primary)
+        vw = draw.textlength("vs", font=vfont2)
+        draw.text((dx - vw / 2, pair_top + val_h // 2 - S(16)), "vs", font=vfont2, fill=accent)
+
+    elif card.kind == "term":
+        term = tidy(card.term or card.headline)
+        tfont, tlines, tline_h, tblock = _block(draw, term, family, column, [(18, 124, 132, 2), (30, 104, 112, 2), (10 ** 6, 88, 96, 3)], weight)
+        dfont = _font(S(42), bold=False, family=family)
+        dlines = _wrap(draw, tidy(card.definition or ""), dfont, column)[:5]
+        total = tblock + S(36) + S(6) + S(36) + len(dlines) * S(56)
+        y = top + max(0, (room - total) // 2)
+        for line in tlines:
+            draw.text((x, y), line, font=tfont, fill=accent)
+            y += tline_h
+        y += S(36)
+        draw.rectangle([x, y, x + S(96), y + S(6)], fill=accent)
+        y += S(6) + S(36)
+        for line in dlines:
+            draw.text((x, y), line, font=dfont, fill=text_color)
+            y += S(56)
+
+    elif card.kind == "checklist":
+        hfont = _font(S(28), bold=True, family=family)
+        ifont = _font(S(38), bold=False, family=family, weight=500)
+        mark, gutter = S(34), S(72)
+        groups = [("DO", card.dos[:3], _tick, accent), ("DON'T", card.donts[:3], _cross, muted)]
+        rows = []
+        for title, items, fn, colour in groups:
+            wrapped = [_wrap(draw, tidy(t), ifont, column - gutter)[:2] for t in items]
+            rows.append((title, wrapped, fn, colour))
+        def group_h(wrapped):
+            return S(28) + S(24) + sum(len(l) * S(50) + S(22) for l in wrapped)
+        total = sum(group_h(r[1]) for r in rows) + S(56)
+        y = top + max(0, (room - total) // 2)
+        track = S(28) * 0.12
+        for gi, (title, wrapped, fn, colour) in enumerate(rows):
+            _tracked(draw, (x, y), title, hfont, colour, track)
+            draw.rectangle([x + _tracked_len(draw, title, hfont, track) + S(18), y + S(14), x + column, y + S(14) + S(2)], fill=(*colour, 90))
+            y += S(28) + S(24)
+            for lines in wrapped:
+                fn(draw, x, y + S(6), mark, colour, S(5))
+                yy = y
+                for line in lines:
+                    draw.text((x + gutter, yy), line, font=ifont, fill=text_color)
+                    yy += S(50)
+                y += len(lines) * S(50) + S(22)
+            if gi == 0:
+                y += S(56)
+
     else:   # question
         qtext = tidy(card.question or card.headline)
         qfont, lines, line_h, block_h = _block(draw, qtext, family, column, QUESTION_LADDER, weight)
@@ -995,6 +1123,98 @@ def _render_format(card: CardBrief, site: Site, out_path: Path, primary, accent,
         draw.line([(ax + S(26), ay - S(12)), (ax + S(40), ay), (ax + S(26), ay + S(12))], fill=accent, width=S(4))
 
     return _save(img, out_path, quality=92)
+
+
+def _tick(draw, x: int, y: int, size: int, colour, width: int) -> None:
+    draw.line([(x, y + size * 0.55), (x + size * 0.38, y + size * 0.9), (x + size, y + size * 0.15)], fill=colour, width=width)
+
+
+def _cross(draw, x: int, y: int, size: int, colour, width: int) -> None:
+    pad = size * 0.14
+    draw.line([(x + pad, y + pad), (x + size - pad, y + size - pad)], fill=colour, width=width)
+    draw.line([(x + size - pad, y + pad), (x + pad, y + size - pad)], fill=colour, width=width)
+
+
+def _render_inverse(card: CardBrief, site: Site, out_path: Path, primary, accent, text_color, S) -> Path:
+    """The brand turned inside out: accent ground, ink type, and the footer kept on its own dark
+    band so every masthead stays legible. Needs nothing but a headline, so it is the format that
+    guarantees a grid never runs to six dark cards in a row."""
+    w, h = S(CARD_W), S(CARD_H)
+    family, weight = site.brand.font, site.brand.heading_weight
+    ink = _ink_on(accent)
+    img = Image.new("RGB", (w, h), accent)
+    draw = ImageDraw.Draw(img, "RGBA")
+    # a quiet diagonal in the primary keeps the accent ground from reading as a flat swatch
+    draw.polygon([(w * 0.58, h), (w, h * 0.55), (w, h)], fill=(*primary, 26))
+    # the rail in primary: same height, same place, so the grid geometry does not move
+    draw.rectangle([0, S(TYPE_TOP), w, S(TYPE_TOP) + S(RAIL_H)], fill=primary)
+    # footer on the brand's own ground, where the masthead was designed to sit
+    band_top = S(FOOT_BOTTOM) - S(56) - S(36)
+    draw.rectangle([0, band_top, w, h], fill=primary)
+    _card_footer(img, site, primary, text_color, S)
+    column = w - S(SIDE) * 2
+    top = S(TYPE_TOP) + S(RAIL_H) + S(56)
+    bottom = band_top - S(40)
+    # kicker chip inverted too: primary chip, accent text
+    kfont = _font(S(KICKER_SIZE), bold=True, family=family)
+    text = (card.kicker or site.category).strip().upper()[:24]
+    track = S(KICKER_SIZE) * 0.08
+    kw = _tracked_len(draw, text, kfont, track)
+    draw.rectangle([S(SIDE), top, S(SIDE) + kw + S(32), top + kfont.size + S(20)], fill=primary)
+    _tracked(draw, (S(SIDE) + S(16), top + S(10)), text, kfont, accent, track)
+    kick_h = kfont.size + S(20) + S(40)
+    hfont, lines, line_h = _headline_block(draw, tidy(card.headline), family, column, HEADLINE_LADDER_TEXT, weight=weight)
+    block_h = len(lines) * line_h
+    y = top + kick_h + max(0, (bottom - top - kick_h - block_h) // 2)
+    for line in lines:
+        draw.text((S(SIDE), y), line, font=hfont, fill=ink)
+        y += line_h
+    return _save(img, out_path, quality=92)
+
+
+def _render_poster(card: CardBrief, site: Site, out_path: Path, primary, accent, text_color,
+                   backdrop_url: str | None, S) -> Path | None:
+    """The photograph as the whole card, headline set over a deep gradient at its foot.
+
+    Returns None when the article has no photo the card can use; the caller then takes the
+    headline route rather than posting an empty frame. Faces are kept out of the crop's lost band
+    the same way the headline card does it.
+    """
+    w, h = S(CARD_W), S(CARD_H)
+    if not backdrop_url:
+        return None
+    source = _source_photo(backdrop_url, 20)
+    if not source or source[0].width < PHOTO_MIN[0] or source[0].height < PHOTO_MIN[1]:
+        return None
+    got = _backdrop(backdrop_url, (w, h))
+    if not got:
+        return None
+    photo, faces = got
+    if faces and faces[1] < S(PORTRAIT_BLEED) + S(8):
+        log.info("a face sits in the band the 4:5 crop removes; poster card skipped")
+        return None
+    img = photo.filter(ImageFilter.UnsharpMask(radius=1.2, percent=40, threshold=3)).convert("RGB")
+    _shade_bottom(img, 0.30, 0.94)                 # the ground the type needs, fading in from a third down
+    family, weight = site.brand.font, site.brand.heading_weight
+    draw = ImageDraw.Draw(img, "RGBA")
+    band_top = S(FOOT_BOTTOM) - S(56) - S(36)
+    draw.rectangle([0, band_top, w, h], fill=(*primary, 235))
+    _card_footer(img, site, primary, text_color, S)
+    column = w - S(SIDE) * 2
+    kick_h = S(KICKER_SIZE) + S(20) * 2
+    bottom = band_top - S(48)
+    hfont, lines, line_h = _headline_block(draw, tidy(card.headline), family, column, HEADLINE_LADDER, weight=weight)
+    block_h = len(lines) * line_h
+    y = bottom - block_h
+    _card_kicker(img, card.kicker or site.category, site, accent, S(SIDE), y - kick_h - S(24), S)
+    draw = ImageDraw.Draw(img, "RGBA")
+    # an inset accent rule above the kicker: the family's section rule, where the photo allows it
+    draw.rectangle([S(SIDE), y - kick_h - S(24) - S(28), S(SIDE) + S(120), y - kick_h - S(24) - S(28) + S(RAIL_H)], fill=accent)
+    for line in lines:
+        draw.text((S(SIDE) + 2, y + 3), line, font=hfont, fill=(0, 0, 0, 120))
+        draw.text((S(SIDE), y), line, font=hfont, fill=(255, 255, 255))
+        y += line_h
+    return _save(img, out_path, quality=90)
 
 
 def render_card(headline: str, kicker: str, site: Site, out_path: Path, variant: str = "landscape",
