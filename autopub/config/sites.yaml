@@ -48,9 +48,20 @@ sites:
       - https://digiday.com/feed/
       - https://www.convinceandconvert.com/feed/
       - https://blog.hubspot.com/marketing/rss.xml
+      # added 2026-09-22: the pool above ran dry at one article an hour. Each of these was checked live
+      # (valid RSS, items within a day) and none is read by another site, so cross-site dedupe does not
+      # eat them. The beat ranker still decides what is on-topic.
+      - https://www.marketingsociety.com/rss.xml                              # brand strategy essays
+      - https://www.ipsos.com/en/rss.xml                                      # consumer research
+      - https://www.fastcompany.com/co-design/rss                             # branding and identity
+      - https://www.afaqs.com/rss                                             # Indian advertising, ~50 items
+      - https://brandequity.economictimes.indiatimes.com/rss/advertising      # sister section to /marketing
+      - https://retail.economictimes.indiatimes.com/rss/topstories            # Indian consumer behaviour
     google_news_queries:
       - consumer psychology marketing
       - brand strategy India
+      - pricing psychology
+      - consumer behaviour brands India
     hashtags: [MarketingPsychology, Branding, ConsumerBehaviour, MarketingMentalist]
     brand:                          # ink ground, signal-orange accent, bone type; the bow-tie mark on covers
       primary: "#0a0908"
