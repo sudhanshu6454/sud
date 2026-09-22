@@ -19,6 +19,7 @@ from typing import Any
 import anthropic
 from pydantic import BaseModel, Field, ValidationError
 
+from .cards import CARD_SCHEMA, CardIdeas
 from .config import Site
 from .extract import Article
 
@@ -58,6 +59,7 @@ class CuratedPost(BaseModel):
     image_headline: str
     image_kicker: str
     captions: Captions
+    card: CardIdeas | None = None      # material for the Instagram card formats; optional, never invented
 
 
 OUTPUT_SCHEMA: dict[str, Any] = {
@@ -74,6 +76,7 @@ OUTPUT_SCHEMA: dict[str, Any] = {
         "tags": {"type": "array", "items": {"type": "string"}, "description": "4 to 8 short topical tags"},
         "image_headline": {"type": "string", "description": "Short headline for the share image, max 70 characters"},
         "image_kicker": {"type": "string", "description": "2-3 word label for the share image, e.g. 'Brand Strategy'"},
+        "card": CARD_SCHEMA,
         "captions": {
             "type": "object",
             "additionalProperties": False,
@@ -107,6 +110,7 @@ You receive one news story from another publisher. Write an ORIGINAL curated art
 - End the body with a paragraph: <p><em>Source: <a href="SOURCE_URL" rel="nofollow noopener" target="_blank">SOURCE_NAME</a></em></p> using the real source URL and publisher name.
 - Never mention that you are an AI or that this is a rewrite.
 - Captions must be platform-native, mention the key takeaway, and must not include any URL (the link is appended automatically where the platform supports it).
+- `card` holds material for the Instagram image, and only what the source genuinely contains: a verbatim quotation with who said it, the single most striking figure exactly as written with what it measures, exactly three takeaways, the real question the piece answers. Leave out any part the source does not support. A card with nothing to say is better than one that invents a number or a quote.
 """
 
 

@@ -10,7 +10,7 @@ import time
 
 from pathlib import Path
 
-from . import config, images, rank, sources
+from . import cards, config, images, rank, sources
 from .pipeline import make_wordpress, run_all
 from .rewrite import effective_model
 from .social import build_publishers
@@ -119,17 +119,40 @@ def cmd_sources(settings, args) -> int:
     return 0
 
 
+SAMPLE_CARD = cards.CardIdeas(
+    quote="People do not buy what you sell. They buy what it says about them.", quote_by="Rory Sutherland, Ogilvy",
+    stat="68%", stat_label="of shoppers say price is no longer their first filter",
+    stat_context="Kantar's 2026 India consumer pulse, 4,200 respondents",
+    takeaways=["Status signals beat discounts for the top quartile", "Scarcity cues work only when the story is credible",
+               "Pricing anchors reset faster than loyalty does"],
+    question="Why does a higher price make some products feel more trustworthy?",
+)
+
+
 def cmd_cards(settings, args) -> int:
-    """Render the share cards for one or every site, so a design change can be looked at before it ships."""
+    """Render the share cards for one or every site, so a design change can be looked at before it ships.
+
+    `--formats` renders the whole Instagram family - headline, quote, number, takeaways, question -
+    from sample material, which is how a change to one format is checked against the other four.
+    """
     out_dir = Path(args.out) if args.out else settings.data_dir / "preview"
     headline = args.headline or SAMPLE_HEADLINE
     for site in settings.sites:
         if args.site and site.key != args.site.upper():
             continue
-        cards = images.render_set(headline, args.kicker or site.category, site, out_dir, site.slug,
-                                  backdrop_url=args.image)
+        if args.formats:
+            print(f"[{site.key}] {site.domain}")
+            for kind in cards.FORMATS:
+                kicker = args.kicker or site.category
+                brief = cards.brief(kind, SAMPLE_CARD, headline, kicker if kind == cards.HEADLINE else cards.KICKERS[kind], None)
+                path = images.render_card(headline, kicker, site, out_dir / f"{site.slug}-{kind}.jpg", "portrait",
+                                          backdrop_url=args.image, card=brief)
+                print(f"   {kind:<9} {path.stat().st_size // 1024:>4} KB  {path}")
+            continue
+        rendered = images.render_set(headline, args.kicker or site.category, site, out_dir, site.slug,
+                                     backdrop_url=args.image)
         print(f"[{site.key}] {site.domain}")
-        for shape, path in cards.items():
+        for shape, path in rendered.items():
             from PIL import Image as _Image
             with _Image.open(path) as im:
                 w, h = im.size
@@ -210,6 +233,7 @@ def main(argv=None) -> int:
     c.add_argument("--site"); c.add_argument("--headline"); c.add_argument("--kicker")
     c.add_argument("--image", help="URL of a photo to use as the backdrop, as a real article would")
     c.add_argument("--out", help="directory to write into (default: <data_dir>/preview)")
+    c.add_argument("--formats", action="store_true", help="render every Instagram card format from sample material")
     ip = sub.add_parser("instagram-probe", help="ask Instagram whether it accepts a taller card yet (posts nothing)")
     ip.add_argument("--site"); ip.add_argument("--ratio", help="3:4 (default), 4:5 or 1:1"); ip.add_argument("--out")
     args = p.parse_args(argv)

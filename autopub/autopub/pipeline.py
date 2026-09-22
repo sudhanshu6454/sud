@@ -9,7 +9,7 @@ from pathlib import Path
 
 from slugify import slugify
 
-from . import extract, images, rank, sources
+from . import cards, extract, images, rank, sources
 from .config import Settings, Site
 from .rewrite import CuratedPost, Rewriter, RewriteSkipped, effective_model
 from .social import SocialPost, build_publishers, dispatch
@@ -79,39 +79,48 @@ def publish_one(site: Site, settings: Settings, state: State, cand: sources.Cand
         report.failed += 1
         return False
 
-    # 3. images
+    # 3. images. The Instagram card takes one of a small family of formats, chosen from what the
+    # article's material can honestly fill and steered away from what this site posted last, so the
+    # grid mixes headline, quote, number, takeaways and question cards without the brand moving.
     stem = slugify(post.slug or post.title)[:60] or f"post-{int(time.time())}"
     if use_source_image is None:
         use_source_image = site.use_source_image
+    history = cards.parse_history(state.note(site.key, "card_formats"))
+    kind = cards.choose(history, post.card)
+    kicker = post.image_kicker or post.category or site.category
+    brief = cards.brief(kind, post.card, post.image_headline or post.title,
+                        kicker if kind == cards.HEADLINE else cards.KICKERS.get(kind, kicker), post.excerpt)
+    log.info("[%s] instagram card: %s (recent: %s)", site.key, kind, ",".join(history[-cards.HISTORY:]) or "none")
     try:
-        cards = images.render_set(post.image_headline or post.title, post.image_kicker or post.category or site.category, site,
-                                  work_dir / site.slug, stem, backdrop_url=article.image if use_source_image else None,
-                                  standfirst=post.excerpt, credit=article.sitename if use_source_image else None,
-                                  date_text=time.strftime("%d %b %Y"))
+        rendered = images.render_set(post.image_headline or post.title, kicker, site,
+                                     work_dir / site.slug, stem, backdrop_url=article.image if use_source_image else None,
+                                     standfirst=post.excerpt, credit=article.sitename if use_source_image else None,
+                                     date_text=time.strftime("%d %b %Y"), card=brief)
     except Exception as exc:  # noqa: BLE001
         log.error("[%s] image generation failed: %s", site.key, exc)
-        cards = {}
+        rendered = {}
+    cards_by_shape = rendered
 
     # 3b. the card Instagram will actually accept, trimmed out of the 3:4 master
-    if cards.get("portrait"):
+    if cards_by_shape.get("portrait"):
         try:
-            cards["portrait"] = images.instagram_asset(cards["portrait"], ratio=settings.instagram_ratio)
+            cards_by_shape["portrait"] = images.instagram_asset(cards_by_shape["portrait"], ratio=settings.instagram_ratio)
         except Exception as exc:  # noqa: BLE001 - fall back to the master; the publisher walks shapes anyway
             log.warning("[%s] could not derive the Instagram asset: %s", site.key, exc)
 
     # 4. WordPress
     try:
-        landscape_media = wp.upload_media(cards["landscape"], post.title, alt_text=post.image_headline) if cards.get("landscape") else None
+        landscape_media = wp.upload_media(cards_by_shape["landscape"], post.title, alt_text=post.image_headline) if cards_by_shape.get("landscape") else None
         # the square and portrait cards exist for the social APIs that fetch an image by URL, so
         # they are only worth uploading when such a platform is actually switched on for this site.
         # With no credentials configured they would just accumulate in the media library forever.
         hosted = {shape for pub in publishers if pub.needs_public_url for shape in pub.image_shapes}
         media_by_shape: dict[str, dict] = {}
         for shape, title in (("square", f"{post.title} (square)"), ("portrait", f"{post.title} (portrait)")):
-            if not cards.get(shape) or shape not in hosted:
+            if not cards_by_shape.get(shape) or shape not in hosted:
                 continue
             try:
-                media_by_shape[shape] = wp.upload_media(cards[shape], title, alt_text=post.image_headline)
+                media_by_shape[shape] = wp.upload_media(cards_by_shape[shape], title, alt_text=post.image_headline)
             except WordPressError as exc:
                 log.warning("[%s] %s card upload failed: %s", site.key, shape, exc)
         cat_id = wp.ensure_term("categories", post.category or site.category)
@@ -136,6 +145,7 @@ def publish_one(site: Site, settings: Settings, state: State, cand: sources.Cand
 
     link = wp_post.get("link") or f"{site.public_url}/{stem}/"
     state.mark_published(url, site.key, wp_post["id"], link, post.title)
+    state.set_note(site.key, "card_formats", cards.dump_history(cards.remember(history, kind)))
     report.published.append(link)
     log.info("[%s] PUBLISHED %s", site.key, link)
 
@@ -149,7 +159,7 @@ def publish_one(site: Site, settings: Settings, state: State, cand: sources.Cand
             "threads": post.captions.threads,
         },
         hashtags=site.hashtags,
-        images={shape: path for shape, path in cards.items() if path},
+        images={shape: path for shape, path in cards_by_shape.items() if path},
         image_urls={shape: media["source_url"] for shape, media in
                     (("landscape", landscape_media or {}), *media_by_shape.items()) if media.get("source_url")},
         pinterest_title=post.captions.pinterest_title,

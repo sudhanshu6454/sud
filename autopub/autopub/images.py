@@ -35,6 +35,7 @@ except ImportError:  # pragma: no cover
     cv2 = None  # type: ignore
     np = None  # type: ignore
 
+from .cards import HEADLINE, CardBrief
 from .config import Site
 from .sources import USER_AGENT
 from .typography import BOLD, REGULAR
@@ -698,7 +699,7 @@ def _card_footer(img: Image.Image, site: Site, primary, text_color, scale) -> in
 
 def _render_portrait(headline: str, kicker: str, standfirst: str | None, site: Site, out_path: Path,
                      primary, accent, text_color, backdrop_url: str | None, credit: str | None = None,
-                     date_text: str | None = None) -> Path:
+                     date_text: str | None = None, card: CardBrief | None = None) -> Path:
     """The 3:4 card Instagram posts: photo above, brand panel below, footer anchored to the bottom.
 
     Nothing that matters is drawn in the top or bottom `PORTRAIT_BLEED` band, so the 4:5 asset the
@@ -712,6 +713,9 @@ def _render_portrait(headline: str, kicker: str, standfirst: str | None, site: S
     """
     def S(v: float) -> int:
         return int(round(v * CARD_SCALE))
+
+    if card is not None and card.kind != HEADLINE:
+        return _render_format(card, site, out_path, primary, accent, text_color, backdrop_url, S)
 
     w, h = S(CARD_W), S(CARD_H)
     family = site.brand.font
@@ -839,9 +843,163 @@ def _render_portrait(headline: str, kicker: str, standfirst: str | None, site: S
     return _save(img, out_path, quality=92)
 
 
+# ---- the other Instagram formats ---------------------------------------------------------------
+#
+# A grid of thirty headline cards is a wall of headlines. These formats change what the middle of
+# the card says - a quotation, a figure, three takeaways, the question the piece answers - and
+# nothing else: same ground, same rail at the same height, same kicker chip, same footer, same
+# safe bands for the 4:5 crop. The brand is the geometry; the format is the content.
+
+TYPE_TOP = 290                 # the rail sits here on every type-led card
+MUTE = 0.72                    # secondary type is the brand text colour at this strength
+QUOTE_LADDER = [(60, 108, 116, 3), (100, 92, 100, 4), (140, 80, 88, 5), (10 ** 6, 68, 76, 7)]
+QUESTION_LADDER = [(40, 116, 124, 3), (72, 100, 108, 4), (110, 84, 92, 5), (10 ** 6, 72, 80, 6)]
+LIST_TITLE_LADDER = [(44, 64, 72, 2), (10 ** 6, 54, 62, 2)]
+STAT_STEPS = [(4, 300), (7, 240), (10, 176), (14, 132), (10 ** 6, 100)]   # (max chars, size) for the figure
+
+
+def _portrait_photo(backdrop_url: str | None, w: int, S) -> Image.Image | None:
+    """The article photo fitted to the card's photo aperture, or None when it is unusable."""
+    if not backdrop_url:
+        return None
+    source = _source_photo(backdrop_url, 20)
+    if not source or source[0].width < PHOTO_MIN[0] or source[0].height < PHOTO_MIN[1]:
+        return None
+    got = _backdrop(backdrop_url, (w, S(PHOTO_H)))
+    return got[0] if got else None
+
+
+def _type_ground(img: Image.Image, photo: Image.Image | None, primary, accent, S) -> None:
+    """The ground every type-led card sits on: the veiled photo when there is one, else the brand
+    gradient with the accent wedge. Identical to the headline type card, so the family reads as one."""
+    w, h = img.size
+    if photo is not None:
+        veil = _cover_fit(photo.resize((w, S(PHOTO_H)), Image.LANCZOS), (w, h))[0]
+        img.paste(veil)
+        img.paste(Image.new("RGB", (w, h), primary), (0, 0), Image.new("L", (w, h), 210))
+    else:
+        img.paste(_gradient((w, h), primary, _darken(primary, 0.55)), (0, 0))
+        ImageDraw.Draw(img, "RGBA").polygon([(w * 0.58, h), (w, h * 0.55), (w, h)], fill=(*accent, 30))
+
+
+def _muted(text_color) -> tuple[int, int, int]:
+    return tuple(int(c * MUTE) for c in text_color)
+
+
+def _block(draw, text: str, family, column, ladder, weight):
+    font, lines, line_h = _headline_block(draw, text, family, column, ladder, weight=weight)
+    return font, lines, line_h, len(lines) * line_h
+
+
+def _render_format(card: CardBrief, site: Site, out_path: Path, primary, accent, text_color,
+                   backdrop_url: str | None, S) -> Path:
+    w, h = S(CARD_W), S(CARD_H)
+    family, weight = site.brand.font, site.brand.heading_weight
+    img = Image.new("RGB", (w, h), primary)
+    _type_ground(img, _portrait_photo(backdrop_url, w, S), primary, accent, S)
+    _rail(img, site, accent, S(TYPE_TOP), S)
+    _card_footer(img, site, primary, text_color, S)
+    draw = ImageDraw.Draw(img, "RGBA")
+    column = w - S(SIDE) * 2
+    kick_h = S(KICKER_SIZE) + S(20) * 2
+    top = S(TYPE_TOP) + S(RAIL_H) + S(56)
+    bottom = S(FOOT_BOTTOM) - S(56) - S(36) - S(40)
+    _card_kicker(img, card.kicker, site, accent, S(SIDE), top, S)
+    top += kick_h + S(40)
+    room = bottom - top
+    muted = _muted(text_color)
+    x = S(SIDE)
+
+    if card.kind == "quote":
+        quote_text = tidy(card.quote or card.headline)
+        mark_font = _font(S(260), bold=True, family=family, weight=weight)
+        qfont, lines, line_h, block_h = _block(draw, quote_text, family, column, QUOTE_LADDER, weight)
+        by_font = _font(S(34), bold=False, family=family)
+        by_lines = _wrap(draw, card.quote_by or site.name, by_font, column - S(96))
+        total = S(120) + block_h + S(44) + len(by_lines) * S(44)
+        y = top + max(0, (room - total) // 2)
+        # the opening mark, in the accent, hung above the first line like a drop cap
+        draw.text((x - S(8), y - S(60)), "“", font=mark_font, fill=(*accent, 235))
+        y += S(120)
+        for line in lines:
+            draw.text((x, y), line, font=qfont, fill=text_color)
+            y += line_h
+        y += S(44)
+        draw.rectangle([x, y + S(14), x + S(64), y + S(14) + S(6)], fill=accent)
+        for line in by_lines:
+            draw.text((x + S(96), y), line, font=by_font, fill=muted)
+            y += S(44)
+
+    elif card.kind == "stat":
+        figure = (card.stat or "").strip()
+        size = next(sz for limit, sz in STAT_STEPS if len(figure) <= limit)
+        ffont = _font(S(size), bold=True, family=family, weight=max(weight, 700))
+        while draw.textlength(figure, font=ffont) > column and size > 72:
+            size -= 8
+            ffont = _font(S(size), bold=True, family=family, weight=max(weight, 700))
+        lfont, llines, lline_h, lblock = _block(draw, tidy(card.stat_label or card.headline), family, column,
+                                                [(48, 60, 68, 2), (10 ** 6, 48, 56, 3)], weight)
+        cfont = _font(S(36), bold=False, family=family)
+        clines = _wrap(draw, tidy(card.stat_context or ""), cfont, column)[:3] if card.stat_context else []
+        fig_h = S(size * 1.02)
+        total = fig_h + S(28) + lblock + (S(28) + len(clines) * S(48) if clines else 0)
+        y = top + max(0, (room - total) // 2)
+        draw.text((x - S(size * 0.04), y - S(size * 0.16)), figure, font=ffont, fill=accent)
+        y += fig_h + S(28)
+        for line in llines:
+            draw.text((x, y), line, font=lfont, fill=text_color)
+            y += lline_h
+        if clines:
+            y += S(28)
+            for line in clines:
+                draw.text((x, y), line, font=cfont, fill=muted)
+                y += S(48)
+
+    elif card.kind == "list":
+        tfont, tlines, tline_h, tblock = _block(draw, tidy(card.headline), family, column, LIST_TITLE_LADDER, weight)
+        ifont = _font(S(42), bold=False, family=family, weight=500)
+        nfont = _font(S(40), bold=True, family=family, weight=max(weight, 700))
+        gutter = S(92)
+        rows = [_wrap(draw, tidy(t), ifont, column - gutter)[:2] for t in card.items[:3]]
+        row_h = [len(r) * S(54) + S(34) for r in rows]
+        total = tblock + S(48) + sum(row_h) - S(34)
+        y = top + max(0, (room - total) // 2)
+        for line in tlines:
+            draw.text((x, y), line, font=tfont, fill=text_color)
+            y += tline_h
+        y += S(48)
+        for i, (lines, rh) in enumerate(zip(rows, row_h), 1):
+            draw.text((x, y + S(4)), f"{i:02d}", font=nfont, fill=accent)
+            draw.rectangle([x, y + S(58), x + S(48), y + S(58) + S(4)], fill=(*accent, 160))
+            yy = y
+            for line in lines:
+                draw.text((x + gutter, yy), line, font=ifont, fill=text_color)
+                yy += S(54)
+            y += rh
+
+    else:   # question
+        qtext = tidy(card.question or card.headline)
+        qfont, lines, line_h, block_h = _block(draw, qtext, family, column, QUESTION_LADDER, weight)
+        cue_font = _font(S(34), bold=True, family=family, weight=max(weight, 600))
+        cue = "Read the answer"
+        total = block_h + S(56) + S(44)
+        y = top + max(0, (room - total) // 2)
+        for line in lines:
+            draw.text((x, y), line, font=qfont, fill=text_color)
+            y += line_h
+        y += S(56)
+        draw.text((x, y), cue, font=cue_font, fill=accent)
+        # the arrow is drawn, not typed: two of the four brand faces have no U+2192 and show a box
+        ax, ay = x + draw.textlength(cue, font=cue_font) + S(18), y + S(20)
+        draw.line([(ax, ay), (ax + S(40), ay)], fill=accent, width=S(4))
+        draw.line([(ax + S(26), ay - S(12)), (ax + S(40), ay), (ax + S(26), ay + S(12))], fill=accent, width=S(4))
+
+    return _save(img, out_path, quality=92)
+
+
 def render_card(headline: str, kicker: str, site: Site, out_path: Path, variant: str = "landscape",
                 backdrop_url: str | None = None, standfirst: str | None = None, credit: str | None = None,
-                date_text: str | None = None) -> Path:
+                date_text: str | None = None, card: CardBrief | None = None) -> Path:
     size = SIZES[variant]
     w, h = size
     primary = hex_to_rgb(site.brand.primary)
@@ -855,7 +1013,7 @@ def render_card(headline: str, kicker: str, site: Site, out_path: Path, variant:
 
     if variant == "portrait":
         return _render_portrait(headline, kicker, standfirst, site, out_path, primary, accent, text_color,
-                                backdrop_url, credit, date_text)
+                                backdrop_url, credit, date_text, card=card)
 
     got = _backdrop(backdrop_url, size, clear_bottom=(0.40 if variant == "square" else 0.0)) if backdrop_url else None
     if got is not None:
@@ -916,13 +1074,18 @@ def _render_photo_cover(photo: Image.Image, headline: str, kicker: str, site: Si
 
 def render_set(headline: str, kicker: str, site: Site, out_dir: Path, stem: str,
                backdrop_url: str | None = None, standfirst: str | None = None, credit: str | None = None,
-               date_text: str | None = None, variants: tuple[str, ...] | None = None) -> dict[str, Path]:
-    """Render the cards asked for; every shape by default. Each is drawn from one download."""
+               date_text: str | None = None, variants: tuple[str, ...] | None = None,
+               card: CardBrief | None = None) -> dict[str, Path]:
+    """Render the cards asked for; every shape by default. Each is drawn from one download.
+
+    `card` shapes the portrait (Instagram) card only: the landscape cover and the square keep the
+    headline treatment, because the featured image and link previews sit next to the title anyway.
+    """
     global _LAST_PHOTO
     try:
         return {
             variant: render_card(headline, kicker, site, out_dir / f"{stem}-{variant}.jpg", variant, backdrop_url,
-                                 standfirst, credit, date_text)
+                                 standfirst, credit, date_text, card=card if variant == "portrait" else None)
             for variant in (variants or tuple(SIZES))
         }
     finally:

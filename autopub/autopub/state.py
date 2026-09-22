@@ -49,6 +49,13 @@ class State:
                 created_at REAL NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_social_article ON social_posts(article_id);
+            CREATE TABLE IF NOT EXISTS site_notes (
+                site TEXT NOT NULL,
+                key TEXT NOT NULL,
+                value TEXT,
+                updated_at REAL NOT NULL,
+                PRIMARY KEY (site, key)
+            );
             """
         )
 
@@ -109,6 +116,19 @@ class State:
         self.conn.execute(
             "INSERT INTO social_posts(article_id,site,platform,ok,remote_id,remote_url,error,created_at) VALUES(?,?,?,?,?,?,?,?)",
             (self._id(url, site), site, platform, 1 if ok else 0, remote_id, remote_url, (error or "")[:2000] or None, time.time()),
+        )
+
+    # -- small per-site memory ----------------------------------------------
+    def note(self, site: str, key: str) -> str | None:
+        """A remembered value for a site, e.g. which card formats it posted last."""
+        row = self.conn.execute("SELECT value FROM site_notes WHERE site=? AND key=?", (site, key)).fetchone()
+        return row["value"] if row else None
+
+    def set_note(self, site: str, key: str, value: str) -> None:
+        self.conn.execute(
+            "INSERT INTO site_notes(site,key,value,updated_at) VALUES(?,?,?,?) "
+            "ON CONFLICT(site,key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+            (site, key, value, time.time()),
         )
 
     def social_results(self, url: str, site: str) -> list[sqlite3.Row]:

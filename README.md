@@ -103,6 +103,21 @@ make status     # what has been published, with links and any errors
 make logs       # follow the publisher
 ```
 
+### Instagram card formats
+
+The Instagram card is one of five formats, all drawn in the site's own palette, typeface, kicker chip,
+section rail and footer, and all inside the same safe bands for the 4:5 crop: **headline** (photo and
+brand panel, or a type card), **quote** (a verbatim line and who said it), **stat** (one figure and what
+it measures), **list** (three takeaways) and **question** (the question the piece answers). The rewriter
+fills `card` in its JSON only with material the source genuinely contains, and `autopub/cards.py`
+picks the format that material supports which the site has used least recently, so the grid mixes
+without inventing a number or a quote to fill a template. A site whose stories only ever yield
+headline material keeps posting headline cards. Preview the whole family for a site with:
+
+```bash
+docker compose run --rm autopub python -m autopub cards --formats --site CRAZY
+```
+
 Tuning lives in `sites.yaml` (`settings:` block and per-site `max_posts_per_run`, `max_age_hours`, feeds,
 keywords). After editing: `make up` (the config is mounted into the container, a restart is enough).
 
