@@ -1,8 +1,10 @@
 {
-  "_readme": "Seed for config/films.json, keyed by the WordPress film id (wp_sspulse_films.id). Copy to config/films.json and fill the blanks. Films 2-4 (Raktdhaar, Dilli Se Dubai, Kaali Raat) are deliberately absent: they are the fictional onboarding examples and must never consume real API quota. WHAT IS ALREADY DONE: title, release_date, industries, and hashtags derived from the title. WHAT YOU MUST FILL, because no connector can resolve it and a wrong value is worse than an empty one: yt_trailer_ids / yt_teaser_ids / yt_song_ids (the id is the v= parameter of a YouTube URL - a wrong id silently feeds another film's views into the forecast), wiki_title (the exact Wikipedia page title, underscores for spaces, e.g. Drishyam_3), and hashtag_account (an ig_user_id from config/assets.json). WHAT RESOLVES ITSELF: tmdb_id and imdb_id are optional - TMDB matches on title plus release year. BUDGET: hashtag search allows 30 unique hashtags per IG account per rolling 7 days, and this file asks for 3 each across 6 films, so spread hashtag_account over at least two of your accounts rather than pointing them all at one.",
   "5": {
     "title": "Ghamasaan",
-    "aliases": ["ghamasaan movie", "ghamasaan film"],
+    "aliases": [
+      "ghamasaan movie",
+      "ghamasaan film"
+    ],
     "cast": [],
     "wiki_title": "",
     "wiki_title_hi": "",
@@ -11,17 +13,26 @@
     "yt_song_ids": [],
     "spotify_track_ids": [],
     "yt_official_channels": [],
-    "hashtags": ["ghamasaan", "ghamasaanmovie", "ghamasaantrailer"],
+    "hashtags": [
+      "ghamasaan",
+      "ghamasaanmovie",
+      "ghamasaantrailer"
+    ],
     "hashtag_account": "",
     "trends_benchmark": "Jawan",
     "release_date": "2026-09-11",
     "tmdb_id": null,
     "imdb_id": "",
-    "industries": ["Hindi"]
+    "industries": [
+      "Hindi"
+    ]
   },
   "6": {
     "title": "Haiwaan",
-    "aliases": ["haiwaan movie", "haiwaan film"],
+    "aliases": [
+      "haiwaan movie",
+      "haiwaan film"
+    ],
     "cast": [],
     "wiki_title": "",
     "wiki_title_hi": "",
@@ -30,17 +41,26 @@
     "yt_song_ids": [],
     "spotify_track_ids": [],
     "yt_official_channels": [],
-    "hashtags": ["haiwaan", "haiwaanmovie", "haiwaantrailer"],
+    "hashtags": [
+      "haiwaan",
+      "haiwaanmovie",
+      "haiwaantrailer"
+    ],
     "hashtag_account": "",
     "trends_benchmark": "Jawan",
     "release_date": "2026-09-11",
     "tmdb_id": null,
     "imdb_id": "",
-    "industries": ["Hindi"]
+    "industries": [
+      "Hindi"
+    ]
   },
   "7": {
     "title": "Daayra",
-    "aliases": ["daayra movie", "daayra film"],
+    "aliases": [
+      "daayra movie",
+      "daayra film"
+    ],
     "cast": [],
     "wiki_title": "",
     "wiki_title_hi": "",
@@ -49,17 +69,27 @@
     "yt_song_ids": [],
     "spotify_track_ids": [],
     "yt_official_channels": [],
-    "hashtags": ["daayra", "daayramovie", "daayratrailer"],
+    "hashtags": [
+      "daayra",
+      "daayramovie",
+      "daayratrailer"
+    ],
     "hashtag_account": "",
     "trends_benchmark": "Jawan",
     "release_date": "2026-09-18",
     "tmdb_id": null,
     "imdb_id": "",
-    "industries": ["Hindi"]
+    "industries": [
+      "Hindi"
+    ]
   },
   "8": {
     "title": "Vibe",
-    "aliases": ["vibe movie", "vibe film", "vibe hindi film"],
+    "aliases": [
+      "vibe movie",
+      "vibe film",
+      "vibe hindi film"
+    ],
     "cast": [],
     "wiki_title": "",
     "wiki_title_hi": "",
@@ -68,17 +98,27 @@
     "yt_song_ids": [],
     "spotify_track_ids": [],
     "yt_official_channels": [],
-    "hashtags": ["vibemovie", "vibefilm", "vibetrailer"],
+    "hashtags": [
+      "vibemovie",
+      "vibefilm",
+      "vibetrailer"
+    ],
     "hashtag_account": "",
     "trends_benchmark": "Jawan",
     "release_date": "2026-09-18",
     "tmdb_id": null,
     "imdb_id": "",
-    "industries": ["Hindi"]
+    "industries": [
+      "Hindi"
+    ]
   },
   "9": {
     "title": "The Vvaan – Force of the Forrest",
-    "aliases": ["the vvaan", "vvaan movie", "the vvaan force of the forrest"],
+    "aliases": [
+      "the vvaan",
+      "vvaan movie",
+      "the vvaan force of the forrest"
+    ],
     "cast": [],
     "wiki_title": "",
     "wiki_title_hi": "",
@@ -87,17 +127,27 @@
     "yt_song_ids": [],
     "spotify_track_ids": [],
     "yt_official_channels": [],
-    "hashtags": ["thevvaan", "vvaan", "vvaanmovie"],
+    "hashtags": [
+      "thevvaan",
+      "vvaan",
+      "vvaanmovie"
+    ],
     "hashtag_account": "",
     "trends_benchmark": "Jawan",
     "release_date": "2026-09-25",
     "tmdb_id": null,
     "imdb_id": "",
-    "industries": ["Hindi"]
+    "industries": [
+      "Hindi"
+    ]
   },
   "10": {
     "title": "Drishyam: The Conclusion",
-    "aliases": ["drishyam the conclusion", "drishyam 3", "drishyam3"],
+    "aliases": [
+      "drishyam the conclusion",
+      "drishyam 3",
+      "drishyam3"
+    ],
     "cast": [],
     "wiki_title": "",
     "wiki_title_hi": "",
@@ -106,12 +156,18 @@
     "yt_song_ids": [],
     "spotify_track_ids": [],
     "yt_official_channels": [],
-    "hashtags": ["drishyam3", "drishyamtheconclusion", "drishyam"],
+    "hashtags": [
+      "drishyam3",
+      "drishyamtheconclusion",
+      "drishyam"
+    ],
     "hashtag_account": "",
     "trends_benchmark": "Jawan",
     "release_date": "2026-10-02",
     "tmdb_id": null,
     "imdb_id": "",
-    "industries": ["Hindi"]
+    "industries": [
+      "Hindi"
+    ]
   }
 }

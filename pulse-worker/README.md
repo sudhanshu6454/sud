@@ -65,6 +65,24 @@ npm test            # 29 tests, all offline
 
 ## 3. Configure films
 
+`config/films.seed.json` is a starting point keyed by the WordPress film id
+(`wp_sspulse_films.id`): `cp config/films.seed.json config/films.json` and fill the blanks. Note
+that `run.js` treats **every top-level key as a film**, so do not add a `_readme` or any other
+non-film key to that file — it becomes a phantom film in every run.
+
+Three fields nothing can resolve for you, and a wrong value is worse than an empty one:
+
+| Field | Unlocks | Where it comes from |
+|---|---|---|
+| `yt_trailer_ids` (plus teasers, songs) | `trTotal`, `likeRatio`, `tr24`, `song`, and the YouTube half of `sentiment` and comment-intent | the `v=` parameter of the YouTube URL. A wrong id does not fail: it silently attributes another film's views to this one. |
+| `wiki_title` | `wiki` | the exact Wikipedia page title, underscores for spaces (`Drishyam_3`) |
+| `hashtag_account` | `posts` | an `ig_user_id` from `config/assets.json`. Hashtag search allows 30 unique hashtags per account per rolling 7 days, so spread films across accounts rather than pointing them all at one. |
+
+`tmdb_id` and `imdb_id` are optional — TMDB matches on title plus release year — but `tmdb` still
+needs `TMDB_API_KEY` set before it runs at all. Films that exist in Pulse only as onboarding
+examples should be left out of this file entirely so they never spend real API quota.
+
+
 `config/films.json` — one entry per tracked film, keyed by the film's id in WordPress (use any stable string until the plugin exists):
 
 ```json
