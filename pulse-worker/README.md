@@ -42,7 +42,7 @@ npm test            # 29 tests, all offline
 1. All 50 Pages in one Business Portfolio; each Instagram account a Professional account connected to one of those Pages.
 2. Meta for Developers → create a **Business** app in that portfolio → add *Instagram Graph API* and *Facebook Login for Business*.
 3. Business Settings → *System users* → add an Admin system user → assign all Pages and Instagram accounts → *Generate token* with `pages_show_list, pages_read_engagement, pages_read_user_content, read_insights, instagram_basic, instagram_manage_insights, instagram_manage_comments, business_management`. Paste into `META_SYSTEM_USER_TOKEN`.
-4. `npm run inventory` → writes `config/assets.json` with every Page and its Instagram account, and lists Pages that have no Instagram account connected.
+4. `npm run inventory` → writes `config/assets.json` with every Page and its Instagram account, and lists Pages that have no Instagram account connected. In Docker, run `chown -R 10001:10001 pulse-worker/config` on the host first: the image runs as an unprivileged user and both this script and `discovery-check.js` write into that mounted directory, so a root-owned one fails with `EACCES` *after* the Graph call has already succeeded.
 5. Submit App Review for those permissions with a screencast of Pulse. You do **not** need Page Public Content Access or Public Content Access — everything here runs on assets you own.
 
 **Spotify (free).** developer.spotify.com → Dashboard → Create app (any redirect URI) → copy Client ID and Secret into `.env`. Put each film's track ids in `spotify_track_ids` (the id is the last segment of a track URL). Popularity is Spotify's own 0–100 score — it is relative and recency-weighted, which is exactly what a pre-release signal wants.
