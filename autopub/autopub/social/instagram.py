@@ -45,6 +45,10 @@ RETRYABLE = {2207032, 2207001, 2207003}       # transient: rebuild the container
 # testing it against 500 (as this once did) matched nothing at all.
 TRANSIENT_CODES = {1, 2, 4, 17, 32, 341, 613}
 QUOTA = {2207042}
+# media_publish can still answer "Media ID is not available" for a while after the container's own
+# status reads FINISHED. The container is fine; the publish is what to repeat. Meta's guidance for
+# 2207027 is to wait and publish again, not to build a new container.
+NOT_READY = {2207027}
 
 
 class _RejectedFile(Exception):
@@ -194,11 +198,26 @@ class InstagramPublisher(Publisher):
         self._reachable(image_url)
         creation_id = self._container(uid, token, image_url, caption, alt_text)
         self._await_container(creation_id, token, deadline)
-        pub = self._call("POST", f"{GRAPH}/{uid}/media_publish",
-                         data={"creation_id": creation_id, "access_token": token})
-        if "id" not in pub:
+        while True:
+            pub = self._call("POST", f"{GRAPH}/{uid}/media_publish",
+                             data={"creation_id": creation_id, "access_token": token})
+            if "id" in pub:
+                break
             code, subcode, message = _error(pub)
-            raise (_Transient if subcode in RETRYABLE else RuntimeError)(f"publish failed {code}/{subcode}: {message}")
+            if subcode in NOT_READY and time.monotonic() + POLL_SECONDS < deadline:
+                log.info("[instagram] container %s not publishable yet (%s); publishing again in %ss",
+                         creation_id, message, POLL_SECONDS)
+                time.sleep(POLL_SECONDS)
+                continue
+            # say which container and what Meta thinks of it, so a failure can be looked at afterwards
+            try:
+                status = self._call("GET", f"{GRAPH}/{creation_id}", timeout=POLL_TIMEOUT,
+                                    params={"fields": "status_code,status", "access_token": token})
+                state = f"{status.get('status_code')} {status.get('status') or ''}".strip()
+            except Exception as exc:  # noqa: BLE001 - diagnostics must not mask the real error
+                state = f"status unreadable: {exc}"
+            raise (_Transient if subcode in RETRYABLE else RuntimeError)(
+                f"publish failed {code}/{subcode}: {message} (container {creation_id}: {state})")
         media_id = pub["id"]
         try:                      # the post is already live; a failed permalink lookup must not lose it
             info = self._call("GET", f"{GRAPH}/{media_id}", params={"fields": "permalink", "access_token": token})

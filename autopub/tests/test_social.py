@@ -231,3 +231,56 @@ def test_a_missing_image_is_caught_before_meta_is_asked_to_fetch_it(monkeypatch)
     res = pub.publish(_post(image_urls={"square": "https://cdn/gone.jpg"}))
     assert not res.ok and "404" in res.error
     assert not asked, "we asked Meta to fetch an image we already knew was gone"
+
+
+def test_instagram_publishes_again_when_meta_says_the_media_is_not_ready_yet(monkeypatch):
+    """A FINISHED container can still draw 9007/2207027 from media_publish for a few seconds.
+
+    The first live CRAZY run lost two posts to this. The container is fine; the publish is what to
+    repeat - on the same container, not a rebuilt one.
+    """
+    from autopub.social import instagram as ig
+    publishes, slept = [], []
+
+    def media_publish(method, url, kwargs):
+        publishes.append(kwargs.get("data", {}).get("creation_id"))
+        if len(publishes) < 3:
+            return 400, {"error": {"code": 9007, "error_subcode": 2207027, "message": "Media ID is not available"}}
+        return 200, {"id": "media-9"}
+
+    call, Resp = _graph({
+        "/content_publishing_limit": (200, {"data": [{"config": {"quota_total": 100}, "quota_usage": 3}]}),
+        "/media_publish": media_publish,          # before "/media": routes match by substring, in order
+        "/media-9": (200, {"permalink": "https://instagram.com/p/abc/"}),
+        "container-1": (200, {"status_code": "FINISHED"}),
+        "/media": (200, {"id": "container-1"}),
+    })
+    monkeypatch.setattr(ig.requests, "request", call)
+    monkeypatch.setattr(ig.requests, "get", lambda *a, **k: Resp(200, {}))
+    monkeypatch.setattr(ig.time, "sleep", lambda s: slept.append(s))
+    pub = REGISTRY["instagram"]({"USER_ID": "17", "ACCESS_TOKEN": "t"})
+    res = pub.publish(_post(image_urls={"square": "https://cdn/square.jpg"}))
+    assert res.ok and res.remote_id == "media-9" and res.url == "https://instagram.com/p/abc/"
+    assert publishes == ["container-1"] * 3, "the same container is published again, no new one is built"
+    assert slept == [ig.POLL_SECONDS, ig.POLL_SECONDS]
+
+
+def test_instagram_names_the_container_when_it_never_becomes_publishable(monkeypatch):
+    from autopub.social import instagram as ig
+    clock = [0.0]
+
+    call, Resp = _graph({
+        "/content_publishing_limit": (200, {"data": [{"config": {"quota_total": 100}, "quota_usage": 3}]}),
+        "/media_publish": (400, {"error": {"code": 9007, "error_subcode": 2207027, "message": "Media ID is not available"}}),
+        "container-7": (200, {"status_code": "FINISHED", "status": "Finished: Media has been uploaded"}),
+        "/media": (200, {"id": "container-7"}),
+    })
+    monkeypatch.setattr(ig.requests, "request", call)
+    monkeypatch.setattr(ig.requests, "get", lambda *a, **k: Resp(200, {}))
+    monkeypatch.setattr(ig.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(ig.time, "sleep", lambda s: clock.__setitem__(0, clock[0] + s))
+    pub = REGISTRY["instagram"]({"USER_ID": "17", "ACCESS_TOKEN": "t"})
+    res = pub.publish(_post(image_urls={"square": "https://cdn/square.jpg"}))
+    assert not res.ok
+    assert "2207027" in res.error and "container-7" in res.error and "FINISHED" in res.error
+    assert clock[0] <= ig.PUBLISH_BUDGET + ig.POLL_SECONDS, "the retries stayed inside the publishing budget"
