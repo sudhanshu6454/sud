@@ -11,6 +11,12 @@ function take(host, perMinute) {
 }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+// Every connector passes its credential in the query string, so an error that quotes the URL
+// publishes the token to the terminal, the docker logs and anywhere the operator pastes them.
+// Meta's own error text repeats the token back too, so the body is scrubbed on the same pattern.
+const SECRET = /((?:access_token|api_key|apikey|key|client_secret|token)=)[^&\s"']+/gi;
+export const redact = s => String(s).replace(SECRET, '$1<redacted>');
+
 export async function getJSON(url, { headers = {}, retries = 3, perMinute = 120, method = 'GET', body, fetchImpl } = {}) {
   const f = fetchImpl || globalThis.fetch;
   const host = new URL(url).host;
@@ -25,7 +31,7 @@ export async function getJSON(url, { headers = {}, retries = 3, perMinute = 120,
     const retryable = res.status === 429 || res.status >= 500;
     if (!retryable || attempt >= retries) {
       const txt = await res.text().catch(() => '');
-      throw Object.assign(new Error(`HTTP ${res.status} ${url} ${txt.slice(0, 300)}`), { status: res.status });
+      throw Object.assign(new Error(redact(`HTTP ${res.status} ${url} ${txt.slice(0, 300)}`)), { status: res.status });
     }
     const ra = Number(res.headers.get('retry-after'));
     await sleep(ra ? ra * 1000 : 800 * 2 ** attempt + Math.random() * 400);
