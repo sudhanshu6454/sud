@@ -37,10 +37,13 @@ for (const a of cfg.instagram) {
     console.log(`ok   @${a.username.padEnd(28)} ${r.followers.toLocaleString('en-IN').padStart(12)} followers · ${r.media_count.toLocaleString('en-IN')} posts`);
   } catch (e) {
     a.enabled = false;
-    a.error = e.message.slice(0, 180);
+    // The URL is the same for every account and longer than the whole budget; Meta's error body
+    // is the part that says why, so it is what gets kept.
+    const why = e.message.replace(/https?:\/\/\S+\s*/, '');
+    a.error = why.slice(0, 180);
     a.checked_at = new Date().toISOString().slice(0, 10);
     bad++;
-    console.log(`FAIL @${a.username.padEnd(28)} ${e.message.slice(0, 120)}`);
+    console.log(`FAIL @${a.username.padEnd(28)} ${why.slice(0, 120)}`);
   }
 }
 fs.writeFileSync(P, JSON.stringify(cfg, null, 1));
