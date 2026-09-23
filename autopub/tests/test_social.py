@@ -114,6 +114,7 @@ def _graph(routes):
 
 
 def test_instagram_caption_stays_inside_the_platform_limits():
+    from autopub.social import instagram as ig
     from autopub.social.instagram import HASHTAG, MAX_HASHTAGS, MAX_MENTIONS, MENTION, trim_tags
     pub = REGISTRY["instagram"]({})
     # the shape the rewriter is actually prompted to produce: a hook, then hashtags on their own line
@@ -124,7 +125,17 @@ def test_instagram_caption_stays_inside_the_platform_limits():
     assert len(MENTION.findall(trimmed)) == MAX_MENTIONS
     assert trimmed.startswith("A hook line")
     caption = pub.caption(_post(captions={"instagram": body + tags}))
-    assert len(caption) <= pub.text_limit and caption.endswith("https://marketingjunkies.in/x/")
+    assert len(caption) <= pub.text_limit and caption.endswith(ig.CTA)
+    assert "http" not in caption and "marketingjunkies.in/x" not in caption, "no URL in an Instagram caption"
+
+
+def test_instagram_caption_carries_the_cta_and_never_a_url():
+    from autopub.social import instagram as ig
+    pub = REGISTRY["instagram"]({"USER_ID": "1", "ACCESS_TOKEN": "t"})
+    caption = pub.caption(_post(captions={"instagram": "Hook line\n\nSee https://example.com/story and www.other.com now\n\n#one #two"}))
+    assert "https://" not in caption and "www." not in caption, "URLs the model slipped in are stripped"
+    assert caption.endswith("\n\n" + ig.CTA)
+    assert "Hook line" in caption and "#one #two" in caption
 
 
 def test_instagram_walks_down_to_the_next_shape_when_a_card_is_refused(monkeypatch):

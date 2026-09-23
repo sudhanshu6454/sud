@@ -36,6 +36,9 @@ POLL_SECONDS = 10
 POLL_TIMEOUT = 15          # a status poll that hangs must not eat the whole budget
 PUBLISH_BUDGET = 240       # wall clock for one article, so a stuck container cannot stall the run
 
+CTA = "Read the full story on our website. Link in bio."
+URL = re.compile(r"https?://\S+|www\.\S+", re.IGNORECASE)   # anything that looks like a link, in case one slips into a caption
+
 HASHTAG = re.compile(r"(?<!\w)#\w+")
 MENTION = re.compile(r"(?<!\w)@\w+")
 
@@ -93,14 +96,16 @@ class InstagramPublisher(Publisher):
     # ---- helpers -----------------------------------------------------------------------------
 
     def caption(self, post: SocialPost) -> str:
-        # the link is inert on Instagram but people still copy it, and it lands in caption search
-        text = trim_tags(post.caption_for(self.platform))
+        # no URL in an Instagram caption: links are inert there and read as clutter. The call to
+        # action points at the site instead; the profile link carries the reader the rest of the way.
+        text = URL.sub("", trim_tags(post.caption_for(self.platform))).strip()
+        text = "\n".join(line.rstrip() for line in text.splitlines()).strip()
         if post.mentions:
             # verified accounts the story is about, as a line of their own so they read as credits
             handles = [h for h in post.mentions if f"@{h}" not in text.lower()]
             if handles:
                 text = text.rstrip() + "\n\n" + " ".join(f"@{h}" for h in handles)
-        return fit_text(text, self.text_limit, f"\n\nRead: {post.link}")
+        return fit_text(text, self.text_limit, f"\n\n{CTA}")
 
     def _call(self, method: str, url: str, **kwargs) -> dict:
         """One Graph call, classified by what actually went wrong.

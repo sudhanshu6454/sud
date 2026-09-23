@@ -109,7 +109,7 @@ OUTPUT_SCHEMA: dict[str, Any] = {
             "properties": {
                 "twitter": {"type": "string", "description": f"<= {PLATFORM_LIMITS['twitter']} chars, 1-2 hashtags, no link (added automatically)"},
                 "facebook": {"type": "string", "description": f"<= {PLATFORM_LIMITS['facebook']} chars, conversational, ends with a question or CTA, no link"},
-                "instagram": {"type": "string", "description": f"<= {PLATFORM_LIMITS['instagram']} chars, hook line first, line breaks, 8-15 hashtags at the end, say 'link in bio' since links are not clickable"},
+                "instagram": {"type": "string", "description": f"<= {PLATFORM_LIMITS['instagram']} chars, hook line first, line breaks, 8-15 hashtags at the end. No URL and no 'link in bio': the call to action is appended automatically"},
                 "linkedin": {"type": "string", "description": f"<= {PLATFORM_LIMITS['linkedin']} chars, professional insight-led post with short paragraphs, no hashtags, no link"},
                 "pinterest_title": {"type": "string", "description": "<= 90 chars pin title"},
                 "pinterest": {"type": "string", "description": f"<= {PLATFORM_LIMITS['pinterest']} chars keyword-rich pin description, no link"},
