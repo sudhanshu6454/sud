@@ -13,7 +13,10 @@ cd "$(dirname "$0")/../.."
 
 # Keep in step with LOCAL_PLUGINS in init-sites.sh.
 declare -A LOCAL_PLUGINS=(
-  [SCREENSTAT]="screenstat-pulse"
+  [MENTALIST]="fleet-linkinbio"
+  [CRAZY]="fleet-linkinbio"
+  [JUNKIES]="fleet-linkinbio"
+  [SCREENSTAT]="screenstat-pulse fleet-linkinbio"
 )
 
 WANT="${1:-}"

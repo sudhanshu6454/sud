@@ -103,6 +103,16 @@ make status     # what has been published, with links and any errors
 make logs       # follow the publisher
 ```
 
+### Link in bio
+
+Every site serves `https://<domain>/bio/` from `plugins/fleet-linkinbio`: the brand's logo, colours and
+typeface, buttons for the website and its Instagram and Facebook accounts, and the newest ten stories
+as tappable cards, newest first. Point each Instagram profile's website field at it; the caption's call
+to action ("Read the full story on our website. Link in bio.") lands there. The brand is chosen by
+hostname from `includes/brands.php`, which mirrors `sites.yaml`. Cached five minutes, refreshed on every
+post save, marked noindex. Deploy with `./infra/wp/deploy-plugins.sh`; preview without WordPress with
+`php plugins/fleet-linkinbio/tests/preview.php crazy4marketing.com > /tmp/bio.html`.
+
 ### Tagging on Instagram
 
 Feed posts tag the accounts a story is genuinely about: the publication that reported it, the brands

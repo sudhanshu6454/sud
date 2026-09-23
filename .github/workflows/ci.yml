@@ -22,6 +22,9 @@ jobs:
       # runs the validation tests and, through them, node tests/model-equality.mjs - the eight
       # HANDOVER-WORLD acceptance fixtures plus the plugin/worker model-copy hash check
       - run: php plugins/screenstat-pulse/tests/run-tests.php
+      # the link-in-bio plugin: syntax on every file, then a render of each brand's page without WordPress
+      - run: for f in plugins/fleet-linkinbio/*.php plugins/fleet-linkinbio/includes/*.php; do php -l "$f"; done
+      - run: for h in marketingmentalist.in crazy4marketing.com marketingjunkies.in screenstat.in; do php plugins/fleet-linkinbio/tests/preview.php $h | grep -q "Latest stories" || exit 1; done
       - run: python infra/gen_compose.py --check
       - run: python -m py_compile infra/dns.py infra/gen_compose.py infra/wire-meta-socials.py
       - run: bash -n infra/bootstrap.sh infra/wp/init-sites.sh infra/linode/provision.sh infra/db/init-databases.sh

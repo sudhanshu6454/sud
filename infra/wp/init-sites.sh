@@ -39,7 +39,10 @@ declare -A EXTRA_PLUGINS=(
 # Per-site plugins shipped in plugins/<dir> (repo-local, not on wordpress.org). Copied fresh into the
 # container and activated on every run, like LOCAL_THEMES.
 declare -A LOCAL_PLUGINS=(
-  [SCREENSTAT]="screenstat-pulse"
+  [MENTALIST]="fleet-linkinbio"
+  [CRAZY]="fleet-linkinbio"
+  [JUNKIES]="fleet-linkinbio"
+  [SCREENSTAT]="screenstat-pulse fleet-linkinbio"
 )
 
 upsert_env() {  # upsert_env KEY VALUE
