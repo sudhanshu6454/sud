@@ -1335,6 +1335,34 @@ def instagram_asset(card: Path, ratio: str = "4:5", out_path: Path | None = None
     return _save(crop, out_path or card.with_name(card.stem.replace("-portrait", "-instagram") + ".jpg"))
 
 
+STORY_SIZE = (1440, 2560)          # 9:16 at the same 4/3 scale as the cards, so type stays sharp
+STORY_SAFE = 340                   # Instagram lays its own UI over roughly this much at top and bottom
+
+
+def story_asset(card: Path, site: Site, out_path: Path) -> Path:
+    """The same card as a 9:16 story: framed on the brand ground, inside the safe zones.
+
+    Stories carry no caption and, through the API, no link sticker, so the card - which already
+    names the site in its footer - is the whole message. It is scaled to sit clear of the bands
+    Instagram and Facebook draw their own controls over, so nothing that matters is covered.
+    """
+    primary = hex_to_rgb(site.brand.primary)
+    accent = hex_to_rgb(site.brand.accent)
+    w, h = STORY_SIZE
+    img = _gradient((w, h), primary, _darken(primary, 0.6))
+    ImageDraw.Draw(img, "RGBA").polygon([(w * 0.55, h), (w, h * 0.62), (w, h)], fill=(*accent, 22))
+    with Image.open(card) as im:
+        cw, ch = im.size
+        avail_h = h - STORY_SAFE * 2
+        scale = min(avail_h / ch, (w - 2 * 48) / cw)
+        fitted = im.convert("RGB").resize((int(cw * scale), int(ch * scale)), Image.LANCZOS)
+    x, y = (w - fitted.width) // 2, (h - fitted.height) // 2
+    # a hairline in the accent around the card lifts it off a ground of nearly the same colour
+    ImageDraw.Draw(img).rectangle([x - 3, y - 3, x + fitted.width + 2, y + fitted.height + 2], outline=accent, width=3)
+    img.paste(fitted, (x, y))
+    return _save(img, out_path, quality=90)
+
+
 def resize_to(card: Path, size: tuple[int, int], out_path: Path) -> Path:
     """Force a card to an exact size, for probing what a platform accepts."""
     with Image.open(card) as im:

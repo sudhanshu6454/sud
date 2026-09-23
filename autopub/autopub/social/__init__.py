@@ -10,6 +10,7 @@ from .facebook import FacebookPublisher
 from .instagram import InstagramPublisher
 from .linkedin import LinkedInPublisher
 from .pinterest import PinterestPublisher
+from .stories import FacebookStoryPublisher, InstagramStoryPublisher
 from .telegram import TelegramPublisher
 from .threads import ThreadsPublisher
 from .twitter import TwitterPublisher
@@ -19,7 +20,8 @@ log = logging.getLogger(__name__)
 REGISTRY: dict[str, type[Publisher]] = {
     cls.platform: cls
     for cls in (TwitterPublisher, FacebookPublisher, InstagramPublisher, LinkedInPublisher,
-                PinterestPublisher, TelegramPublisher, ThreadsPublisher)
+                PinterestPublisher, TelegramPublisher, ThreadsPublisher,
+                InstagramStoryPublisher, FacebookStoryPublisher)
 }
 
 

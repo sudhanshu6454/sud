@@ -34,7 +34,9 @@ def test_registry_capabilities():
     assert REGISTRY["instagram"].supports_link is False and REGISTRY["instagram"].requires_image
     assert REGISTRY["pinterest"].requires_image and REGISTRY["pinterest"].image_shapes[0] == "portrait"
     assert REGISTRY["twitter"].supports_link and REGISTRY["twitter"].supports_image
-    assert set(REGISTRY) == {"twitter", "facebook", "instagram", "linkedin", "pinterest", "telegram", "threads"}
+    assert set(REGISTRY) == {"twitter", "facebook", "instagram", "linkedin", "pinterest", "telegram", "threads",
+                             "instagram_story", "facebook_story"}
+    assert REGISTRY["instagram_story"].image_shapes == ("story",) and REGISTRY["facebook_story"].image_shapes == ("story",)
 
 
 def test_build_publishers_only_with_full_creds(site):

@@ -7,7 +7,9 @@ def test_sites_load(settings):
         assert s.feeds, f"{s.key} has no feeds"
         assert s.domain.endswith((".in", ".com"))
         assert s.brand.primary.startswith("#")
-        assert set(s.socials) <= {"twitter", "facebook", "instagram", "linkedin", "pinterest", "telegram", "threads"}
+        assert set(s.socials) <= {"twitter", "facebook", "instagram", "linkedin", "pinterest", "telegram", "threads",
+                                  "instagram_story", "facebook_story"}
+        assert s.socials.index("instagram_story") > s.socials.index("instagram"), "stories run after the feed post"
 
 
 def test_env_lookup_and_urls(site, monkeypatch):

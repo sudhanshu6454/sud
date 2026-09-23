@@ -101,8 +101,13 @@ def publish_one(site: Site, settings: Settings, state: State, cand: sources.Cand
         rendered = {}
     cards_by_shape = rendered
 
-    # 3b. the card Instagram will actually accept, trimmed out of the 3:4 master
+    # 3b. the card Instagram will actually accept, trimmed out of the 3:4 master; and the same card
+    # framed 9:16 for the story publishers, drawn from the master before it is cropped
     if cards_by_shape.get("portrait"):
+        try:
+            cards_by_shape["story"] = images.story_asset(cards_by_shape["portrait"], site, work_dir / site.slug / f"{stem}-story.jpg")
+        except Exception as exc:  # noqa: BLE001 - a story is a bonus; the feed post must not depend on it
+            log.warning("[%s] could not build the story asset: %s", site.key, exc)
         try:
             cards_by_shape["portrait"] = images.instagram_asset(cards_by_shape["portrait"], ratio=settings.instagram_ratio)
         except Exception as exc:  # noqa: BLE001 - fall back to the master; the publisher walks shapes anyway
@@ -116,7 +121,8 @@ def publish_one(site: Site, settings: Settings, state: State, cand: sources.Cand
         # With no credentials configured they would just accumulate in the media library forever.
         hosted = {shape for pub in publishers if pub.needs_public_url for shape in pub.image_shapes}
         media_by_shape: dict[str, dict] = {}
-        for shape, title in (("square", f"{post.title} (square)"), ("portrait", f"{post.title} (portrait)")):
+        for shape, title in (("square", f"{post.title} (square)"), ("portrait", f"{post.title} (portrait)"),
+                             ("story", f"{post.title} (story)")):
             if not cards_by_shape.get(shape) or shape not in hosted:
                 continue
             try:
