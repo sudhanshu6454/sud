@@ -35,8 +35,11 @@ MAX_MENTIONS = 20
 POLL_SECONDS = 10
 POLL_TIMEOUT = 15          # a status poll that hangs must not eat the whole budget
 PUBLISH_BUDGET = 240       # wall clock for one article, so a stuck container cannot stall the run
+CAROUSEL_BUDGET = 420      # a carousel is up to ten containers; if it fails, the single card gets its own budget
+MAX_CHILDREN = 10          # Instagram's ceiling for carousel items
 
 CTA = "Read the full story on our website. Link in bio."
+SWIPE = "Swipe through for the full breakdown."
 URL = re.compile(r"https?://\S+|www\.\S+", re.IGNORECASE)   # anything that looks like a link, in case one slips into a caption
 
 HASHTAG = re.compile(r"(?<!\w)#\w+")
@@ -90,12 +93,13 @@ class InstagramPublisher(Publisher):
     supports_link = False
     requires_image = True
     needs_public_url = True
+    supports_carousel = True
     image_shapes = ("portrait", "square", "landscape")   # tallest first: portrait owns the most feed height
     text_limit = 2200
 
     # ---- helpers -----------------------------------------------------------------------------
 
-    def caption(self, post: SocialPost) -> str:
+    def caption(self, post: SocialPost, carousel: bool | None = None) -> str:
         # no URL in an Instagram caption: links are inert there and read as clutter. The call to
         # action points at the site instead; the profile link carries the reader the rest of the way.
         text = URL.sub("", trim_tags(post.caption_for(self.platform))).strip()
@@ -105,7 +109,10 @@ class InstagramPublisher(Publisher):
             handles = [h for h in post.mentions if f"@{h}" not in text.lower()]
             if handles:
                 text = text.rstrip() + "\n\n" + " ".join(f"@{h}" for h in handles)
-        return fit_text(text, self.text_limit, f"\n\n{CTA}")
+        if carousel is None:
+            carousel = len(post.carousel_urls) >= 2
+        tail = f"\n\n{SWIPE}\n\n{CTA}" if carousel else f"\n\n{CTA}"
+        return fit_text(text, self.text_limit, tail)
 
     def _call(self, method: str, url: str, **kwargs) -> dict:
         """One Graph call, classified by what actually went wrong.
@@ -168,15 +175,18 @@ class InstagramPublisher(Publisher):
 
     # ---- the two-step publish ----------------------------------------------------------------
 
+    def _tags(self, mentions: list[str]) -> str:
+        from .mentions import tag_positions   # local import: mentions imports GRAPH from here
+        return json.dumps([{"username": h, "x": x, "y": y}
+                           for h, (x, y) in zip(mentions, tag_positions(len(mentions)))])
+
     def _container(self, uid: str, token: str, image_url: str, caption: str, alt_text: str | None,
                    mentions: list[str] | None = None) -> str:
         data = {"image_url": image_url, "caption": caption, "access_token": token}
         if alt_text:
             data["alt_text"] = alt_text[:1000]
         if mentions:
-            from .mentions import tag_positions   # local import: mentions imports GRAPH from here
-            data["user_tags"] = json.dumps([{"username": h, "x": x, "y": y}
-                                            for h, (x, y) in zip(mentions, tag_positions(len(mentions)))])
+            data["user_tags"] = self._tags(mentions)
         payload = self._call("POST", f"{GRAPH}/{uid}/media", data=data)
         if "id" in payload:
             return payload["id"]
@@ -187,6 +197,10 @@ class InstagramPublisher(Publisher):
             log.warning("[instagram] container refused with photo tags (%s/%s: %s); retrying without tags",
                         code, subcode, message[:120])
             return self._container(uid, token, image_url, caption, alt_text, None)
+        self._refuse(payload)
+
+    def _refuse(self, payload: dict) -> None:
+        """Turn a container refusal into the exception that says what to do about it."""
         code, subcode, message = _error(payload)
         if subcode in QUOTA:
             raise RuntimeError(f"daily publishing quota reached ({subcode}): {message}")
@@ -221,6 +235,11 @@ class InstagramPublisher(Publisher):
         self._reachable(image_url)
         creation_id = self._container(uid, token, image_url, caption, alt_text, mentions)
         self._await_container(creation_id, token, deadline)
+        return self._publish_container(uid, token, creation_id, deadline)
+
+    def _publish_container(self, uid: str, token: str, creation_id: str, deadline: float,
+                           format: str | None = None) -> PublishResult:
+        """Publish a finished container, repeating while Meta says the media is not ready yet."""
         while True:
             pub = self._call("POST", f"{GRAPH}/{uid}/media_publish",
                              data={"creation_id": creation_id, "access_token": token})
@@ -247,7 +266,42 @@ class InstagramPublisher(Publisher):
         except Exception as exc:  # noqa: BLE001
             log.info("[instagram] published %s but could not read its permalink: %s", media_id, exc)
             info = {}
-        return PublishResult(self.platform, True, remote_id=media_id, url=info.get("permalink"))
+        return PublishResult(self.platform, True, remote_id=media_id, url=info.get("permalink"), format=format)
+
+    # ---- carousel: children first, then one parent that carries the caption -------------------
+
+    def _child(self, uid: str, token: str, image_url: str, alt_text: str | None, mentions: list[str] | None) -> str:
+        data = {"image_url": image_url, "is_carousel_item": "true", "access_token": token}
+        if alt_text:
+            data["alt_text"] = alt_text[:1000]
+        if mentions:
+            data["user_tags"] = self._tags(mentions)
+        payload = self._call("POST", f"{GRAPH}/{uid}/media", data=data)
+        if "id" in payload:
+            return payload["id"]
+        if mentions:
+            code, subcode, message = _error(payload)
+            log.warning("[instagram] carousel cover refused with photo tags (%s/%s: %s); retrying without tags",
+                        code, subcode, message[:120])
+            return self._child(uid, token, image_url, alt_text, None)
+        self._refuse(payload)
+
+    def _post_carousel(self, uid: str, token: str, urls: list[str], caption: str, alt_text: str | None,
+                       deadline: float, mentions: list[str] | None = None) -> PublishResult:
+        """Every slide becomes a child container; the parent CAROUSEL container lists them in order
+        and carries the caption. Only the parent counts against the publishing allowance."""
+        urls = urls[:MAX_CHILDREN]
+        for url in urls:
+            self._reachable(url)
+        children = [self._child(uid, token, url, alt_text if i == 0 else None, mentions if i == 0 else None)
+                    for i, url in enumerate(urls)]
+        payload = self._call("POST", f"{GRAPH}/{uid}/media",
+                             data={"media_type": "CAROUSEL", "children": ",".join(children),
+                                   "caption": caption, "access_token": token})
+        if "id" not in payload:
+            self._refuse(payload)
+        self._await_container(payload["id"], token, deadline)
+        return self._publish_container(uid, token, payload["id"], deadline, format="carousel")
 
     def probe_ratio(self, image_url: str) -> tuple[bool, str]:
         """Ask Meta whether it will take this image, without posting anything.
@@ -274,13 +328,28 @@ class InstagramPublisher(Publisher):
             return PublishResult(self.platform, False, error="Instagram's 24h publishing quota is used up; skipping")
 
         shapes = [s for s in self.image_shapes if post.image_urls.get(s)]
-        if not shapes:
+        if not shapes and len(post.carousel_urls) < 2:
             raise RuntimeError("Instagram needs a publicly reachable image URL (upload to WordPress first)")
+
+        problems: list[str] = []
+        if len(post.carousel_urls) >= 2:
+            # the swipe-through post. Anything that goes wrong with it falls back to the single card
+            # below, so a carousel slot never costs the article its feed post.
+            try:
+                return self._post_carousel(uid, token, post.carousel_urls, caption, alt_text,
+                                           time.monotonic() + CAROUSEL_BUDGET, post.mentions)
+            except Exception as exc:  # noqa: BLE001
+                if "quota" in str(exc).lower():
+                    raise     # the single card would hit the same wall
+                log.warning("[instagram] carousel failed (%s); posting the single card instead", exc)
+                problems.append(f"carousel: {exc}")
+                caption = self.caption(post, carousel=False)   # without the swipe line
+            if not shapes:
+                raise RuntimeError("could not publish the carousel and no single card was uploaded -> " + " | ".join(problems))
 
         # one budget for the whole article: autopub publishes serially, so a stuck container here
         # is time the other three sites do not get
         deadline = time.monotonic() + PUBLISH_BUDGET
-        problems: list[str] = []
         retried = False
         for shape in shapes:
             url = post.image_urls[shape]

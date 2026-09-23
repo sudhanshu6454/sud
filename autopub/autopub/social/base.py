@@ -35,6 +35,7 @@ class SocialPost:
     alt_text: str | None = None                                 # what the card says, for screen readers
     mentions: list[str] = field(default_factory=list)           # verified Instagram usernames to tag, without @
     story_urls: list[str] = field(default_factory=list)         # 9:16 story frames in order: cover, content, closing
+    carousel_urls: list[str] = field(default_factory=list)      # 4:5 carousel slides in order: cover, content, closing
 
     def caption_for(self, platform: str) -> str:
         return (self.captions.get(platform) or self.captions.get("facebook") or self.title).strip()
@@ -53,6 +54,7 @@ class PublishResult:
     remote_id: str | None = None
     url: str | None = None
     error: str | None = None
+    format: str | None = None       # how it went out when that differs from the platform's default, e.g. "carousel"
 
 
 def fit_text(caption: str, limit: int, suffix: str = "") -> str:
@@ -78,6 +80,7 @@ class Publisher(ABC):
     requires_image: ClassVar[bool] = False
     image_shapes: ClassVar[tuple[str, ...]] = ("landscape", "square")   # which card this platform wants, best first
     needs_public_url: ClassVar[bool] = False   # true when the API fetches the image itself instead of taking an upload
+    supports_carousel: ClassVar[bool] = False  # can post several images as one swipe-through post
     text_limit: ClassVar[int] = 2000
 
     def __init__(self, creds: dict[str, str], timeout: int = 60):

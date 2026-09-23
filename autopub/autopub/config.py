@@ -88,6 +88,10 @@ class Settings:
     # (error 36003/2207009). The cards are drawn 3:4; this says which shape actually gets posted.
     # Flip to "3:4" once `python -m autopub instagram-probe` shows Meta accepting 0.75.
     instagram_ratio: str = "4:5"
+    # Twice a day the Instagram post is a carousel instead of a single card: the first article a site
+    # publishes at or after each of these hours, in `timezone`. [] switches carousels off.
+    carousel_hours: list[int] = field(default_factory=lambda: [9, 18])
+    timezone: str = "Asia/Kolkata"
     data_dir: Path = DEFAULT_DATA_DIR
 
     def site(self, key: str) -> Site:
@@ -123,4 +127,6 @@ def load(path: str | os.PathLike | None = None) -> Settings:
     if len(set(keys)) != len(keys):
         raise ValueError(f"duplicate site keys in {cfg_path}: {keys}")
     data_dir = Path(os.environ.get("AUTOPUB_DATA_DIR", settings_raw.pop("data_dir", DEFAULT_DATA_DIR)))
-    return Settings(sites=sites, data_dir=data_dir, **settings_raw)
+    settings = Settings(sites=sites, data_dir=data_dir, **settings_raw)
+    settings.carousel_hours = sorted({int(h) % 24 for h in (settings.carousel_hours or [])})
+    return settings

@@ -1455,6 +1455,128 @@ def story_closing_frame(headline: str, site: Site, out_path: Path) -> Path:
     return _save(img, out_path, quality=90)
 
 
+# ---- carousel slides ---------------------------------------------------------------------------
+# Drawn on the same 3:4 master canvas as the cards and trimmed to the same 4:5 as the cover, so the
+# rail, the kicker chip and the footer sit in exactly the same place on every slide of a swipe.
+CAROUSEL_SIZE = (int(CARD_W * CARD_SCALE), int(CARD_W * CARD_SCALE / IG_RATIOS["4:5"]))   # 1440x1800
+SLIDE_HEADING_LADDER = [(40, 72, 80, 3), (70, 60, 68, 4), (10 ** 6, 50, 58, 5)]
+SLIDE_BODY_SIZE, SLIDE_BODY_LEAD = 40, 58
+
+
+def _slide_canvas(site: Site):
+    """The master canvas a slide is drawn on: type ground, rail and footer, like the type-led cards."""
+    S = lambda v: int(round(v * CARD_SCALE))
+    primary, accent, text = hex_to_rgb(site.brand.primary), hex_to_rgb(site.brand.accent), hex_to_rgb(site.brand.text)
+    img = Image.new("RGB", (S(CARD_W), S(CARD_H)), primary)
+    _type_ground(img, None, primary, accent, S)
+    _rail(img, site, accent, S(TYPE_TOP), S)
+    _card_footer(img, site, primary, text, S)
+    return img, primary, accent, text, S
+
+
+def _slide_frame(S) -> tuple[int, int, int]:
+    """x, top and bottom of a slide's content area on the master canvas."""
+    top = S(TYPE_TOP) + S(RAIL_H) + S(56)
+    bottom = S(FOOT_BOTTOM) - S(56) - S(36) - S(40)
+    return S(SIDE), top, bottom
+
+
+def _to_feed_ratio(img: Image.Image, out_path: Path) -> Path:
+    """Trim the master to 4:5 the way instagram_asset trims the cover."""
+    w, h = img.size
+    target = int(round(w / IG_RATIOS["4:5"]))
+    top = (h - target) // 2
+    return _save(img.crop((0, top, w, top + target)), out_path, quality=90)
+
+
+def _swipe_cue(draw, x: int, y: int, S, colour) -> None:
+    """A small drawn arrow: the brand faces lack the glyph."""
+    draw.line([(x, y), (x + S(40), y)], fill=colour, width=S(3))
+    draw.line([(x + S(28), y - S(11)), (x + S(40), y), (x + S(28), y + S(11))], fill=colour, width=S(3))
+
+
+def _short_kicker(kicker: str | None, limit: int = 15) -> str:
+    """The section label cut at a word, never mid-word: 'MARKETING' rather than 'MARKETING PSYCH'."""
+    words = (kicker or "").strip().upper().split()
+    out = ""
+    for word in words:
+        if len(f"{out} {word}".strip()) > limit:
+            break
+        out = f"{out} {word}".strip()
+    return out or "THE STORY"
+
+
+def carousel_text_slide(heading: str, body: str, index: int, total: int, site: Site, out_path: Path,
+                        kicker: str | None = None) -> Path:
+    """One content slide: kicker with its place in the sequence, a bold heading, an accent rule and
+    the body in reading type. Together the slides are the article for a viewer who never taps out."""
+    img, primary, accent, text, S = _slide_canvas(site)
+    family, weight = site.brand.font, site.brand.heading_weight
+    draw = ImageDraw.Draw(img, "RGBA")
+    x, top, bottom = _slide_frame(S)
+    column = img.width - x * 2
+    _card_kicker(img, f"{_short_kicker(kicker)}  \u00b7  {index}/{total}", site, accent, x, top, S)
+    top += S(KICKER_SIZE) + S(20) * 2 + S(40)
+    hfont, hlines, line_h = _headline_block(draw, _spell_out(tidy(heading), family), family, column,
+                                            SLIDE_HEADING_LADDER, weight=weight)
+    bfont = _font(S(SLIDE_BODY_SIZE), bold=False, family=family, weight=450)
+    rule_h = S(32) + S(6) + S(36)
+    room_lines = max(3, (bottom - S(56) - top - len(hlines) * line_h - rule_h) // S(SLIDE_BODY_LEAD))
+    blines = _wrap(draw, _spell_out(tidy(body), family), bfont, column)
+    if len(blines) > room_lines:
+        blines = blines[:room_lines]
+        blines[-1] = blines[-1].rstrip(",;:- ") + "\u2026"
+    # the block sits a little above centre of the room, as the type-led cards do, so a short slide
+    # does not read as a heading marooned over empty ground
+    block = len(hlines) * line_h + rule_h + len(blines) * S(SLIDE_BODY_LEAD)
+    y = top + max(0, (bottom - S(56) - top - block) // 3)
+    for line in hlines:
+        draw.text((x, y), line, font=hfont, fill=text)
+        y += line_h
+    y += S(32)
+    draw.rectangle([x, y, x + S(96), y + S(6)], fill=accent)
+    y += S(6) + S(36)
+    for line in blines:
+        draw.text((x, y), line, font=bfont, fill=text)
+        y += S(SLIDE_BODY_LEAD)
+    # a quiet cue to keep swiping, bottom right of the content area
+    _swipe_cue(draw, img.width - x - S(40), bottom - S(12), S, (*accent, 200))
+    return _to_feed_ratio(img, out_path)
+
+
+def carousel_closing_slide(headline: str, site: Site, out_path: Path) -> Path:
+    """The last slide: the title as a reminder, the site large in the accent, and the way there."""
+    img, primary, accent, text, S = _slide_canvas(site)
+    family, weight = site.brand.font, site.brand.heading_weight
+    draw = ImageDraw.Draw(img, "RGBA")
+    x, top, bottom = _slide_frame(S)
+    column = img.width - x * 2
+    _card_kicker(img, "Read the full story", site, accent, x, top, S)
+    y = top + S(KICKER_SIZE) + S(20) * 2 + S(56)
+    tfont, tlines, tline_h = _headline_block(draw, _spell_out(tidy(headline), family), family, column,
+                                             [(60, 52, 60, 3), (10 ** 6, 44, 52, 4)], weight=weight)
+    for line in tlines:
+        draw.text((x, y), line, font=tfont, fill=tuple(int(c * 0.8) for c in text))
+        y += tline_h
+    y += S(56)
+    logo_h = S(56)
+    _card_logo(img, site, primary, x, y + logo_h, logo_h)
+    y += logo_h + S(40)
+    dfont = _figure_font(site.domain, S(64), family, max(weight, 700))
+    while draw.textlength(site.domain, font=dfont) > column:
+        dfont = _figure_font(site.domain, dfont.size - S(4), family, max(weight, 700))
+    draw.text((x, y), site.domain, font=dfont, fill=accent)
+    y += dfont.size + S(32)
+    cfont = _font(S(36), bold=True, family=family, weight=max(weight, 600))
+    cue = "Link in bio"
+    draw.text((x, y), cue, font=cfont, fill=text)
+    _swipe_cue(draw, x + int(draw.textlength(cue, font=cfont)) + S(20), y + S(22), S, accent)
+    y += S(36) + S(28)
+    sfont = _font(S(30), bold=False, family=family)
+    draw.text((x, y), "Save this post for later and share it with your team", font=sfont, fill=_muted(text))
+    return _to_feed_ratio(img, out_path)
+
+
 def resize_to(card: Path, size: tuple[int, int], out_path: Path) -> Path:
     """Force a card to an exact size, for probing what a platform accepts."""
     with Image.open(card) as im:

@@ -10,7 +10,7 @@ import time
 
 from pathlib import Path
 
-from . import cards, config, images, rank, sources
+from . import cards, carousels, config, images, rank, sources
 from .pipeline import make_wordpress, run_all
 from .rewrite import effective_model
 from .social import build_publishers
@@ -76,6 +76,11 @@ def cmd_check(settings, args) -> int:
             print(f"linkedin token expires {expires} ({days:.0f} days): {note}")
         except ValueError:
             print(f"linkedin token expiry {expires!r} is not a date")
+    if settings.carousel_hours:
+        print(f"carousels: the first article at or after {', '.join(f'{h:02d}:00' for h in settings.carousel_hours)} "
+              f"{settings.timezone} each day goes out as a carousel")
+    else:
+        print("carousels: off (settings.carousel_hours is empty)")
     for site in settings.sites:
         print(f"\n[{site.key}] {site.domain} -> {site.wp_base_url()}")
         try:
@@ -152,6 +157,23 @@ def cmd_cards(settings, args) -> int:
     headline = args.headline or SAMPLE_HEADLINE
     for site in settings.sites:
         if args.site and site.key != args.site.upper():
+            continue
+        if args.carousel:
+            # the whole swipe from sample slides: cover card, content slides, closing slide
+            print(f"[{site.key}] {site.domain}")
+            kicker = args.kicker or site.category
+            brief = cards.brief(cards.HEADLINE, None, headline, kicker, None)
+            cover = images.render_card(headline, kicker, site, out_dir / f"{site.slug}-carousel-0.jpg", "portrait",
+                                       backdrop_url=args.image, card=brief)
+            paths = [images.instagram_asset(cover, ratio=settings.instagram_ratio,
+                                            out_path=out_dir / f"{site.slug}-carousel-cover.jpg")]
+            slides = carousels.usable(carousels.SAMPLE_SLIDES)
+            for i, (heading, body) in enumerate(slides, 1):
+                paths.append(images.carousel_text_slide(heading, body, i, len(slides), site,
+                                                        out_dir / f"{site.slug}-carousel-{i}.jpg", kicker=kicker))
+            paths.append(images.carousel_closing_slide(headline, site, out_dir / f"{site.slug}-carousel-end.jpg"))
+            for path in paths:
+                print(f"   {path.stat().st_size // 1024:>4} KB  {path}")
             continue
         if args.formats:
             print(f"[{site.key}] {site.domain}")
@@ -247,6 +269,7 @@ def main(argv=None) -> int:
     c.add_argument("--image", help="URL of a photo to use as the backdrop, as a real article would")
     c.add_argument("--out", help="directory to write into (default: <data_dir>/preview)")
     c.add_argument("--formats", action="store_true", help="render every Instagram card format from sample material")
+    c.add_argument("--carousel", action="store_true", help="render a sample carousel: cover, content slides, closing")
     ip = sub.add_parser("instagram-probe", help="ask Instagram whether it accepts a taller card yet (posts nothing)")
     ip.add_argument("--site"); ip.add_argument("--ratio", help="3:4 (default), 4:5 or 1:1"); ip.add_argument("--out")
     args = p.parse_args(argv)

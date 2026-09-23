@@ -20,6 +20,7 @@ import anthropic
 from pydantic import BaseModel, Field, ValidationError
 
 from .cards import CARD_SCHEMA, CardIdeas
+from .carousels import CAROUSEL_PROMPT, CAROUSEL_SCHEMA, CarouselSlide
 from .config import Site
 from .extract import Article
 
@@ -78,6 +79,7 @@ class CuratedPost(BaseModel):
     card: CardIdeas | None = None      # material for the Instagram card formats; optional, never invented
     mentions: list[Mention] = Field(default_factory=list)   # who the story is about; handles verified before use
     story_frames: list[StoryFrame] = Field(default_factory=list)   # the article's substance, as 1-3 story frames
+    carousel_slides: list[CarouselSlide] = Field(default_factory=list)   # the article in depth, only when a carousel is due
 
 
 OUTPUT_SCHEMA: dict[str, Any] = {
@@ -189,8 +191,11 @@ def json_object(text: str) -> str:
     return stripped[start : end + 1] if start != -1 and end > start else stripped
 
 
-def schema_for(site: Site) -> dict[str, Any]:
-    """The output schema with this site's own sections as the allowed categories."""
+def schema_for(site: Site, carousel: bool = False) -> dict[str, Any]:
+    """The output schema with this site's own sections as the allowed categories.
+
+    `carousel` adds the slides for a swipe-through post; twice a day, not on every article, so the
+    ordinary rewrite stays focused on the article itself."""
     schema = deepcopy(OUTPUT_SCHEMA)
     sections = site.categories or [site.category]
     schema["properties"]["category"] = {
@@ -198,6 +203,9 @@ def schema_for(site: Site) -> dict[str, Any]:
         "enum": sections,
         "description": "The one section this story belongs in",
     }
+    if carousel:
+        schema["properties"]["carousel_slides"] = deepcopy(CAROUSEL_SCHEMA)
+        schema["required"] = [*schema["required"], "carousel_slides"]
     return schema
 
 
@@ -228,14 +236,14 @@ class Rewriter:
                 self.use_fallbacks = False
         return self.client.messages.create(**kwargs)
 
-    def rewrite(self, site: Site, article: Article) -> CuratedPost:
-        schema = schema_for(site)
+    def rewrite(self, site: Site, article: Article, carousel: bool = False) -> CuratedPost:
+        schema = schema_for(site, carousel)
         # Appended after .format() so the schema's own braces are never read as format placeholders.
         system = SYSTEM_PROMPT.format(
             name=site.name, domain=site.domain, tagline=site.tagline,
             niche=site.niche, audience=site.audience, tone=site.tone,
             sections=", ".join(site.categories or [site.category]),
-        ) + JSON_CONTRACT.format(schema=json.dumps(schema))
+        ) + (CAROUSEL_PROMPT if carousel else "") + JSON_CONTRACT.format(schema=json.dumps(schema))
         user = (
             f"SOURCE_URL: {article.url}\n"
             f"SOURCE_NAME: {article.sitename or article.url.split('/')[2]}\n"

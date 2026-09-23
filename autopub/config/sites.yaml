@@ -18,6 +18,12 @@ settings:
   # Raise for a narrower site, lower if a site goes quiet, 0 to switch it off.
   min_relevance: 5
   rank_pool: 40                       # how many of the newest candidates get scored
+  # Twice a day each site's Instagram post is a detailed carousel instead of a single card: the first
+  # article published at or after each of these hours (in `timezone`) goes out as the feed card plus
+  # up to eight content slides and a closing slide, and as a multi-photo post on the Facebook Page.
+  # The slot is spent only when a carousel actually goes up. [] switches carousels off.
+  carousel_hours: [9, 18]
+  timezone: Asia/Kolkata
 
 sites:
   - key: MENTALIST

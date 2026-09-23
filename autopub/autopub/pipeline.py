@@ -9,7 +9,7 @@ from pathlib import Path
 
 from slugify import slugify
 
-from . import cards, extract, images, rank, sources
+from . import cards, carousels, extract, images, rank, sources
 from .config import Settings, Site
 from .rewrite import CuratedPost, Rewriter, RewriteSkipped, effective_model
 from .social import SocialPost, build_publishers, dispatch
@@ -66,9 +66,13 @@ def publish_one(site: Site, settings: Settings, state: State, cand: sources.Cand
     if not article.sitename:
         article.sitename = cand.source
 
-    # 2. rewrite
+    # 2. rewrite. Twice a day the Instagram post is a carousel; those articles are asked for the
+    # slides as part of the same rewrite, so the model writes them from the source it has in hand.
+    carousel_log = carousels.parse_log(state.note(site.key, carousels.NOTE))
+    want_carousel = (any(p.supports_carousel and p.needs_public_url for p in publishers)
+                     and carousels.due(time.time(), carousel_log, settings.carousel_hours, settings.timezone))
     try:
-        post: CuratedPost = rewriter.rewrite(site, article)
+        post: CuratedPost = rewriter.rewrite(site, article, carousel=want_carousel)
     except RewriteSkipped as exc:
         state.mark_skipped(url, site.key, str(exc))
         report.skipped += 1
@@ -126,6 +130,27 @@ def publish_one(site: Site, settings: Settings, state: State, cand: sources.Cand
         except Exception as exc:  # noqa: BLE001 - fall back to the master; the publisher walks shapes anyway
             log.warning("[%s] could not derive the Instagram asset: %s", site.key, exc)
 
+    # 3c. the carousel slides, when this article is the slot's carousel and the source gave enough
+    # for one. The cover is the feed card itself, so the grid still shows the format family.
+    carousel_slides: list[Path] = []
+    if want_carousel and cards_by_shape.get("portrait"):
+        slides = carousels.usable(post.carousel_slides)
+        if len(slides) < carousels.MIN_SLIDES:
+            log.info("[%s] carousel slot open but the story gave %d slide(s), need %d; posting a single card",
+                     site.key, len(slides), carousels.MIN_SLIDES)
+        else:
+            try:
+                for i, (heading, body) in enumerate(slides, 1):
+                    carousel_slides.append(images.carousel_text_slide(heading, body, i, len(slides), site,
+                                                                      work_dir / site.slug / f"{stem}-slide-{i}.jpg",
+                                                                      kicker=post.image_kicker or post.category))
+                carousel_slides.append(images.carousel_closing_slide(post.image_headline or post.title, site,
+                                                                     work_dir / site.slug / f"{stem}-slide-end.jpg"))
+                log.info("[%s] carousel: cover + %d slides + closing", site.key, len(slides))
+            except Exception as exc:  # noqa: BLE001 - the single card is the fallback
+                log.warning("[%s] could not build the carousel slides: %s", site.key, exc)
+                carousel_slides = []
+
     # 4. WordPress
     try:
         landscape_media = wp.upload_media(cards_by_shape["landscape"], post.title, alt_text=post.image_headline) if cards_by_shape.get("landscape") else None
@@ -142,6 +167,15 @@ def publish_one(site: Site, settings: Settings, state: State, cand: sources.Cand
                 media_by_shape[shape] = wp.upload_media(cards_by_shape[shape], title, alt_text=post.image_headline)
             except WordPressError as exc:
                 log.warning("[%s] %s card upload failed: %s", site.key, shape, exc)
+        carousel_media: list[dict] = []
+        if carousel_slides and media_by_shape.get("portrait"):
+            for i, slide in enumerate(carousel_slides, 1):
+                try:
+                    carousel_media.append(wp.upload_media(slide, f"{post.title} (slide {i})", alt_text=post.image_headline))
+                except WordPressError as exc:
+                    log.warning("[%s] carousel slide %d upload failed: %s; posting a single card", site.key, i, exc)
+                    carousel_media = []   # slides are a sequence; a gap in the middle is worse than no carousel
+                    break
         story_media: list[dict] = []
         if "story" in hosted and media_by_shape.get("story"):
             for i, frame in enumerate(story_frames, 1):
@@ -204,13 +238,21 @@ def publish_one(site: Site, settings: Settings, state: State, cand: sources.Cand
         mentions=mentions,
         story_urls=[m["source_url"] for m in ([media_by_shape["story"]] if media_by_shape.get("story") else []) + story_media
                     if m.get("source_url")],
+        carousel_urls=[m["source_url"] for m in ([media_by_shape["portrait"]] if carousel_media else []) + carousel_media
+                       if m.get("source_url")],
     )
-    for res in dispatch(publishers, social):
+    results = dispatch(publishers, social)
+    for res in results:
         state.record_social(url, site.key, res.platform, res.ok, res.remote_id, res.url, res.error)
         if res.ok:
             report.social_ok += 1
         else:
             report.social_failed += 1
+    if any(res.ok and res.format == "carousel" for res in results):
+        # the slot is spent only once a carousel is actually up; a failed one leaves it for the next article
+        state.set_note(site.key, carousels.NOTE, carousels.dump_log(carousel_log + [time.time()]))
+        log.info("[%s] carousel posted for the %s slot", site.key,
+                 carousels.slot(time.time(), settings.carousel_hours, settings.timezone))
     return True
 
 
