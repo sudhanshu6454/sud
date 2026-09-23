@@ -27,7 +27,7 @@ jobs:
       - run: for h in marketingmentalist.in crazy4marketing.com marketingjunkies.in screenstat.in; do php plugins/fleet-linkinbio/tests/preview.php $h | grep -q "Latest stories" || exit 1; done
       - run: python infra/gen_compose.py --check
       - run: python -m py_compile infra/dns.py infra/gen_compose.py infra/wire-meta-socials.py
-      - run: bash -n infra/bootstrap.sh infra/wp/init-sites.sh infra/linode/provision.sh infra/db/init-databases.sh
+      - run: bash -n infra/bootstrap.sh infra/wp/init-sites.sh infra/wp/deploy-plugins.sh infra/wp/deploy-themes.sh infra/wp/legal-pages.sh infra/linode/provision.sh infra/db/init-databases.sh
       - name: docker compose config
         run: |
           cp .env.example .env

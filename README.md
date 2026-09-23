@@ -103,6 +103,16 @@ make status     # what has been published, with links and any errors
 make logs       # follow the publisher
 ```
 
+### Privacy policy pages
+
+`./infra/wp/legal-pages.sh` creates or refreshes a Privacy Policy page on every site at
+`https://<domain>/privacy-policy/` from `infra/wp/privacy-policy.html` (name, domain, contact and
+operator filled per site) and registers it as WordPress's privacy page, which the theme footers link.
+The contact address defaults to `contact@<domain>`; `EMAIL=you@example.com ./infra/wp/legal-pages.sh`
+uses one address everywhere. The policy states what the site collects and, for the Meta and LinkedIn
+app reviews, that the platform integrations post only to accounts we own and collect no user data.
+Theme changes ship with `./infra/wp/deploy-themes.sh`, the theme counterpart of deploy-plugins.sh.
+
 ### Link in bio
 
 Every site serves `https://<domain>/bio/` from `plugins/fleet-linkinbio`: the brand's logo, colours and

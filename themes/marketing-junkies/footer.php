@@ -24,7 +24,7 @@
 				mj_nav_menu( 'footer-company', 'mj-footer-list' );
 			} else {
 				echo '<ul class="mj-footer-list">';
-				foreach ( array( 'about' => __( 'About', 'marketing-junkies' ), 'editorial-policy' => __( 'Editorial policy', 'marketing-junkies' ), 'advertise' => __( 'Advertise', 'marketing-junkies' ), 'contact' => __( 'Contact', 'marketing-junkies' ) ) as $slug => $label ) {
+				foreach ( array( 'about' => __( 'About', 'marketing-junkies' ), 'editorial-policy' => __( 'Editorial policy', 'marketing-junkies' ), 'privacy-policy' => __( 'Privacy policy', 'marketing-junkies' ), 'advertise' => __( 'Advertise', 'marketing-junkies' ), 'contact' => __( 'Contact', 'marketing-junkies' ) ) as $slug => $label ) {
 					$url = mj_page_link( $slug );
 					if ( $url ) {
 						printf( '<li><a href="%s">%s</a></li>', esc_url( $url ), esc_html( $label ) );

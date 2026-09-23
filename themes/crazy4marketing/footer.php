@@ -13,6 +13,7 @@
 	<div class="site-footer__bottom">
 		<span>© <?php echo esc_html( wp_date( 'Y' ) ); ?> <?php bloginfo( 'name' ); ?>. <?php esc_html_e( 'Facts before opinions. Always.', 'crazy4marketing' ); ?></span>
 		<span class="handle">@<?php echo esc_html( get_theme_mod( 'c4_instagram', 'crazy4marketing' ) ); ?></span>
+		<?php if ( get_privacy_policy_url() ) : ?><a class="legal" href="<?php echo esc_url( get_privacy_policy_url() ); ?>"><?php esc_html_e( 'Privacy policy', 'crazy4marketing' ); ?></a><?php endif; ?>
 	</div>
 </footer>
 </div>
