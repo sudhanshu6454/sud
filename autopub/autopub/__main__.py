@@ -67,6 +67,15 @@ def cmd_check(settings, args) -> int:
           f"api_key={'set' if os.environ.get('ANTHROPIC_API_KEY') else 'MISSING'}")
     if not os.environ.get("ANTHROPIC_API_KEY"):
         ok = False
+    expires = os.environ.get("LINKEDIN_TOKEN_EXPIRES")
+    if expires:
+        try:
+            days = (time.mktime(time.strptime(expires, "%Y-%m-%d")) - time.time()) / 86400
+            note = "EXPIRED - run: python3 infra/linkedin-auth.py refresh" if days < 0 else (
+                f"renew soon: python3 infra/linkedin-auth.py refresh" if days < 10 else "ok")
+            print(f"linkedin token expires {expires} ({days:.0f} days): {note}")
+        except ValueError:
+            print(f"linkedin token expiry {expires!r} is not a date")
     for site in settings.sites:
         print(f"\n[{site.key}] {site.domain} -> {site.wp_base_url()}")
         try:
