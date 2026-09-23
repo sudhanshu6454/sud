@@ -103,6 +103,19 @@ make status     # what has been published, with links and any errors
 make logs       # follow the publisher
 ```
 
+### Tagging on Instagram
+
+Feed posts tag the accounts a story is genuinely about: the publication that reported it, the brands
+or companies it concerns, and a person only when quoted or the subject. The rewriter proposes them
+in `mentions` with the handle it believes each uses; every handle is then checked through Instagram's
+Business Discovery from the site's own account, and kept only if the account exists, is a professional
+account, and its name plausibly matches the entity (fan pages, parodies and namesakes are dropped).
+Verdicts are cached for 30 days in `site_notes`. At most four tags per post, publication first. They
+go in the caption as `@handles` and as photo tags on the card; if Instagram refuses a photo tag, the
+post goes out with the caption mentions alone rather than being lost. Stories and Facebook are not
+tagged: the API allows no mention stickers on stories, and Page mentions need a Page-ID lookup that
+has not been enabled for this app.
+
 ### Instagram card formats
 
 The Instagram card is one of ten formats, all drawn in the site's own palette, typeface, kicker chip

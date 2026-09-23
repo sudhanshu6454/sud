@@ -156,6 +156,16 @@ def publish_one(site: Site, settings: Settings, state: State, cand: sources.Cand
     log.info("[%s] PUBLISHED %s", site.key, link)
 
     # 5. socials - each platform gets the right shape (image+link, image-only, or link-only)
+    mentions: list[str] = []
+    ig = next((p for p in publishers if p.platform == "instagram"), None)
+    if ig is not None and post.mentions:
+        try:
+            from .social.mentions import verify
+            mentions = verify(post.mentions, ig.creds["USER_ID"], ig.creds["ACCESS_TOKEN"], state)
+            log.info("[%s] tagging %s (of %d suggested)", site.key, ", ".join("@" + h for h in mentions) or "nobody",
+                     len(post.mentions))
+        except Exception as exc:  # noqa: BLE001 - tags are a bonus; the post must not depend on them
+            log.warning("[%s] mention verification failed: %s", site.key, exc)
     social = SocialPost(
         title=post.title, link=link,
         captions={
@@ -170,6 +180,7 @@ def publish_one(site: Site, settings: Settings, state: State, cand: sources.Cand
                     (("landscape", landscape_media or {}), *media_by_shape.items()) if media.get("source_url")},
         pinterest_title=post.captions.pinterest_title,
         alt_text=f"{post.image_kicker or post.category or site.category}: {post.image_headline or post.title}",
+        mentions=mentions,
     )
     for res in dispatch(publishers, social):
         state.record_social(url, site.key, res.platform, res.ok, res.remote_id, res.url, res.error)

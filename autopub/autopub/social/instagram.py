@@ -16,6 +16,7 @@ why images.py trims a 4:5 asset out of the 3:4 master unless AUTOPUB_IG_RATIO sa
 """
 from __future__ import annotations
 
+import json
 import logging
 import re
 import time
@@ -94,6 +95,11 @@ class InstagramPublisher(Publisher):
     def caption(self, post: SocialPost) -> str:
         # the link is inert on Instagram but people still copy it, and it lands in caption search
         text = trim_tags(post.caption_for(self.platform))
+        if post.mentions:
+            # verified accounts the story is about, as a line of their own so they read as credits
+            handles = [h for h in post.mentions if f"@{h}" not in text.lower()]
+            if handles:
+                text = text.rstrip() + "\n\n" + " ".join(f"@{h}" for h in handles)
         return fit_text(text, self.text_limit, f"\n\nRead: {post.link}")
 
     def _call(self, method: str, url: str, **kwargs) -> dict:
@@ -157,13 +163,25 @@ class InstagramPublisher(Publisher):
 
     # ---- the two-step publish ----------------------------------------------------------------
 
-    def _container(self, uid: str, token: str, image_url: str, caption: str, alt_text: str | None) -> str:
+    def _container(self, uid: str, token: str, image_url: str, caption: str, alt_text: str | None,
+                   mentions: list[str] | None = None) -> str:
         data = {"image_url": image_url, "caption": caption, "access_token": token}
         if alt_text:
             data["alt_text"] = alt_text[:1000]
+        if mentions:
+            from .mentions import tag_positions   # local import: mentions imports GRAPH from here
+            data["user_tags"] = json.dumps([{"username": h, "x": x, "y": y}
+                                            for h, (x, y) in zip(mentions, tag_positions(len(mentions)))])
         payload = self._call("POST", f"{GRAPH}/{uid}/media", data=data)
         if "id" in payload:
             return payload["id"]
+        if mentions:
+            # a tag Instagram will not place (account gone private, tags disallowed) must not lose the
+            # post: build the container again without the tags and keep the caption mentions
+            code, subcode, message = _error(payload)
+            log.warning("[instagram] container refused with photo tags (%s/%s: %s); retrying without tags",
+                        code, subcode, message[:120])
+            return self._container(uid, token, image_url, caption, alt_text, None)
         code, subcode, message = _error(payload)
         if subcode in QUOTA:
             raise RuntimeError(f"daily publishing quota reached ({subcode}): {message}")
@@ -194,9 +212,9 @@ class InstagramPublisher(Publisher):
         raise _Transient("container did not finish inside the publishing budget")
 
     def _post_one(self, uid: str, token: str, image_url: str, caption: str, alt_text: str | None,
-                  deadline: float) -> PublishResult:
+                  deadline: float, mentions: list[str] | None = None) -> PublishResult:
         self._reachable(image_url)
-        creation_id = self._container(uid, token, image_url, caption, alt_text)
+        creation_id = self._container(uid, token, image_url, caption, alt_text, mentions)
         self._await_container(creation_id, token, deadline)
         while True:
             pub = self._call("POST", f"{GRAPH}/{uid}/media_publish",
@@ -265,7 +283,7 @@ class InstagramPublisher(Publisher):
                 problems.append(f"{shape}: ran out of time before it could be tried")
                 break
             try:
-                return self._post_one(uid, token, url, caption, alt_text, deadline)
+                return self._post_one(uid, token, url, caption, alt_text, deadline, post.mentions)
             except _RejectedFile as exc:
                 # e.g. a 3:4 card against the documented 4:5 floor: a different shape is the fix
                 log.warning("[instagram] %s card refused (%s); trying the next shape", shape, exc)
