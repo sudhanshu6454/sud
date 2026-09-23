@@ -34,6 +34,7 @@ class SocialPost:
     pinterest_title: str | None = None
     alt_text: str | None = None                                 # what the card says, for screen readers
     mentions: list[str] = field(default_factory=list)           # verified Instagram usernames to tag, without @
+    story_urls: list[str] = field(default_factory=list)         # 9:16 story frames in order: cover, content, closing
 
     def caption_for(self, platform: str) -> str:
         return (self.captions.get(platform) or self.captions.get("facebook") or self.title).strip()

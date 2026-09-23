@@ -107,3 +107,113 @@ def test_a_story_without_its_asset_fails_on_its_own_row_and_touches_nothing(monk
     pub = REGISTRY["facebook_story"]({"PAGE_ID": "42", "PAGE_TOKEN": "p"})
     res = pub.publish(_post(image_urls={"portrait": "https://cdn/p.jpg"}))   # feed asset only, no story
     assert not res.ok and "story asset" in res.error
+
+
+def _story_post(urls):
+    return _post(image_urls={"story": urls[0], "portrait": "https://cdn/p.jpg"}, story_urls=list(urls))
+
+
+def test_instagram_posts_every_frame_in_order_cover_first(monkeypatch):
+    created = []
+
+    def post(url, data=None, timeout=None):
+        class R:
+            def json(self_inner):
+                if url.endswith("/media"):
+                    created.append(data["image_url"]); return {"id": f"c{len(created)}"}
+                return {"id": "s" + data["creation_id"][1:]}
+        return R()
+
+    monkeypatch.setattr(st.requests, "post", post)
+    monkeypatch.setattr(st.requests, "get", lambda *a, **k: type("R", (), {"json": lambda s: {"status_code": "FINISHED", "data": [{"config": {"quota_total": 100}, "quota_usage": 10}]}})())
+    monkeypatch.setattr(st.time, "sleep", lambda s: None)
+    pub = REGISTRY["instagram_story"]({"USER_ID": "17", "ACCESS_TOKEN": "t"})
+    urls = ["https://cdn/cover.jpg", "https://cdn/f1.jpg", "https://cdn/f2.jpg", "https://cdn/end.jpg"]
+    res = pub.publish(_story_post(urls))
+    assert res.ok and created == urls, "frames go up in the order given, cover first"
+    assert res.remote_id == "s1,s2,s3,s4" and res.error is None
+
+
+def test_a_frame_failing_after_the_cover_ends_the_story_early_but_keeps_it(monkeypatch):
+    n = {"media": 0}
+
+    def post(url, data=None, timeout=None):
+        class R:
+            def json(self_inner):
+                if url.endswith("/media"):
+                    n["media"] += 1
+                    if n["media"] == 3:
+                        return {"error": {"code": 100, "error_subcode": 2207005, "message": "bad image"}}
+                    return {"id": f"c{n['media']}"}
+                return {"id": "s" + data["creation_id"][1:]}
+        return R()
+
+    monkeypatch.setattr(st.requests, "post", post)
+    monkeypatch.setattr(st.requests, "get", lambda *a, **k: type("R", (), {"json": lambda s: {"status_code": "FINISHED", "data": [{"config": {"quota_total": 100}, "quota_usage": 10}]}})())
+    monkeypatch.setattr(st.time, "sleep", lambda s: None)
+    pub = REGISTRY["instagram_story"]({"USER_ID": "17", "ACCESS_TOKEN": "t"})
+    res = pub.publish(_story_post(["https://cdn/c.jpg", "https://cdn/1.jpg", "https://cdn/2.jpg", "https://cdn/e.jpg"]))
+    assert res.ok and res.remote_id == "s1,s2" and "frame 3" in res.error
+
+
+def test_the_story_is_shortened_when_the_daily_allowance_runs_low(monkeypatch):
+    created = []
+
+    def post(url, data=None, timeout=None):
+        class R:
+            def json(self_inner):
+                if url.endswith("/media"):
+                    created.append(1); return {"id": f"c{len(created)}"}
+                return {"id": "s"}
+        return R()
+
+    monkeypatch.setattr(st.requests, "post", post)
+    monkeypatch.setattr(st.requests, "get", lambda *a, **k: type("R", (), {"json": lambda s: {"status_code": "FINISHED", "data": [{"config": {"quota_total": 100}, "quota_usage": 92}]}})())
+    monkeypatch.setattr(st.time, "sleep", lambda s: None)
+    pub = REGISTRY["instagram_story"]({"USER_ID": "17", "ACCESS_TOKEN": "t"})
+    res = pub.publish(_story_post(["https://cdn/c.jpg", "https://cdn/1.jpg", "https://cdn/2.jpg", "https://cdn/3.jpg", "https://cdn/e.jpg"]))
+    assert res.ok and len(created) == 8 - st.FEED_RESERVE, "8 left minus the reserve for feed posts"
+
+
+def test_facebook_posts_the_frames_as_a_sequence_of_page_stories(monkeypatch):
+    calls = []
+
+    def post(url, data=None, timeout=None):
+        calls.append(url.rsplit("/", 1)[-1])
+        class R:
+            def json(self_inner):
+                if url.endswith("/photos"):
+                    return {"id": f"photo-{len(calls)}"}
+                return {"success": True, "post_id": f"42_{len(calls)}"}
+        return R()
+
+    monkeypatch.setattr(st.requests, "post", post)
+    pub = REGISTRY["facebook_story"]({"PAGE_ID": "42", "PAGE_TOKEN": "p"})
+    res = pub.publish(_story_post(["https://cdn/c.jpg", "https://cdn/1.jpg", "https://cdn/e.jpg"]))
+    assert res.ok and calls == ["photos", "photo_stories"] * 3
+    assert res.remote_id.count(",") == 2 and res.url == "https://www.facebook.com/42_2"
+
+
+def test_story_text_and_closing_frames_are_9_16_and_keep_the_safe_bands_clear(site, tmp_path):
+    from autopub.rewrite import StoryFrame
+    f = images.story_text_frame("Why this matters for marketers", "Location signals feed attribution. " * 6, 1, 2, site, tmp_path / "f.jpg", kicker="Privacy")
+    e = images.story_closing_frame("Google fined over location data", site, tmp_path / "e.jpg")
+    primary = images.hex_to_rgb(site.brand.primary)
+    for path in (f, e):
+        with Image.open(path) as im:
+            assert im.size == images.STORY_SIZE
+            px = im.convert("RGB")
+            for y in (30, im.height - 30):
+                c = px.getpixel((im.width // 2, y))
+                assert sum(abs(a - b) for a, b in zip(c, primary)) < 90, f"content in the safe band at y={y}"
+    assert StoryFrame(heading="h", body="b").body == "b"
+
+
+def test_curated_post_accepts_story_frames_and_defaults_to_none():
+    from autopub.rewrite import CuratedPost
+    base = dict(title="T", slug="t", excerpt="E", body_html="<p>x</p>", image_headline="H", image_kicker="K",
+                captions=dict(twitter="", facebook="", instagram="", linkedin="", pinterest_title="", pinterest="",
+                              telegram="", threads=""))
+    assert CuratedPost(**base).story_frames == []
+    post = CuratedPost(**base, story_frames=[{"heading": "What happened", "body": "Facts."}, {"heading": "Why it matters", "body": "Stakes."}])
+    assert [f.heading for f in post.story_frames] == ["What happened", "Why it matters"]

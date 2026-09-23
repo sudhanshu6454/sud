@@ -103,11 +103,24 @@ def publish_one(site: Site, settings: Settings, state: State, cand: sources.Cand
 
     # 3b. the card Instagram will actually accept, trimmed out of the 3:4 master; and the same card
     # framed 9:16 for the story publishers, drawn from the master before it is cropped
+    story_frames: list[Path] = []
     if cards_by_shape.get("portrait"):
         try:
             cards_by_shape["story"] = images.story_asset(cards_by_shape["portrait"], site, work_dir / site.slug / f"{stem}-story.jpg")
+            # the rest of the story: the article's substance in one to three text frames, then the
+            # closing frame that sends the viewer to the site. Stories carry no caption, so without
+            # these a viewer gets a headline and nothing else.
+            frames = [(f.heading, f.body) for f in post.story_frames if f.heading.strip() and f.body.strip()][:3]
+            if not frames and post.excerpt:
+                frames = [(post.image_headline or post.title, post.excerpt)]
+            for i, (heading, body) in enumerate(frames, 1):
+                story_frames.append(images.story_text_frame(heading, body, i, len(frames), site,
+                                                            work_dir / site.slug / f"{stem}-story-{i}.jpg",
+                                                            kicker=post.image_kicker or post.category))
+            story_frames.append(images.story_closing_frame(post.image_headline or post.title, site,
+                                                           work_dir / site.slug / f"{stem}-story-end.jpg"))
         except Exception as exc:  # noqa: BLE001 - a story is a bonus; the feed post must not depend on it
-            log.warning("[%s] could not build the story asset: %s", site.key, exc)
+            log.warning("[%s] could not build the story frames: %s", site.key, exc)
         try:
             cards_by_shape["portrait"] = images.instagram_asset(cards_by_shape["portrait"], ratio=settings.instagram_ratio)
         except Exception as exc:  # noqa: BLE001 - fall back to the master; the publisher walks shapes anyway
@@ -129,6 +142,14 @@ def publish_one(site: Site, settings: Settings, state: State, cand: sources.Cand
                 media_by_shape[shape] = wp.upload_media(cards_by_shape[shape], title, alt_text=post.image_headline)
             except WordPressError as exc:
                 log.warning("[%s] %s card upload failed: %s", site.key, shape, exc)
+        story_media: list[dict] = []
+        if "story" in hosted and media_by_shape.get("story"):
+            for i, frame in enumerate(story_frames, 1):
+                try:
+                    story_media.append(wp.upload_media(frame, f"{post.title} (story {i})", alt_text=post.image_headline))
+                except WordPressError as exc:
+                    log.warning("[%s] story frame %d upload failed: %s", site.key, i, exc)
+                    break   # frames are a sequence; a gap in the middle is worse than a shorter story
         cat_id = wp.ensure_term("categories", post.category or site.category)
         tag_ids = []
         for tag in post.tags[:8]:
@@ -181,6 +202,8 @@ def publish_one(site: Site, settings: Settings, state: State, cand: sources.Cand
         pinterest_title=post.captions.pinterest_title,
         alt_text=f"{post.image_kicker or post.category or site.category}: {post.image_headline or post.title}",
         mentions=mentions,
+        story_urls=[m["source_url"] for m in ([media_by_shape["story"]] if media_by_shape.get("story") else []) + story_media
+                    if m.get("source_url")],
     )
     for res in dispatch(publishers, social):
         state.record_social(url, site.key, res.platform, res.ok, res.remote_id, res.url, res.error)

@@ -1363,6 +1363,98 @@ def story_asset(card: Path, site: Site, out_path: Path) -> Path:
     return _save(img, out_path, quality=90)
 
 
+def _story_canvas(site: Site):
+    """The 9:16 ground every story frame shares, with the brand rail near the top of the safe area."""
+    primary, accent, text = hex_to_rgb(site.brand.primary), hex_to_rgb(site.brand.accent), hex_to_rgb(site.brand.text)
+    w, h = STORY_SIZE
+    img = _gradient((w, h), primary, _darken(primary, 0.6))
+    ImageDraw.Draw(img, "RGBA").polygon([(w * 0.55, h), (w, h * 0.62), (w, h)], fill=(*accent, 22))
+    _rail(img, site, accent, STORY_SAFE + 20, lambda v: int(round(v * CARD_SCALE)))
+    return img, primary, accent, text
+
+
+def _story_footer(img: Image.Image, site: Site, text) -> None:
+    """Domain and 'link in bio' just above the bottom safe band, small and quiet."""
+    w, h = img.size
+    S = lambda v: int(round(v * CARD_SCALE))
+    font = _font(S(26), bold=False, family=site.brand.font)
+    label = f"{site.domain}   Read the full story: link in bio"
+    draw = ImageDraw.Draw(img)
+    draw.text((S(72), h - STORY_SAFE - S(48)), label, font=font, fill=tuple(int(c * 0.62) for c in text))
+    _card_logo(img, site, hex_to_rgb(site.brand.primary), w - S(72) - S(160), h - STORY_SAFE - S(8), S(40))
+
+
+def story_text_frame(heading: str, body: str, index: int, total: int, site: Site, out_path: Path,
+                     kicker: str | None = None) -> Path:
+    """A content frame of the story: kicker with position, a bold heading, and the body in
+    comfortable reading type. This is where a viewer who never taps through gets the article."""
+    img, primary, accent, text = _story_canvas(site)
+    w, h = img.size
+    S = lambda v: int(round(v * CARD_SCALE))
+    family, weight = site.brand.font, site.brand.heading_weight
+    draw = ImageDraw.Draw(img, "RGBA")
+    x, column = S(72), w - S(72) * 2
+    top = STORY_SAFE + 20 + S(RAIL_H) + S(64)
+    label = (kicker or "The story").upper()[:22] + f"  ·  {index}/{total}"
+    _card_kicker(img, label, site, accent, x, top, S)
+    y = top + S(KICKER_SIZE) + S(20) * 2 + S(56)
+    hfont, hlines, line_h = _headline_block(draw, _spell_out(tidy(heading), family), family, column,
+                                            [(40, 76, 84, 3), (70, 64, 72, 4), (10 ** 6, 54, 62, 5)], weight=weight)
+    for line in hlines:
+        draw.text((x, y), line, font=hfont, fill=text)
+        y += line_h
+    y += S(40)
+    draw.rectangle([x, y, x + S(96), y + S(6)], fill=accent)
+    y += S(6) + S(44)
+    bfont = _font(S(42), bold=False, family=family, weight=450)
+    room_lines = max(3, (h - STORY_SAFE - S(140) - y) // S(62))
+    blines = _wrap(draw, _spell_out(tidy(body), family), bfont, column)
+    if len(blines) > room_lines:
+        blines = blines[:room_lines]
+        blines[-1] = blines[-1].rstrip(",;:- ") + "\u2026"
+    for line in blines:
+        draw.text((x, y), line, font=bfont, fill=text)
+        y += S(62)
+    _story_footer(img, site, text)
+    return _save(img, out_path, quality=90)
+
+
+def story_closing_frame(headline: str, site: Site, out_path: Path) -> Path:
+    """The last frame: the article's title as a reminder, then the site, large, and the way there."""
+    img, primary, accent, text = _story_canvas(site)
+    w, h = img.size
+    S = lambda v: int(round(v * CARD_SCALE))
+    family, weight = site.brand.font, site.brand.heading_weight
+    draw = ImageDraw.Draw(img, "RGBA")
+    x, column = S(72), w - S(72) * 2
+    top = STORY_SAFE + 20 + S(RAIL_H) + S(64)
+    _card_kicker(img, "Read the full story", site, accent, x, top, S)
+    y = top + S(KICKER_SIZE) + S(20) * 2 + S(72)
+    tfont, tlines, tline_h = _headline_block(draw, _spell_out(tidy(headline), family), family, column,
+                                             [(60, 56, 64, 3), (10 ** 6, 46, 54, 4)], weight=weight)
+    for line in tlines:
+        draw.text((x, y), line, font=tfont, fill=tuple(int(c * 0.8) for c in text))
+        y += tline_h
+    y += S(72)
+    # the domain is the message: set big, in the accent, with the site's own mark above it
+    logo_h = S(64)
+    _card_logo(img, site, primary, x, y + logo_h, logo_h)
+    y += logo_h + S(48)
+    dfont = _figure_font(site.domain, S(72), family, max(weight, 700))
+    while draw.textlength(site.domain, font=dfont) > column:
+        dfont = _figure_font(site.domain, dfont.size - S(4), family, max(weight, 700))
+    draw.text((x, y), site.domain, font=dfont, fill=accent)
+    y += dfont.size + S(36)
+    cfont = _font(S(40), bold=True, family=family, weight=max(weight, 600))
+    cue = "Link in bio"
+    draw.text((x, y), cue, font=cfont, fill=text)
+    ax, ay = x + draw.textlength(cue, font=cfont) + S(20), y + S(24)
+    draw.line([(ax, ay), (ax + S(44), ay)], fill=accent, width=S(4))
+    draw.line([(ax + S(30), ay - S(13)), (ax + S(44), ay), (ax + S(30), ay + S(13))], fill=accent, width=S(4))
+    _story_footer(img, site, text)
+    return _save(img, out_path, quality=90)
+
+
 def resize_to(card: Path, size: tuple[int, int], out_path: Path) -> Path:
     """Force a card to an exact size, for probing what a platform accepts."""
     with Image.open(card) as im:

@@ -59,6 +59,12 @@ class Mention(BaseModel):
     instagram: str | None = Field(default=None, max_length=40)
 
 
+class StoryFrame(BaseModel):
+    """One frame of the social story: a heading and a short body, both plain text."""
+    heading: str = Field(max_length=70)
+    body: str = Field(max_length=360)
+
+
 class CuratedPost(BaseModel):
     title: str = Field(max_length=120)
     category: str = ""
@@ -71,6 +77,7 @@ class CuratedPost(BaseModel):
     captions: Captions
     card: CardIdeas | None = None      # material for the Instagram card formats; optional, never invented
     mentions: list[Mention] = Field(default_factory=list)   # who the story is about; handles verified before use
+    story_frames: list[StoryFrame] = Field(default_factory=list)   # the article's substance, as 1-3 story frames
 
 
 OUTPUT_SCHEMA: dict[str, Any] = {
@@ -88,6 +95,19 @@ OUTPUT_SCHEMA: dict[str, Any] = {
         "image_headline": {"type": "string", "description": "Short headline for the share image, max 70 characters"},
         "image_kicker": {"type": "string", "description": "2-3 word label for the share image, e.g. 'Brand Strategy'"},
         "card": CARD_SCHEMA,
+        "story_frames": {
+            "type": "array",
+            "description": "The article told in 2 or 3 story frames for Instagram and Facebook Stories, where readers see only images. Frame 1: what happened, with the key facts and figures. Frame 2: why it matters for our audience. Frame 3 (optional): what to do about it, or the outlook. Plain text only: no hashtags, no URLs, no emoji, no markdown.",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["heading", "body"],
+                "properties": {
+                    "heading": {"type": "string", "description": "Max 60 characters, a complete thought, sentence case"},
+                    "body": {"type": "string", "description": "2 to 3 sentences, 200 to 320 characters, specific and factual"},
+                },
+            },
+        },
         "mentions": {
             "type": "array",
             "description": "Up to 5 accounts genuinely central to this story, for tagging: the publication that reported it, the brands, companies or agencies it is about, and a person only when quoted or the subject. Never bystanders or competitors merely named in passing.",
@@ -135,6 +155,7 @@ You receive one news story from another publisher. Write an ORIGINAL curated art
 - End the body with a paragraph: <p><em>Source: <a href="SOURCE_URL" rel="nofollow noopener" target="_blank">SOURCE_NAME</a></em></p> using the real source URL and publisher name.
 - Never mention that you are an AI or that this is a rewrite.
 - Captions must be platform-native, mention the key takeaway, and must not include any URL (the link is appended automatically where the platform supports it).
+- `story_frames` tells the article in 2 or 3 frames for Stories, where readers see only images: what happened with the facts and figures, why it matters, and what to do or what comes next. Each frame is a heading and 2-3 plain sentences. This is the whole article a story viewer gets, so carry the substance, not a teaser.
 - `mentions` lists who the story is about, for tagging: the reporting publication, the brands or companies it concerns, a person only when quoted or the subject. Give an Instagram username only when confident it is the real account; it is checked against the live account before use, so a guess costs nothing but an omission loses a tag.
 - `card` holds material for the Instagram image, and only what the source genuinely contains: a verbatim quotation with who said it, the single most striking figure exactly as written with what it measures, exactly three takeaways, the real question the piece answers, a direct two-way comparison the source itself makes (left/right value and label), a concept the piece explains (term and a one-sentence definition in your words), and do/don't advice when the piece actually gives it. Leave out any part the source does not support. A card with nothing to say is better than one that invents a number, a quote or a comparison.
 """
