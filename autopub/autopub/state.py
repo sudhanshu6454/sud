@@ -124,6 +124,11 @@ class State:
         row = self.conn.execute("SELECT value FROM site_notes WHERE site=? AND key=?", (site, key)).fetchone()
         return row["value"] if row else None
 
+    def notes(self, key: str) -> dict[str, str]:
+        """The same note across every site, e.g. which throwbacks the whole fleet has run."""
+        rows = self.conn.execute("SELECT site, value FROM site_notes WHERE key=?", (key,)).fetchall()
+        return {r["site"]: r["value"] for r in rows if r["value"]}
+
     def set_note(self, site: str, key: str, value: str) -> None:
         self.conn.execute(
             "INSERT INTO site_notes(site,key,value,updated_at) VALUES(?,?,?,?) "

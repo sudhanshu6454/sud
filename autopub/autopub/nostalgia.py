@@ -60,10 +60,11 @@ PICK_SCHEMA = {
 
 PICK_PROMPT = """You are the features editor of {name} ({domain}). Beat: {niche} Audience: {audience}
 
-Name ONE iconic advertising campaign for today's throwback feature. It must be at least {min_age} years old and
-genuinely famous: the kind of ad this audience remembers, quotes or still sees referenced, with a film that
-exists on YouTube under the brand's name. Alternate between Indian and international campaigns from one day
-to the next (today: {region}). It must not be any of these, already covered:
+Name ONE iconic advertising campaign for today's throwback feature. Hard rules:
+- Today's campaign MUST be {region}. Not the other kind.
+- At least {min_age} years old and genuinely famous: the kind of ad this audience remembers, quotes or still
+  sees referenced, with a film that exists on YouTube under the brand's name.
+- Not any of these, already covered anywhere in our network (nor another film from the same campaign):
 {used}
 
 Only name facts you are certain of; leave year or agency out rather than guess. Prefer a campaign whose
@@ -106,6 +107,16 @@ def parse_used(raw: str | None) -> list[str]:
     return [line.strip() for line in (raw or "").splitlines() if line.strip()]
 
 
+def fleet_used(state: State) -> list[str]:
+    """Every campaign any site has covered, so two sites never pick the same classic."""
+    seen: list[str] = []
+    for value in state.notes(USED_NOTE).values():
+        for key in parse_used(value):
+            if not any(_same(key, s) for s in seen):
+                seen.append(key)
+    return seen
+
+
 def dump_used(used: list[str]) -> str:
     return "\n".join(used[-400:])
 
@@ -123,12 +134,13 @@ def _same(a: str, b: str) -> bool:
 
 
 def pick(rewriter: Rewriter, site: Site, used: list[str], day_index: int) -> Pick:
-    region = "an Indian campaign" if day_index % 2 == 0 else "an international campaign"
+    region = ("an INDIAN campaign (made for India, by an Indian or India-based brand)" if day_index % 2 == 0
+              else "an INTERNATIONAL campaign (made outside India, for a global or foreign market)")
     system = PICK_PROMPT.format(name=site.name, domain=site.domain, niche=site.niche, audience=site.audience,
                                 min_age=MIN_AGE_YEARS, region=region,
                                 used="\n".join(f"- {u}" for u in used[-120:]) or "- (none yet)")
     system += JSON_CONTRACT.format(schema=json.dumps(PICK_SCHEMA))
-    return rewriter.ask(system, f"Today is {time.strftime('%d %B %Y')}. Name today's campaign.", PICK_SCHEMA,
+    return rewriter.ask(system, f"Today is {time.strftime('%d %B %Y')}. Name today's campaign: {region}.", PICK_SCHEMA,
                         Pick.model_validate, max_tokens=6000)   # a reasoning model thinks inside this budget too
 
 
@@ -177,7 +189,7 @@ def publish_daily(site: Site, settings: Settings, state: State, rewriter: Rewrit
     slot_log = carousels.parse_log(state.note(site.key, NOTE))
     day_index = len(slot_log) + (0 if site.key in ("MENTALIST", "JUNKIES") else 1)   # sites alternate out of step
     choice = film = url = None
-    tried = list(used)
+    tried = fleet_used(state)     # the whole network's list goes to the model; this site's own decides the repeat check
     for _ in range(ATTEMPTS):
         candidate = pick(rewriter, site, tried, day_index)
         key = key_of(candidate)

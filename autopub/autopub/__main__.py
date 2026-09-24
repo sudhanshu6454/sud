@@ -290,7 +290,7 @@ def cmd_nostalgia(settings, args) -> int:
         print(f"\n[{site.key}] {site.domain}: {len(used)} throwbacks so far")
         if args.dry_run:
             try:
-                choice = nostalgia.pick(rewriter, site, used, len(used))
+                choice = nostalgia.pick(rewriter, site, nostalgia.fleet_used(state) or used, len(used) + (0 if site.key in ("MENTALIST", "JUNKIES") else 1))
             except RuntimeError as exc:
                 print(f"  pick failed: {exc}")
                 rc = 1

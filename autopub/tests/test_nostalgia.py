@@ -58,13 +58,29 @@ def test_the_feature_embeds_the_official_film_and_files_under_throwback(site):
     assert '"enum": ["Throwback"]' in system and "never mention that you are an ai" in system.lower()
 
 
+def test_the_pick_sees_every_sites_list_so_two_sites_never_choose_the_same_classic(tmp_path, site):
+    state = State(tmp_path / "s.db")
+    state.set_note("MENTALIST", nostalgia.USED_NOTE, "Airtel | Har Ek Friend Zaroori Hota Hai | 2011")
+    state.set_note("CRAZY", nostalgia.USED_NOTE, "Ariel India | Share The Load | 2015\nairtel | Har Ek Friend Zaroori Hota Hai |")
+    assert nostalgia.fleet_used(state) == ["Airtel | Har Ek Friend Zaroori Hota Hai | 2011", "Ariel India | Share The Load | 2015"]
+    assert state.notes("nothing") == {}
+
+
+def test_a_hashtag_campaign_name_is_searched_without_the_hash(monkeypatch):
+    from autopub import youtube
+    asked = []
+    monkeypatch.setattr(youtube, "search", lambda q, timeout=20: asked.append(q) or [])
+    youtube.find_ad("Ariel India", "#ShareTheLoad", 2015)
+    assert asked[0] == "Ariel India ShareTheLoad 2015 ad"
+
+
 def test_the_pick_prompt_lists_what_was_already_covered_and_alternates_regions(site):
     rw = FakeRewriter([Pick(brand="Nike", campaign="Just Do It", year=1988, hook="h")])
     nostalgia.pick(rw, site, ["Cadbury | Kuch Khaas Hai | 1994"], day_index=1)
-    assert "- Cadbury | Kuch Khaas Hai | 1994" in rw.systems[0] and "an international campaign" in rw.systems[0]
+    assert "- Cadbury | Kuch Khaas Hai | 1994" in rw.systems[0] and "an INTERNATIONAL campaign" in rw.systems[0]
     rw2 = FakeRewriter([Pick(brand="Amul", campaign="Utterly Butterly", hook="h")])
     nostalgia.pick(rw2, site, [], day_index=0)
-    assert "an Indian campaign" in rw2.systems[0] and "(none yet)" in rw2.systems[0]
+    assert "an INDIAN campaign" in rw2.systems[0] and "(none yet)" in rw2.systems[0]
 
 
 class VideoRecorder(Publisher):

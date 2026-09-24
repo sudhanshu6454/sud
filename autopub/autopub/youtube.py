@@ -101,6 +101,7 @@ def search(query: str, timeout: int = 20) -> list[dict]:
 
 def find_ad(brand: str, campaign: str, year: int | str | None = None, timeout: int = 20) -> dict | None:
     """The ad on YouTube, or None. Returns id, title, channel, url, thumbnail."""
+    campaign = re.sub(r"[#\"'“”‘’]", " ", campaign or "").strip()   # a hashtag in the query buries the brand's own upload
     query = " ".join(p for p in (brand, campaign, str(year) if year else "", "ad") if p)
     pick = choose(search(query, timeout), brand, campaign)
     if pick is None and campaign:
