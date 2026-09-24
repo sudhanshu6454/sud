@@ -36,6 +36,10 @@ class SocialPost:
     mentions: list[str] = field(default_factory=list)           # verified Instagram usernames to tag, without @
     story_urls: list[str] = field(default_factory=list)         # 9:16 story frames in order: cover, content, closing
     carousel_urls: list[str] = field(default_factory=list)      # 4:5 carousel slides in order: cover, content, closing
+    video_url: str | None = None                                # the article's reel (MP4), publicly reachable
+    video_path: Path | None = None
+    video_cover_url: str | None = None                          # 9:16 cover image for the reel
+    video_share_to_feed: bool = True                            # show the reel in the profile grid as well as the Reels tab
 
     def caption_for(self, platform: str) -> str:
         return (self.captions.get(platform) or self.captions.get("facebook") or self.title).strip()
@@ -81,6 +85,7 @@ class Publisher(ABC):
     image_shapes: ClassVar[tuple[str, ...]] = ("landscape", "square")   # which card this platform wants, best first
     needs_public_url: ClassVar[bool] = False   # true when the API fetches the image itself instead of taking an upload
     supports_carousel: ClassVar[bool] = False  # can post several images as one swipe-through post
+    wants_video: ClassVar[bool] = False        # posts the article's reel rather than a card
     text_limit: ClassVar[int] = 2000
 
     def __init__(self, creds: dict[str, str], timeout: int = 60):

@@ -10,6 +10,7 @@ from .facebook import FacebookPublisher
 from .instagram import InstagramPublisher
 from .linkedin import LinkedInPublisher
 from .pinterest import PinterestPublisher
+from .reels import FacebookVideoPublisher, InstagramReelPublisher
 from .stories import FacebookStoryPublisher, InstagramStoryPublisher
 from .telegram import TelegramPublisher
 from .threads import ThreadsPublisher
@@ -21,7 +22,7 @@ REGISTRY: dict[str, type[Publisher]] = {
     cls.platform: cls
     for cls in (TwitterPublisher, FacebookPublisher, InstagramPublisher, LinkedInPublisher,
                 PinterestPublisher, TelegramPublisher, ThreadsPublisher,
-                InstagramStoryPublisher, FacebookStoryPublisher)
+                InstagramStoryPublisher, FacebookStoryPublisher, InstagramReelPublisher, FacebookVideoPublisher)
 }
 
 

@@ -173,6 +173,32 @@ leaves the slot to the next article. Preview the whole swipe with:
 docker compose run --rm autopub python -m autopub cards --carousel --site CRAZY
 ```
 
+### Reels
+
+Twice a day (`settings.reel_hours`, default `[12, 21]`) the article also goes out as video: the story
+frames (cover, text frames, closing) become a 20-30 second 1080x1920 reel in `autopub/video.py`.
+Each frame holds for as long as its text takes to read, drifts with a slow zoom that alternates
+direction, dissolves into the next, and a segmented progress bar along the top says how much is
+left. There is no music: the API adds none and a licensed track is not something to guess at; a
+silent reel with legible type still gets Reels distribution. The MP4 is uploaded to WordPress like
+the images and posted as an Instagram `REELS` container (card as the cover, feed caption, in the
+profile grid too unless `reel_share_to_feed: false`) and as a Facebook Page video with the link in
+the description. Enabled by `instagram_reel` and `facebook_video` in a site's `socials`; same
+credentials as the feed. The slot is spent only once a reel is actually up. ffmpeg comes from the
+`imageio-ffmpeg` wheel, so nothing is installed on the host. Preview one with:
+
+```bash
+docker compose run --rm autopub python -m autopub cards --reel --site CRAZY
+```
+
+### Viral ad coverage
+
+Crazy4Marketing's beat names viral ads, brand films and stunts explicitly, has a **Viral Campaigns**
+section, and reads three creative-work feeds checked live (Muse by Clio, Adweek Creativity, Campaign
+Brief) plus Google News queries for viral campaigns; Marketing Junkies and Marketing Mentalist carry
+matching queries ("viral advertisement India", "why this ad went viral"). The beat ranker still
+decides, so these compete with the rest of the day's candidates rather than being forced through.
+
 Tuning lives in `sites.yaml` (`settings:` block and per-site `max_posts_per_run`, `max_age_hours`, feeds,
 keywords). After editing: `make up` (the config is mounted into the container, a restart is enough).
 
@@ -493,6 +519,7 @@ All variables are `PLATFORM_<SITEKEY>_NAME` in `.env`. Each site can have its ow
 | Facebook Page | `FACEBOOK_*_PAGE_ID`, `PAGE_TOKEN` | Easiest: `python3 infra/wire-meta-socials.py SITE=ig_handle --facebook` mints the Page token from `META_SYSTEM_USER_TOKEN`. By hand: developers.facebook.com app → Graph API Explorer → permissions `pages_manage_posts`, `pages_read_engagement` → exchange for a **long-lived Page** token. A user or System User token is refused for Page writes (error 190 / 2069032). |
 | Instagram | `INSTAGRAM_*_USER_ID`, `ACCESS_TOKEN` | Instagram Business/Creator account linked to the Facebook Page; same app with `instagram_basic`, `instagram_content_publish`. User ID = the IG business account id. Images must be publicly reachable (we use the WordPress media URL). A Page token derived from a long-lived user token does not expire on a clock, which is what you want for an unattended poster. Twice a day (`settings.carousel_hours`) the post is a carousel: the card plus up to eight content slides and a closing slide; see "Carousels" above. |
 | Instagram story, Facebook Page story | same variables as Instagram and Facebook Page | Enabled by listing `instagram_story` and `facebook_story` under a site's `socials`. Each article also goes out as a story sequence after the feed post: the card as the cover, one to three text frames carrying the article's substance (written by the rewriter as `story_frames`: what happened, why it matters, what to do), and a closing frame with the site and 'link in bio', all 9:16 on the brand ground inside the platforms' safe zones. Instagram's daily publishing allowance is checked first and the story shortened rather than starving the feed post. Stories take no caption or link through the API; the card's footer names the site. Each story is its own row in `social_posts`, so a failed story never costs the feed post. |
+| Instagram reel, Facebook Page video | same variables as Instagram and Facebook Page | Enabled by `instagram_reel` and `facebook_video` under `socials`. Twice a day (`settings.reel_hours`) the article's story frames are rendered as a 20-30s silent 9:16 MP4 and posted as a reel and as a Page video; see "Reels" above. |
 | LinkedIn Page | `LINKEDIN_*_ORG_URN`, `ACCESS_TOKEN` | `python3 infra/linkedin-auth.py auth`, then `orgs`, then `wire SITE=Page ...` does it all from one login. Needs a LinkedIn Developer app associated with a verified Company Page and approved for the **Community Management API** (`w_organization_social`). Tokens last 60 days: `linkedin-auth.py refresh` renews them and `autopub check` warns ten days out. |
 | Pinterest | `PINTEREST_*_ACCESS_TOKEN`, `BOARD_ID` | developers.pinterest.com app with `pins:write`, `boards:read`. |
 | Telegram | `TELEGRAM_*_BOT_TOKEN`, `CHAT_ID` | @BotFather → new bot; add it as admin of your channel; `CHAT_ID` is `@channelname`. |

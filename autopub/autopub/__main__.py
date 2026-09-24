@@ -10,7 +10,7 @@ import time
 
 from pathlib import Path
 
-from . import cards, carousels, config, images, rank, sources
+from . import cards, carousels, config, images, rank, sources, video
 from .pipeline import make_wordpress, run_all
 from .rewrite import effective_model
 from .social import build_publishers
@@ -81,6 +81,11 @@ def cmd_check(settings, args) -> int:
               f"{settings.timezone} each day goes out as a carousel")
     else:
         print("carousels: off (settings.carousel_hours is empty)")
+    if settings.reel_hours:
+        print(f"reels: the first article at or after {', '.join(f'{h:02d}:00' for h in settings.reel_hours)} "
+              f"{settings.timezone} each day also goes out as a reel and a Page video")
+    else:
+        print("reels: off (settings.reel_hours is empty)")
     for site in settings.sites:
         print(f"\n[{site.key}] {site.domain} -> {site.wp_base_url()}")
         try:
@@ -157,6 +162,28 @@ def cmd_cards(settings, args) -> int:
     headline = args.headline or SAMPLE_HEADLINE
     for site in settings.sites:
         if args.site and site.key != args.site.upper():
+            continue
+        if args.reel:
+            # the whole reel from sample frames, so the motion and timing can be watched before it ships
+            print(f"[{site.key}] {site.domain}")
+            kicker = args.kicker or site.category
+            card = images.render_card(headline, kicker, site, out_dir / f"{site.slug}-reel-card.jpg", "portrait",
+                                      backdrop_url=args.image,
+                                      card=cards.brief(cards.INVERSE, None, headline, kicker, None))
+            frames = [images.story_asset(card, site, out_dir / f"{site.slug}-reel-0.jpg")]
+            texts: list = [None]
+            sample = [(sl.heading, sl.body) for sl in carousels.SAMPLE_SLIDES[:3]]
+            for i, (heading, body) in enumerate(sample, 1):
+                frames.append(images.story_text_frame(heading, body, i, len(sample), site,
+                                                      out_dir / f"{site.slug}-reel-{i}.jpg", kicker=kicker))
+                texts.append(body)
+            frames.append(images.story_closing_frame(headline, site, out_dir / f"{site.slug}-reel-end.jpg"))
+            texts.append(None)
+            durations = video.plan(frames, texts)
+            path = video.render_reel(frames, out_dir / f"{site.slug}-reel.mp4", durations, images.hex_to_rgb(site.brand.accent))
+            info = video.probe(path)
+            print(f"   {path.stat().st_size // 1024:>5} KB  {info.get('width')}x{info.get('height')} {info.get('codec')} "
+                  f"{info.get('duration', 0):.1f}s  {path}")
             continue
         if args.carousel:
             # the whole swipe from sample slides: cover card, content slides, closing slide
@@ -270,6 +297,7 @@ def main(argv=None) -> int:
     c.add_argument("--out", help="directory to write into (default: <data_dir>/preview)")
     c.add_argument("--formats", action="store_true", help="render every Instagram card format from sample material")
     c.add_argument("--carousel", action="store_true", help="render a sample carousel: cover, content slides, closing")
+    c.add_argument("--reel", action="store_true", help="render a sample reel (MP4) from the story frames")
     ip = sub.add_parser("instagram-probe", help="ask Instagram whether it accepts a taller card yet (posts nothing)")
     ip.add_argument("--site"); ip.add_argument("--ratio", help="3:4 (default), 4:5 or 1:1"); ip.add_argument("--out")
     args = p.parse_args(argv)

@@ -9,7 +9,7 @@ from pathlib import Path
 
 from slugify import slugify
 
-from . import cards, carousels, extract, images, rank, sources
+from . import cards, carousels, extract, images, rank, sources, video
 from .config import Settings, Site
 from .rewrite import CuratedPost, Rewriter, RewriteSkipped, effective_model
 from .social import SocialPost, build_publishers, dispatch
@@ -19,6 +19,7 @@ from .wordpress import WordPress, WordPressError
 log = logging.getLogger(__name__)
 
 MAX_CONSECUTIVE_FAILURES = 3   # stop a site's run when the model/API keeps failing
+REEL_NOTE = "reels"            # site_notes key: when this site's last reels went out (same slot logic as carousels)
 
 
 @dataclass
@@ -42,6 +43,14 @@ def make_wordpress(site: Site) -> WordPress:
     if not password:
         raise WordPressError(f"WP_{site.key}_APP_PASSWORD is not set (run infra/wp/init-sites.sh)")
     return WordPress(site.wp_base_url(), user, password, public_host=site.domain)
+
+
+def _story_texts(post: CuratedPost) -> list[tuple[str, str]]:
+    """The text frames of the story: what the rewriter wrote, else the excerpt under the headline."""
+    frames = [(f.heading, f.body) for f in post.story_frames if f.heading.strip() and f.body.strip()][:3]
+    if not frames and post.excerpt:
+        frames = [(post.image_headline or post.title, post.excerpt)]
+    return frames
 
 
 def publish_one(site: Site, settings: Settings, state: State, cand: sources.Candidate, rewriter: Rewriter,
@@ -71,6 +80,9 @@ def publish_one(site: Site, settings: Settings, state: State, cand: sources.Cand
     carousel_log = carousels.parse_log(state.note(site.key, carousels.NOTE))
     want_carousel = (any(p.supports_carousel and p.needs_public_url for p in publishers)
                      and carousels.due(time.time(), carousel_log, settings.carousel_hours, settings.timezone))
+    reel_log = carousels.parse_log(state.note(site.key, REEL_NOTE))
+    want_reel = (any(p.wants_video for p in publishers)
+                 and carousels.due(time.time(), reel_log, settings.reel_hours, settings.timezone))
     try:
         post: CuratedPost = rewriter.rewrite(site, article, carousel=want_carousel)
     except RewriteSkipped as exc:
@@ -114,9 +126,7 @@ def publish_one(site: Site, settings: Settings, state: State, cand: sources.Cand
             # the rest of the story: the article's substance in one to three text frames, then the
             # closing frame that sends the viewer to the site. Stories carry no caption, so without
             # these a viewer gets a headline and nothing else.
-            frames = [(f.heading, f.body) for f in post.story_frames if f.heading.strip() and f.body.strip()][:3]
-            if not frames and post.excerpt:
-                frames = [(post.image_headline or post.title, post.excerpt)]
+            frames = _story_texts(post)
             for i, (heading, body) in enumerate(frames, 1):
                 story_frames.append(images.story_text_frame(heading, body, i, len(frames), site,
                                                             work_dir / site.slug / f"{stem}-story-{i}.jpg",
@@ -129,6 +139,22 @@ def publish_one(site: Site, settings: Settings, state: State, cand: sources.Cand
             cards_by_shape["portrait"] = images.instagram_asset(cards_by_shape["portrait"], ratio=settings.instagram_ratio)
         except Exception as exc:  # noqa: BLE001 - fall back to the master; the publisher walks shapes anyway
             log.warning("[%s] could not derive the Instagram asset: %s", site.key, exc)
+
+    # 3b'. the reel: the story frames as a short video, when this article is the slot's reel
+    reel_path: Path | None = None
+    if want_reel and cards_by_shape.get("story") and story_frames:
+        try:
+            frames = [cards_by_shape["story"], *story_frames]
+            texts = [None, *[body for _, body in _story_texts(post)], None][:len(frames)]
+            texts += [None] * (len(frames) - len(texts))
+            durations = video.plan(frames, texts)
+            reel_path = video.render_reel(frames, work_dir / site.slug / f"{stem}-reel.mp4", durations,
+                                          images.hex_to_rgb(site.brand.accent))
+            log.info("[%s] reel: %d frames, %.0fs, %d KB", site.key, len(frames), sum(durations),
+                     reel_path.stat().st_size // 1024)
+        except Exception as exc:  # noqa: BLE001 - the reel is a bonus; the feed post must not depend on it
+            log.warning("[%s] could not render the reel: %s", site.key, exc)
+            reel_path = None
 
     # 3c. the carousel slides, when this article is the slot's carousel and the source gave enough
     # for one. The cover is the feed card itself, so the grid still shows the format family.
@@ -176,6 +202,12 @@ def publish_one(site: Site, settings: Settings, state: State, cand: sources.Cand
                     log.warning("[%s] carousel slide %d upload failed: %s; posting a single card", site.key, i, exc)
                     carousel_media = []   # slides are a sequence; a gap in the middle is worse than no carousel
                     break
+        reel_media: dict | None = None
+        if reel_path is not None and any(p.wants_video and p.needs_public_url for p in publishers):
+            try:
+                reel_media = wp.upload_media(reel_path, f"{post.title} (reel)", alt_text=post.image_headline)
+            except WordPressError as exc:
+                log.warning("[%s] reel upload failed: %s", site.key, exc)
         story_media: list[dict] = []
         if "story" in hosted and media_by_shape.get("story"):
             for i, frame in enumerate(story_frames, 1):
@@ -240,6 +272,9 @@ def publish_one(site: Site, settings: Settings, state: State, cand: sources.Cand
                     if m.get("source_url")],
         carousel_urls=[m["source_url"] for m in ([media_by_shape["portrait"]] if carousel_media else []) + carousel_media
                        if m.get("source_url")],
+        video_url=(reel_media or {}).get("source_url"), video_path=reel_path,
+        video_cover_url=(media_by_shape.get("story") or {}).get("source_url"),
+        video_share_to_feed=settings.reel_share_to_feed,
     )
     results = dispatch(publishers, social)
     for res in results:
@@ -248,6 +283,10 @@ def publish_one(site: Site, settings: Settings, state: State, cand: sources.Cand
             report.social_ok += 1
         else:
             report.social_failed += 1
+    if any(res.ok and res.format in ("reel", "video") for res in results):
+        state.set_note(site.key, REEL_NOTE, carousels.dump_log(reel_log + [time.time()]))
+        log.info("[%s] reel posted for the %s slot", site.key,
+                 carousels.slot(time.time(), settings.reel_hours, settings.timezone))
     if any(res.ok and res.format == "carousel" for res in results):
         # the slot is spent only once a carousel is actually up; a failed one leaves it for the next article
         state.set_note(site.key, carousels.NOTE, carousels.dump_log(carousel_log + [time.time()]))

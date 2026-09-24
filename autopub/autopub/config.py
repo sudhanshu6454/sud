@@ -91,6 +91,10 @@ class Settings:
     # Twice a day the Instagram post is a carousel instead of a single card: the first article a site
     # publishes at or after each of these hours, in `timezone`. [] switches carousels off.
     carousel_hours: list[int] = field(default_factory=lambda: [9, 18])
+    # Likewise for video: the first article at or after each of these hours also goes out as a reel
+    # (Instagram) and a video post (Facebook Page), built from its story frames. [] switches it off.
+    reel_hours: list[int] = field(default_factory=lambda: [12, 21])
+    reel_share_to_feed: bool = True     # show reels in the profile grid too, not only in the Reels tab
     timezone: str = "Asia/Kolkata"
     data_dir: Path = DEFAULT_DATA_DIR
 
@@ -129,4 +133,5 @@ def load(path: str | os.PathLike | None = None) -> Settings:
     data_dir = Path(os.environ.get("AUTOPUB_DATA_DIR", settings_raw.pop("data_dir", DEFAULT_DATA_DIR)))
     settings = Settings(sites=sites, data_dir=data_dir, **settings_raw)
     settings.carousel_hours = sorted({int(h) % 24 for h in (settings.carousel_hours or [])})
+    settings.reel_hours = sorted({int(h) % 24 for h in (settings.reel_hours or [])})
     return settings

@@ -35,7 +35,9 @@ def test_registry_capabilities():
     assert REGISTRY["pinterest"].requires_image and REGISTRY["pinterest"].image_shapes[0] == "portrait"
     assert REGISTRY["twitter"].supports_link and REGISTRY["twitter"].supports_image
     assert set(REGISTRY) == {"twitter", "facebook", "instagram", "linkedin", "pinterest", "telegram", "threads",
-                             "instagram_story", "facebook_story"}
+                             "instagram_story", "facebook_story", "instagram_reel", "facebook_video"}
+    assert REGISTRY["instagram_reel"].wants_video and REGISTRY["facebook_video"].wants_video
+    assert not REGISTRY["instagram_reel"].requires_image, "a reel is a video; the card is only its cover"
     assert REGISTRY["instagram_story"].image_shapes == ("story",) and REGISTRY["facebook_story"].image_shapes == ("story",)
 
 

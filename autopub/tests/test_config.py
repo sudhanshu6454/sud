@@ -8,8 +8,9 @@ def test_sites_load(settings):
         assert s.domain.endswith((".in", ".com"))
         assert s.brand.primary.startswith("#")
         assert set(s.socials) <= {"twitter", "facebook", "instagram", "linkedin", "pinterest", "telegram", "threads",
-                                  "instagram_story", "facebook_story"}
+                                  "instagram_story", "facebook_story", "instagram_reel", "facebook_video"}
         assert s.socials.index("instagram_story") > s.socials.index("instagram"), "stories run after the feed post"
+        assert s.socials.index("instagram_reel") > s.socials.index("instagram_story"), "the reel goes last: it is the slowest"
 
 
 def test_env_lookup_and_urls(site, monkeypatch):

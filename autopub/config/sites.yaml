@@ -23,6 +23,11 @@ settings:
   # up to eight content slides and a closing slide, and as a multi-photo post on the Facebook Page.
   # The slot is spent only when a carousel actually goes up. [] switches carousels off.
   carousel_hours: [9, 18]
+  # Video, the same way: the first article at or after each of these hours also goes out as a reel on
+  # Instagram and a video post on the Facebook Page, built from its story frames (about 20-30 seconds,
+  # silent, the brand ground, a progress bar). [] switches it off.
+  reel_hours: [12, 21]
+  reel_share_to_feed: true            # reels appear in the profile grid as well as the Reels tab
   timezone: Asia/Kolkata
 
 sites:
@@ -68,6 +73,7 @@ sites:
       - brand strategy India
       - pricing psychology
       - consumer behaviour brands India
+      - why this ad went viral
     hashtags: [MarketingPsychology, Branding, ConsumerBehaviour, MarketingMentalist]
     brand:                          # ink ground, signal-orange accent, bone type; the bow-tie mark on covers
       primary: "#0a0908"
@@ -75,7 +81,7 @@ sites:
       text: "#f7f5ef"
       logo: brand/marketing-mentalist-logo.png
       font: InstrumentSans   # the typeface the site itself uses, for the share cards
-    socials: [twitter, facebook, instagram, linkedin, pinterest, telegram, threads, instagram_story, facebook_story]
+    socials: [twitter, facebook, instagram, linkedin, pinterest, telegram, threads, instagram_story, facebook_story, instagram_reel, facebook_video]
 
   - key: CRAZY
     domain: crazy4marketing.com
@@ -83,11 +89,13 @@ sites:
     tagline: Digital marketing news, growth hacks and campaigns we are crazy about
     niche: >
       Digital marketing and performance marketing: Google Ads, Meta Ads, SEO, AI in
-      marketing, growth hacking, e-commerce marketing, viral campaigns and creator economy.
+      marketing, growth hacking, e-commerce marketing, creator economy, and above all the ad
+      campaigns everyone is talking about: viral ads, brand films and stunts, the creative idea
+      behind them and why they spread.
     audience: Digital marketers, agency folks, D2C founders and growth teams.
     tone: Energetic, punchy, practical. Short paragraphs, clear takeaways.
     category: Digital Marketing
-    categories: [Digital Marketing, SEO, Social Media, AI in Marketing, Growth Hacking, E-commerce]
+    categories: [Digital Marketing, Viral Campaigns, SEO, Social Media, AI in Marketing, Growth Hacking, E-commerce]
     max_posts_per_run: 1
     max_age_hours: 48
     min_words: 250
@@ -107,9 +115,16 @@ sites:
       - https://influencermarketinghub.com/feed/
       - https://www.smartinsights.com/feed/
       - https://www.adweek.com/feed/
+      # added 2026-09-24 for viral-ad coverage; each checked live (valid RSS, items within a day)
+      - https://musebycl.io/rss.xml                                # Muse by Clio: the day's best creative work
+      - https://www.adweek.com/category/creativity/feed/          # Adweek's creativity desk
+      - https://campaignbrief.com/feed/                            # campaign launches, APAC lens
     google_news_queries:
       - digital marketing news
       - performance marketing India
+      - viral ad campaign
+      - ad film goes viral India
+      - brand campaign viral social media
     hashtags: [DigitalMarketing, GrowthHacking, PerformanceMarketing, Crazy4Marketing]
     brand:                          # Core Black, Signal Pink, Paper Cream - the theme's palette; lockup on covers
       primary: "#0a0a0a"
@@ -118,7 +133,7 @@ sites:
       logo: brand/crazy4marketing-logo.png
       font: SpaceGrotesk   # the typeface the site itself uses, for the share cards
       rail: double         # the site's own ticker rule, under the card's photo
-    socials: [twitter, facebook, instagram, linkedin, pinterest, telegram, threads, instagram_story, facebook_story]
+    socials: [twitter, facebook, instagram, linkedin, pinterest, telegram, threads, instagram_story, facebook_story, instagram_reel, facebook_video]
 
   - key: JUNKIES
     domain: marketingjunkies.in
@@ -151,6 +166,8 @@ sites:
     google_news_queries:
       - marketing news India
       - advertising campaign launch
+      - viral advertisement India
+      - ad campaign goes viral
     hashtags: [MarketingNews, AdTech, MarTech, MarketingJunkies]
     brand:                          # the real brand: ink ground, bronze accent, cream type
       primary: "#1c1b1a"
@@ -160,7 +177,7 @@ sites:
       font: Archivo   # the typeface the site itself uses, for the share cards
       heading_weight: 800   # matches --font-heading-weight in the theme
       rail: inset           # a typographic rule inside the column, like the site's
-    socials: [twitter, facebook, instagram, linkedin, pinterest, telegram, threads, instagram_story, facebook_story]
+    socials: [twitter, facebook, instagram, linkedin, pinterest, telegram, threads, instagram_story, facebook_story, instagram_reel, facebook_video]
 
   - key: SCREENSTAT
     domain: screenstat.in
@@ -204,4 +221,4 @@ sites:
       font: Inter   # the typeface the site itself uses, for the share cards
       heading_weight: 600   # the theme sets headings at 600, not 700
       rail: bars            # a numbers brand: the section rule is a bar chart
-    socials: [twitter, facebook, instagram, linkedin, pinterest, telegram, threads, instagram_story, facebook_story]
+    socials: [twitter, facebook, instagram, linkedin, pinterest, telegram, threads, instagram_story, facebook_story, instagram_reel, facebook_video]
