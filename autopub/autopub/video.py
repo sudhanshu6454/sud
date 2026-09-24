@@ -75,32 +75,49 @@ def _progress(frame: Image.Image, index: int, total: int, fraction: float, accen
     """Story-style segments: done ones solid, the current one filling, the rest faint."""
     draw = ImageDraw.Draw(frame, "RGBA")
     w = frame.width
-    seg = (w - BAR_SIDE * 2 - BAR_GAP * (total - 1)) / total
+    k = w / REEL_SIZE[0]                  # the bar keeps its proportions at the 720-wide fallback
+    side, gap, y, bh = BAR_SIDE * k, BAR_GAP * k, BAR_Y * k, max(3, BAR_H * k)
+    seg = (w - side * 2 - gap * (total - 1)) / total
     for i in range(total):
-        x0 = BAR_SIDE + i * (seg + BAR_GAP)
-        draw.rectangle([x0, BAR_Y, x0 + seg, BAR_Y + BAR_H], fill=(*ink, 70))
+        x0 = side + i * (seg + gap)
+        draw.rectangle([x0, y, x0 + seg, y + bh], fill=(*ink, 70))
         fill = 1.0 if i < index else (fraction if i == index else 0.0)
         if fill > 0:
-            draw.rectangle([x0, BAR_Y, x0 + seg * fill, BAR_Y + BAR_H], fill=(*accent, 255))
+            draw.rectangle([x0, y, x0 + seg * fill, y + bh], fill=(*accent, 255))
 
 
 def render_reel(frames: list[Path], out_path: Path, durations: list[float], accent: tuple[int, int, int],
                 ink: tuple[int, int, int] = (255, 255, 255), size: tuple[int, int] = REEL_SIZE, fps: int = FPS,
                 dissolve: float = DISSOLVE, audio: Path | None = None) -> Path:
     """Write the reel. `frames` in order; `durations` seconds each; total runtime is their sum.
-    `audio` is a WAV laid on the same timeline (the narration); without one the track is silence."""
+    `audio` is a WAV laid on the same timeline (the narration); without one the track is silence.
+
+    The encoder is held to a small footprint (two threads, one reference frame, a short lookahead)
+    because the fleet shares one modest box with four WordPress sites and a database, and the
+    kernel's answer to a greedy ffmpeg is to kill it. If the full-size encode still fails, a
+    720x1280 one at the lightest preset is tried before giving the reel up: Instagram scales it."""
     if len(frames) < 2:
         raise ValueError("a reel needs at least two frames")
     if len(durations) != len(frames):
         raise ValueError("one duration per frame")
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        return _encode(frames, out_path, durations, accent, ink, size, fps, dissolve, audio, "superfast")
+    except RuntimeError as exc:
+        if size[0] <= 720:
+            raise
+        log.warning("reel encode at %dx%d failed (%s); trying 720x1280 at the lightest preset", *size, exc)
+        return _encode(frames, out_path, durations, accent, ink, (720, 1280), fps, dissolve, audio, "ultrafast")
+
+
+def _encode(frames, out_path: Path, durations, accent, ink, size, fps, dissolve, audio, preset: str) -> Path:
     w, h = size
     sound = ["-i", str(audio)] if audio else ["-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000"]
-    cmd = [ffmpeg_exe(), "-y", "-loglevel", "error",
+    cmd = [ffmpeg_exe(), "-y", "-loglevel", "error", "-threads", "2",
            "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{w}x{h}", "-r", str(fps), "-i", "-",
-           *sound, "-shortest", "-c:v", "libx264", "-preset", "veryfast", "-crf", "22", "-pix_fmt", "yuv420p",
-           "-r", str(fps), "-movflags", "+faststart", "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2",
-           str(out_path)]
+           *sound, "-shortest", "-c:v", "libx264", "-preset", preset, "-crf", "23", "-pix_fmt", "yuv420p",
+           "-x264-params", "ref=1:rc-lookahead=8:bframes=0:threads=2", "-r", str(fps), "-movflags", "+faststart",
+           "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2", str(out_path)]
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
     assert proc.stdin is not None
     total = len(frames)
@@ -120,13 +137,21 @@ def render_reel(frames: list[Path], out_path: Path, durations: list[float], acce
                     prev_zoom = 1 + ZOOM * (1 if (i - 1) % 2 == 0 else 0)
                     frame = Image.blend(_view(prepared[i - 1], size, prev_zoom), frame, (k + 1) / (fade_n + 1))
                 _progress(frame, i, total, t, accent, ink)
-                proc.stdin.write(frame.tobytes())
+                try:
+                    proc.stdin.write(frame.tobytes())
+                except BrokenPipeError:
+                    break        # ffmpeg is gone; the exit code below says why
             if i > 0:
                 prepared[i - 1] = None   # free the previous source once the dissolve out of it is done
-        proc.stdin.close()
+        try:
+            proc.stdin.close()
+        except BrokenPipeError:
+            pass
         err = proc.stderr.read().decode(errors="replace") if proc.stderr else ""
-        if proc.wait() != 0:
-            raise RuntimeError(f"ffmpeg failed: {err.strip()[-400:]}")
+        code = proc.wait()
+        if code != 0:
+            why = "killed (out of memory?)" if code < 0 else err.strip()[-400:] or f"exit {code}"
+            raise RuntimeError(f"ffmpeg failed: {why}")
     finally:
         if proc.poll() is None:
             proc.kill()
