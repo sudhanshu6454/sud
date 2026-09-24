@@ -44,6 +44,7 @@ class Site:
     hashtags: list[str] = field(default_factory=list)
     brand: Brand = field(default_factory=Brand)
     socials: list[str] = field(default_factory=list)
+    nostalgia: bool = False     # one classic-ad throwback feature a day, at settings.nostalgia_hour
 
     @property
     def public_url(self) -> str:
@@ -95,6 +96,12 @@ class Settings:
     # (Instagram) and a video post (Facebook Page), built from its story frames. [] switches it off.
     reel_hours: list[int] = field(default_factory=lambda: [12, 21])
     reel_share_to_feed: bool = True     # show reels in the profile grid too, not only in the Reels tab
+    # The reel's narration: a Piper voice name (rhasspy/piper-voices), fetched once into <data_dir>/voices.
+    # "" posts silent reels.
+    reel_voice: str = "en_US-ryan-high"
+    # The daily throwback: one iconic ad campaign, revisited, on sites with `nostalgia: true`. The first
+    # cycle at or after this hour (in `timezone`) publishes it. None switches it off.
+    nostalgia_hour: int | None = 15
     timezone: str = "Asia/Kolkata"
     data_dir: Path = DEFAULT_DATA_DIR
 

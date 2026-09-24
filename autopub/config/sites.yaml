@@ -28,6 +28,10 @@ settings:
   # silent, the brand ground, a progress bar). [] switches it off.
   reel_hours: [12, 21]
   reel_share_to_feed: true            # reels appear in the profile grid as well as the Reels tab
+  reel_voice: en_US-ryan-high         # the reel's narration (a Piper voice, fetched once into /data/voices); "" = silent
+  # The daily throwback: one iconic ad campaign revisited, with the official YouTube film embedded,
+  # on the sites that set nostalgia to true. Published by the first cycle at or after this hour.
+  nostalgia_hour: 15
   timezone: Asia/Kolkata
 
 sites:
@@ -82,6 +86,7 @@ sites:
       logo: brand/marketing-mentalist-logo.png
       font: InstrumentSans   # the typeface the site itself uses, for the share cards
     socials: [twitter, facebook, instagram, linkedin, pinterest, telegram, threads, instagram_story, facebook_story, instagram_reel, facebook_video]
+    nostalgia: true              # one classic-ad throwback a day, at settings.nostalgia_hour
 
   - key: CRAZY
     domain: crazy4marketing.com
@@ -134,6 +139,7 @@ sites:
       font: SpaceGrotesk   # the typeface the site itself uses, for the share cards
       rail: double         # the site's own ticker rule, under the card's photo
     socials: [twitter, facebook, instagram, linkedin, pinterest, telegram, threads, instagram_story, facebook_story, instagram_reel, facebook_video]
+    nostalgia: true              # one classic-ad throwback a day, at settings.nostalgia_hour
 
   - key: JUNKIES
     domain: marketingjunkies.in
@@ -178,6 +184,7 @@ sites:
       heading_weight: 800   # matches --font-heading-weight in the theme
       rail: inset           # a typographic rule inside the column, like the site's
     socials: [twitter, facebook, instagram, linkedin, pinterest, telegram, threads, instagram_story, facebook_story, instagram_reel, facebook_video]
+    nostalgia: true              # one classic-ad throwback a day, at settings.nostalgia_hour
 
   - key: SCREENSTAT
     domain: screenstat.in

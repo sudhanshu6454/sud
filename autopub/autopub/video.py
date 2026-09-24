@@ -4,8 +4,8 @@ The story frames already tell the article in 9:16 on the brand ground (cover, on
 frames, closing). Here they become a video: each frame holds for as long as its text takes to
 read, drifts a little (a slow zoom, alternating direction, so the picture is never dead still),
 and dissolves into the next; a segmented progress bar along the top says how much is left, as a
-story does. No music: the API adds none, a licensed track is not something to guess at, and a
-silent reel with legible type still gets Reels distribution, which is the point.
+story does. The soundtrack is an original narration of the same text (speech.py) when a voice is available,
+else silence: the API adds no music and a licensed track is not something to guess at.
 
 Encoding is H.264 in an MP4 with a silent AAC track, which is what Instagram's Reels endpoint and
 the Facebook Page video endpoint both accept without complaint. ffmpeg comes from the
@@ -22,7 +22,7 @@ from PIL import Image, ImageDraw
 log = logging.getLogger(__name__)
 
 REEL_SIZE = (1080, 1920)     # 9:16, the size Instagram encodes reels at anyway
-FPS = 30
+FPS = 24                     # Reels accept 23-60; 24 keeps the render a fifth quicker than 30
 ZOOM = 0.06                  # how far a frame drifts over its hold: 6%, felt rather than seen
 DISSOLVE = 0.6               # seconds of crossfade between frames
 COVER_HOLD, CLOSING_HOLD = 3.0, 3.2
@@ -86,19 +86,21 @@ def _progress(frame: Image.Image, index: int, total: int, fraction: float, accen
 
 def render_reel(frames: list[Path], out_path: Path, durations: list[float], accent: tuple[int, int, int],
                 ink: tuple[int, int, int] = (255, 255, 255), size: tuple[int, int] = REEL_SIZE, fps: int = FPS,
-                dissolve: float = DISSOLVE) -> Path:
-    """Write the reel. `frames` in order; `durations` seconds each; total runtime is their sum."""
+                dissolve: float = DISSOLVE, audio: Path | None = None) -> Path:
+    """Write the reel. `frames` in order; `durations` seconds each; total runtime is their sum.
+    `audio` is a WAV laid on the same timeline (the narration); without one the track is silence."""
     if len(frames) < 2:
         raise ValueError("a reel needs at least two frames")
     if len(durations) != len(frames):
         raise ValueError("one duration per frame")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     w, h = size
+    sound = ["-i", str(audio)] if audio else ["-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000"]
     cmd = [ffmpeg_exe(), "-y", "-loglevel", "error",
            "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{w}x{h}", "-r", str(fps), "-i", "-",
-           "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000",
-           "-shortest", "-c:v", "libx264", "-preset", "veryfast", "-crf", "22", "-pix_fmt", "yuv420p",
-           "-r", str(fps), "-movflags", "+faststart", "-c:a", "aac", "-b:a", "96k", str(out_path)]
+           *sound, "-shortest", "-c:v", "libx264", "-preset", "veryfast", "-crf", "22", "-pix_fmt", "yuv420p",
+           "-r", str(fps), "-movflags", "+faststart", "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2",
+           str(out_path)]
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
     assert proc.stdin is not None
     total = len(frames)

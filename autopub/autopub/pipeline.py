@@ -9,7 +9,7 @@ from pathlib import Path
 
 from slugify import slugify
 
-from . import cards, carousels, extract, images, rank, sources, video
+from . import cards, carousels, extract, images, nostalgia, rank, sources, speech, video
 from .config import Settings, Site
 from .rewrite import CuratedPost, Rewriter, RewriteSkipped, effective_model
 from .social import SocialPost, build_publishers, dispatch
@@ -43,6 +43,17 @@ def make_wordpress(site: Site) -> WordPress:
     if not password:
         raise WordPressError(f"WP_{site.key}_APP_PASSWORD is not set (run infra/wp/init-sites.sh)")
     return WordPress(site.wp_base_url(), user, password, public_host=site.domain)
+
+
+_NARRATOR: dict = {}
+
+
+def narrator_for(settings: Settings):
+    """The reel's voice, loaded once per process; None when narration is off or unavailable."""
+    key = settings.reel_voice
+    if key not in _NARRATOR:
+        _NARRATOR[key] = speech.Narrator.load(key, settings.data_dir / "voices") if key else None
+    return _NARRATOR[key]
 
 
 def _story_texts(post: CuratedPost) -> list[tuple[str, str]]:
@@ -95,6 +106,21 @@ def publish_one(site: Site, settings: Settings, state: State, cand: sources.Cand
         report.failed += 1
         return False
 
+    return publish_post(site, settings, state, url, post, wp, publishers, work_dir, report,
+                        image_url=article.image, credit=article.sitename, use_source_image=use_source_image,
+                        want_carousel=want_carousel, want_reel=want_reel, carousel_log=carousel_log, reel_log=reel_log)
+
+
+def publish_post(site: Site, settings: Settings, state: State, url: str, post: CuratedPost, wp: WordPress,
+                 publishers, work_dir: Path, report: RunReport, *, image_url: str | None = None, credit: str | None = None,
+                 use_source_image: bool | None = None, want_carousel: bool = False, want_reel: bool = False,
+                 force_reel: bool = False, carousel_log: list[float] | None = None, reel_log: list[float] | None = None) -> bool:
+    """Everything after the words exist: cards, story frames, reel, carousel, WordPress, socials.
+
+    `url` is the claimed source key in `state`; `image_url` and `credit` are the source photo and
+    who it belongs to. Shared by the hourly news post and the daily throwback feature."""
+    carousel_log = carousel_log if carousel_log is not None else carousels.parse_log(state.note(site.key, carousels.NOTE))
+    reel_log = reel_log if reel_log is not None else carousels.parse_log(state.note(site.key, REEL_NOTE))
     # 3. images. The Instagram card takes one of a small family of formats, chosen from what the
     # article's material can honestly fill and steered away from what this site posted last, so the
     # grid mixes headline, quote, number, takeaways and question cards without the brand moving.
@@ -102,15 +128,15 @@ def publish_one(site: Site, settings: Settings, state: State, cand: sources.Cand
     if use_source_image is None:
         use_source_image = site.use_source_image
     history = cards.parse_history(state.note(site.key, "card_formats"))
-    kind = cards.choose(history, post.card, photo=bool(use_source_image and article.image))
+    kind = cards.choose(history, post.card, photo=bool(use_source_image and image_url))
     kicker = post.image_kicker or post.category or site.category
     brief = cards.brief(kind, post.card, post.image_headline or post.title,
                         kicker if kind == cards.HEADLINE else cards.KICKERS.get(kind, kicker), post.excerpt)
     log.info("[%s] instagram card: %s (recent: %s)", site.key, kind, ",".join(history[-cards.HISTORY:]) or "none")
     try:
         rendered = images.render_set(post.image_headline or post.title, kicker, site,
-                                     work_dir / site.slug, stem, backdrop_url=article.image if use_source_image else None,
-                                     standfirst=post.excerpt, credit=article.sitename if use_source_image else None,
+                                     work_dir / site.slug, stem, backdrop_url=image_url if use_source_image else None,
+                                     standfirst=post.excerpt, credit=credit if use_source_image else None,
                                      date_text=time.strftime("%d %b %Y"), card=brief)
     except Exception as exc:  # noqa: BLE001
         log.error("[%s] image generation failed: %s", site.key, exc)
@@ -142,16 +168,30 @@ def publish_one(site: Site, settings: Settings, state: State, cand: sources.Cand
 
     # 3b'. the reel: the story frames as a short video, when this article is the slot's reel
     reel_path: Path | None = None
-    if want_reel and cards_by_shape.get("story") and story_frames:
+    if (want_reel or force_reel) and cards_by_shape.get("story") and story_frames:
         try:
             frames = [cards_by_shape["story"], *story_frames]
-            texts = [None, *[body for _, body in _story_texts(post)], None][:len(frames)]
+            spoken = _story_texts(post)
+            texts = [None, *[body for _, body in spoken], None][:len(frames)]
             texts += [None] * (len(frames) - len(texts))
             durations = video.plan(frames, texts)
+            audio = None
+            narrator = narrator_for(settings)
+            if narrator is not None:
+                # the narration sets the pace: each frame holds for as long as its lines take to say
+                scripts = [post.image_headline or post.title, *[f"{h}. {b}" for h, b in spoken],
+                           f"Read the full story on {site.domain}. Link in bio."][:len(frames)]
+                scripts += [None] * (len(frames) - len(scripts))
+                try:
+                    audio, durations = narrator.soundtrack(scripts, work_dir / site.slug / f"{stem}-voice.wav",
+                                                           floor=[speech.LEAD_IN + speech.PAD_AFTER + 1.5] * len(frames))
+                except Exception as exc:  # noqa: BLE001 - a lost voice is a silent reel, not a lost reel
+                    log.warning("[%s] narration failed (%s); the reel goes out silent", site.key, exc)
+                    audio, durations = None, video.plan(frames, texts)
             reel_path = video.render_reel(frames, work_dir / site.slug / f"{stem}-reel.mp4", durations,
-                                          images.hex_to_rgb(site.brand.accent))
-            log.info("[%s] reel: %d frames, %.0fs, %d KB", site.key, len(frames), sum(durations),
-                     reel_path.stat().st_size // 1024)
+                                          images.hex_to_rgb(site.brand.accent), audio=audio)
+            log.info("[%s] reel: %d frames, %.0fs, %s, %d KB", site.key, len(frames), sum(durations),
+                     "narrated" if audio else "silent", reel_path.stat().st_size // 1024)
         except Exception as exc:  # noqa: BLE001 - the reel is a bonus; the feed post must not depend on it
             log.warning("[%s] could not render the reel: %s", site.key, exc)
             reel_path = None
@@ -336,29 +376,39 @@ def run_site(site: Site, settings: Settings, state: State, rewriter: Rewriter | 
     fresh = [c for c in candidates if not state.is_used(c.url, site.key)]
     if not fresh:
         log.info("[%s] nothing new", site.key)
-        return report
+    else:
+        fresh = _by_relevance(site, settings, fresh)
 
-    fresh = _by_relevance(site, settings, fresh)
-    if not fresh:
-        return report
+    def ready():
+        nonlocal rewriter, wp, publishers
+        rewriter = rewriter or Rewriter(model=effective_model(settings.llm_model), effort=settings.llm_effort)
+        wp = wp or make_wordpress(site)
+        publishers = build_publishers(site) if publishers is None else publishers
 
-    rewriter = rewriter or Rewriter(model=effective_model(settings.llm_model), effort=settings.llm_effort)
-    wp = wp or make_wordpress(site)
-    publishers = build_publishers(site) if publishers is None else publishers
-    log.info("[%s] %d fresh candidates; socials: %s", site.key, len(fresh), [p.platform for p in publishers] or "none")
+    if fresh:
+        ready()
+        log.info("[%s] %d fresh candidates; socials: %s", site.key, len(fresh), [p.platform for p in publishers] or "none")
+        for cand in fresh:
+            if len(report.published) >= limit:
+                break
+            if report.failed >= MAX_CONSECUTIVE_FAILURES and not report.published:
+                log.error("[%s] %d consecutive failures; aborting this run (will retry next cycle)", site.key, report.failed)
+                break
+            if not state.claim(cand.url, site.key, cand.title):
+                continue
+            ok = publish_one(site, settings, state, cand, rewriter, wp, publishers, work_dir, report)
+            if ok and len(report.published) < limit and gap:
+                # spread posts a little even inside one run
+                time.sleep(min(gap, 60))
 
-    for cand in fresh:
-        if len(report.published) >= limit:
-            break
-        if report.failed >= MAX_CONSECUTIVE_FAILURES and not report.published:
-            log.error("[%s] %d consecutive failures; aborting this run (will retry next cycle)", site.key, report.failed)
-            break
-        if not state.claim(cand.url, site.key, cand.title):
-            continue
-        ok = publish_one(site, settings, state, cand, rewriter, wp, publishers, work_dir, report)
-        if ok and len(report.published) < limit and gap:
-            # spread posts a little even inside one run
-            time.sleep(min(gap, 60))
+    # the daily throwback: one classic ad, revisited, on top of the news. Its slot is spent only when
+    # it actually publishes, so a day the model or YouTube let us down is tried again next cycle.
+    if site.nostalgia and nostalgia.due(settings, state, site):
+        try:
+            ready()
+            nostalgia.publish_daily(site, settings, state, rewriter, wp, publishers, work_dir, report)
+        except Exception as exc:  # noqa: BLE001 - a feature that fails must not take the news down with it
+            log.exception("[%s] throwback failed: %s", site.key, exc)
     log.info(report.summary())
     return report
 

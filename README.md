@@ -179,16 +179,40 @@ Twice a day (`settings.reel_hours`, default `[12, 21]`) the article also goes ou
 frames (cover, text frames, closing) become a 20-30 second 1080x1920 reel in `autopub/video.py`.
 Each frame holds for as long as its text takes to read, drifts with a slow zoom that alternates
 direction, dissolves into the next, and a segmented progress bar along the top says how much is
-left. There is no music: the API adds none and a licensed track is not something to guess at; a
-silent reel with legible type still gets Reels distribution. The MP4 is uploaded to WordPress like
-the images and posted as an Instagram `REELS` container (card as the cover, feed caption, in the
-profile grid too unless `reel_share_to_feed: false`) and as a Facebook Page video with the link in
-the description. Enabled by `instagram_reel` and `facebook_video` in a site's `socials`; same
-credentials as the feed. The slot is spent only once a reel is actually up. ffmpeg comes from the
-`imageio-ffmpeg` wheel, so nothing is installed on the host. Preview one with:
+left. The soundtrack is an **original narration** of the same text: `autopub/speech.py` runs a
+Piper neural voice (`settings.reel_voice`, default `en_US-ryan-high`; the ~120 MB model is fetched
+once into `<data_dir>/voices`) on the CPU, and each frame holds for as long as its lines take to
+say. Instagram files audio the account made itself as original audio. No music: the API adds none
+and a licensed track is not something to guess at. Set `reel_voice: ""` for silent reels; a voice
+that cannot be loaded also falls back to silence rather than losing the reel. The MP4 is uploaded to
+WordPress like the images and posted as an Instagram `REELS` container (card as the cover, feed
+caption, in the profile grid too unless `reel_share_to_feed: false`) and as a Facebook Page video
+with the link in the description. Enabled by `instagram_reel` and `facebook_video` in a site's
+`socials`; same credentials as the feed. The slot is spent only once a reel is actually up. ffmpeg
+comes from the `imageio-ffmpeg` wheel, so nothing is installed on the host. Preview one with:
 
 ```bash
 docker compose run --rm autopub python -m autopub cards --reel --site CRAZY
+```
+
+### The daily throwback
+
+Once a day (`settings.nostalgia_hour`, default 15:00 in `settings.timezone`) each site marked
+`nostalgia: true` (the three marketing sites) publishes a feature revisiting one iconic ad campaign.
+`autopub/nostalgia.py` asks the model to name a campaign at least five years old that the site has
+not covered (Indian and international on alternate days; the covered list lives in `site_notes`),
+finds the official upload on YouTube (`autopub/youtube.py`, from the results page, no API key), and
+only then asks for the article: the ad, why it worked for this site's beat, what it did for the
+brand, what a marketer takes from it now. The film is **embedded** with WordPress's own YouTube
+block, so it plays with its original sound in YouTube's player and nothing is downloaded or
+re-hosted; a campaign the model misremembers has no upload to find and is dropped, not written up.
+The feature then takes the same road as the news: cards (the film's thumbnail as the photo),
+story frames, a narrated reel every time, WordPress under the **Throwback** category, every social.
+A film's URL is the dedupe key, so two sites never run the same ad. Run or preview one by hand:
+
+```bash
+docker compose run --rm autopub python -m autopub nostalgia --dry-run          # the pick and the film, nothing published
+docker compose run --rm autopub python -m autopub nostalgia --site CRAZY       # publish today's now
 ```
 
 ### Viral ad coverage

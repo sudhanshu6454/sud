@@ -10,7 +10,7 @@ import time
 
 from pathlib import Path
 
-from . import cards, carousels, config, images, rank, sources, video
+from . import cards, carousels, config, images, nostalgia, rank, sources, video
 from .pipeline import make_wordpress, run_all
 from .rewrite import effective_model
 from .social import build_publishers
@@ -86,6 +86,11 @@ def cmd_check(settings, args) -> int:
               f"{settings.timezone} each day also goes out as a reel and a Page video")
     else:
         print("reels: off (settings.reel_hours is empty)")
+    print(f"reel voice: {settings.reel_voice or 'none (silent reels)'}"
+          + (f" in {settings.data_dir / 'voices'}" if settings.reel_voice else ""))
+    if settings.nostalgia_hour is not None:
+        on = [s.key for s in settings.sites if s.nostalgia]
+        print(f"throwback: one classic ad a day at or after {settings.nostalgia_hour:02d}:00 {settings.timezone} on {on or 'no site'}")
     for site in settings.sites:
         print(f"\n[{site.key}] {site.domain} -> {site.wp_base_url()}")
         try:
@@ -269,6 +274,37 @@ def cmd_instagram_probe(settings, args) -> int:
     return worst
 
 
+def cmd_nostalgia(settings, args) -> int:
+    """Run today's throwback for a site now, or with --dry-run only show what it would pick and embed."""
+    from .pipeline import RunReport
+    from .rewrite import Rewriter
+    state = State(settings.data_dir / "autopub.db", settings.dedupe_across_sites)
+    rewriter = Rewriter(model=effective_model(settings.llm_model), effort=settings.llm_effort)
+    rc = 0
+    for site in settings.sites:
+        if args.site and site.key != args.site.upper():
+            continue
+        if not site.nostalgia and not args.site:
+            continue
+        used = nostalgia.parse_used(state.note(site.key, nostalgia.USED_NOTE))
+        print(f"\n[{site.key}] {site.domain}: {len(used)} throwbacks so far")
+        if args.dry_run:
+            choice = nostalgia.pick(rewriter, site, used, len(used))
+            film = nostalgia.youtube.find_ad(choice.brand, choice.campaign, choice.year)
+            print(f"  pick: {choice.brand} - {choice.campaign} ({choice.year or 'year unsure'}) {choice.country}")
+            print(f"  why:  {choice.hook}")
+            print(f"  film: {film['url'] + '  ' + film['title'][:60] + '  [' + film['channel'] + ']' if film else 'NOT FOUND (would ask again)'}")
+            continue
+        report = RunReport(site=site.key)
+        ok = nostalgia.publish_daily(site, settings, state, rewriter, make_wordpress(site), build_publishers(site),
+                                     settings.data_dir / "images", report)
+        print(f"  {'published' if ok else 'nothing published'}: {report.summary()}")
+        for link in report.published:
+            print("  ->", link)
+        rc = rc or (0 if ok else 1)
+    return rc
+
+
 def cmd_status(settings, args) -> int:
     state = State(settings.data_dir / "autopub.db", settings.dedupe_across_sites)
     for site in settings.sites:
@@ -298,12 +334,15 @@ def main(argv=None) -> int:
     c.add_argument("--formats", action="store_true", help="render every Instagram card format from sample material")
     c.add_argument("--carousel", action="store_true", help="render a sample carousel: cover, content slides, closing")
     c.add_argument("--reel", action="store_true", help="render a sample reel (MP4) from the story frames")
+    n = sub.add_parser("nostalgia", help="publish today's classic-ad throwback now (or --dry-run to see the pick)")
+    n.add_argument("--site"); n.add_argument("--dry-run", action="store_true", help="pick and look up the film, publish nothing")
     ip = sub.add_parser("instagram-probe", help="ask Instagram whether it accepts a taller card yet (posts nothing)")
     ip.add_argument("--site"); ip.add_argument("--ratio", help="3:4 (default), 4:5 or 1:1"); ip.add_argument("--out")
     args = p.parse_args(argv)
     settings = config.load(args.config)
     commands = {"serve": cmd_serve, "run": cmd_run, "check": cmd_check, "sources": cmd_sources,
-                "status": cmd_status, "cards": cmd_cards, "instagram-probe": cmd_instagram_probe}
+                "status": cmd_status, "cards": cmd_cards, "instagram-probe": cmd_instagram_probe,
+                "nostalgia": cmd_nostalgia}
     return commands[args.cmd](settings, args)
 
 

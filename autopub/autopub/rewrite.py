@@ -226,6 +226,7 @@ class Rewriter:
             use_fallbacks = first_party and os.environ.get("ANTHROPIC_FALLBACKS", "default").lower() != "off"
         self.use_fallbacks = use_fallbacks
         self.client = client or anthropic.Anthropic(max_retries=3, timeout=300.0)
+        self.last_usage = None
 
     def _create(self, **kwargs):
         if self.use_fallbacks:
@@ -236,28 +237,18 @@ class Rewriter:
                 self.use_fallbacks = False
         return self.client.messages.create(**kwargs)
 
-    def rewrite(self, site: Site, article: Article, carousel: bool = False) -> CuratedPost:
-        schema = schema_for(site, carousel)
-        # Appended after .format() so the schema's own braces are never read as format placeholders.
-        system = SYSTEM_PROMPT.format(
-            name=site.name, domain=site.domain, tagline=site.tagline,
-            niche=site.niche, audience=site.audience, tone=site.tone,
-            sections=", ".join(site.categories or [site.category]),
-        ) + (CAROUSEL_PROMPT if carousel else "") + JSON_CONTRACT.format(schema=json.dumps(schema))
-        user = (
-            f"SOURCE_URL: {article.url}\n"
-            f"SOURCE_NAME: {article.sitename or article.url.split('/')[2]}\n"
-            f"SOURCE_TITLE: {article.title}\n"
-            f"SOURCE_DATE: {article.date or 'unknown'}\n"
-            f"SITE_HASHTAGS (use some in instagram/twitter captions): {' '.join('#' + h for h in site.hashtags)}\n\n"
-            f"SOURCE_TEXT:\n{article.text}"
-        )
+    def ask(self, system: str, user: str, schema: dict[str, Any], validate=None, max_tokens: int = 16000):
+        """One structured request: the schema travels as output_config and in the prompt, the reply
+        is parsed defensively, and a reply that does not fit gets one corrective round.
+
+        `validate` turns the parsed JSON into the caller's object (e.g. a pydantic model_validate)
+        and may raise ValidationError or ValueError to trigger the corrective round."""
         messages: list[dict[str, Any]] = [{"role": "user", "content": user}]
         for attempt in (1, 2):   # one corrective round: a provider that ignores the schema often obeys the prompt
             try:
                 response = self._create(
                     model=self.model,
-                    max_tokens=16000,
+                    max_tokens=max_tokens,
                     system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
                     messages=messages,
                     output_config={"effort": self.effort, "format": {"type": "json_schema", "schema": schema}},
@@ -277,9 +268,10 @@ class Rewriter:
 
             text = text_block(response)
             try:
-                post = CuratedPost.model_validate(json.loads(json_object(text)))
+                data = json.loads(json_object(text))
+                result = validate(data) if validate else data
                 break
-            except (json.JSONDecodeError, ValidationError) as exc:
+            except (json.JSONDecodeError, ValidationError, ValueError, TypeError) as exc:
                 if attempt == 2:
                     raise RuntimeError(f"unusable model output: {exc}") from exc
                 log.warning("model did not return the schema (%s); asking once more", type(exc).__name__)
@@ -287,10 +279,30 @@ class Rewriter:
                     {"role": "assistant", "content": text or "(no text returned)"},
                     {"role": "user", "content": "That did not parse as the required JSON object. Reply with ONLY the JSON object, no fences and no commentary."},
                 ]
+        self.last_usage = response.usage
+        return result
+
+    def rewrite(self, site: Site, article: Article, carousel: bool = False) -> CuratedPost:
+        schema = schema_for(site, carousel)
+        # Appended after .format() so the schema's own braces are never read as format placeholders.
+        system = SYSTEM_PROMPT.format(
+            name=site.name, domain=site.domain, tagline=site.tagline,
+            niche=site.niche, audience=site.audience, tone=site.tone,
+            sections=", ".join(site.categories or [site.category]),
+        ) + (CAROUSEL_PROMPT if carousel else "") + JSON_CONTRACT.format(schema=json.dumps(schema))
+        user = (
+            f"SOURCE_URL: {article.url}\n"
+            f"SOURCE_NAME: {article.sitename or article.url.split('/')[2]}\n"
+            f"SOURCE_TITLE: {article.title}\n"
+            f"SOURCE_DATE: {article.date or 'unknown'}\n"
+            f"SITE_HASHTAGS (use some in instagram/twitter captions): {' '.join('#' + h for h in site.hashtags)}\n\n"
+            f"SOURCE_TEXT:\n{article.text}"
+        )
+        post = self.ask(system, user, schema, CuratedPost.model_validate)
         post.tags = [t.strip() for t in post.tags if t and t.strip()][:8]
         sections = {c.lower(): c for c in (site.categories or [site.category])}
         post.category = sections.get(post.category.strip().lower(), site.category)
-        usage = response.usage
+        usage = self.last_usage
         log.info("rewrite ok: %s (in=%s cached=%s out=%s)", post.title, usage.input_tokens,
                  getattr(usage, "cache_read_input_tokens", 0), usage.output_tokens)
         return post
