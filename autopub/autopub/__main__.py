@@ -188,10 +188,18 @@ def cmd_cards(settings, args) -> int:
             frames.append(images.story_closing_frame(headline, site, out_dir / f"{site.slug}-reel-end.jpg"))
             texts.append(None)
             durations = video.plan(frames, texts)
-            path = video.render_reel(frames, out_dir / f"{site.slug}-reel.mp4", durations, images.hex_to_rgb(site.brand.accent))
+            audio = None
+            from .pipeline import narrator_for
+            from . import speech
+            narrator = narrator_for(settings)
+            if narrator is not None:
+                scripts = [headline, *[f"{h}. {b}" for h, b in sample], f"Read the full story on {site.domain}. Link in bio."]
+                audio, durations = narrator.soundtrack(scripts, out_dir / f"{site.slug}-reel-voice.wav",
+                                                       floor=[speech.LEAD_IN + speech.PAD_AFTER + 1.5] * len(frames))
+            path = video.render_reel(frames, out_dir / f"{site.slug}-reel.mp4", durations, images.hex_to_rgb(site.brand.accent), audio=audio)
             info = video.probe(path)
             print(f"   {path.stat().st_size // 1024:>5} KB  {info.get('width')}x{info.get('height')} {info.get('codec')} "
-                  f"{info.get('duration', 0):.1f}s  {path}")
+                  f"{info.get('duration', 0):.1f}s  {'narrated by ' + settings.reel_voice if audio else 'silent (no voice loaded)'}  {path}")
             continue
         if args.carousel:
             # the whole swipe from sample slides: cover card, content slides, closing slide
