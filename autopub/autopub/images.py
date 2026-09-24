@@ -1024,6 +1024,35 @@ def _render_format(card: CardBrief, site: Site, out_path: Path, primary, accent,
                 yy += S(54)
             y += rh
 
+    elif card.kind == "steal":
+        # the swipe-file card: the tactic as an imperative, how to apply it, and a save cue. Shared for
+        # being useful rather than for being news.
+        tfont, tlines, tline_h, tblock = _block(draw, tidy(card.headline), family, column,
+                                                [(40, 76, 84, 3), (70, 64, 72, 4), (10 ** 6, 54, 62, 5)], weight)
+        bfont = _font(S(40), bold=False, family=family, weight=450)
+        blines = _wrap(draw, tidy(card.standfirst or ""), bfont, column)[:6]
+        pill_h = S(64)
+        total = tblock + S(36) + S(6) + S(36) + len(blines) * S(58) + S(56) + pill_h
+        y = top + max(0, (room - total) // 2)
+        for line in tlines:
+            draw.text((x, y), line, font=tfont, fill=text_color)
+            y += tline_h
+        y += S(36)
+        draw.rectangle([x, y, x + S(96), y + S(6)], fill=accent)
+        y += S(6) + S(36)
+        for line in blines:
+            draw.text((x, y), line, font=bfont, fill=text_color)
+            y += S(58)
+        y += S(56)
+        # "Save this post" pill with a drawn bookmark, in the accent
+        pfont = _font(S(30), bold=True, family=family, weight=max(weight, 600))
+        label = "Save this post"
+        pw = int(draw.textlength(label, font=pfont)) + S(44) + S(40)
+        draw.rounded_rectangle([x, y, x + pw, y + pill_h], radius=S(8), outline=accent, width=S(3))
+        bx, by = x + S(22), y + S(16)
+        draw.polygon([(bx, by), (bx + S(20), by), (bx + S(20), by + S(32)), (bx + S(10), by + S(24)), (bx, by + S(32))], fill=accent)
+        draw.text((x + S(22) + S(20) + S(20), y + (pill_h - pfont.size) // 2 - S(2)), label, font=pfont, fill=text_color)
+
     elif card.kind == "versus":
         tfont, tlines, tline_h, tblock = _block(draw, tidy(card.headline), family, column, LIST_TITLE_LADDER, weight)
         gap = S(48)
@@ -1163,12 +1192,21 @@ def _render_inverse(card: CardBrief, site: Site, out_path: Path, primary, accent
     draw.rectangle([S(SIDE), top, S(SIDE) + kw + S(32), top + kfont.size + S(20)], fill=primary)
     _tracked(draw, (S(SIDE) + S(16), top + S(10)), text, kfont, accent, track)
     kick_h = kfont.size + S(20) + S(40)
-    hfont, lines, line_h = _headline_block(draw, tidy(card.headline), family, column, HEADLINE_LADDER_TEXT, weight=weight)
-    block_h = len(lines) * line_h
+    hfont, lines, line_h = _headline_block(draw, _spell_out(tidy(card.headline), family), family, column,
+                                           HEADLINE_LADDER_TEXT, weight=weight)
+    sfont = _font(S(36), bold=False, family=family)
+    slines = _wrap(draw, _spell_out(tidy(card.standfirst), family), sfont, column)[:3] if card.standfirst else []
+    block_h = len(lines) * line_h + (S(24) + len(slines) * S(50) if slines else 0)
     y = top + kick_h + max(0, (bottom - top - kick_h - block_h) // 2)
     for line in lines:
         draw.text((S(SIDE), y), line, font=hfont, fill=ink)
         y += line_h
+    if slines:
+        # the standfirst (the article's headline, under a hook) in the ink, quieter
+        y += S(24)
+        for line in slines:
+            draw.text((S(SIDE), y), line, font=sfont, fill=(*ink, 200))
+            y += S(50)
     return _save(img, out_path, quality=92)
 
 
@@ -1575,6 +1613,42 @@ def carousel_closing_slide(headline: str, site: Site, out_path: Path) -> Path:
     sfont = _font(S(30), bold=False, family=family)
     draw.text((x, y), "Save this post for later and share it with your team", font=sfont, fill=_muted(text))
     return _to_feed_ratio(img, out_path)
+
+
+def story_debate_frame(question: str, options: list[str], site: Site, out_path: Path) -> Path:
+    """The debate story: one arguable question, two numbered sides, and the ask to reply with 1 or 2.
+    The API allows no poll sticker, so the reply is the vote; replies arrive as DMs."""
+    img, primary, accent, text = _story_canvas(site)
+    w, h = img.size
+    S = lambda v: int(round(v * CARD_SCALE))
+    family, weight = site.brand.font, site.brand.heading_weight
+    draw = ImageDraw.Draw(img, "RGBA")
+    x, column = S(72), w - S(72) * 2
+    top = STORY_SAFE + 20 + S(RAIL_H) + S(64)
+    _card_kicker(img, "The debate", site, accent, x, top, S)
+    qfont, qlines, qline_h = _headline_block(draw, _spell_out(tidy(question), family), family, column,
+                                             [(40, 84, 92, 3), (70, 70, 78, 4), (10 ** 6, 58, 66, 5)], weight=weight)
+    box_h, gap = S(120), S(28)
+    ofont = _font(S(44), bold=True, family=family, weight=max(weight, 600))
+    nfont = _figure_font("12", S(56), family, max(weight, 700))
+    afont = _font(S(34), bold=False, family=family)
+    block = len(qlines) * qline_h + S(64) + 2 * box_h + gap + S(56) + S(44)
+    y = top + S(KICKER_SIZE) + S(20) * 2 + max(S(56), (h - STORY_SAFE - S(140) - top - block) // 3)
+    for line in qlines:
+        draw.text((x, y), line, font=qfont, fill=text)
+        y += qline_h
+    y += S(64)
+    for i, option in enumerate((list(options) + ["Yes", "No"])[:2], 1):
+        draw.rounded_rectangle([x, y, x + column, y + box_h], radius=S(12), outline=accent, width=S(4),
+                               fill=(*accent, 28 if i == 1 else 0))
+        draw.text((x + S(36), y + (box_h - nfont.size) // 2 - S(4)), str(i), font=nfont, fill=accent)
+        label = _spell_out(tidy(option), family)[:26]
+        draw.text((x + S(36) + S(56) + S(28), y + (box_h - ofont.size) // 2 - S(4)), label, font=ofont, fill=text)
+        y += box_h + gap
+    y += S(56) - gap
+    draw.text((x, y), "Reply to this story with 1 or 2", font=afont, fill=_muted(text))
+    _story_footer(img, site, text)
+    return _save(img, out_path, quality=90)
 
 
 def resize_to(card: Path, size: tuple[int, int], out_path: Path) -> Path:

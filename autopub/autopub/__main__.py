@@ -88,6 +88,9 @@ def cmd_check(settings, args) -> int:
         print("reels: off (settings.reel_hours is empty)")
     print(f"reel voice: {settings.reel_voice or 'none (silent reels)'}"
           + (f" in {settings.data_dir / 'voices'}" if settings.reel_voice else ""))
+    print(f"follow-ups: steal card at or after {settings.steal_hour:02d}:00, debate story at or after {settings.debate_hour:02d}:00 "
+          f"{settings.timezone}, posted {settings.followup_delay_minutes} min after their article"
+          if settings.steal_hour is not None and settings.debate_hour is not None else "follow-ups: partly off")
     if settings.nostalgia_hour is not None:
         on = [s.key for s in settings.sites if s.nostalgia]
         print(f"throwback: one classic ad a day at or after {settings.nostalgia_hour:02d}:00 {settings.timezone} on {on or 'no site'}")

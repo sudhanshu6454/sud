@@ -32,6 +32,13 @@ settings:
   # The daily throwback: one iconic ad campaign revisited, with the official YouTube film embedded,
   # on the sites that set nostalgia to true. Published by the first cycle at or after this hour.
   nostalgia_hour: 15
+  # Follow-ups: one "Steal this" card a day (the first article after steal_hour that offers a reusable
+  # tactic) and one debate story a day (the first after debate_hour that raises an arguable question),
+  # each posted a while after its article so the day's posts spread out. The throwback's hot take
+  # follows the same way. The debate story goes out at half the delay.
+  steal_hour: 11
+  debate_hour: 17
+  followup_delay_minutes: 120
   timezone: Asia/Kolkata
 
 sites:

@@ -102,6 +102,12 @@ class Settings:
     # The daily throwback: one iconic ad campaign, revisited, on sites with `nostalgia: true`. The first
     # cycle at or after this hour (in `timezone`) publishes it. None switches it off.
     nostalgia_hour: int | None = 15
+    # One 'Steal this' card a day (the first article at or after this hour that offers a reusable tactic)
+    # and one debate story a day (the first that raises an arguable question), each posted as a follow-up
+    # `followup_delay_minutes` after the article. The throwback's hot take follows the same way. None = off.
+    steal_hour: int | None = 11
+    debate_hour: int | None = 17
+    followup_delay_minutes: int = 120
     timezone: str = "Asia/Kolkata"
     data_dir: Path = DEFAULT_DATA_DIR
 

@@ -215,6 +215,31 @@ docker compose run --rm autopub python -m autopub nostalgia --dry-run          #
 docker compose run --rm autopub python -m autopub nostalgia --site CRAZY       # publish today's now
 ```
 
+### Hooks, and the follow-ups
+
+Every card leads with a **hook**: the rewriter writes a 3-7 word scroll-stopper (`hook`) that is set
+large, and the article's headline runs beneath it as the standfirst; without a hook the card reads as
+before. The Instagram and Facebook captions open with `caption_hook`, one sentence that opens a gap,
+because the first line is all either platform shows before "more".
+
+Three pieces trail an article rather than travelling with it, queued in `site_notes` when it
+publishes and posted by a later cycle (`autopub/followups.py`, `followup_delay_minutes`, default 120):
+
+- **Steal this** (`steal_hour`, default 11:00): the first article after the hour whose source offered a
+  reusable tactic (`steal`: the idea as an imperative and how to apply it) gets a swipe-file card, with
+  a "Save this post" cue, on Instagram and the Facebook Page.
+- **The debate** (`debate_hour`, default 17:00, at half the delay): the first article after the hour
+  that raised an arguable question (`debate`: the question and two short sides) gets a 9:16 story with
+  the two sides numbered and "Reply to this story with 1 or 2". The API allows no poll sticker
+  ("Publishing stickers (i.e., link, poll, location) is not supported"), so the reply is the vote and
+  arrives as a DM.
+- **Hot take**: two hours after the daily throwback, its `hot_take` (one bold, arguable line) goes out
+  as a quote card asking for agreement or disagreement in the comments.
+
+Each is tried once and recorded in `social_posts` as `platform:kind` (e.g. `instagram:steal`); a
+slot is spent when the piece is queued. A story with no tactic or no real question leaves the slot
+to the next article.
+
 ### Viral ad coverage
 
 Crazy4Marketing's beat names viral ads, brand films and stunts explicitly, has a **Viral Campaigns**

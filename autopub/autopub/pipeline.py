@@ -9,7 +9,7 @@ from pathlib import Path
 
 from slugify import slugify
 
-from . import cards, carousels, extract, images, nostalgia, rank, sources, speech, video
+from . import cards, carousels, extract, followups, images, nostalgia, rank, sources, speech, video
 from .config import Settings, Site
 from .rewrite import CuratedPost, Rewriter, RewriteSkipped, effective_model
 from .social import SocialPost, build_publishers, dispatch
@@ -54,6 +54,14 @@ def narrator_for(settings: Settings):
     if key not in _NARRATOR:
         _NARRATOR[key] = speech.Narrator.load(key, settings.data_dir / "voices") if key else None
     return _NARRATOR[key]
+
+
+def _hooked(hook: str | None, caption: str) -> str:
+    """The caption with its hook as the first line: the one line Instagram shows before 'more'."""
+    hook = " ".join((hook or "").split())
+    if len(hook) < 12 or hook.lower() in caption.lower()[:200]:
+        return caption
+    return f"{hook}\n\n{caption.strip()}"
 
 
 def _story_texts(post: CuratedPost) -> list[tuple[str, str]]:
@@ -111,6 +119,29 @@ def publish_one(site: Site, settings: Settings, state: State, cand: sources.Cand
                         want_carousel=want_carousel, want_reel=want_reel, carousel_log=carousel_log, reel_log=reel_log)
 
 
+def _queue_followups(site: Site, settings: Settings, state: State, post: CuratedPost, link: str, publishers) -> None:
+    """One 'Steal this' card and one debate story a day: the first article after each hour that has
+    the material takes the slot, and the piece is queued to go out after the article."""
+    now = time.time()
+    due = now + settings.followup_delay_minutes * 60
+    names = {p.platform for p in publishers}
+    if settings.steal_hour is not None and names & set(followups.FEED) and post.steal \
+            and len(post.steal.idea.strip()) >= 12 and len(post.steal.how.strip()) >= 40:
+        log_ = carousels.parse_log(state.note(site.key, followups.STEAL_NOTE))
+        if carousels.due(now, log_, [settings.steal_hour], settings.timezone):
+            followups.schedule(state, site.key, "steal", due, {"idea": post.steal.idea.strip(), "how": post.steal.how.strip(),
+                                                                "link": link, "title": post.title})
+            state.set_note(site.key, followups.STEAL_NOTE, carousels.dump_log(log_ + [now]))
+    if settings.debate_hour is not None and names & set(followups.STORY) and post.debate \
+            and post.debate.question.strip().endswith("?") and len([o for o in post.debate.options if o.strip()]) == 2:
+        log_ = carousels.parse_log(state.note(site.key, followups.DEBATE_NOTE))
+        if carousels.due(now, log_, [settings.debate_hour], settings.timezone):
+            followups.schedule(state, site.key, "debate", now + settings.followup_delay_minutes * 30,
+                               {"question": post.debate.question.strip(), "options": [o.strip() for o in post.debate.options][:2],
+                                "link": link, "title": post.title})
+            state.set_note(site.key, followups.DEBATE_NOTE, carousels.dump_log(log_ + [now]))
+
+
 def publish_post(site: Site, settings: Settings, state: State, url: str, post: CuratedPost, wp: WordPress,
                  publishers, work_dir: Path, report: RunReport, *, image_url: str | None = None, credit: str | None = None,
                  use_source_image: bool | None = None, want_carousel: bool = False, want_reel: bool = False,
@@ -130,13 +161,18 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
     history = cards.parse_history(state.note(site.key, "card_formats"))
     kind = cards.choose(history, post.card, photo=bool(use_source_image and image_url))
     kicker = post.image_kicker or post.category or site.category
-    brief = cards.brief(kind, post.card, post.image_headline or post.title,
-                        kicker if kind == cards.HEADLINE else cards.KICKERS.get(kind, kicker), post.excerpt)
+    # the hook is what stops the scroll, so it is set large; the headline that would have been
+    # there runs beneath it as the standfirst. Without a hook the card reads as before.
+    hook = (post.hook or "").strip()
+    card_headline = hook if len(hook) >= 8 else (post.image_headline or post.title)
+    card_standfirst = (post.image_headline or post.title) if len(hook) >= 8 else post.excerpt
+    brief = cards.brief(kind, post.card, card_headline,
+                        kicker if kind == cards.HEADLINE else cards.KICKERS.get(kind, kicker), card_standfirst)
     log.info("[%s] instagram card: %s (recent: %s)", site.key, kind, ",".join(history[-cards.HISTORY:]) or "none")
     try:
-        rendered = images.render_set(post.image_headline or post.title, kicker, site,
+        rendered = images.render_set(card_headline, kicker, site,
                                      work_dir / site.slug, stem, backdrop_url=image_url if use_source_image else None,
-                                     standfirst=post.excerpt, credit=credit if use_source_image else None,
+                                     standfirst=card_standfirst, credit=credit if use_source_image else None,
                                      date_text=time.strftime("%d %b %Y"), card=brief)
     except Exception as exc:  # noqa: BLE001
         log.error("[%s] image generation failed: %s", site.key, exc)
@@ -296,8 +332,8 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
     social = SocialPost(
         title=post.title, link=link,
         captions={
-            "twitter": post.captions.twitter, "facebook": post.captions.facebook,
-            "instagram": post.captions.instagram, "linkedin": post.captions.linkedin,
+            "twitter": post.captions.twitter, "facebook": _hooked(post.caption_hook, post.captions.facebook),
+            "instagram": _hooked(post.caption_hook, post.captions.instagram), "linkedin": post.captions.linkedin,
             "pinterest": post.captions.pinterest, "telegram": post.captions.telegram,
             "threads": post.captions.threads,
         },
@@ -316,6 +352,7 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
         video_cover_url=(media_by_shape.get("story") or {}).get("source_url"),
         video_share_to_feed=settings.reel_share_to_feed,
     )
+    _queue_followups(site, settings, state, post, link, publishers)
     results = dispatch(publishers, social)
     for res in results:
         state.record_social(url, site.key, res.platform, res.ok, res.remote_id, res.url, res.error)
@@ -365,6 +402,21 @@ def run_site(site: Site, settings: Settings, state: State, rewriter: Rewriter | 
     work_dir = work_dir or settings.data_dir / "images"
     limit = site.max_posts_per_run if limit is None else limit
 
+    def ready():
+        nonlocal rewriter, wp, publishers
+        rewriter = rewriter or Rewriter(model=effective_model(settings.llm_model), effort=settings.llm_effort)
+        wp = wp or make_wordpress(site)
+        publishers = build_publishers(site) if publishers is None else publishers
+
+    # follow-ups whose time has come (the steal card, the debate story, the hot take) go first: they
+    # are not new articles, so the gap between articles does not apply to them
+    if followups.split_due(followups.load(state, site.key), time.time())[0]:
+        try:
+            ready()
+            followups.run(site, settings, state, wp, publishers, work_dir, report)
+        except Exception as exc:  # noqa: BLE001
+            log.exception("[%s] follow-ups failed: %s", site.key, exc)
+
     last = state.last_published_at(site.key)
     gap = settings.min_gap_minutes_between_posts * 60
     if last and time.time() - last < gap:
@@ -378,12 +430,6 @@ def run_site(site: Site, settings: Settings, state: State, rewriter: Rewriter | 
         log.info("[%s] nothing new", site.key)
     else:
         fresh = _by_relevance(site, settings, fresh)
-
-    def ready():
-        nonlocal rewriter, wp, publishers
-        rewriter = rewriter or Rewriter(model=effective_model(settings.llm_model), effort=settings.llm_effort)
-        wp = wp or make_wordpress(site)
-        publishers = build_publishers(site) if publishers is None else publishers
 
     if fresh:
         ready()

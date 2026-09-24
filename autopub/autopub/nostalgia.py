@@ -21,7 +21,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from . import carousels, youtube
+from . import carousels, followups, youtube
 from .config import Settings, Site
 from .rewrite import JSON_CONTRACT, CuratedPost, Rewriter, schema_for
 from .state import State
@@ -93,6 +93,11 @@ right there (the film is embedded above your text; do not describe frame by fram
 - `story_frames`: 2-3 frames telling the ad's story and its lesson for a viewer who sees only images.
 - `mentions`: the brand (and agency if certain), with Instagram usernames only when confident.
 - `card`: only material you are certain of; the ad's tagline as `quote` with `quote_by` the brand is ideal.
+- `hot_take`: one bold, arguable sentence about this campaign seen from today, max 140 characters, that a
+  marketer could disagree with ("This ad would be cancelled in a week today, and it would deserve it").
+  An opinion, stated flat, no hedging, no question mark.
+- `hook`: 3-7 words set large on the card ("The ad that sold friendship"); `caption_hook`: the caption's
+  first line, one sentence that opens a gap.
 """
 
 
@@ -158,6 +163,8 @@ def embed_block(video_url: str, caption: str) -> str:
 def write(rewriter: Rewriter, site: Site, choice: Pick, film: dict | None) -> CuratedPost:
     schema = schema_for(site)
     schema["properties"]["category"] = {"type": "string", "enum": [CATEGORY]}
+    schema["properties"]["hot_take"] = {"type": "string", "description": "One bold, arguable sentence about this campaign seen from today, max 140 characters, no question mark"}
+    schema["required"] = [*schema["required"], "hot_take"]
     system = FEATURE_PROMPT.format(name=site.name, domain=site.domain, tagline=site.tagline, niche=site.niche,
                                    audience=site.audience, tone=site.tone, category=CATEGORY, kicker=KICKER)
     system += JSON_CONTRACT.format(schema=json.dumps(schema))
@@ -223,6 +230,13 @@ def publish_daily(site: Site, settings: Settings, state: State, rewriter: Rewrit
     if ok:
         state.set_note(site.key, USED_NOTE, dump_used(used + [key_of(choice)]))
         state.set_note(site.key, NOTE, carousels.dump_log(slot_log + [time.time()]))
+        take = " ".join((post.hot_take or "").split())
+        if len(take) >= 20 and any(p.platform in followups.FEED for p in publishers):
+            # the hot take follows the feature: one arguable line, as a quote card, for the comments
+            followups.schedule(state, site.key, "hot_take", time.time() + settings.followup_delay_minutes * 60,
+                               {"take": take, "link": report.published[-1] if report.published else film["url"],
+                                "title": post.title, "subject": f"{choice.brand}'s {choice.campaign}",
+                                "by": f"{site.name} on {choice.brand}"})
         log.info("[%s] throwback published for the %s slot", site.key,
                  carousels.slot(time.time(), [settings.nostalgia_hour], settings.timezone))
     return ok
