@@ -289,7 +289,12 @@ def cmd_nostalgia(settings, args) -> int:
         used = nostalgia.parse_used(state.note(site.key, nostalgia.USED_NOTE))
         print(f"\n[{site.key}] {site.domain}: {len(used)} throwbacks so far")
         if args.dry_run:
-            choice = nostalgia.pick(rewriter, site, used, len(used))
+            try:
+                choice = nostalgia.pick(rewriter, site, used, len(used))
+            except RuntimeError as exc:
+                print(f"  pick failed: {exc}")
+                rc = 1
+                continue
             film = nostalgia.youtube.find_ad(choice.brand, choice.campaign, choice.year)
             print(f"  pick: {choice.brand} - {choice.campaign} ({choice.year or 'year unsure'}) {choice.country}")
             print(f"  why:  {choice.hook}")

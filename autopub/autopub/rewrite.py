@@ -263,15 +263,16 @@ class Rewriter:
             if response.stop_reason == "refusal":
                 details = getattr(response, "stop_details", None)
                 raise RewriteSkipped(f"model declined ({getattr(details, 'category', None)})")
-            if response.stop_reason == "max_tokens":
-                raise RuntimeError("model output truncated at max_tokens")
-
             text = text_block(response)
             try:
                 data = json.loads(json_object(text))
                 result = validate(data) if validate else data
                 break
             except (json.JSONDecodeError, ValidationError, ValueError, TypeError) as exc:
+                # a reasoning model spends its thinking inside max_tokens; when the answer itself was cut
+                # off there is nothing to correct, so say that rather than asking again
+                if response.stop_reason == "max_tokens":
+                    raise RuntimeError("model output truncated at max_tokens") from exc
                 if attempt == 2:
                     raise RuntimeError(f"unusable model output: {exc}") from exc
                 log.warning("model did not return the schema (%s); asking once more", type(exc).__name__)

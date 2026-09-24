@@ -129,7 +129,7 @@ def pick(rewriter: Rewriter, site: Site, used: list[str], day_index: int) -> Pic
                                 used="\n".join(f"- {u}" for u in used[-120:]) or "- (none yet)")
     system += JSON_CONTRACT.format(schema=json.dumps(PICK_SCHEMA))
     return rewriter.ask(system, f"Today is {time.strftime('%d %B %Y')}. Name today's campaign.", PICK_SCHEMA,
-                        Pick.model_validate, max_tokens=800)
+                        Pick.model_validate, max_tokens=6000)   # a reasoning model thinks inside this budget too
 
 
 def embed_block(video_url: str, caption: str) -> str:
