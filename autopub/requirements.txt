@@ -11,3 +11,4 @@ opencv-python-headless>=4.9   # face-aware cover crops (autopub/images.py)
 numpy>=1.26
 imageio-ffmpeg>=0.5        # bundled ffmpeg binary for the reels (autopub/video.py)
 piper-tts>=1.8             # local neural voice for the reel narration (autopub/speech.py)
+kokoro-onnx>=0.6           # the natural-sounding narration voice (autopub/speech.py); piper stays as the fallback

@@ -9,7 +9,7 @@ from pathlib import Path
 
 from slugify import slugify
 
-from . import cards, carousels, extract, followups, images, nostalgia, rank, sources, speech, video
+from . import cards, carousels, extract, followups, images, music, nostalgia, rank, sources, speech, video
 from .config import Settings, Site
 from .rewrite import CuratedPost, Rewriter, RewriteSkipped, effective_model
 from .social import SocialPost, build_publishers, dispatch
@@ -224,10 +224,20 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
                 except Exception as exc:  # noqa: BLE001 - a lost voice is a silent reel, not a lost reel
                     log.warning("[%s] narration failed (%s); the reel goes out silent", site.key, exc)
                     audio, durations = None, video.plan(frames, texts)
+            voiced = audio is not None
+            if settings.reel_music:
+                # the music bed for the story's mood, under the voice when there is one
+                try:
+                    audio = music.soundtrack(post.mood or music.DEFAULT_MOOD, sum(durations),
+                                             work_dir / site.slug / f"{stem}-mix.wav", voice_wav=audio,
+                                             seed=post.title, music_dir=settings.data_dir / "music")
+                except Exception as exc:  # noqa: BLE001 - no bed is not no reel
+                    log.warning("[%s] music bed failed (%s); the reel goes out without one", site.key, exc)
             reel_path = video.render_reel(frames, work_dir / site.slug / f"{stem}-reel.mp4", durations,
                                           images.hex_to_rgb(site.brand.accent), audio=audio)
-            log.info("[%s] reel: %d frames, %.0fs, %s, %d KB", site.key, len(frames), sum(durations),
-                     "narrated" if audio else "silent", reel_path.stat().st_size // 1024)
+            log.info("[%s] reel: %d frames, %.0fs, %s%s, %d KB", site.key, len(frames), sum(durations),
+                     "narrated" if voiced else "no voice", f", {music.mood_of(post.mood)} bed" if settings.reel_music else "",
+                     reel_path.stat().st_size // 1024)
         except Exception as exc:  # noqa: BLE001 - the reel is a bonus; the feed post must not depend on it
             log.warning("[%s] could not render the reel: %s", site.key, exc)
             reel_path = None

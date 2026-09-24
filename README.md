@@ -180,11 +180,17 @@ frames (cover, text frames, closing) become a 20-30 second 1080x1920 reel in `au
 Each frame holds for as long as its text takes to read, drifts with a slow zoom that alternates
 direction, dissolves into the next, and a segmented progress bar along the top says how much is
 left. The soundtrack is an **original narration** of the same text: `autopub/speech.py` runs a
-Piper neural voice (`settings.reel_voice`, default `en_US-ryan-high`; the ~120 MB model is fetched
-once into `<data_dir>/voices`) on the CPU, and each frame holds for as long as its lines take to
-say. Instagram files audio the account made itself as original audio. No music: the API adds none
-and a licensed track is not something to guess at. Set `reel_voice: ""` for silent reels; a voice
-that cannot be loaded also falls back to silence rather than losing the reel. The MP4 is uploaded to
+Kokoro neural voice (`settings.reel_voice`, default `af_heart`; others: `af_bella`, `am_michael`,
+`bm_george`, `bf_emma`; the ~350 MB model is fetched once into `<data_dir>/voices`) in a child
+process on the CPU, and each frame holds for as long as its lines take to say. A Piper voice name
+(`en_US-ryan-high`) still works as a lighter fallback. Instagram files audio the account made itself
+as original audio. Under the voice sits a **music bed matched to the story's mood** (`mood`, written
+by the rewriter: upbeat, calm, serious or nostalgic; the throwback is nostalgic): `autopub/music.py`
+uses a track of yours from `<data_dir>/music/<mood>/` when one is there (MP3 or WAV, your licence,
+looped or trimmed to length), else composes one on the spot from the mood's key, tempo and
+progression, deterministic per story. Either way it sits well under the voice and dips further while
+it speaks. `reel_music: false` for voice only; `reel_voice: ""` for no voice; a voice that cannot be
+loaded falls back to silence rather than losing the reel. The MP4 is uploaded to
 WordPress like the images and posted as an Instagram `REELS` container (card as the cover, feed
 caption, in the profile grid too unless `reel_share_to_feed: false`) and as a Facebook Page video
 with the link in the description. Enabled by `instagram_reel` and `facebook_video` in a site's
@@ -192,7 +198,7 @@ with the link in the description. Enabled by `instagram_reel` and `facebook_vide
 comes from the `imageio-ffmpeg` wheel, so nothing is installed on the host. Preview one with:
 
 ```bash
-docker compose run --rm autopub python -m autopub cards --reel --site CRAZY
+docker compose run --rm autopub python -m autopub cards --reel --site CRAZY --mood upbeat
 ```
 
 ### The daily throwback

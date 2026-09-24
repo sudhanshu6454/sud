@@ -98,7 +98,10 @@ class Settings:
     reel_share_to_feed: bool = True     # show reels in the profile grid too, not only in the Reels tab
     # The reel's narration: a Piper voice name (rhasspy/piper-voices), fetched once into <data_dir>/voices.
     # "" posts silent reels.
-    reel_voice: str = "en_US-ryan-high"
+    reel_voice: str = "af_heart"
+    # A music bed under the reel, matched to the story's mood: your own licensed tracks from
+    # <data_dir>/music/<mood>/ when present, else one composed on the spot. False = voice only.
+    reel_music: bool = True
     # The daily throwback: one iconic ad campaign, revisited, on sites with `nostalgia: true`. The first
     # cycle at or after this hour (in `timezone`) publishes it. None switches it off.
     nostalgia_hour: int | None = 15

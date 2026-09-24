@@ -86,8 +86,10 @@ def cmd_check(settings, args) -> int:
               f"{settings.timezone} each day also goes out as a reel and a Page video")
     else:
         print("reels: off (settings.reel_hours is empty)")
+    from . import speech as _speech
     print(f"reel voice: {settings.reel_voice or 'none (silent reels)'}"
-          + (f" in {settings.data_dir / 'voices'}" if settings.reel_voice else ""))
+          + (f" ({'Kokoro' if _speech.is_kokoro(settings.reel_voice) else 'Piper'}, in {settings.data_dir / 'voices'})" if settings.reel_voice else ""))
+    print(f"reel music: {'on, own tracks from ' + str(settings.data_dir / 'music') + '/<mood>/ else composed' if settings.reel_music else 'off'}")
     print(f"follow-ups: steal card at or after {settings.steal_hour:02d}:00, debate story at or after {settings.debate_hour:02d}:00 "
           f"{settings.timezone}, posted {settings.followup_delay_minutes} min after their article"
           if settings.steal_hour is not None and settings.debate_hour is not None else "follow-ups: partly off")
@@ -196,10 +198,17 @@ def cmd_cards(settings, args) -> int:
                 scripts = [headline, *[f"{h}. {b}" for h, b in sample], f"Read the full story on {site.domain}. Link in bio."]
                 audio, durations = narrator.soundtrack(scripts, out_dir / f"{site.slug}-reel-voice.wav",
                                                        floor=[speech.LEAD_IN + speech.PAD_AFTER + 1.5] * len(frames))
+            voiced = audio is not None
+            mood = args.mood or "calm"
+            if settings.reel_music:
+                from . import music
+                audio = music.soundtrack(mood, sum(durations), out_dir / f"{site.slug}-reel-mix.wav", voice_wav=audio,
+                                         seed=headline, music_dir=settings.data_dir / "music")
             path = video.render_reel(frames, out_dir / f"{site.slug}-reel.mp4", durations, images.hex_to_rgb(site.brand.accent), audio=audio)
             info = video.probe(path)
             print(f"   {path.stat().st_size // 1024:>5} KB  {info.get('width')}x{info.get('height')} {info.get('codec')} "
-                  f"{info.get('duration', 0):.1f}s  {'narrated by ' + settings.reel_voice if audio else 'silent (no voice loaded)'}  {path}")
+                  f"{info.get('duration', 0):.1f}s  {'narrated by ' + settings.reel_voice if voiced else 'no voice loaded'}"
+                  f"{', ' + mood + ' music' if settings.reel_music else ''}  {path}")
             continue
         if args.carousel:
             # the whole swipe from sample slides: cover card, content slides, closing slide
@@ -350,6 +359,7 @@ def main(argv=None) -> int:
     c.add_argument("--formats", action="store_true", help="render every Instagram card format from sample material")
     c.add_argument("--carousel", action="store_true", help="render a sample carousel: cover, content slides, closing")
     c.add_argument("--reel", action="store_true", help="render a sample reel (MP4) from the story frames")
+    c.add_argument("--mood", help="music mood for the sample reel: upbeat, calm, serious or nostalgic")
     n = sub.add_parser("nostalgia", help="publish today's classic-ad throwback now (or --dry-run to see the pick)")
     n.add_argument("--site"); n.add_argument("--dry-run", action="store_true", help="pick and look up the film, publish nothing")
     ip = sub.add_parser("instagram-probe", help="ask Instagram whether it accepts a taller card yet (posts nothing)")

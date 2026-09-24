@@ -28,7 +28,13 @@ settings:
   # silent, the brand ground, a progress bar). [] switches it off.
   reel_hours: [12, 21]
   reel_share_to_feed: true            # reels appear in the profile grid as well as the Reels tab
-  reel_voice: en_US-ryan-high         # the reel's narration (a Piper voice, fetched once into /data/voices); "" = silent
+  # The reel's narration. A Kokoro voice (af_heart, af_bella, am_michael, bm_george, bf_emma ...) is the
+  # natural-sounding one; a Piper name (en_US-ryan-high) still works. Models are fetched once into
+  # /data/voices. "" = silent.
+  reel_voice: af_heart
+  # Music under the reel, matched to the story's mood (upbeat, calm, serious, nostalgic). Your own
+  # licensed tracks go in /data/music/<mood>/ and are used first; otherwise a bed is composed.
+  reel_music: true
   # The daily throwback: one iconic ad campaign revisited, with the official YouTube film embedded,
   # on the sites that set nostalgia to true. Published by the first cycle at or after this hour.
   nostalgia_hour: 15

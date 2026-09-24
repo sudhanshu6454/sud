@@ -179,6 +179,7 @@ def write(rewriter: Rewriter, site: Site, choice: Pick, film: dict | None) -> Cu
         post.tags = (post.tags + ["Throwback"])[:8]
     post.category = CATEGORY
     post.image_kicker = KICKER
+    post.mood = post.mood or "nostalgic"
     if film:
         caption = f"{choice.brand}: {choice.campaign}" + (f" ({choice.year})" if choice.year else "") + f". Video: {film['channel']} on YouTube."
         post.body_html = embed_block(film["url"], caption) + post.body_html
