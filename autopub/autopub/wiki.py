@@ -70,6 +70,7 @@ class Film:
     title: str
     page: str | None = None          # the film's Wikipedia page title, when linked
     notes: str = ""
+    role: str = ""
     budget_cr: float | None = None   # crore INR
     gross_cr: float | None = None    # crore INR, worldwide where given
     language: str = ""
@@ -124,6 +125,7 @@ def parse_filmography(page: str) -> list[Film]:
         if title_col is None:
             continue
         notes_col = next((i for i, h in enumerate(headers) if h.startswith("note")), None)
+        role_col = next((i for i, h in enumerate(headers) if h.startswith("role") or h.startswith("character")), None)
         lang_col = next((i for i, h in enumerate(headers) if h.startswith("language")), None)
         carry: dict[int, tuple[tuple[str, int, str | None], int]] = {}
         for row in rows[1:]:
@@ -161,6 +163,7 @@ def parse_filmography(page: str) -> list[Film]:
             title = title.strip(" *")
             films.append(Film(year=int(ym.group()), title=title, page=logical[title_col][2],
                               notes=logical[notes_col][0] if notes_col is not None and notes_col < len(logical) else "",
+                              role=logical[role_col][0] if role_col is not None and role_col < len(logical) else "",
                               language=logical[lang_col][0] if lang_col is not None and lang_col < len(logical) else ""))
     # the same film can appear twice (two tables, dubbed versions): keep the first
     seen, out = set(), []
@@ -170,6 +173,17 @@ def parse_filmography(page: str) -> list[Film]:
             seen.add(key)
             out.append(f)
     return out
+
+
+_APPEARANCE = re.compile(r"cameo|guest|special appearance|friendly appearance|item number|special song|"
+                         r"\bvoice\b|narrat|\bherself\b|\bhimself\b|uncredited|archive footage|extended appearance|"
+                         r"\bdubbed\b|\bdubbing\b", re.I)
+
+
+def is_appearance(film: Film) -> bool:
+    """A cameo, guest or special appearance, a voice or a song number: on the filmography, not in
+    the record. Judged from the role and the notes, which is where Wikipedia marks it."""
+    return bool(_APPEARANCE.search(f"{film.role} {film.notes}"))
 
 
 def filmography(actor: str) -> tuple[str, list[Film]] | None:

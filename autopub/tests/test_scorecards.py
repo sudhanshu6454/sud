@@ -38,6 +38,16 @@ def test_the_filmography_reader_unrolls_rowspans_and_keeps_only_the_film_tables(
     assert not any(f.title in ("Some Show", "Short One", "TBA") for f in films), "television, shorts and unreleased rows stay out"
 
 
+def test_cameos_guest_and_special_appearances_are_left_out_of_the_record():
+    films = wiki.parse_filmography(PAGE)
+    assert [wiki.is_appearance(f) for f in films] == [False, True, False], "Film B is marked Cameo in its notes"
+    for role, notes in (("Herself", ""), ("Voice", ""), ("Raj", "Special appearance"), ("Raj", "Guest appearance"),
+                        ("Dancer", "Item number"), ("Narrator", ""), ("Raj", "Uncredited")):
+        assert wiki.is_appearance(wiki.Film(2020, "X", role=role, notes=notes)), (role, notes)
+    for role, notes in (("Raj Malhotra", ""), ("Rahul", "Nominated for the Filmfare Award"), ("Vijay", "Tamil film")):
+        assert not wiki.is_appearance(wiki.Film(2020, "X", role=role, notes=notes)), (role, notes)
+
+
 def test_money_strings_become_crore_rupees():
     assert wiki.crore("₹1,050–1,160 crore") == 1050.0
     assert wiki.crore("est. ₹300 crore") == 300.0
@@ -83,6 +93,8 @@ def test_the_lead_image_is_taken_only_under_a_licence_that_allows_reuse(monkeypa
 def _fake_wiki(monkeypatch, n_recent=8, with_money=8):
     this = date.today().year
     films = [wiki.Film(year=1999 + i, title=f"Old {i}", page=f"Old {i}") for i in range(6)]
+    films += [wiki.Film(year=2003, title="Cameo One", page="Cameo One", notes="Cameo appearance"),
+              wiki.Film(year=2005, title="Cameo Two", page="Cameo Two", role="Himself")]
     films += [wiki.Film(year=this - n_recent + i, title=f"Recent {i}", page=f"Recent {i}") for i in range(n_recent)]
     monkeypatch.setattr(wiki, "filmography", lambda actor: ("Star filmography", films))
     money = {f"Recent {i}": (100.0, [120.0, 90.0, 300.0, 210.0, 180.0, 400.0, 110.0, 260.0][i % 8]) for i in range(with_money)}
@@ -95,6 +107,7 @@ def test_the_record_is_computed_from_the_figures_not_guessed(monkeypatch):
     _fake_wiki(monkeypatch)
     f = scorecards.gather("Star (actor)")
     assert f is not None and f.actor == "Star" and f.films_total == 14 and f.debut_year == 1999
+    assert f.appearances_left_out == 2, "the two cameos are on the filmography but not in the record"
     # 120/100 flop, 90 flop, 300 blockbuster, 210 hit, 180 hit, 400 blockbuster, 110 flop, 260 blockbuster
     assert f.with_data == 8 and f.hits == 5 and f.blockbusters == 3 and f.average == 0 and f.flops == 3
     assert f.hit_rate == 62 and f.avg_multiple == round(sum([1.2, 0.9, 3.0, 2.1, 1.8, 4.0, 1.1, 2.6]) / 8, 2)
@@ -103,6 +116,7 @@ def test_the_record_is_computed_from_the_figures_not_guessed(monkeypatch):
     assert f.born == "1976-06-22" and f.awards == 9
     html = scorecards.table_html(f)
     assert "<h2>By the numbers</h2>" in html and "hit rate of 62%" in html and "Recent 5" in html and "2.5x budget" in html
+    assert "Cameos, guest and special appearances (2) are not counted" in html
     assert html.count("<tr>") == 1 + 8, "a header row and one row per recent film"
     card = scorecards.card_from(f)
     assert card.stat == "62%" and card.left_value == "5" and card.right_value == "3" and len(card.takeaways) == 3

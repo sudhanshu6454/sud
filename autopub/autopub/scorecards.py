@@ -123,6 +123,7 @@ class Facts:
     recent: list[dict] = field(default_factory=list)   # year, title, budget_cr, gross_cr, multiple, verdict
     as_of: str = ""
     photo: dict | None = None       # the actor's lead image on Wikimedia Commons: url, artist, license
+    appearances_left_out: int = 0   # cameos, guest and special appearances not counted
 
 
 def verdict(multiple: float | None) -> str | None:
@@ -141,7 +142,12 @@ def gather(actor_title: str) -> Facts | None:
         log.info("no filmography found for %r", actor_title)
         return None
     page, films = got
-    films = sorted(films, key=lambda f: f.year)
+    appearances = [f for f in films if wiki.is_appearance(f)]
+    films = sorted((f for f in films if not wiki.is_appearance(f)), key=lambda f: f.year)
+    if appearances:
+        log.info("%r: %d cameo, guest or special appearances left out of the record", actor_title, len(appearances))
+    if len(films) < 5:
+        return None
     this_year = date.today().year
     recent = [f for f in films if f.year >= this_year - RECENT_YEARS and f.year <= this_year and f.page][-MAX_RECENT:]
     rows = []
@@ -189,7 +195,7 @@ def gather(actor_title: str) -> Facts | None:
         recent_five_avg=round(sum(r["multiple"] for r in recent_five) / len(recent_five), 2) if recent_five else None,
         previous_five_avg=round(sum(r["multiple"] for r in previous_five) / len(previous_five), 2) if previous_five else None,
         total_gross_cr=round(sum(r["gross_cr"] for r in rows if r["gross_cr"]), 1),
-        recent=rows, as_of=date.today().strftime("%d %B %Y"), photo=photo,
+        recent=rows, as_of=date.today().strftime("%d %B %Y"), photo=photo, appearances_left_out=len(appearances),
     )
 
 
@@ -243,7 +249,8 @@ def table_html(f: Facts) -> str:
                if f.biggest_hit else "")
     return (
         '<div class="screenstat-scorecard"><h2>By the numbers</h2><ul>'
-        f"<li><strong>Films:</strong> {f.films_total} since {f.debut_year}; {f.films_last_decade} in the last ten years</li>"
+        f"<li><strong>Films:</strong> {f.films_total} since {f.debut_year}; {f.films_last_decade} in the last ten years"
+        + (f" (cameos and guest appearances not counted)" if f.appearances_left_out else "") + "</li>"
         f"<li><strong>Recent films with figures:</strong> {f.with_data} of {len(f.recent)} since {f.recent[0]['year'] if f.recent else f.latest_year}</li>"
         f"<li><strong>Hits:</strong> {f.hits} ({f.blockbusters} blockbusters), <strong>average:</strong> {f.average}, <strong>flops:</strong> {f.flops} "
         f"- a hit rate of {f.hit_rate:.0f}%</li>"
@@ -254,7 +261,9 @@ def table_html(f: Facts) -> str:
         f"<tbody>{rows}</tbody></table>"
         f"<figcaption>Budget and worldwide box office as listed on each film's English Wikipedia page on {f.as_of}; "
         "figures in crore rupees, dollar figures converted at ₹83. ScreenStat's rule: blockbuster at 2.5x budget or more, "
-        "hit at 1.75x, average at 1.25x, flop below. Films without both figures are not judged.</figcaption></figure>"
+        "hit at 1.75x, average at 1.25x, flop below. Films without both figures are not judged."
+        + (f" Cameos, guest and special appearances ({f.appearances_left_out}) are not counted.</figcaption></figure>"
+           if f.appearances_left_out else "</figcaption></figure>")
     )
 
 
