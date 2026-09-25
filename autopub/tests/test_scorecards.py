@@ -53,6 +53,33 @@ def test_the_verdict_rule_is_fixed_and_printed():
     assert scorecards.verdict(1.3) == "Average" and scorecards.verdict(0.9) == "Flop" and scorecards.verdict(None) is None
 
 
+PHOTO = {"url": "https://upload.wikimedia.org/x/Star.jpg", "name": "Star.jpg", "width": 1200, "height": 1600,
+         "artist": "Bollywood Hungama", "license": "CC BY 3.0", "license_url": "https://creativecommons.org/licenses/by/3.0",
+         "page": "https://commons.wikimedia.org/wiki/File:Star.jpg"}
+
+
+def test_the_lead_image_is_taken_only_under_a_licence_that_allows_reuse(monkeypatch):
+    answers = {}
+
+    def fake_get(params, timeout=20, api=None):
+        if params.get("prop") == "pageimages":
+            return {"query": {"pages": {"1": {"pageimage": "Star.jpg", "original": {"source": "https://upload.wikimedia.org/x/Star.jpg", "width": 1200, "height": 1600}}}}}
+        return {"query": {"pages": {"2": {"imageinfo": [{"extmetadata": {k: {"value": v} for k, v in answers.items()}}]}}}}
+
+    monkeypatch.setattr(wiki, "get", fake_get)
+    answers.update(Artist="<a href='x'>Bollywood Hungama</a>\n", LicenseShortName="CC BY 3.0", LicenseUrl="https://creativecommons.org/licenses/by/3.0")
+    img = wiki.lead_image("Star (actor)")
+    assert img["artist"] == "Bollywood Hungama" and img["license"] == "CC BY 3.0" and img["width"] == 1200
+    assert img["page"] == "https://commons.wikimedia.org/wiki/File:Star.jpg"
+    for bad in ("Non-free fair use", "CC BY-NC-SA 4.0", "CC BY-ND 4.0", ""):
+        answers["LicenseShortName"] = bad
+        assert wiki.lead_image("Star (actor)") is None, bad
+    answers["LicenseShortName"] = "GODL-India"
+    assert wiki.lead_image("Star (actor)")["license"] == "GODL-India"
+    monkeypatch.setattr(wiki, "get", lambda *a, **k: {"query": {"pages": {"1": {}}}})
+    assert wiki.lead_image("Nobody") is None
+
+
 def _fake_wiki(monkeypatch, n_recent=8, with_money=8):
     this = date.today().year
     films = [wiki.Film(year=1999 + i, title=f"Old {i}", page=f"Old {i}") for i in range(6)]
@@ -61,6 +88,7 @@ def _fake_wiki(monkeypatch, n_recent=8, with_money=8):
     money = {f"Recent {i}": (100.0, [120.0, 90.0, 300.0, 210.0, 180.0, 400.0, 110.0, 260.0][i % 8]) for i in range(with_money)}
     monkeypatch.setattr(wiki, "film_money", lambda page: money.get(page, (None, None)))
     monkeypatch.setattr(wiki, "person", lambda title: wiki.Person(title=title, born="1976-06-22", awards=9) if title == "Star (actor)" else wiki.Person(title=title))
+    monkeypatch.setattr(wiki, "lead_image", lambda title: dict(PHOTO))
 
 
 def test_the_record_is_computed_from_the_figures_not_guessed(monkeypatch):
@@ -115,10 +143,19 @@ def test_the_slot_publishes_a_scorecard_with_the_table_and_a_figure_card(monkeyp
     wp = FakeWP()
     Recorder.seen.clear()
     rw = FakeRewriter([Pick(actor="Star (actor)", industry="Tamil", why_now="a release this week")])
+    from PIL import Image
+    def fake_fetch(photo, out_dir):
+        path = tmp_path / "star.jpg"
+        Image.new("RGB", (1200, 1600), (30, 90, 200)).save(path)
+        return path
+    monkeypatch.setattr(scorecards, "fetch_photo", fake_fetch)
     report = pipeline.run_site(site, settings, state, rewriter=rw, wp=wp, publishers=[Recorder({})], work_dir=tmp_path / "img")
     assert report.published == ["https://marketingmentalist.in/star-scorecard/"]
     body = wp.posts[0]["content"]
-    assert body.startswith('<div class="screenstat-scorecard">') and "Star filmography on Wikipedia" in body
+    assert body.startswith('<figure class="wp-block-image size-large screenstat-portrait">'), "the photo leads the page"
+    assert 'Photo: <a href="https://commons.wikimedia.org/wiki/File:Star.jpg"' in body and "CC BY 3.0" in body
+    assert '<div class="screenstat-scorecard">' in body and "Star filmography on Wikipedia" in body
+    assert wp.media[0].name == "star.jpg", "the photo is uploaded first, with its credit, and the cards are drawn from it"
     assert ("categories", "Scorecards") in wp.terms
     assert "Hindi film industry" in rw.systems[0], "the first slot asks for a Hindi actor; industries rotate by slot"
     assert "FACTS (the only figures you may use)" in rw.users[1] and '"hit_rate": 62' in rw.users[1]

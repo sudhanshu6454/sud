@@ -263,7 +263,11 @@ around them, told to add no number of its own. ScreenStat's verdict rule is prin
 scorecard: blockbuster at 2.5x budget or more, hit at 1.75x, average at 1.25x, flop below; films
 Wikipedia has no figures for are counted but not judged. An actor with fewer than five recent films
 with figures is skipped, not guessed at. The card is built from the figures (the hit rate, hits
-against flops, three takeaways). Filed under **Scorecards**.
+against flops, three takeaways). The actor's lead image on Wikimedia Commons is used when its licence
+allows reuse with credit (Creative Commons attribution licences, public domain, India's GODL; never
+non-free or non-commercial files): it is uploaded to the site's media library, shown at the top of the
+scorecard with the author and licence linked, and stands behind the cards with the same credit on the
+card. Filed under **Scorecards**.
 
 ```bash
 docker compose run --rm autopub python -m autopub scorecard --dry-run --actor "Vijay (actor)"   # the figures, nothing published

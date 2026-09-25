@@ -122,6 +122,7 @@ class Facts:
     total_gross_cr: float
     recent: list[dict] = field(default_factory=list)   # year, title, budget_cr, gross_cr, multiple, verdict
     as_of: str = ""
+    photo: dict | None = None       # the actor's lead image on Wikimedia Commons: url, artist, license
 
 
 def verdict(multiple: float | None) -> str | None:
@@ -166,6 +167,11 @@ def gather(actor_title: str) -> Facts | None:
         log.debug("wikidata: %s", exc)
         who = wiki.Person(title=own_page)
     display = re.sub(r"\s*\([^)]*\)\s*$", "", own_page).strip() or own_page
+    try:
+        photo = wiki.lead_image(own_page)
+    except Exception as exc:  # noqa: BLE001 - no picture is not no scorecard
+        log.debug("lead image: %s", exc)
+        photo = None
     counts = {label: sum(1 for r in judged if r["verdict"] == label) for _, label in RULE}
     multiples = [r["multiple"] for r in judged]
     by_gross = max((r for r in rows if r["gross_cr"]), key=lambda r: r["gross_cr"], default=None)
@@ -183,8 +189,37 @@ def gather(actor_title: str) -> Facts | None:
         recent_five_avg=round(sum(r["multiple"] for r in recent_five) / len(recent_five), 2) if recent_five else None,
         previous_five_avg=round(sum(r["multiple"] for r in previous_five) / len(previous_five), 2) if previous_five else None,
         total_gross_cr=round(sum(r["gross_cr"] for r in rows if r["gross_cr"]), 1),
-        recent=rows, as_of=date.today().strftime("%d %B %Y"),
+        recent=rows, as_of=date.today().strftime("%d %B %Y"), photo=photo,
     )
+
+
+def credit_line(photo: dict) -> str:
+    """The attribution a Creative Commons image asks for, short enough for a card's credit."""
+    return f"{photo['artist'][:28].rstrip(', ')}, {photo['license']} via Wikimedia Commons"
+
+
+def photo_html(photo: dict, actor: str, src: str) -> str:
+    return (f'<figure class="wp-block-image size-large screenstat-portrait"><img src="{src}" alt="{actor}">'
+            f'<figcaption class="wp-element-caption">{actor}. Photo: <a href="{photo["page"]}" rel="nofollow noopener" target="_blank">'
+            f'{photo["artist"]}</a>, <a href="{photo["license_url"] or photo["page"]}" rel="nofollow noopener" target="_blank">'
+            f'{photo["license"]}</a>, via Wikimedia Commons.</figcaption></figure>')
+
+
+def fetch_photo(photo: dict, out_dir) -> "Path | None":
+    """Download the Commons original for the article and the cards, with the User-Agent Wikimedia asks for."""
+    import requests
+    from pathlib import Path
+    try:
+        resp = requests.get(photo["url"], headers=wiki.UA, timeout=30)
+        resp.raise_for_status()
+    except Exception as exc:  # noqa: BLE001
+        log.info("photo download failed: %s", exc)
+        return None
+    ext = ".png" if photo["name"].lower().endswith(".png") else ".jpg"
+    out = Path(out_dir) / ("actor-" + re.sub(r"[^a-z0-9]+", "-", photo["name"].lower())[:40].strip("-") + ext)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_bytes(resp.content)
+    return out
 
 
 def _cr(v: float | None) -> str:
@@ -321,8 +356,20 @@ def publish_daily(site: Site, settings: Settings, state: State, rewriter: Rewrit
     except Exception as exc:  # noqa: BLE001
         state.release(url, site.key)
         raise RuntimeError(f"scorecard could not be written: {exc}") from exc
+    # the actor's picture: in the article with its credit, and as the photo behind the cards
+    image_url = credit = None
+    if facts.photo:
+        local = fetch_photo(facts.photo, work_dir / site.slug)
+        if local is not None:
+            try:
+                media = wp.upload_media(local, f"{facts.actor} (photo)", alt_text=facts.actor,
+                                        caption=f"Photo: {facts.photo['artist']}, {facts.photo['license']}, via Wikimedia Commons")
+                post.body_html = photo_html(facts.photo, facts.actor, media["source_url"]) + post.body_html
+                image_url, credit = media["source_url"], credit_line(facts.photo)
+            except Exception as exc:  # noqa: BLE001
+                log.warning("[%s] photo upload failed: %s", site.key, exc)
     ok = pipeline.publish_post(site, settings, state, url, post, wp, publishers, work_dir, report,
-                               image_url=None, credit=None, use_source_image=False)
+                               image_url=image_url, credit=credit, use_source_image=image_url is not None)
     if ok:
         state.set_note(site.key, USED_NOTE, "\n".join((used + [facts.actor])[-500:]))
         state.set_note(site.key, NOTE, carousels.dump_log(slot_log + [time.time()]))

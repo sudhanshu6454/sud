@@ -250,3 +250,33 @@ def person(title: str) -> Person:
         born = t[1:11] if t else None
     return Person(title=title, born=born, awards=len(claims.get("P166", [])),
                   description=ent.get("descriptions", {}).get("en", {}).get("value", ""))
+
+
+# ---- the lead image ---------------------------------------------------------------------------------
+
+FREE_LICENCES = ("cc by", "cc0", "public domain", "godl", "pd-")     # reuse allowed with credit; NC and ND are not
+
+
+def lead_image(title: str) -> dict | None:
+    """The page's lead image with its author and licence, or None when there is none we may reuse.
+
+    Non-free and non-commercial files are left alone: a scorecard is published on a commercial
+    site, so only Creative Commons attribution licences, public domain and India's GODL qualify."""
+    data = get({"action": "query", "titles": title, "prop": "pageimages", "piprop": "original|name", "redirects": 1})
+    page = next(iter(data.get("query", {}).get("pages", {}).values()), {})
+    name, original = page.get("pageimage"), page.get("original") or {}
+    if not name or not original.get("source"):
+        return None
+    info = get({"action": "query", "titles": f"File:{name}", "prop": "imageinfo", "iiprop": "extmetadata|url|size",
+                "iiextmetadatafilter": "Artist|LicenseShortName|LicenseUrl"})
+    ii = (next(iter(info.get("query", {}).get("pages", {}).values()), {}).get("imageinfo") or [{}])[0]
+    meta = {k: _text(v.get("value", "")) for k, v in (ii.get("extmetadata") or {}).items()}
+    licence = meta.get("LicenseShortName", "")
+    low = licence.lower()
+    if not any(low.startswith(ok) or ok in low for ok in FREE_LICENCES) or "-nc" in low or "-nd" in low:
+        log.info("lead image of %r is %r; not reused", title, licence or "unlicensed")
+        return None
+    return {"url": original["source"], "name": name, "width": int(original.get("width") or 0),
+            "height": int(original.get("height") or 0), "artist": meta.get("Artist", "").strip()[:60] or "Wikimedia Commons",
+            "license": licence, "license_url": meta.get("LicenseUrl", ""),
+            "page": f"https://commons.wikimedia.org/wiki/File:{name}"}

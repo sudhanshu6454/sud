@@ -826,7 +826,7 @@ def _render_portrait(headline: str, kicker: str, standfirst: str | None, site: S
             _shade_bottom(band, 0.0, 0.62)
             img.paste(band, (0, photo_bottom - band_h))
             cfont = _font(S(CREDIT_SIZE), bold=False, family=family)
-            label = f"Photo: {credit}"[:48]
+            label = f"Photo: {credit}"[:70]      # long enough for an author, a licence and 'via Wikimedia Commons'
             draw = ImageDraw.Draw(img)
             tw = draw.textlength(label, font=cfont)
             draw.text((w - S(SIDE) - tw, photo_bottom - S(30) - cfont.size), label,
