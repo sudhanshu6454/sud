@@ -28,13 +28,11 @@ settings:
   # silent, the brand ground, a progress bar). [] switches it off.
   reel_hours: [12, 21]
   reel_share_to_feed: true            # reels appear in the profile grid as well as the Reels tab
-  # The reel's narration. For a real Indian English voice use a cloud voice, free at this volume:
-  #   azure:en-IN-AartiNeural   (or en-IN-NeerjaNeural; male: en-IN-PrabhatNeural) with AZURE_SPEECH_KEY
-  #                              and AZURE_SPEECH_REGION in .env
-  #   google:en-IN-Neural2-A    (female; D is male) with GOOGLE_TTS_API_KEY in .env
-  # Local voices need no key: Kokoro hf_alpha / hf_beta (Hindi-trained, generic accent in English),
-  # af_heart / am_michael (American), bf_emma / bm_george (British); Piper en_US-ryan-high. "" = silent.
-  reel_voice: azure:en-IN-AartiNeural
+  # The reel's narration. Local voices need no key: Kokoro af_heart / af_bella (female), am_michael
+  # (male), bf_emma / bm_george (British); Piper en_US-ryan-high. A real Indian English voice needs a
+  # cloud key, free at this volume: azure:en-IN-AartiNeural (AZURE_SPEECH_KEY + AZURE_SPEECH_REGION in
+  # .env) or google:en-IN-Neural2-A (GOOGLE_TTS_API_KEY). "" = silent.
+  reel_voice: af_heart
   # Music under the reel, matched to the story's mood (upbeat, calm, serious, nostalgic). Your own
   # licensed tracks go in /data/music/<mood>/ and are used first; otherwise a bed is composed.
   reel_music: true
