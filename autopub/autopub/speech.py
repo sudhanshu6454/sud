@@ -18,7 +18,7 @@ from pathlib import Path
 
 log = logging.getLogger(__name__)
 
-DEFAULT_VOICE = "af_heart"
+DEFAULT_VOICE = "hf_alpha"     # Indian English, female; af_heart / am_michael for American, bf_emma / bm_george for British
 RATE = 22050                 # Piper's output; Kokoro's is 24000; ffmpeg resamples to 48k for the reel
 KOKORO_RATE = 24000
 KOKORO_FILES = {             # hexgrad/Kokoro-82M (Apache-2.0) as packaged by thewh1teagle/kokoro-onnx
@@ -33,7 +33,9 @@ def is_kokoro(voice: str) -> bool:
 
 
 def kokoro_lang(voice: str) -> str:
-    return {"a": "en-us", "b": "en-gb", "e": "es", "f": "fr-fr", "h": "hi", "i": "it", "j": "ja", "p": "pt-br", "z": "cmn"}.get(voice[:1], "en-us")
+    """The phoneme set for the voice. The scripts are English, so the Hindi voices (hf_*, hm_*) read
+    English phonemes and come out as Indian English rather than Hindi-pronounced English."""
+    return {"a": "en-us", "b": "en-gb", "h": "en-us", "e": "es", "f": "fr-fr", "i": "it", "j": "ja", "p": "pt-br", "z": "cmn"}.get(voice[:1], "en-us")
 PAD_AFTER = 0.7              # seconds of quiet after a frame's narration before the dissolve
 LEAD_IN = 0.35               # seconds before the first word of a frame
 

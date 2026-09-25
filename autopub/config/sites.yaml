@@ -28,10 +28,10 @@ settings:
   # silent, the brand ground, a progress bar). [] switches it off.
   reel_hours: [12, 21]
   reel_share_to_feed: true            # reels appear in the profile grid as well as the Reels tab
-  # The reel's narration. A Kokoro voice (af_heart, af_bella, am_michael, bm_george, bf_emma ...) is the
-  # natural-sounding one; a Piper name (en_US-ryan-high) still works. Models are fetched once into
-  # /data/voices. "" = silent.
-  reel_voice: af_heart
+  # The reel's narration: a Kokoro voice. hf_alpha and hf_beta are Indian English (female), hm_omega and
+  # hm_psi Indian English (male); af_heart / am_michael American, bf_emma / bm_george British. A Piper
+  # name (en_US-ryan-high) still works. Models are fetched once into /data/voices. "" = silent.
+  reel_voice: hf_alpha
   # Music under the reel, matched to the story's mood (upbeat, calm, serious, nostalgic). Your own
   # licensed tracks go in /data/music/<mood>/ and are used first; otherwise a bed is composed.
   reel_music: true

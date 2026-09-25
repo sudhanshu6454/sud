@@ -180,8 +180,9 @@ frames (cover, text frames, closing) become a 20-30 second 1080x1920 reel in `au
 Each frame holds for as long as its text takes to read, drifts with a slow zoom that alternates
 direction, dissolves into the next, and a segmented progress bar along the top says how much is
 left. The soundtrack is an **original narration** of the same text: `autopub/speech.py` runs a
-Kokoro neural voice (`settings.reel_voice`, default `af_heart`; others: `af_bella`, `am_michael`,
-`bm_george`, `bf_emma`; the ~350 MB model is fetched once into `<data_dir>/voices`) in a child
+Kokoro neural voice (`settings.reel_voice`, default `hf_alpha`, Indian English, female; also
+`hf_beta`, the male `hm_omega` and `hm_psi`, and the American and British `af_heart`, `am_michael`,
+`bf_emma`, `bm_george`; the ~350 MB model is fetched once into `<data_dir>/voices`) in a child
 process on the CPU, and each frame holds for as long as its lines take to say. A Piper voice name
 (`en_US-ryan-high`) still works as a lighter fallback. Instagram files audio the account made itself
 as original audio. Under the voice sits a **music bed matched to the story's mood** (`mood`, written

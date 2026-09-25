@@ -61,7 +61,7 @@ def test_your_own_track_is_preferred_and_looped_to_length(tmp_path, monkeypatch)
 def test_voice_names_pick_their_backend():
     assert speech.is_kokoro("af_heart") and speech.is_kokoro("bm_george") and speech.is_kokoro("hf_alpha")
     assert not speech.is_kokoro("en_US-ryan-high") and not speech.is_kokoro("") and not speech.is_kokoro("heart")
-    assert speech.kokoro_lang("af_heart") == "en-us" and speech.kokoro_lang("bf_emma") == "en-gb" and speech.kokoro_lang("hf_alpha") == "hi"
+    assert speech.kokoro_lang("af_heart") == "en-us" and speech.kokoro_lang("bf_emma") == "en-gb" and speech.kokoro_lang("hf_alpha") == "en-us"
 
 
 def test_kokoro_synthesises_in_a_child_and_a_missing_package_means_silence(tmp_path, monkeypatch):
