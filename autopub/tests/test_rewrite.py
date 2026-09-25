@@ -212,3 +212,17 @@ def test_category_is_snapped_to_a_real_section(site):
 def test_unknown_category_falls_back_to_the_default(site):
     data = dict(GOOD, category="Sports")
     assert Rewriter(client=FakeClient(_resp(json.dumps(data)))).rewrite(site, ARTICLE).category == site.category
+
+
+def test_a_reply_cut_off_at_the_token_limit_is_asked_again_with_twice_the_room(site):
+    class Client(FakeClient):
+        def _create(self, **kw):
+            self.calls.append(("plain", kw))
+            if len(self.calls) == 1:
+                return _resp('{"title": "Brands Re', stop="max_tokens")
+            return _resp(json.dumps(GOOD))
+    client = Client(None)
+    post = Rewriter(model="m", client=client, use_fallbacks=False).rewrite(site, ARTICLE)
+    assert post.title == "Brands Rethink Loyalty"
+    assert [kw["max_tokens"] for _, kw in client.calls] == [16000, 32000]
+    assert len(client.calls[1][1]["messages"]) == 1, "the retry is the same request, not a corrective turn"

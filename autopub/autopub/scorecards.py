@@ -312,7 +312,8 @@ def write(rewriter: Rewriter, site: Site, facts: Facts, why_now: str) -> Curated
     user = (f"ACTOR: {facts.actor}\nWHY NOW: {why_now}\n"
             f"SITE_HASHTAGS (use some in instagram/twitter captions): {' '.join('#' + h for h in site.hashtags)}\n\n"
             f"FACTS (the only figures you may use):\n{json.dumps(payload, ensure_ascii=False, indent=1)}")
-    post = rewriter.ask(system, user, schema, CuratedPost.model_validate)
+    # the facts table is long and the model reasons over it inside the same budget as its answer
+    post = rewriter.ask(system, user, schema, CuratedPost.model_validate, max_tokens=32000)
     post.tags = [t.strip() for t in post.tags if t and t.strip()][:8]
     if "scorecard" not in [t.lower() for t in post.tags]:
         post.tags = (post.tags + ["Scorecard"])[:8]

@@ -310,9 +310,14 @@ class Rewriter:
                 break
             except (json.JSONDecodeError, ValidationError, ValueError, TypeError) as exc:
                 # a reasoning model spends its thinking inside max_tokens; when the answer itself was cut
-                # off there is nothing to correct, so say that rather than asking again
+                # off there is nothing to correct in it, so the one retry is the same request with twice
+                # the room rather than a corrective turn
                 if response.stop_reason == "max_tokens":
-                    raise RuntimeError("model output truncated at max_tokens") from exc
+                    if attempt == 2 or max_tokens >= 64000:
+                        raise RuntimeError("model output truncated at max_tokens") from exc
+                    log.warning("model output truncated at %d tokens; asking again with %d", max_tokens, max_tokens * 2)
+                    max_tokens *= 2
+                    continue
                 if attempt == 2:
                     raise RuntimeError(f"unusable model output: {exc}") from exc
                 log.warning("model did not return the schema (%s); asking once more", type(exc).__name__)
