@@ -145,7 +145,8 @@ def _queue_followups(site: Site, settings: Settings, state: State, post: Curated
 def publish_post(site: Site, settings: Settings, state: State, url: str, post: CuratedPost, wp: WordPress,
                  publishers, work_dir: Path, report: RunReport, *, image_url: str | None = None, credit: str | None = None,
                  use_source_image: bool | None = None, want_carousel: bool = False, want_reel: bool = False,
-                 force_reel: bool = False, carousel_log: list[float] | None = None, reel_log: list[float] | None = None) -> bool:
+                 force_reel: bool = False, carousel_log: list[float] | None = None, reel_log: list[float] | None = None,
+                 card_brief=None) -> bool:
     """Everything after the words exist: cards, story frames, reel, carousel, WordPress, socials.
 
     `url` is the claimed source key in `state`; `image_url` and `credit` are the source photo and
@@ -159,15 +160,15 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
     if use_source_image is None:
         use_source_image = site.use_source_image
     history = cards.parse_history(state.note(site.key, "card_formats"))
-    kind = cards.choose(history, post.card, photo=bool(use_source_image and image_url))
+    kind = card_brief.kind if card_brief is not None else cards.choose(history, post.card, photo=bool(use_source_image and image_url))
     kicker = post.image_kicker or post.category or site.category
     # the hook is what stops the scroll, so it is set large; the headline that would have been
     # there runs beneath it as the standfirst. Without a hook the card reads as before.
     hook = (post.hook or "").strip()
     card_headline = hook if len(hook) >= 8 else (post.image_headline or post.title)
     card_standfirst = (post.image_headline or post.title) if len(hook) >= 8 else post.excerpt
-    brief = cards.brief(kind, post.card, card_headline,
-                        kicker if kind == cards.HEADLINE else cards.KICKERS.get(kind, kicker), card_standfirst)
+    brief = card_brief if card_brief is not None else cards.brief(
+        kind, post.card, card_headline, kicker if kind == cards.HEADLINE else cards.KICKERS.get(kind, kicker), card_standfirst)
     log.info("[%s] instagram card: %s (recent: %s)", site.key, kind, ",".join(history[-cards.HISTORY:]) or "none")
     try:
         rendered = images.render_set(card_headline, kicker, site,
@@ -324,7 +325,8 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
 
     link = wp_post.get("link") or f"{site.public_url}/{stem}/"
     state.mark_published(url, site.key, wp_post["id"], link, post.title)
-    state.set_note(site.key, "card_formats", cards.dump_history(cards.remember(history, kind)))
+    if kind in cards.FORMATS:      # a bespoke card (the scorecard) is not part of the rotation
+        state.set_note(site.key, "card_formats", cards.dump_history(cards.remember(history, kind)))
     report.published.append(link)
     log.info("[%s] PUBLISHED %s", site.key, link)
 

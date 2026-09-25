@@ -183,3 +183,22 @@ def test_an_actor_without_figures_is_skipped_and_the_next_pick_asked(monkeypatch
 def test_only_screenstat_runs_scorecards(settings):
     assert [s.key for s in settings.sites if s.scorecards] == ["SCREENSTAT"]
     assert settings.scorecard_hours == [8, 11, 14, 17, 20]
+
+
+def test_the_scorecard_card_shows_the_face_and_the_record(monkeypatch, settings, tmp_path):
+    from PIL import Image
+    from autopub import images
+    from tests.test_images import _fake_photo_fetch, _has_green
+    site = settings.site("SCREENSTAT")
+    _fake_wiki(monkeypatch)
+    f = scorecards.gather("Star (actor)")
+    brief = scorecards.card_brief(f, "Bollywood Hungama, CC BY 3.0 via Wikimedia Commons")
+    assert brief.kind == "scorecard" and brief.headline == "Star" and brief.stat == "62%" and brief.left_value == "5" and brief.right_value == "3"
+    _fake_photo_fetch(monkeypatch, size=(1200, 1600))
+    path = images.render_card("Star", "Scorecard", site, tmp_path / "sc.jpg", "portrait", backdrop_url="https://cdn/star.jpg", card=brief)
+    with Image.open(path) as im:
+        assert im.size == (1440, 1920)
+        top = im.convert("RGB").crop((0, 200, 1440, 900))
+        assert any(g > 150 and r < 80 and b < 80 for r, g, b in top.resize((20, 10)).getdata()), "the photo fills the top of the card"
+    without = images.render_card("Star", "Scorecard", site, tmp_path / "sc2.jpg", "portrait", card=brief)
+    assert not _has_green(without), "no photo: the type ground, not a blank"

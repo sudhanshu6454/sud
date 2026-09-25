@@ -23,7 +23,7 @@ from datetime import date
 from pydantic import BaseModel, Field
 
 from . import carousels, wiki
-from .cards import CardIdeas
+from .cards import CardBrief, CardIdeas
 from .config import Settings, Site
 from .rewrite import JSON_CONTRACT, CuratedPost, Rewriter, schema_for
 from .state import State
@@ -269,6 +269,15 @@ def card_from(f: Facts) -> CardIdeas:
                      question=None)
 
 
+def card_brief(f: Facts, credit: str | None = None) -> CardBrief:
+    """The scorecard card: the face, the name, and the record in tiles."""
+    record = f"{f.films_total} films since {f.debut_year}"
+    return CardBrief("scorecard", f.actor, KICKER, standfirst=f"{record} | {credit}" if credit else record,
+                     stat=f"{f.hit_rate:.0f}%", stat_label="hit rate, recent films",
+                     left_value=str(f.hits), left_label="hits", right_value=str(f.flops), right_label="flops",
+                     term=f"{f.avg_multiple:.2f}x")
+
+
 def due(settings: Settings, state: State, site: Site) -> bool:
     if not settings.scorecard_hours:
         return False
@@ -369,7 +378,8 @@ def publish_daily(site: Site, settings: Settings, state: State, rewriter: Rewrit
             except Exception as exc:  # noqa: BLE001
                 log.warning("[%s] photo upload failed: %s", site.key, exc)
     ok = pipeline.publish_post(site, settings, state, url, post, wp, publishers, work_dir, report,
-                               image_url=image_url, credit=credit, use_source_image=image_url is not None)
+                               image_url=image_url, credit=credit, use_source_image=image_url is not None,
+                               card_brief=card_brief(facts, credit))
     if ok:
         state.set_note(site.key, USED_NOTE, "\n".join((used + [facts.actor])[-500:]))
         state.set_note(site.key, NOTE, carousels.dump_log(slot_log + [time.time()]))

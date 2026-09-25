@@ -751,6 +751,8 @@ def _render_portrait(headline: str, kicker: str, standfirst: str | None, site: S
         card = None     # no usable photo after all: the headline card is the honest fallback
     if card is not None and card.kind == INVERSE:
         return _render_inverse(card, site, out_path, primary, accent, text_color, S)
+    if card is not None and card.kind == "scorecard":
+        return _render_scorecard(card, site, out_path, primary, accent, text_color, backdrop_url, S)
     if card is not None and card.kind != HEADLINE:
         return _render_format(card, site, out_path, primary, accent, text_color, backdrop_url, S)
 
@@ -1253,6 +1255,94 @@ def _render_poster(card: CardBrief, site: Site, out_path: Path, primary, accent,
         draw.text((S(SIDE), y), line, font=hfont, fill=(255, 255, 255))
         y += line_h
     return _save(img, out_path, quality=90)
+
+
+SCORE_PHOTO_H = 700          # the face gets more of the card than a news photo; the panel keeps room for the tiles and the record line
+
+
+def _render_scorecard(card: CardBrief, site: Site, out_path: Path, primary, accent, text_color,
+                      backdrop_url: str | None, S) -> Path:
+    """An actor's picture across the top, the name, and the record in tiles: hit rate, hits, flops,
+    then the average return and the film count in a line. The figures are the card's `stat`,
+    `left_*`, `right_*`, `term` (average return) and `standfirst` (the film count line)."""
+    w, h = S(CARD_W), S(CARD_H)
+    family, weight = site.brand.font, site.brand.heading_weight
+    img = Image.new("RGB", (w, h), primary)
+    photo = None
+    if backdrop_url:
+        source = _source_photo(backdrop_url, 20)
+        if source and source[0].width >= 500 and source[0].height >= 500:
+            got = _backdrop(backdrop_url, (w, S(SCORE_PHOTO_H)))
+            if got:
+                photo, faces = got
+                if faces and faces[1] < S(PORTRAIT_BLEED) + S(8):
+                    photo = None
+    if photo is not None:
+        img.paste(photo.filter(ImageFilter.UnsharpMask(radius=1.2, percent=45, threshold=3)), (0, 0))
+        photo_bottom = S(SCORE_PHOTO_H)
+        band = img.crop((0, photo_bottom - S(160), w, photo_bottom))
+        _shade_bottom(band, 0.0, 0.55)
+        img.paste(band, (0, photo_bottom - S(160)))
+        if card.standfirst and "|" in card.standfirst:
+            # the credit rides in the standfirst after a pipe, so the record line and the credit travel together
+            credit = card.standfirst.split("|", 1)[1].strip()
+            cfont = _font(S(CREDIT_SIZE), bold=False, family=family)
+            draw = ImageDraw.Draw(img)
+            label = f"Photo: {credit}"[:70]
+            draw.text((w - S(SIDE) - draw.textlength(label, font=cfont), photo_bottom - S(30) - cfont.size), label,
+                      font=cfont, fill=(238, 238, 238))
+        _rail(img, site, accent, photo_bottom, S)
+        top = photo_bottom + S(RAIL_H) + S(40)
+    else:
+        _type_ground(img, None, primary, accent, S)
+        _rail(img, site, accent, S(TYPE_TOP), S)
+        top = S(TYPE_TOP) + S(RAIL_H) + S(56)
+    _card_footer(img, site, primary, text_color, S)
+    draw = ImageDraw.Draw(img, "RGBA")
+    x, column = S(SIDE), w - S(SIDE) * 2
+    bottom = S(FOOT_BOTTOM) - S(56) - S(36) - S(40)
+    if photo is None:
+        # without a picture the block would sit high over empty ground: drop it a third of the way down
+        block = S(KICKER_SIZE) + S(20) * 2 + S(20) + 2 * S(90) + S(24) + S(128) + S(28) + S(84)
+        top += max(0, (bottom - top - block) // 3)
+    _card_kicker(img, card.kicker or "Scorecard", site, accent, x, top, S)
+    y = top + S(KICKER_SIZE) + S(20) * 2 + S(20)
+    nfont, nlines, nline_h = _headline_block(draw, tidy(card.headline), family, column,
+                                             [(24, 84, 90, 1), (40, 64, 70, 2), (10 ** 6, 52, 58, 2)], weight=weight)
+    for line in nlines[:2]:
+        draw.text((x, y), line, font=nfont, fill=text_color)
+        y += nline_h
+    y += S(24)
+    # three tiles: the hit rate in the accent, hits and flops in the type colour
+    tiles = [(card.stat or "-", card.stat_label or "hit rate", accent),
+             (card.left_value or "-", card.left_label or "hits", text_color),
+             (card.right_value or "-", card.right_label or "flops", text_color)]
+    gap = S(24)
+    tile_w = (column - gap * 2) // 3
+    tile_h = S(128)
+    vfont = _figure_font("0123456789%x.", S(58), family, max(weight, 700))
+    lfont = _font(S(26), bold=False, family=family)
+    muted = _muted(text_color)
+    for i, (value, label, colour) in enumerate(tiles):
+        tx = x + i * (tile_w + gap)
+        draw.rounded_rectangle([tx, y, tx + tile_w, y + tile_h], radius=S(10), fill=(*text_color, 18), outline=(*text_color, 40), width=2)
+        vf = vfont
+        while draw.textlength(str(value), font=vf) > tile_w - S(32) and vf.size > S(30):
+            vf = _figure_font(str(value), vf.size - S(4), family, max(weight, 700))
+        draw.text((tx + S(20), y + S(14)), str(value), font=vf, fill=colour)
+        for k, line in enumerate(_wrap(draw, label, lfont, tile_w - S(40))[:1]):
+            draw.text((tx + S(20), y + S(14) + S(58) + S(10) + k * S(30)), line, font=lfont, fill=muted)
+    y += tile_h + S(24)
+    line = card.standfirst.split("|", 1)[0].strip() if card.standfirst else ""
+    parts = [p for p in (f"Avg return {card.term}" if card.term else "", line) if p]
+    if parts:
+        rfont = _font(S(32), bold=False, family=family, weight=500)
+        for row in _wrap(draw, "   \u00b7   ".join(parts), rfont, column)[:2]:
+            if y + S(40) > bottom:
+                break
+            draw.text((x, y), row, font=rfont, fill=text_color)
+            y += S(42)
+    return _save(img, out_path, quality=92)
 
 
 def render_card(headline: str, kicker: str, site: Site, out_path: Path, variant: str = "landscape",
