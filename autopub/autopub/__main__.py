@@ -10,7 +10,7 @@ import time
 
 from pathlib import Path
 
-from . import cards, carousels, config, images, nostalgia, rank, sources, video
+from . import cards, carousels, config, images, nostalgia, rank, scorecards, sources, video
 from .pipeline import make_wordpress, run_all
 from .rewrite import effective_model
 from .social import build_publishers
@@ -100,6 +100,9 @@ def cmd_check(settings, args) -> int:
     print(f"follow-ups: steal card at or after {settings.steal_hour:02d}:00, debate story at or after {settings.debate_hour:02d}:00 "
           f"{settings.timezone}, posted {settings.followup_delay_minutes} min after their article"
           if settings.steal_hour is not None and settings.debate_hour is not None else "follow-ups: partly off")
+    if settings.scorecard_hours:
+        on = [s.key for s in settings.sites if s.scorecards]
+        print(f"scorecards: at or after {', '.join(f'{h:02d}:00' for h in settings.scorecard_hours)} {settings.timezone} on {on or 'no site'}")
     if settings.nostalgia_hour is not None:
         on = [s.key for s in settings.sites if s.nostalgia]
         print(f"throwback: one classic ad a day at or after {settings.nostalgia_hour:02d}:00 {settings.timezone} on {on or 'no site'}")
@@ -337,6 +340,36 @@ def cmd_nostalgia(settings, args) -> int:
     return rc
 
 
+def cmd_scorecard(settings, args) -> int:
+    """Publish an actor scorecard now (--actor picks one, else the model does), or --dry-run to see the figures."""
+    from .pipeline import RunReport
+    from .rewrite import Rewriter
+    state = State(settings.data_dir / "autopub.db", settings.dedupe_across_sites)
+    site = settings.site(args.site or "SCREENSTAT")
+    if args.dry_run:
+        rewriter = None if args.actor else Rewriter(model=effective_model(settings.llm_model), effort=settings.llm_effort)
+        actor = args.actor or scorecards.pick(rewriter, site, scorecards.parse_used(state.note(site.key, scorecards.USED_NOTE)), 0).actor
+        print(f"[{site.key}] gathering {actor!r} from Wikipedia ...")
+        facts = scorecards.gather(actor)
+        if facts is None:
+            print("  not enough figures on Wikipedia for a scorecard (need budget and box office for at least "
+                  f"{scorecards.MIN_WITH_DATA} recent films)")
+            return 1
+        print(f"  {facts.actor}: {facts.films_total} films since {facts.debut_year}, {facts.films_last_decade} in the last decade, born {facts.born}, awards {facts.awards}")
+        print(f"  {facts.with_data} recent films with figures: {facts.hits} hits ({facts.blockbusters} blockbusters), {facts.average} average, {facts.flops} flops; hit rate {facts.hit_rate:.0f}%, average return {facts.avg_multiple:.2f}x")
+        for r in reversed(facts.recent):
+            print(f"    {r['year']} {r['title'][:34]:<34} budget {str(r['budget_cr']):>8}  gross {str(r['gross_cr']):>8}  {('%.2fx' % r['multiple']) if r['multiple'] else '   -  '}  {r['verdict'] or ''}")
+        return 0
+    rewriter = Rewriter(model=effective_model(settings.llm_model), effort=settings.llm_effort)
+    report = RunReport(site=site.key)
+    ok = scorecards.publish_daily(site, settings, state, rewriter, make_wordpress(site), build_publishers(site),
+                                  settings.data_dir / "images", report, actor=args.actor)
+    print(f"  {'published' if ok else 'nothing published'}: {report.summary()}")
+    for link in report.published:
+        print("  ->", link)
+    return 0 if ok else 1
+
+
 def cmd_status(settings, args) -> int:
     state = State(settings.data_dir / "autopub.db", settings.dedupe_across_sites)
     for site in settings.sites:
@@ -369,13 +402,16 @@ def main(argv=None) -> int:
     c.add_argument("--mood", help="music mood for the sample reel: upbeat, calm, serious or nostalgic")
     n = sub.add_parser("nostalgia", help="publish today's classic-ad throwback now (or --dry-run to see the pick)")
     n.add_argument("--site"); n.add_argument("--dry-run", action="store_true", help="pick and look up the film, publish nothing")
+    sc = sub.add_parser("scorecard", help="publish an actor scorecard now, or --dry-run to see the figures")
+    sc.add_argument("--site"); sc.add_argument("--actor", help="the actor's English Wikipedia page title")
+    sc.add_argument("--dry-run", action="store_true")
     ip = sub.add_parser("instagram-probe", help="ask Instagram whether it accepts a taller card yet (posts nothing)")
     ip.add_argument("--site"); ip.add_argument("--ratio", help="3:4 (default), 4:5 or 1:1"); ip.add_argument("--out")
     args = p.parse_args(argv)
     settings = config.load(args.config)
     commands = {"serve": cmd_serve, "run": cmd_run, "check": cmd_check, "sources": cmd_sources,
                 "status": cmd_status, "cards": cmd_cards, "instagram-probe": cmd_instagram_probe,
-                "nostalgia": cmd_nostalgia}
+                "nostalgia": cmd_nostalgia, "scorecard": cmd_scorecard}
     return commands[args.cmd](settings, args)
 
 

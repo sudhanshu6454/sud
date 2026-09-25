@@ -9,7 +9,7 @@ from pathlib import Path
 
 from slugify import slugify
 
-from . import cards, carousels, extract, followups, images, music, nostalgia, rank, sources, speech, video
+from . import cards, carousels, extract, followups, images, music, nostalgia, rank, scorecards, sources, speech, video
 from .config import Settings, Site
 from .rewrite import CuratedPost, Rewriter, RewriteSkipped, effective_model
 from .social import SocialPost, build_publishers, dispatch
@@ -465,6 +465,13 @@ def run_site(site: Site, settings: Settings, state: State, rewriter: Rewriter | 
             nostalgia.publish_daily(site, settings, state, rewriter, wp, publishers, work_dir, report)
         except Exception as exc:  # noqa: BLE001 - a feature that fails must not take the news down with it
             log.exception("[%s] throwback failed: %s", site.key, exc)
+    # ScreenStat's actor scorecards: one per slot, figures from Wikipedia, on top of the news
+    if site.scorecards and scorecards.due(settings, state, site):
+        try:
+            ready()
+            scorecards.publish_daily(site, settings, state, rewriter, wp, publishers, work_dir, report)
+        except Exception as exc:  # noqa: BLE001
+            log.exception("[%s] scorecard failed: %s", site.key, exc)
     log.info(report.summary())
     return report
 

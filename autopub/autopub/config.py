@@ -45,6 +45,7 @@ class Site:
     brand: Brand = field(default_factory=Brand)
     socials: list[str] = field(default_factory=list)
     nostalgia: bool = False     # one classic-ad throwback feature a day, at settings.nostalgia_hour
+    scorecards: bool = False    # actor scorecards from Wikipedia figures, at each settings.scorecard_hours
 
     @property
     def public_url(self) -> str:
@@ -108,6 +109,9 @@ class Settings:
     # One 'Steal this' card a day (the first article at or after this hour that offers a reusable tactic)
     # and one debate story a day (the first that raises an arguable question), each posted as a follow-up
     # `followup_delay_minutes` after the article. The throwback's hot take follows the same way. None = off.
+    # Actor scorecards (sites with scorecards: true): the first cycle at or after each of these hours
+    # publishes one actor's career in numbers, figures from Wikipedia. [] switches them off.
+    scorecard_hours: list[int] = field(default_factory=lambda: [8, 11, 14, 17, 20])
     steal_hour: int | None = 11
     debate_hour: int | None = 17
     followup_delay_minutes: int = 120
@@ -150,4 +154,5 @@ def load(path: str | os.PathLike | None = None) -> Settings:
     settings = Settings(sites=sites, data_dir=data_dir, **settings_raw)
     settings.carousel_hours = sorted({int(h) % 24 for h in (settings.carousel_hours or [])})
     settings.reel_hours = sorted({int(h) % 24 for h in (settings.reel_hours or [])})
+    settings.scorecard_hours = sorted({int(h) % 24 for h in (settings.scorecard_hours or [])})
     return settings

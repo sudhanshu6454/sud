@@ -250,6 +250,27 @@ Each is tried once and recorded in `social_posts` as `platform:kind` (e.g. `inst
 slot is spent when the piece is queued. A story with no tactic or no real question leaves the slot
 to the next article.
 
+### ScreenStat's actor scorecards
+
+Five times a day (`settings.scorecard_hours`, default 08:00, 11:00, 14:00, 17:00 and 20:00, on sites
+with `scorecards: true`) ScreenStat publishes an actor's career in numbers. Every figure comes from
+Wikipedia (`autopub/wiki.py`): the filmography table gives the films and years, each recent film's
+infobox its budget and box office, Wikidata the date of birth and awards. `autopub/scorecards.py`
+computes the record (films, hits, flops, return multiples, biggest hit, the recent-five trend), writes
+the summary box and the film table itself, and hands the figures to the model, which names the day's
+actor (Hindi, Tamil, Telugu, Malayalam and Kannada industries in turn) and writes only the analysis
+around them, told to add no number of its own. ScreenStat's verdict rule is printed on every
+scorecard: blockbuster at 2.5x budget or more, hit at 1.75x, average at 1.25x, flop below; films
+Wikipedia has no figures for are counted but not judged. An actor with fewer than five recent films
+with figures is skipped, not guessed at. The card is built from the figures (the hit rate, hits
+against flops, three takeaways). Filed under **Scorecards**.
+
+```bash
+docker compose run --rm autopub python -m autopub scorecard --dry-run --actor "Vijay (actor)"   # the figures, nothing published
+docker compose run --rm autopub python -m autopub scorecard --actor "Alia Bhatt"               # publish one now
+docker compose run --rm autopub python -m autopub scorecard --dry-run                          # let the model pick
+```
+
 ### Viral ad coverage
 
 Crazy4Marketing's beat names viral ads, brand films and stunts explicitly, has a **Viral Campaigns**

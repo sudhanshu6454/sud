@@ -43,6 +43,9 @@ settings:
   # tactic) and one debate story a day (the first after debate_hour that raises an arguable question),
   # each posted a while after its article so the day's posts spread out. The throwback's hot take
   # follows the same way. The debate story goes out at half the delay.
+  # ScreenStat's actor scorecards: five a day, an actor's career in numbers (films, hits, flops, return
+  # on budget) with every figure read from Wikipedia. The first cycle at or after each hour publishes one.
+  scorecard_hours: [8, 11, 14, 17, 20]
   steal_hour: 11
   debate_hour: 17
   followup_delay_minutes: 120
@@ -243,3 +246,4 @@ sites:
       heading_weight: 600   # the theme sets headings at 600, not 700
       rail: bars            # a numbers brand: the section rule is a bar chart
     socials: [twitter, facebook, instagram, linkedin, pinterest, telegram, threads, instagram_story, facebook_story, instagram_reel, facebook_video]
+    scorecards: true             # five actor scorecards a day, at settings.scorecard_hours
