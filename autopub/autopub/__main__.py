@@ -10,7 +10,7 @@ import time
 
 from pathlib import Path
 
-from . import cards, carousels, config, images, nostalgia, rank, scorecards, sources, video
+from . import adclip, cards, carousels, config, images, nostalgia, rank, scorecards, sources, video
 from .pipeline import make_wordpress, run_all
 from .rewrite import effective_model
 from .social import build_publishers
@@ -107,6 +107,19 @@ def cmd_check(settings, args) -> int:
         on = [s.key for s in settings.sites if s.nostalgia]
         print(f"ad features: viral now / throwback in turn at or after {', '.join(f'{h:02d}:00' for h in settings.ad_hours)} "
               f"{settings.timezone} on {on or 'no site'}")
+        if settings.repost_ads:
+            try:
+                import yt_dlp
+                fetcher = f"yt-dlp {yt_dlp.version.__version__}"
+            except ImportError:
+                ok = False
+                fetcher = "yt-dlp MISSING (pip install yt-dlp)"
+            cookies = settings.ad_clip_cookies
+            print(f"ad films: fetched and reposted inside the frame, {settings.ad_clip_max_seconds}s cap, "
+                  f"clients {'+'.join(settings.ad_clip_player_clients)}, {fetcher}, cookies "
+                  f"{(cookies + (' (ok)' if Path(cookies).exists() else ' MISSING')) if cookies else 'none'}")
+        else:
+            print("ad films: embedded from YouTube (repost_ads is off)")
     for site in settings.sites:
         print(f"\n[{site.key}] {site.domain} -> {site.wp_base_url()}")
         try:
@@ -350,6 +363,49 @@ def cmd_nostalgia(settings, args) -> int:
     return rc
 
 
+def cmd_adclip(settings, args) -> int:
+    """Fetch an ad film (or take --file) and render it inside the site's reel frame, to be eyeballed
+    before repost_ads goes live. Publishes nothing."""
+    site = settings.site(args.site.upper())
+    out_dir = Path(args.out) if args.out else settings.data_dir / "preview"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    if args.file:
+        clip = Path(args.file)
+    elif args.url:
+        print(f"fetching {args.url} with yt-dlp ({'+'.join(settings.ad_clip_player_clients)}) ...")
+        try:
+            clip = adclip.fetch(args.url, out_dir / "ads", player_clients=settings.ad_clip_player_clients,
+                                cookies=settings.ad_clip_cookies or None)
+        except RuntimeError as exc:
+            print(f"FAILED: {exc}")
+            return 1
+    else:
+        print("give --url (a YouTube link) or --file (an MP4 already on disk)")
+        return 2
+    info = video.probe(clip)
+    print(f"film: {clip} {info.get('width')}x{info.get('height')} {info.get('duration', 0):.0f}s "
+          f"{'with' if info.get('audio') else 'NO'} sound")
+    brand = args.brand or "The brand"
+    hook = args.hook or f"Why everyone is sharing {brand}'s new ad"
+    kicker = args.kicker or "Viral now"
+    credit = f"Ad: {brand}. Video: {brand} on YouTube. Shown for review."
+    stem = "adclip-preview"
+    card = images.render_card(hook, kicker, site, out_dir / f"{stem}-portrait.jpg", variant="portrait",
+                              standfirst=f"{brand}: the film, the psychology, the takeaways")
+    intro = images.story_asset(card, site, out_dir / f"{stem}-story.jpg")
+    outro = images.story_closing_frame(hook, site, out_dir / f"{stem}-story-end.jpg")
+    frame = images.ad_frame(kicker, hook, credit, site, out_dir / f"{stem}-frame.png")
+    print("composing the reel ...")
+    t0 = time.monotonic()
+    reel = adclip.compose(clip, frame, intro, outro, out_dir / f"{stem}-{site.slug}.mp4",
+                          max_seconds=settings.ad_clip_max_seconds)
+    got = video.probe(reel)
+    print(f"reel: {reel} {got.get('width')}x{got.get('height')} {got.get('duration', 0):.0f}s, "
+          f"{reel.stat().st_size // 1024} KB, {time.monotonic() - t0:.0f}s to render")
+    print(f"frame: {frame}")
+    return 0
+
+
 def cmd_scorecard(settings, args) -> int:
     """Publish an actor scorecard now (--actor picks one, else the model does), or --dry-run to see the figures."""
     from .pipeline import RunReport
@@ -413,6 +469,10 @@ def main(argv=None) -> int:
     n = sub.add_parser("nostalgia", help="publish an ad feature now: this week's viral ad or a classic (or --dry-run to see the pick)")
     n.add_argument("--site"); n.add_argument("--dry-run", action="store_true", help="pick and look up the film, publish nothing")
     n.add_argument("--kind", choices=["current", "nostalgic"], help="which kind; default: the kind the current slot would post")
+    ac = sub.add_parser("adclip", help="fetch an ad film and render it inside the site's reel frame, for a look (posts nothing)")
+    ac.add_argument("--site", required=True); ac.add_argument("--url", help="the YouTube link of the brand's own upload")
+    ac.add_argument("--file", help="an MP4 already on disk, instead of --url"); ac.add_argument("--out", help="directory to write into")
+    ac.add_argument("--brand"); ac.add_argument("--hook", help="the line set above the film"); ac.add_argument("--kicker")
     sc = sub.add_parser("scorecard", help="publish an actor scorecard now, or --dry-run to see the figures")
     sc.add_argument("--site"); sc.add_argument("--actor", help="the actor's English Wikipedia page title")
     sc.add_argument("--dry-run", action="store_true")
@@ -422,7 +482,7 @@ def main(argv=None) -> int:
     settings = config.load(args.config)
     commands = {"serve": cmd_serve, "run": cmd_run, "check": cmd_check, "sources": cmd_sources,
                 "status": cmd_status, "cards": cmd_cards, "instagram-probe": cmd_instagram_probe,
-                "nostalgia": cmd_nostalgia, "scorecard": cmd_scorecard}
+                "nostalgia": cmd_nostalgia, "scorecard": cmd_scorecard, "adclip": cmd_adclip}
     return commands[args.cmd](settings, args)
 
 

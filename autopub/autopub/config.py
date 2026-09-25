@@ -106,6 +106,14 @@ class Settings:
     # Ad features on sites with `nostalgia: true`: the first cycle at or after each hour publishes one,
     # this week's viral ad and a classic revisited in turn (current first). [] switches them off.
     ad_hours: list[int] = field(default_factory=lambda: [9, 12, 15, 18, 21])
+    # The film itself rather than a narrated review: the brand's own upload is fetched with yt-dlp,
+    # the article gets it as a self-hosted video, Instagram and Facebook get it inside the site's
+    # reel frame with its own sound, cut at ad_clip_max_seconds. The rights stay with the brand:
+    # reposting is the operator's decision, so this is off unless sites.yaml says otherwise.
+    repost_ads: bool = False
+    ad_clip_max_seconds: int = 120
+    ad_clip_player_clients: list[str] = field(default_factory=lambda: ["android", "web"])   # yt-dlp clients, in order
+    ad_clip_cookies: str = ""        # a Netscape cookies.txt for YouTube, when it insists on a signed-in browser
     # One 'Steal this' card a day (the first article at or after this hour that offers a reusable tactic)
     # and one debate story a day (the first that raises an arguable question), each posted as a follow-up
     # `followup_delay_minutes` after the article. The throwback's hot take follows the same way. None = off.

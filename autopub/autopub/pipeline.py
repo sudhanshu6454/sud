@@ -9,7 +9,7 @@ from pathlib import Path
 
 from slugify import slugify
 
-from . import cards, carousels, extract, followups, images, music, nostalgia, rank, scorecards, sources, speech, video
+from . import adclip, cards, carousels, extract, followups, images, music, nostalgia, rank, scorecards, sources, speech, video
 from .config import Settings, Site
 from .rewrite import CuratedPost, Rewriter, RewriteSkipped, effective_model
 from .social import SocialPost, build_publishers, dispatch
@@ -146,11 +146,14 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
                  publishers, work_dir: Path, report: RunReport, *, image_url: str | None = None, credit: str | None = None,
                  use_source_image: bool | None = None, want_carousel: bool = False, want_reel: bool = False,
                  force_reel: bool = False, carousel_log: list[float] | None = None, reel_log: list[float] | None = None,
-                 card_brief=None, force_story: bool = False) -> bool:
+                 card_brief=None, force_story: bool = False, ad_clip: Path | None = None,
+                 ad_caption: str | None = None) -> bool:
     """Everything after the words exist: cards, story frames, reel, carousel, WordPress, socials.
 
     `url` is the claimed source key in `state`; `image_url` and `credit` are the source photo and
-    who it belongs to. Shared by the hourly news post and the daily throwback feature."""
+    who it belongs to. Shared by the hourly news post and the daily throwback feature. `ad_clip`
+    is the ad film itself (adclip.fetch): it becomes the reel, inside the site's frame, instead of
+    the narrated one, and the article's video slot, with `ad_caption` as the credit."""
     carousel_log = carousel_log if carousel_log is not None else carousels.parse_log(state.note(site.key, carousels.NOTE))
     reel_log = reel_log if reel_log is not None else carousels.parse_log(state.note(site.key, REEL_NOTE))
     # 3. images. The Instagram card takes one of a small family of formats, chosen from what the
@@ -212,9 +215,26 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
         except Exception as exc:  # noqa: BLE001 - fall back to the master; the publisher walks shapes anyway
             log.warning("[%s] could not derive the Instagram asset: %s", site.key, exc)
 
-    # 3b'. the reel: the story frames as a short video, when this article is the slot's reel
+    # 3b'. the reel. With the ad film in hand it is the film inside the site's frame, its own sound,
+    # between the story cover and the closing frame; otherwise the story frames as a narrated video,
+    # when this article is the slot's reel
     reel_path: Path | None = None
-    if (want_reel or force_reel) and cards_by_shape.get("story") and story_frames:
+    reel_from_clip = False
+    if ad_clip is not None and (want_reel or force_reel) and cards_by_shape.get("story"):
+        try:
+            frame = images.ad_frame(kicker, card_headline, ad_caption or credit or "", site,
+                                    work_dir / site.slug / f"{stem}-ad-frame.png")
+            outro = story_frames[-1] if story_frames else images.story_closing_frame(
+                post.image_headline or post.title, site, work_dir / site.slug / f"{stem}-story-end.jpg")
+            reel_path = adclip.compose(ad_clip, frame, cards_by_shape["story"], outro,
+                                       work_dir / site.slug / f"{stem}-reel.mp4", max_seconds=settings.ad_clip_max_seconds)
+            reel_from_clip = True
+            log.info("[%s] ad reel: the film inside the frame, %.0fs cap, %d KB", site.key,
+                     settings.ad_clip_max_seconds, reel_path.stat().st_size // 1024)
+        except Exception as exc:  # noqa: BLE001 - the narrated reel below stands in
+            log.warning("[%s] could not compose the ad reel (%s); falling back to the narrated one", site.key, exc)
+            reel_path = None
+    if reel_path is None and (want_reel or force_reel) and cards_by_shape.get("story") and story_frames:
         try:
             frames = [cards_by_shape["story"], *story_frames]
             spoken = _story_texts(post)
@@ -304,6 +324,18 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
                 reel_media = wp.upload_media(reel_path, f"{post.title} (reel)", alt_text=post.image_headline)
             except WordPressError as exc:
                 log.warning("[%s] reel upload failed: %s", site.key, exc)
+        # the article's video: the film itself, self-hosted, in the slot the writer left for it;
+        # if the upload fails the YouTube embed the slot carries stays
+        clip_block: str | None = None
+        if ad_clip is not None and adclip.SLOT_OPEN in post.body_html:
+            try:
+                clip_media = wp.upload_media(ad_clip, f"{post.title} (ad film)", alt_text=post.image_headline,
+                                             caption=ad_caption or "")
+                clip_block = adclip.video_block(clip_media["id"], clip_media["source_url"], ad_caption or credit or "",
+                                                poster=(landscape_media or {}).get("source_url"))
+            except WordPressError as exc:
+                log.warning("[%s] ad film upload failed: %s; the embed stays", site.key, exc)
+        post.body_html = adclip.place_video(post.body_html, clip_block)
         story_media: list[dict] = []
         if "story" in hosted and media_by_shape.get("story"):
             for i, frame in enumerate(story_frames, 1):
@@ -350,11 +382,13 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
                      len(post.mentions))
         except Exception as exc:  # noqa: BLE001 - tags are a bonus; the post must not depend on them
             log.warning("[%s] mention verification failed: %s", site.key, exc)
+    # the film's reel says whose film it is, on the frame and in the caption
+    credit_line = f"\n\n{ad_caption}" if reel_from_clip and ad_caption else ""
     social = SocialPost(
         title=post.title, link=link,
         captions={
-            "twitter": post.captions.twitter, "facebook": _hooked(post.caption_hook, post.captions.facebook),
-            "instagram": _hooked(post.caption_hook, post.captions.instagram), "linkedin": post.captions.linkedin,
+            "twitter": post.captions.twitter, "facebook": _hooked(post.caption_hook, post.captions.facebook) + credit_line,
+            "instagram": _hooked(post.caption_hook, post.captions.instagram) + credit_line, "linkedin": post.captions.linkedin,
             "pinterest": post.captions.pinterest, "telegram": post.captions.telegram,
             "threads": post.captions.threads,
         },

@@ -1583,6 +1583,44 @@ def story_closing_frame(headline: str, site: Site, out_path: Path) -> Path:
     return _save(img, out_path, quality=90)
 
 
+# ---- the ad reel's frame -----------------------------------------------------------------------
+# The film plays inside a window of the story canvas; the frame around it is the story ground with
+# the kicker and hook above and the credit line and footer below. The window is full width and tall
+# enough for a 16:9 film with room to spare, so a square or vertical cut fits too, centred.
+AD_WINDOW_TOP, AD_WINDOW_H = 860, 1100     # in STORY_SIZE pixels; adclip.compose scales them to the reel
+
+
+def ad_frame(kicker: str, hook: str, credit: str, site: Site, out_path: Path) -> Path:
+    """The still the film is composed onto: kicker, the hook set large above the window, the
+    credit line under it, the site's footer. Saved as PNG so the type stays crisp under ffmpeg."""
+    img, primary, accent, text = _story_canvas(site)
+    w, h = img.size
+    S = lambda v: int(round(v * CARD_SCALE))
+    family, weight = site.brand.font, site.brand.heading_weight
+    draw = ImageDraw.Draw(img, "RGBA")
+    x, column = S(72), w - S(72) * 2
+    top = STORY_SAFE + 20 + S(RAIL_H) + S(64)
+    _card_kicker(img, (kicker or "Ad").upper()[:24], site, accent, x, top, S)
+    y = top + S(KICKER_SIZE) + S(20) * 2 + S(40)
+    room = AD_WINDOW_TOP - S(40) - y
+    hfont, hlines, line_h = _headline_block(draw, _spell_out(tidy(hook), family), family, column,
+                                            [(40, 60, 68, 2), (70, 50, 58, 3), (10 ** 6, 44, 52, 3)], weight=weight)
+    for line in hlines[:max(1, room // line_h)]:
+        draw.text((x, y), line, font=hfont, fill=text)
+        y += line_h
+    # a hairline above the window: the film sits on the ground, the frame does not box it in
+    draw.rectangle([x, AD_WINDOW_TOP - S(14), x + S(96), AD_WINDOW_TOP - S(14) + S(6)], fill=accent)
+    cfont = _font(S(26), bold=False, family=family)
+    cy = AD_WINDOW_TOP + AD_WINDOW_H + S(28)
+    for line in _wrap(draw, credit, cfont, column)[:2]:
+        draw.text((x, cy), line, font=cfont, fill=tuple(int(c * 0.7) for c in text))
+        cy += S(36)
+    _story_footer(img, site, text)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    img.save(out_path, format="PNG", optimize=True)
+    return out_path
+
+
 # ---- carousel slides ---------------------------------------------------------------------------
 # Drawn on the same 3:4 master canvas as the cards and trimmed to the same 4:5 as the cover, so the
 # rail, the kicker chip and the footer sit in exactly the same place on every slide of a swipe.

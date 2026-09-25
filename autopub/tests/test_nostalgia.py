@@ -50,7 +50,9 @@ def test_the_feature_embeds_the_official_film_and_files_under_throwback(site):
     rw = FakeRewriter([], _post(category="Marketing Psychology", image_kicker="Whatever", tags=["a"]))
     post = nostalgia.write(rw, site, Pick(brand="Cadbury", campaign="Kuch Khaas Hai", year=1994, hook="h"), FILM)
     assert post.category == "Throwback" and post.image_kicker == "Throwback" and "Throwback" in post.tags
-    assert post.body_html.startswith("<!-- wp:embed") and "https://www.youtube.com/watch?v=aaa" in post.body_html
+    # the embed sits in the video slot: the film itself replaces it once uploaded (repost_ads), else the markers go
+    assert post.body_html.startswith(nostalgia.adclip.SLOT_OPEN + "\n<!-- wp:embed") and "https://www.youtube.com/watch?v=aaa" in post.body_html
+    assert nostalgia.adclip.place_video(post.body_html, None).startswith("<!-- wp:embed")
     assert 'class="wp-block-embed__wrapper"' in post.body_html, "WordPress renders the player from its own embed block"
     assert post.body_html.rstrip().endswith("on YouTube</a></em></p>")
     assert "Cadbury Dairy Milk India on YouTube" in post.body_html

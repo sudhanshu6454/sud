@@ -2,7 +2,7 @@
 
 Embedding is what the article does with the film: the player is YouTube's, the views and the
 rights stay with whoever uploaded it, and the ad plays with its own sound on our page. Nothing is
-downloaded and nothing is re-hosted. The search page carries its results as JSON (ytInitialData),
+downloaded here (adclip.py does that, only when the operator switches it on). The search page carries its results as JSON (ytInitialData),
 which is read here without an API key; if YouTube changes the page the lookup returns nothing and
 the feature is written without an embed rather than with a wrong one.
 """
@@ -82,11 +82,15 @@ def choose(results: list[dict], brand: str, campaign: str = "") -> dict | None:
         return None
 
     def score(v):
-        official = brand_l.replace(" ", "") in v["channel"].lower().replace(" ", "")
         named = sum(1 for w in words if w in v["title"].lower())
-        return (official, named, v["views"])
+        return (is_official(v, brand), named, v["views"])
 
     return max(good, key=score)
+
+
+def is_official(video: dict, brand: str) -> bool:
+    """Whether the upload is the brand's own: the brand's name is in the channel's."""
+    return brand.lower().replace(" ", "") in (video.get("channel") or "").lower().replace(" ", "")
 
 
 def search(query: str, timeout: int = 20) -> list[dict]:
@@ -100,7 +104,8 @@ def search(query: str, timeout: int = 20) -> list[dict]:
 
 
 def find_ad(brand: str, campaign: str, year: int | str | None = None, timeout: int = 20) -> dict | None:
-    """The ad on YouTube, or None. Returns id, title, channel, url, thumbnail."""
+    """The ad on YouTube, or None. Returns id, title, channel, url, thumbnail, and `official`: whether
+    the upload is the brand's own (the only kind adclip will ever fetch)."""
     campaign = re.sub(r"[#\"'“”‘’]", " ", campaign or "").strip()   # a hashtag in the query buries the brand's own upload
     query = " ".join(p for p in (brand, campaign, str(year) if year else "", "ad") if p)
     pick = choose(search(query, timeout), brand, campaign)
@@ -108,6 +113,7 @@ def find_ad(brand: str, campaign: str, year: int | str | None = None, timeout: i
         pick = choose(search(f"{brand} {campaign} commercial", timeout), brand, campaign)
     if pick is None:
         return None
+    pick["official"] = is_official(pick, brand)
     pick["url"] = f"https://www.youtube.com/watch?v={pick['id']}"
     pick["thumbnail"] = f"https://i.ytimg.com/vi/{pick['id']}/maxresdefault.jpg"
     return pick

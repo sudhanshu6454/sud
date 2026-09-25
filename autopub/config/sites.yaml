@@ -40,6 +40,18 @@ settings:
   # classic revisited in turn (current at the 1st, 3rd and 5th hour, nostalgic at the 2nd and 4th),
   # the official YouTube film embedded, written in each site's own format.
   ad_hours: [9, 12, 15, 18, 21]
+  # The film itself, not a narrated review: the brand's own YouTube upload is fetched (yt-dlp), the
+  # article carries it as a self-hosted video, and the reel is the film inside the site's frame with
+  # its own sound, cut at ad_clip_max_seconds, credited on the frame and in the caption. The rights
+  # in the film stay with the brand; Instagram's rights matching can mute or remove such a reel.
+  # Uploads that are not the brand's own are never fetched; those stay embeds.
+  repost_ads: true
+  ad_clip_max_seconds: 120
+  # yt-dlp player clients in order; the android one is served without YouTube's sign-in wall from
+  # a server address. If YouTube still insists, export a cookies.txt from a signed-in browser into
+  # /data and name it here (a path inside the container).
+  ad_clip_player_clients: [android, web]
+  ad_clip_cookies: ""
   # Follow-ups: one "Steal this" card a day (the first article after steal_hour that offers a reusable
   # tactic) and one debate story a day (the first after debate_hour that raises an arguable question),
   # each posted a while after its article so the day's posts spread out. The throwback's hot take

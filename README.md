@@ -234,8 +234,18 @@ this week's ads and two classics:
   international in turn; the model names it and YouTube must have the film under the brand's name,
   so a misremembered campaign is dropped, not written. A hot take follows two hours later.
 
-The film is **embedded** with WordPress's own YouTube block, so it plays with its original sound in
-YouTube's player and nothing is downloaded or re-hosted. Each site writes in its own format:
+The film is **embedded** with WordPress's own YouTube block by default, so it plays with its original
+sound in YouTube's player and nothing is downloaded or re-hosted. With `repost_ads: true` (the
+fleet's setting) the film itself goes out instead: `autopub/adclip.py` fetches the brand's **own**
+upload with yt-dlp (never a fan's), the article carries it as a self-hosted video block with the
+credit as its caption, and the reel is the film inside the site's frame (kicker, hook, credit line,
+footer) between the story cover and the closing frame, with its own sound, cut at
+`ad_clip_max_seconds` (120). The rights in the film stay with the brand and Instagram's rights
+matching may mute or remove such a reel; when the download is refused the embed and a narrated
+reel go out as before. YouTube shows a sign-in wall to the default client from a server address,
+so the `android` player client is asked first (`ad_clip_player_clients`); if it still refuses,
+export a `cookies.txt` from a signed-in browser into `/data` and name it in `ad_clip_cookies`.
+Each site writes in its own format:
 **The psychology of the ad** on Marketing Mentalist (the behavioural levers the film pulls), a
 **Campaign breakdown** on Crazy4Marketing (hook, structure, why it spread, steal this), and **Ad
 watch** on Marketing Junkies (brand, agency, response, category context). Filed under **Throwback**
@@ -246,6 +256,7 @@ every social. A film's URL is the dedupe key, so two sites never run the same ad
 ```bash
 docker compose run --rm autopub python -m autopub nostalgia --dry-run --kind current     # the pick and the film, nothing published
 docker compose run --rm autopub python -m autopub nostalgia --site CRAZY --kind nostalgic  # publish one now
+docker compose run --rm autopub python -m autopub adclip --site CRAZY --url https://www.youtube.com/watch?v=VIDEO_ID --brand "The brand"  # fetch a film and render it in the frame, posts nothing
 ```
 
 ### Viral ad coverage
