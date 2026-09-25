@@ -43,7 +43,10 @@ def test_ytdlp_is_asked_for_the_android_client_first_an_mp4_under_1080p_and_no_p
     assert opts["extractor_args"]["youtube"]["player_client"] == ["android", "web"]
     assert opts["format"].startswith("bv*[height<=1080][ext=mp4]") and opts["merge_output_format"] == "mp4"
     assert opts["noplaylist"] and "cookiefile" not in opts
-    assert adclip.options(tmp_path, cookies="/data/cookies.txt")["cookiefile"] == "/data/cookies.txt"
+    jar = tmp_path / "cookies.txt"
+    jar.write_text("# Netscape HTTP Cookie File\n")
+    assert adclip.options(tmp_path, cookies=jar)["cookiefile"] == str(jar)
+    assert "cookiefile" not in adclip.options(tmp_path, cookies=tmp_path / "missing.txt"), "a jar that is not there yet is skipped, not fatal"
     assert opts["match_filter"]({"duration": 90}) is None
     assert "longer than an ad film" in opts["match_filter"]({"duration": 3600})
 
@@ -230,4 +233,4 @@ def test_config_switches_the_repost_on_for_the_fleet(settings):
     from autopub import config
     live = config.load(Path(__file__).parent.parent / "config" / "sites.yaml")
     assert live.repost_ads is True and live.ad_clip_max_seconds == 120
-    assert live.ad_clip_player_clients == ["android", "web"] and live.ad_clip_cookies == ""
+    assert live.ad_clip_player_clients == ["android", "web"] and live.ad_clip_cookies == "/data/youtube-cookies.txt"

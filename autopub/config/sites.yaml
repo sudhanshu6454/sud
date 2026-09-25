@@ -47,11 +47,13 @@ settings:
   # Uploads that are not the brand's own are never fetched; those stay embeds.
   repost_ads: true
   ad_clip_max_seconds: 120
-  # yt-dlp player clients in order; the android one is served without YouTube's sign-in wall from
-  # a server address. If YouTube still insists, export a cookies.txt from a signed-in browser into
-  # /data and name it here (a path inside the container).
+  # YouTube shows a server address a sign-in wall whatever the player client, so yt-dlp needs the
+  # cookies of a signed-in browser: export a cookies.txt (a spare Google account, from a private
+  # window) and copy it into the container with
+  #   docker cp youtube-cookies.txt autopub:/data/youtube-cookies.txt
+  # Without the file the fetch is tried anyway and the feature falls back to the embed.
   ad_clip_player_clients: [android, web]
-  ad_clip_cookies: ""
+  ad_clip_cookies: /data/youtube-cookies.txt
   # Follow-ups: one "Steal this" card a day (the first article after steal_hour that offers a reusable
   # tactic) and one debate story a day (the first after debate_hour that raises an arguable question),
   # each posted a while after its article so the day's posts spread out. The throwback's hot take

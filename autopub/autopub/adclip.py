@@ -52,8 +52,10 @@ def options(out_dir: Path, *, player_clients=PLAYER_CLIENTS, cookies: str | Path
         "extractor_args": {"youtube": {"player_client": list(player_clients)}},
         "match_filter": _short_enough,
     }
-    if cookies:
+    if cookies and Path(cookies).exists():
         opts["cookiefile"] = str(cookies)
+    elif cookies:
+        log.warning("cookies file %s is not there; asking YouTube without it", cookies)
     return opts
 
 
