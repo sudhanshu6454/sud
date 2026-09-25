@@ -163,4 +163,4 @@ def test_sites_without_the_flag_and_hours_switched_off_never_run_it(monkeypatch,
 
 def test_config_marks_the_three_marketing_sites(settings):
     assert [s.key for s in settings.sites if s.nostalgia] == ["MENTALIST", "CRAZY", "JUNKIES"]
-    assert settings.nostalgia_hour == 15 and settings.reel_voice == "hf_alpha"
+    assert settings.nostalgia_hour == 15 and settings.reel_voice == "azure:en-IN-AartiNeural"

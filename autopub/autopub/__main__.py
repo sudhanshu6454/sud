@@ -87,8 +87,15 @@ def cmd_check(settings, args) -> int:
     else:
         print("reels: off (settings.reel_hours is empty)")
     from . import speech as _speech
-    print(f"reel voice: {settings.reel_voice or 'none (silent reels)'}"
-          + (f" ({'Kokoro' if _speech.is_kokoro(settings.reel_voice) else 'Piper'}, in {settings.data_dir / 'voices'})" if settings.reel_voice else ""))
+    v = settings.reel_voice
+    if v.startswith("azure:"):
+        have = bool(os.environ.get("AZURE_SPEECH_KEY")) and bool(os.environ.get("AZURE_SPEECH_REGION"))
+        where = f"Microsoft, key {'set' if have else 'MISSING: set AZURE_SPEECH_KEY and AZURE_SPEECH_REGION in .env'}"
+    elif v.startswith("google:"):
+        where = f"Google, key {'set' if os.environ.get('GOOGLE_TTS_API_KEY') else 'MISSING: set GOOGLE_TTS_API_KEY in .env'}"
+    elif v:
+        where = f"{'Kokoro' if _speech.is_kokoro(v) else 'Piper'}, in {settings.data_dir / 'voices'}"
+    print(f"reel voice: {v or 'none (silent reels)'}" + (f" ({where})" if v else ""))
     print(f"reel music: {'on, own tracks from ' + str(settings.data_dir / 'music') + '/<mood>/ else composed' if settings.reel_music else 'off'}")
     print(f"follow-ups: steal card at or after {settings.steal_hour:02d}:00, debate story at or after {settings.debate_hour:02d}:00 "
           f"{settings.timezone}, posted {settings.followup_delay_minutes} min after their article"

@@ -78,3 +78,48 @@ def test_kokoro_synthesises_in_a_child_and_a_missing_package_means_silence(tmp_p
     wav, holds = n.soundtrack(["One", None, "Three"], tmp_path / "v.wav", floor=[0.2, 1.0, 0.2])
     assert seen == [["One.", "Three."]], "only the frames with words go to the child, in order"
     assert holds[1] == 1.0 and abs(holds[0] - (speech.LEAD_IN + 0.5 + speech.PAD_AFTER)) < 0.01
+
+
+def _wav_bytes(seconds: float) -> bytes:
+    import io
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1); w.setsampwidth(2); w.setframerate(24000)
+        w.writeframes(speech.tone(seconds, 24000))
+    return buf.getvalue()
+
+
+def test_cloud_voices_need_their_keys_and_speak_through_the_rest_api(monkeypatch, tmp_path):
+    monkeypatch.delenv("AZURE_SPEECH_KEY", raising=False); monkeypatch.delenv("AZURE_SPEECH_REGION", raising=False)
+    monkeypatch.delenv("GOOGLE_TTS_API_KEY", raising=False)
+    assert speech.Narrator.load("azure:en-IN-AartiNeural", tmp_path) is None
+    assert speech.Narrator.load("google:en-IN-Neural2-A", tmp_path) is None
+    monkeypatch.setenv("AZURE_SPEECH_KEY", "k"); monkeypatch.setenv("AZURE_SPEECH_REGION", "centralindia")
+    monkeypatch.setenv("GOOGLE_TTS_API_KEY", "g")
+    calls = []
+
+    class R:
+        status_code = 200
+        def __init__(self, content=b"", payload=None):
+            self.content, self._payload, self.text = content, payload, ""
+        def json(self):
+            return self._payload
+
+    def post(url, **kw):
+        calls.append((url, kw))
+        if "microsoft" in url:
+            return R(content=_wav_bytes(0.5))
+        import base64
+        return R(payload={"audioContent": base64.b64encode(_wav_bytes(0.7)).decode()})
+
+    import requests
+    monkeypatch.setattr(requests, "post", post)
+    az = speech.Narrator.load("azure:en-IN-AartiNeural", tmp_path)
+    assert az is not None and az.rate == 24000 and abs(az.duration(az.speak("Namaste")) - 0.5) < 0.01
+    url, kw = calls[-1]
+    assert url == "https://centralindia.tts.speech.microsoft.com/cognitiveservices/v1"
+    assert kw["headers"]["Ocp-Apim-Subscription-Key"] == "k" and b'name="en-IN-AartiNeural"' in kw["data"] and b"Namaste." in kw["data"]
+    goog = speech.Narrator.load("google:en-IN-Neural2-A", tmp_path)
+    assert goog is not None and abs(goog.duration(goog.speak("Namaste")) - 0.7) < 0.01
+    url, kw = calls[-1]
+    assert kw["params"] == {"key": "g"} and kw["json"]["voice"] == {"languageCode": "en-IN", "name": "en-IN-Neural2-A"}

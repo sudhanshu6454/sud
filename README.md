@@ -179,12 +179,15 @@ Twice a day (`settings.reel_hours`, default `[12, 21]`) the article also goes ou
 frames (cover, text frames, closing) become a 20-30 second 1080x1920 reel in `autopub/video.py`.
 Each frame holds for as long as its text takes to read, drifts with a slow zoom that alternates
 direction, dissolves into the next, and a segmented progress bar along the top says how much is
-left. The soundtrack is an **original narration** of the same text: `autopub/speech.py` runs a
-Kokoro neural voice (`settings.reel_voice`, default `hf_alpha`, Indian English, female; also
-`hf_beta`, the male `hm_omega` and `hm_psi`, and the American and British `af_heart`, `am_michael`,
-`bf_emma`, `bm_george`; the ~350 MB model is fetched once into `<data_dir>/voices`) in a child
-process on the CPU, and each frame holds for as long as its lines take to say. A Piper voice name
-(`en_US-ryan-high`) still works as a lighter fallback. Instagram files audio the account made itself
+left. The soundtrack is an **original narration** of the same text (`autopub/speech.py`,
+`settings.reel_voice`), and each frame holds for as long as its lines take to say. For an Indian
+English voice use a cloud voice, free at this volume: `azure:en-IN-AartiNeural` (the default; also
+`en-IN-NeerjaNeural`, male `en-IN-PrabhatNeural`) with `AZURE_SPEECH_KEY` and `AZURE_SPEECH_REGION`
+in `.env`, or `google:en-IN-Neural2-A` with `GOOGLE_TTS_API_KEY`. Without a key the reel goes out
+silent, and `autopub check` says so. Local voices need no key: Kokoro (`af_heart`, `am_michael`,
+`bf_emma`, `bm_george`; the Hindi-trained `hf_alpha` speaks English with a generic accent; the
+~350 MB model is fetched once into `<data_dir>/voices` and runs in a child process) or a Piper name
+(`en_US-ryan-high`). Instagram files audio the account made itself
 as original audio. Under the voice sits a **music bed matched to the story's mood** (`mood`, written
 by the rewriter: upbeat, calm, serious or nostalgic; the throwback is nostalgic): `autopub/music.py`
 uses a track of yours from `<data_dir>/music/<mood>/` when one is there (MP3 or WAV, your licence,

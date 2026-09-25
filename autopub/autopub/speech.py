@@ -72,6 +72,10 @@ class Narrator:
         """A ready narrator, downloading the voice on first use; None when it cannot be had."""
         if not voice:
             return None
+        if voice.startswith("azure:"):
+            return cls._load_azure(voice[6:])
+        if voice.startswith("google:"):
+            return cls._load_google(voice[7:])
         if is_kokoro(voice):
             return cls._load_kokoro(voice, voice_dir)
         try:
@@ -125,6 +129,32 @@ class Narrator:
         n = cls(voice, voice_dir, None)
         n.rate = KOKORO_RATE
         n._many = lambda texts: _kokoro_child(voice, voice_dir, texts)
+        return n
+
+    @classmethod
+    def _load_azure(cls, voice: str) -> "Narrator | None":
+        """Microsoft's neural voices, e.g. azure:en-IN-AartiNeural. Needs AZURE_SPEECH_KEY and
+        AZURE_SPEECH_REGION (e.g. centralindia) in .env. Free tier: 500k characters a month."""
+        import os
+        key, region = os.environ.get("AZURE_SPEECH_KEY"), os.environ.get("AZURE_SPEECH_REGION")
+        if not key or not region:
+            log.warning("no narration: azure voice %s needs AZURE_SPEECH_KEY and AZURE_SPEECH_REGION", voice)
+            return None
+        n = cls(f"azure:{voice}", None, lambda text: _azure_synth(text, voice, key, region))
+        n.rate = 24000
+        return n
+
+    @classmethod
+    def _load_google(cls, voice: str) -> "Narrator | None":
+        """Google's voices, e.g. google:en-IN-Neural2-A. Needs GOOGLE_TTS_API_KEY in .env (an API key
+        with the Text-to-Speech API enabled). Free tier: 1M characters a month for Neural2."""
+        import os
+        key = os.environ.get("GOOGLE_TTS_API_KEY")
+        if not key:
+            log.warning("no narration: google voice %s needs GOOGLE_TTS_API_KEY", voice)
+            return None
+        n = cls(f"google:{voice}", None, lambda text: _google_synth(text, voice, key))
+        n.rate = 24000
         return n
 
     rate = RATE
@@ -189,6 +219,41 @@ def _download(url: str, target: Path) -> None:
             for chunk in resp.iter_content(1 << 20):
                 fh.write(chunk)
     tmp.replace(target)
+
+
+def _pcm_from_wav(data: bytes) -> bytes:
+    import io
+    with wave.open(io.BytesIO(data)) as w:
+        if w.getnchannels() != 1 or w.getsampwidth() != 2:
+            raise RuntimeError(f"unexpected audio: {w.getnchannels()} ch, {w.getsampwidth() * 8} bit")
+        return w.readframes(w.getnframes())
+
+
+def _azure_synth(text: str, voice: str, key: str, region: str) -> bytes:
+    import html
+    import requests
+    lang = "-".join(voice.split("-")[:2])
+    ssml = (f'<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="{lang}">'
+            f'<voice name="{voice}"><prosody rate="0%">{html.escape(text)}</prosody></voice></speak>')
+    resp = requests.post(f"https://{region}.tts.speech.microsoft.com/cognitiveservices/v1", data=ssml.encode("utf-8"),
+                         headers={"Ocp-Apim-Subscription-Key": key, "Content-Type": "application/ssml+xml",
+                                  "X-Microsoft-OutputFormat": "riff-24khz-16bit-mono-pcm", "User-Agent": "autopub"},
+                         timeout=60)
+    if resp.status_code != 200:
+        raise RuntimeError(f"azure speech {resp.status_code}: {resp.text[:200]}")
+    return _pcm_from_wav(resp.content)
+
+
+def _google_synth(text: str, voice: str, key: str) -> bytes:
+    import base64
+    import requests
+    lang = "-".join(voice.split("-")[:2])
+    resp = requests.post("https://texttospeech.googleapis.com/v1/text:synthesize", params={"key": key}, timeout=60,
+                         json={"input": {"text": text}, "voice": {"languageCode": lang, "name": voice},
+                               "audioConfig": {"audioEncoding": "LINEAR16", "sampleRateHertz": 24000}})
+    if resp.status_code != 200:
+        raise RuntimeError(f"google tts {resp.status_code}: {resp.text[:200]}")
+    return _pcm_from_wav(base64.b64decode(resp.json()["audioContent"]))
 
 
 def _kokoro_child(voice: str, voice_dir: Path, texts: list[str]) -> list[bytes]:
