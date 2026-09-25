@@ -60,12 +60,12 @@ def _fake_wiki(monkeypatch, n_recent=8, with_money=8):
     monkeypatch.setattr(wiki, "filmography", lambda actor: ("Star filmography", films))
     money = {f"Recent {i}": (100.0, [120.0, 90.0, 300.0, 210.0, 180.0, 400.0, 110.0, 260.0][i % 8]) for i in range(with_money)}
     monkeypatch.setattr(wiki, "film_money", lambda page: money.get(page, (None, None)))
-    monkeypatch.setattr(wiki, "person", lambda title: wiki.Person(title=title, born="1976-06-22", awards=9))
+    monkeypatch.setattr(wiki, "person", lambda title: wiki.Person(title=title, born="1976-06-22", awards=9) if title == "Star (actor)" else wiki.Person(title=title))
 
 
 def test_the_record_is_computed_from_the_figures_not_guessed(monkeypatch):
     _fake_wiki(monkeypatch)
-    f = scorecards.gather("Star")
+    f = scorecards.gather("Star (actor)")
     assert f is not None and f.actor == "Star" and f.films_total == 14 and f.debut_year == 1999
     # 120/100 flop, 90 flop, 300 blockbuster, 210 hit, 180 hit, 400 blockbuster, 110 flop, 260 blockbuster
     assert f.with_data == 8 and f.hits == 5 and f.blockbusters == 3 and f.average == 0 and f.flops == 3
@@ -114,7 +114,7 @@ def test_the_slot_publishes_a_scorecard_with_the_table_and_a_figure_card(monkeyp
     state = State(tmp_path / "s.db")
     wp = FakeWP()
     Recorder.seen.clear()
-    rw = FakeRewriter([Pick(actor="Star", industry="Tamil", why_now="a release this week")])
+    rw = FakeRewriter([Pick(actor="Star (actor)", industry="Tamil", why_now="a release this week")])
     report = pipeline.run_site(site, settings, state, rewriter=rw, wp=wp, publishers=[Recorder({})], work_dir=tmp_path / "img")
     assert report.published == ["https://marketingmentalist.in/star-scorecard/"]
     body = wp.posts[0]["content"]

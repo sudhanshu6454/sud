@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from dataclasses import asdict, dataclass, field
 from datetime import date
@@ -156,17 +157,21 @@ def gather(actor_title: str) -> Facts | None:
     if len(judged) < MIN_WITH_DATA:
         log.info("%r: only %d recent films with budget and gross; not enough for a scorecard", actor_title, len(judged))
         return None
+    # the actor's own page title carries the disambiguation ("Vijay (actor)"), which Wikidata needs;
+    # the display name drops it
+    own_page = actor_title if not actor_title.endswith(" filmography") else actor_title[:-len(" filmography")]
     try:
-        who = wiki.person(page.replace(" filmography", ""))
+        who = wiki.person(own_page)
     except Exception as exc:  # noqa: BLE001
         log.debug("wikidata: %s", exc)
-        who = wiki.Person(title=page)
+        who = wiki.Person(title=own_page)
+    display = re.sub(r"\s*\([^)]*\)\s*$", "", own_page).strip() or own_page
     counts = {label: sum(1 for r in judged if r["verdict"] == label) for _, label in RULE}
     multiples = [r["multiple"] for r in judged]
     by_gross = max((r for r in rows if r["gross_cr"]), key=lambda r: r["gross_cr"], default=None)
     recent_five, previous_five = judged[-5:], judged[-10:-5]
     return Facts(
-        actor=page.replace(" filmography", ""), page=page, industry="", born=who.born, awards=who.awards,
+        actor=display, page=page, industry="", born=who.born, awards=who.awards,
         films_total=len(films), debut_year=films[0].year, latest_year=max(f.year for f in films if f.year <= this_year),
         films_last_decade=sum(1 for f in films if this_year - 10 <= f.year <= this_year),
         with_data=len(judged), hits=counts["Hit"] + counts["Blockbuster"], blockbusters=counts["Blockbuster"],
