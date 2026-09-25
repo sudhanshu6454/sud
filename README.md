@@ -242,9 +242,11 @@ credit as its caption, and the reel is the film inside the site's frame (kicker,
 footer) between the story cover and the closing frame, with its own sound, cut at
 `ad_clip_max_seconds` (120). The rights in the film stay with the brand and Instagram's rights
 matching may mute or remove such a reel; when the download is refused the embed and a narrated
-reel go out as before. YouTube shows a sign-in wall to the default client from a server address,
-so the `android` player client is asked first (`ad_clip_player_clients`); if it still refuses,
-export a `cookies.txt` from a signed-in browser into `/data` and name it in `ad_clip_cookies`.
+reel go out as before. YouTube hides its streams behind a JavaScript challenge, so yt-dlp is
+installed with its `[default,deno]` extras (the solver and a JS runtime); with those the embedded
+player client is served the film from a server address without a sign-in wall, so it is asked
+first (`ad_clip_player_clients`). If YouTube still refuses, export a `cookies.txt` from a
+signed-in browser and copy it to `/data/youtube-cookies.txt` in the container (`ad_clip_cookies`).
 Each site writes in its own format:
 **The psychology of the ad** on Marketing Mentalist (the behavioural levers the film pulls), a
 **Campaign breakdown** on Crazy4Marketing (hook, structure, why it spread, steal this), and **Ad

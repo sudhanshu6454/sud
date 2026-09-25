@@ -12,4 +12,4 @@ numpy>=1.26
 imageio-ffmpeg>=0.5        # bundled ffmpeg binary for the reels (autopub/video.py)
 piper-tts>=1.8             # local neural voice for the reel narration (autopub/speech.py)
 kokoro-onnx>=0.6           # the natural-sounding narration voice (autopub/speech.py); piper stays as the fallback
-yt-dlp>=2025.1.1           # fetches the ad film itself when repost_ads is on (autopub/adclip.py)
+yt-dlp[default,deno]>=2026.1.1   # fetches the ad film itself when repost_ads is on (autopub/adclip.py); the extras bring the JS runtime YouTube demands

@@ -112,7 +112,7 @@ class Settings:
     # reposting is the operator's decision, so this is off unless sites.yaml says otherwise.
     repost_ads: bool = False
     ad_clip_max_seconds: int = 120
-    ad_clip_player_clients: list[str] = field(default_factory=lambda: ["android", "web"])   # yt-dlp clients, in order
+    ad_clip_player_clients: list[str] = field(default_factory=lambda: ["web_embedded", "web"])   # yt-dlp clients, in order
     ad_clip_cookies: str = ""        # a Netscape cookies.txt for YouTube, when it insists on a signed-in browser
     # One 'Steal this' card a day (the first article at or after this hour that offers a reusable tactic)
     # and one debate story a day (the first that raises an arguable question), each posted as a follow-up

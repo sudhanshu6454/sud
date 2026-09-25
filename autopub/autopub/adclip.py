@@ -11,9 +11,11 @@ The rights in the film stay with the brand: it is shown for review, credited on 
 in the caption, and capped at `ad_clip_max_seconds`. Reposting a film you do not own is the
 operator's call, which is why the switch is off by default and documented in sites.yaml.
 
-YouTube answers a datacenter address with a sign-in wall for the default web client; the android
-player client is served the film without one, so it is asked first. When YouTube wants cookies
-anyway, `ad_clip_cookies` names a Netscape cookies.txt exported from a signed-in browser.
+YouTube hides its streams behind a JavaScript challenge, so yt-dlp needs a JS runtime and its solver
+script: the `yt-dlp[default,deno]` extras in requirements.txt bring both (deno as a pip wheel). With
+those, the embedded-player client is served the film from a server address without a sign-in wall,
+so it is asked first, the web client after it. When YouTube wants cookies anyway, `ad_clip_cookies`
+names a Netscape cookies.txt exported from a signed-in browser.
 """
 from __future__ import annotations
 
@@ -29,7 +31,7 @@ log = logging.getLogger(__name__)
 
 INTRO_HOLD, OUTRO_HOLD = 2.5, 3.0      # seconds on the story cover before the film, on the closing frame after
 FADE = 0.5                             # seconds the film fades out over when it is cut at the cap
-PLAYER_CLIENTS = ("android", "web")    # yt-dlp player clients, first one that works wins
+PLAYER_CLIENTS = ("web_embedded", "web")    # yt-dlp player clients, in order; the embedded player needs no sign-in
 FORMAT = "bv*[height<=1080][ext=mp4]+ba[ext=m4a]/b[height<=1080][ext=mp4]/b[ext=mp4]/b"
 SOURCE_CAP = 6 * 60                    # seconds: longer than this is not an ad film; refused before download
 
@@ -43,7 +45,7 @@ _SLOT = re.compile(re.escape(SLOT_OPEN) + r"(.*?)" + re.escape(SLOT_CLOSE), re.S
 
 def options(out_dir: Path, *, player_clients=PLAYER_CLIENTS, cookies: str | Path | None = None) -> dict:
     """The yt-dlp options: an MP4 at 1080p or under, merged with the bundled ffmpeg, no playlists,
-    the android client before the web one, cookies when the operator exported some."""
+    the embedded-player client before the web one, cookies when the operator exported some."""
     opts = {
         "format": FORMAT, "merge_output_format": "mp4",
         "outtmpl": str(out_dir / "%(id)s.%(ext)s"),

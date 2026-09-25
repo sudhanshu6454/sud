@@ -38,9 +38,9 @@ def stills(site, tmp_path):
 
 # ---- fetching ----------------------------------------------------------------------------------------------
 
-def test_ytdlp_is_asked_for_the_android_client_first_an_mp4_under_1080p_and_no_playlist(tmp_path):
+def test_ytdlp_is_asked_for_the_embedded_player_first_an_mp4_under_1080p_and_no_playlist(tmp_path):
     opts = adclip.options(tmp_path, cookies=None)
-    assert opts["extractor_args"]["youtube"]["player_client"] == ["android", "web"]
+    assert opts["extractor_args"]["youtube"]["player_client"] == ["web_embedded", "web"]
     assert opts["format"].startswith("bv*[height<=1080][ext=mp4]") and opts["merge_output_format"] == "mp4"
     assert opts["noplaylist"] and "cookiefile" not in opts
     jar = tmp_path / "cookies.txt"
@@ -63,7 +63,7 @@ def test_fetch_returns_the_downloaded_film_after_checking_it_is_a_video(tmp_path
 
     got = adclip.fetch("https://www.youtube.com/watch?v=abc", tmp_path / "ads", downloader=fake)
     assert got == tmp_path / "ads" / "abc.mp4" and got.exists()
-    assert seen["url"].endswith("abc") and seen["opts"]["extractor_args"]["youtube"]["player_client"][0] == "android"
+    assert seen["url"].endswith("abc") and seen["opts"]["extractor_args"]["youtube"]["player_client"][0] == "web_embedded"
 
 
 def test_youtubes_sign_in_wall_is_reported_with_the_cookies_remedy(tmp_path):
@@ -183,7 +183,7 @@ def test_the_official_film_is_fetched_reposted_in_the_article_and_becomes_the_re
 
     report, wp, state = _feature(monkeypatch, settings, site, tmp_path, {**FILM, "official": True}, fetch, compose)
     assert report.published == ["https://marketingmentalist.in/cadbury-kuch-khaas-hai/"]
-    assert fetched["url"] == FILM["url"] and fetched["clients"] == ["android", "web"]
+    assert fetched["url"] == FILM["url"] and fetched["clients"] == ["web_embedded", "web"]
     content = wp.posts[0]["content"]
     assert content.startswith('<!-- wp:video {"id":') and "wp:embed" not in content and adclip.SLOT_OPEN not in content
     assert "Shown for review" in content and "Watch the original" in content, "the article credits the film and links the upload"
@@ -233,4 +233,4 @@ def test_config_switches_the_repost_on_for_the_fleet(settings):
     from autopub import config
     live = config.load(Path(__file__).parent.parent / "config" / "sites.yaml")
     assert live.repost_ads is True and live.ad_clip_max_seconds == 120
-    assert live.ad_clip_player_clients == ["android", "web"] and live.ad_clip_cookies == "/data/youtube-cookies.txt"
+    assert live.ad_clip_player_clients == ["web_embedded", "web"] and live.ad_clip_cookies == "/data/youtube-cookies.txt"
