@@ -197,7 +197,10 @@ the local Kokoro voice `af_heart` (also `af_bella`, `am_michael`, `bf_emma`, `bm
 volume: `azure:en-IN-AartiNeural` (also `en-IN-NeerjaNeural`, male `en-IN-PrabhatNeural`) with
 `AZURE_SPEECH_KEY` and `AZURE_SPEECH_REGION` in `.env`, or `google:en-IN-Neural2-A` with
 `GOOGLE_TTS_API_KEY`; a cloud voice without its key falls back to silence and `autopub check` says
-so. Instagram files audio the account made itself
+so. On a reel slot the reel is the article's Instagram post and the video its Facebook post: the
+card is not posted beside them, so an article never sits on the grid twice in a row as a picture
+and then as a reel of the same picture; a reel that fails hands the slot back to the card.
+Instagram files audio the account made itself
 as original audio. Under the voice sits a **music bed matched to the story's mood** (`mood`, written
 by the rewriter: upbeat, calm, serious or nostalgic; the throwback is nostalgic): `autopub/music.py`
 uses a track of yours from `<data_dir>/music/<mood>/` when one is there (MP3 or WAV, your licence,

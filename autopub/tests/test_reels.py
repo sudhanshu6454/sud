@@ -197,3 +197,40 @@ def test_settings_carry_the_reel_slots(settings):
     assert settings.reel_hours == [12, 21] and settings.reel_share_to_feed is True
     from autopub import config
     assert config.Settings(sites=settings.sites).reel_hours == [12, 21]
+
+
+def test_the_reel_stands_in_for_the_card_and_a_failed_reel_hands_it_back():
+    from autopub.social import dispatch
+    from autopub.social.base import SocialPost
+
+    class Card(Publisher):
+        platform = "instagram"; env_prefix = "X"; required_env = ()
+        seen = 0
+        def _publish(self, post):
+            Card.seen += 1
+            return PublishResult(self.platform, True, remote_id="card")
+
+    class Reel(Publisher):
+        platform = "instagram_reel"; env_prefix = "X"; required_env = (); wants_video = True; replaces = "instagram"
+        ok = True
+        def _publish(self, post):
+            return PublishResult(self.platform, Reel.ok, remote_id="reel", format="reel", error=None if Reel.ok else "meta said no")
+
+    class Story(Publisher):
+        platform = "instagram_story"; env_prefix = "X"; required_env = (); image_shapes = ("story",)
+        def _publish(self, post):
+            return PublishResult(self.platform, True, remote_id="story")
+
+    with_video = SocialPost(title="T", link="https://x/", captions={}, image_urls={"portrait": "p", "story": "s"}, video_url="v", story_urls=["s"])
+    Card.seen = 0; Reel.ok = True
+    results = dispatch([Card({}), Story({}), Reel({})], with_video)
+    assert [r.platform for r in results] == ["instagram_reel", "instagram_story"], "the reel goes first and the card stays home; the story still goes"
+    assert Card.seen == 0
+    Reel.ok = False
+    results = dispatch([Card({}), Story({}), Reel({})], with_video)
+    assert [(r.platform, r.ok) for r in results] == [("instagram_reel", False), ("instagram", True), ("instagram_story", True)]
+    assert Card.seen == 1, "a failed reel hands the slot back to the card"
+    without = SocialPost(title="T", link="https://x/", captions={}, image_urls={"portrait": "p"})
+    Card.seen = 0
+    results = dispatch([Card({}), Story({}), Reel({})], without)
+    assert [r.platform for r in results] == ["instagram"] and Card.seen == 1, "no reel: the card as always, the story idle"

@@ -28,6 +28,7 @@ class InstagramReelPublisher(InstagramPublisher):
     requires_image = False
     supports_carousel = False
     wants_video = True
+    replaces = "instagram"          # the reel is the article's feed post; the card is not posted beside it
 
     def _publish(self, post: SocialPost) -> PublishResult:
         uid, token = self.creds["USER_ID"], self.creds["ACCESS_TOKEN"]
@@ -54,6 +55,7 @@ class FacebookVideoPublisher(FacebookPublisher):
     requires_image = False
     supports_carousel = False
     wants_video = True
+    replaces = "facebook"
 
     def _publish(self, post: SocialPost) -> PublishResult:
         page, token = self.creds["PAGE_ID"], self.creds["PAGE_TOKEN"]

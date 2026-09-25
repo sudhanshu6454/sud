@@ -52,19 +52,39 @@ def idle(pub: Publisher, post: SocialPost) -> str | None:
     return None
 
 
+def _post(pub: Publisher, post: SocialPost) -> PublishResult:
+    res = pub.publish(post)
+    if res.ok:
+        log.info("[%s] posted %s", pub.platform, res.url or res.remote_id)
+    else:
+        log.error("[%s] FAILED: %s", pub.platform, res.error)
+    return res
+
+
 def dispatch(publishers: list[Publisher], post: SocialPost) -> list[PublishResult]:
+    """Every publisher once, with one rule: a video post that goes out stands in for the card on
+    the same platform, so an article is never on a grid twice in a row as a picture and then as a
+    reel of the same picture. A video that fails hands the slot back to the card."""
     results = []
+    replaced: set[str] = set()
     for pub in publishers:
+        if not pub.wants_video or idle(pub, post):
+            continue
+        res = _post(pub, post)
+        results.append(res)
+        if res.ok and pub.replaces:
+            replaced.add(pub.replaces)
+            log.info("[%s] the %s post stands in for the %s card", pub.platform, res.format or "video", pub.replaces)
+    for pub in publishers:
+        if pub.wants_video:
+            continue
+        if pub.platform in replaced:
+            continue
         why = idle(pub, post)
         if why:
             log.info("[%s] %s", pub.platform, why)
             continue
-        res = pub.publish(post)
-        if res.ok:
-            log.info("[%s] posted %s", pub.platform, res.url or res.remote_id)
-        else:
-            log.error("[%s] FAILED: %s", pub.platform, res.error)
-        results.append(res)
+        results.append(_post(pub, post))
     return results
 
 

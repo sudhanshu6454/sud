@@ -86,6 +86,7 @@ class Publisher(ABC):
     needs_public_url: ClassVar[bool] = False   # true when the API fetches the image itself instead of taking an upload
     supports_carousel: ClassVar[bool] = False  # can post several images as one swipe-through post
     wants_video: ClassVar[bool] = False        # posts the article's reel rather than a card
+    replaces: ClassVar[str | None] = None      # the platform whose card this post stands in for when it goes out
     text_limit: ClassVar[int] = 2000
 
     def __init__(self, creds: dict[str, str], timeout: int = 60):
