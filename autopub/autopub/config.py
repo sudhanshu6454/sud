@@ -112,6 +112,10 @@ class Settings:
     # Actor scorecards (sites with scorecards: true): the first cycle at or after each of these hours
     # publishes one actor's career in numbers, figures from Wikipedia. [] switches them off.
     scorecard_hours: list[int] = field(default_factory=lambda: [8, 11, 14, 17, 20])
+    # Instagram allows 100 API publishes per account a day and every story frame counts as one, so a
+    # story sequence goes out for every Nth news article (1 = every article). Throwbacks and
+    # scorecards always get theirs.
+    story_every: int = 2
     steal_hour: int | None = 11
     debate_hour: int | None = 17
     followup_delay_minutes: int = 120

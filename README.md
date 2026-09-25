@@ -154,6 +154,16 @@ headline material keeps posting headline cards. Preview the whole family for a s
 docker compose run --rm autopub python -m autopub cards --formats --site CRAZY
 ```
 
+### Instagram's daily allowance
+
+Instagram allows 100 API publishes per account in 24 hours, and every story frame counts as one. At
+an article an hour with a four-frame story each, one account would spend 120 on stories alone, so
+`settings.story_every` (default 2) sends the story sequence out for every second news article; the
+throwback and the scorecards always get theirs. A publisher with nothing to post for an article (a
+reel publisher outside a reel slot, a story publisher on an article without a story) stands aside
+without an error row. The story publisher also reads the account's remaining allowance before it
+posts and shortens or skips the story to keep six publishes back for the feed.
+
 ### Carousels
 
 Twice a day the Instagram post is a carousel rather than a single card. `settings.carousel_hours`

@@ -40,9 +40,25 @@ def build_publishers(site: Site, environ=None) -> list[Publisher]:
     return out
 
 
+def idle(pub: Publisher, post: SocialPost) -> str | None:
+    """Why this publisher has nothing to do for this post, or None when it does.
+
+    A reel publisher on an article that is not a reel slot, a story publisher on an article that
+    gets no story this time: neither is a failure, so neither gets an error row."""
+    if pub.wants_video and not post.video_url:
+        return "no reel this time"
+    if pub.image_shapes == ("story",) and not (post.story_urls or post.image_urls.get("story")):
+        return "no story this time"
+    return None
+
+
 def dispatch(publishers: list[Publisher], post: SocialPost) -> list[PublishResult]:
     results = []
     for pub in publishers:
+        why = idle(pub, post)
+        if why:
+            log.info("[%s] %s", pub.platform, why)
+            continue
         res = pub.publish(post)
         if res.ok:
             log.info("[%s] posted %s", pub.platform, res.url or res.remote_id)
@@ -52,4 +68,4 @@ def dispatch(publishers: list[Publisher], post: SocialPost) -> list[PublishResul
     return results
 
 
-__all__ = ["REGISTRY", "Publisher", "PublishResult", "SocialPost", "build_publishers", "dispatch", "fit_text"]
+__all__ = ["REGISTRY", "Publisher", "PublishResult", "SocialPost", "build_publishers", "dispatch", "fit_text", "idle"]

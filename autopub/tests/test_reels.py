@@ -169,12 +169,12 @@ def test_the_due_article_gets_a_reel_uploaded_and_the_slot_is_spent(monkeypatch,
     state = State(tmp_path / "s.db")
     VideoRecorder.seen.clear()
     report, wp = _run(monkeypatch, settings, site, tmp_path, state, [VideoRecorder({})], n=2)
-    assert len(report.published) == 2 and report.social_ok == 1 and report.social_failed == 1
-    first, second = VideoRecorder.seen
+    assert len(report.published) == 2 and report.social_ok == 1 and report.social_failed == 0
+    (first,) = VideoRecorder.seen
     assert first.video_url and first.video_url.endswith("-reel.mp4") and first.video_path.exists()
     assert first.video_cover_url is None, "no story publisher, so the 9:16 cover was not hosted; the reel still goes"
     assert video.probe(first.video_path)["codec"] == "h264"
-    assert second.video_url is None, "the second article in the slot is not a reel"
+    # the second article in the slot is not a reel: the video publisher stands aside, no failure row
     assert len(carousels.parse_log(state.note(site.key, pipeline.REEL_NOTE))) == 1
 
 

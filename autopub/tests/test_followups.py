@@ -247,3 +247,30 @@ def test_the_inverse_card_carries_a_standfirst_under_the_hook(site, tmp_path):
                                  card=CardBrief(cards.INVERSE, "Discounts are training your customers", "Pricing"))
     with Image.open(with_sf) as a, Image.open(without) as b:
         assert a.tobytes() != b.tobytes(), "the standfirst is drawn"
+
+
+def test_stories_go_out_for_every_second_news_article_and_always_for_a_forced_one(monkeypatch, settings, site, tmp_path):
+    settings.carousel_hours = settings.reel_hours = []
+    settings.steal_hour = settings.debate_hour = None
+    settings.story_every = 2
+    state = State(tmp_path / "s.db")
+    StoryRec.seen.clear(); FeedRec.seen.clear()
+    report, wp = _run(monkeypatch, settings, site, tmp_path, state, HookRewriter(), [FeedRec({}), StoryRec({})], n=3)
+    assert len(report.published) == 3
+    assert len(StoryRec.seen) == 2, "articles one and three get a story; two does not"
+    assert all(p.story_urls for p in StoryRec.seen)
+    assert len(FeedRec.seen) == 3, "every article still gets its feed post"
+    assert state.note(site.key, "story_counter") == "3"
+    assert report.social_failed == 0, "a story publisher with no story is idle, not failed"
+
+
+def test_a_reel_publisher_stands_aside_when_there_is_no_reel():
+    from autopub.social import REGISTRY, idle
+    from autopub.social.base import SocialPost
+    reel = REGISTRY["instagram_reel"]({"USER_ID": "1", "ACCESS_TOKEN": "t"})
+    story = REGISTRY["instagram_story"]({"USER_ID": "1", "ACCESS_TOKEN": "t"})
+    feed = REGISTRY["instagram"]({"USER_ID": "1", "ACCESS_TOKEN": "t"})
+    bare = SocialPost(title="T", link="https://x/", captions={}, image_urls={"portrait": "https://cdn/p.jpg"})
+    assert idle(reel, bare) == "no reel this time" and idle(story, bare) == "no story this time" and idle(feed, bare) is None
+    full = SocialPost(title="T", link="https://x/", captions={}, image_urls={"portrait": "p", "story": "s"}, video_url="v")
+    assert idle(reel, full) is None and idle(story, full) is None

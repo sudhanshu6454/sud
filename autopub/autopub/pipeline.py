@@ -146,7 +146,7 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
                  publishers, work_dir: Path, report: RunReport, *, image_url: str | None = None, credit: str | None = None,
                  use_source_image: bool | None = None, want_carousel: bool = False, want_reel: bool = False,
                  force_reel: bool = False, carousel_log: list[float] | None = None, reel_log: list[float] | None = None,
-                 card_brief=None) -> bool:
+                 card_brief=None, force_story: bool = False) -> bool:
     """Everything after the words exist: cards, story frames, reel, carousel, WordPress, socials.
 
     `url` is the claimed source key in `state`; `image_url` and `credit` are the source photo and
@@ -182,8 +182,16 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
 
     # 3b. the card Instagram will actually accept, trimmed out of the 3:4 master; and the same card
     # framed 9:16 for the story publishers, drawn from the master before it is cropped
+    # Instagram counts every story frame against the account's 100 publishes a day, so the news gets a
+    # story every `story_every`th article; the features that are the day's showpieces always do
     story_frames: list[Path] = []
-    if cards_by_shape.get("portrait"):
+    every = max(1, int(settings.story_every or 1))
+    counter = int(state.note(site.key, "story_counter") or 0)
+    want_story = force_story or every == 1 or counter % every == 0
+    state.set_note(site.key, "story_counter", str(counter + 1))
+    if not want_story:
+        log.info("[%s] no story for this article (one every %d); next one is due", site.key, every)
+    if cards_by_shape.get("portrait") and want_story:
         try:
             cards_by_shape["story"] = images.story_asset(cards_by_shape["portrait"], site, work_dir / site.slug / f"{stem}-story.jpg")
             # the rest of the story: the article's substance in one to three text frames, then the
@@ -198,6 +206,7 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
                                                            work_dir / site.slug / f"{stem}-story-end.jpg"))
         except Exception as exc:  # noqa: BLE001 - a story is a bonus; the feed post must not depend on it
             log.warning("[%s] could not build the story frames: %s", site.key, exc)
+    if cards_by_shape.get("portrait"):
         try:
             cards_by_shape["portrait"] = images.instagram_asset(cards_by_shape["portrait"], ratio=settings.instagram_ratio)
         except Exception as exc:  # noqa: BLE001 - fall back to the master; the publisher walks shapes anyway

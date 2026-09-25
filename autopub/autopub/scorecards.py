@@ -380,7 +380,7 @@ def publish_daily(site: Site, settings: Settings, state: State, rewriter: Rewrit
                 log.warning("[%s] photo upload failed: %s", site.key, exc)
     ok = pipeline.publish_post(site, settings, state, url, post, wp, publishers, work_dir, report,
                                image_url=image_url, credit=credit, use_source_image=image_url is not None,
-                               card_brief=card_brief(facts, credit))
+                               card_brief=card_brief(facts, credit), force_story=True)
     if ok:
         state.set_note(site.key, USED_NOTE, "\n".join((used + [facts.actor])[-500:]))
         state.set_note(site.key, NOTE, carousels.dump_log(slot_log + [time.time()]))

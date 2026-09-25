@@ -46,6 +46,10 @@ settings:
   # ScreenStat's actor scorecards: five a day, an actor's career in numbers (films, hits, flops, return
   # on budget) with every figure read from Wikipedia. The first cycle at or after each hour publishes one.
   scorecard_hours: [8, 11, 14, 17, 20]
+  # Instagram allows 100 API publishes per account a day and every story frame counts as one. A story
+  # sequence (cover, 1-3 text frames, closing) therefore goes out for every 2nd news article; throwbacks
+  # and scorecards always get theirs. 1 = every article.
+  story_every: 2
   steal_hour: 11
   debate_hour: 17
   followup_delay_minutes: 120

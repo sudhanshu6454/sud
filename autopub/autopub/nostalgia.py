@@ -227,7 +227,7 @@ def publish_daily(site: Site, settings: Settings, state: State, rewriter: Rewrit
         raise RuntimeError(f"throwback feature could not be written: {exc}") from exc
     ok = pipeline.publish_post(site, settings, state, url, post, wp, publishers, work_dir, report,
                                image_url=film["thumbnail"], credit=f"{film['channel']} on YouTube",
-                               use_source_image=True, force_reel=True)
+                               use_source_image=True, force_reel=True, force_story=True)
     if ok:
         state.set_note(site.key, USED_NOTE, dump_used(used + [key_of(choice)]))
         state.set_note(site.key, NOTE, carousels.dump_log(slot_log + [time.time()]))
