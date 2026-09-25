@@ -468,8 +468,8 @@ def run_site(site: Site, settings: Settings, state: State, rewriter: Rewriter | 
                 # spread posts a little even inside one run
                 time.sleep(min(gap, 60))
 
-    # the daily throwback: one classic ad, revisited, on top of the news. Its slot is spent only when
-    # it actually publishes, so a day the model or YouTube let us down is tried again next cycle.
+    # the ad features: this week's viral ad or a classic revisited, on top of the news. A slot is spent
+    # only when a feature actually publishes, so a slot the model or YouTube let down is tried next cycle.
     if site.nostalgia and nostalgia.due(settings, state, site):
         try:
             ready()

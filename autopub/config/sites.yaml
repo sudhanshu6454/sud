@@ -36,9 +36,10 @@ settings:
   # Music under the reel, matched to the story's mood (upbeat, calm, serious, nostalgic). Your own
   # licensed tracks go in /data/music/<mood>/ and are used first; otherwise a bed is composed.
   reel_music: true
-  # The daily throwback: one iconic ad campaign revisited, with the official YouTube film embedded,
-  # on the sites that set nostalgia to true. Published by the first cycle at or after this hour.
-  nostalgia_hour: 15
+  # Ad features on the sites that set nostalgia to true: five a day, this week's viral ad film and a
+  # classic revisited in turn (current at the 1st, 3rd and 5th hour, nostalgic at the 2nd and 4th),
+  # the official YouTube film embedded, written in each site's own format.
+  ad_hours: [9, 12, 15, 18, 21]
   # Follow-ups: one "Steal this" card a day (the first article after steal_hour that offers a reusable
   # tactic) and one debate story a day (the first after debate_hour that raises an arguable question),
   # each posted a while after its article so the day's posts spread out. The throwback's hot take
@@ -47,9 +48,9 @@ settings:
   # on budget) with every figure read from Wikipedia. The first cycle at or after each hour publishes one.
   scorecard_hours: [8, 11, 14, 17, 20]
   # Instagram allows 100 API publishes per account a day and every story frame counts as one. A story
-  # sequence (cover, 1-3 text frames, closing) therefore goes out for every 2nd news article; throwbacks
-  # and scorecards always get theirs. 1 = every article.
-  story_every: 2
+  # sequence (cover, 1-3 text frames, closing) therefore goes out for every 3rd news article; the ad
+  # features and scorecards always get theirs. 1 = every article.
+  story_every: 3
   steal_hour: 11
   debate_hour: 17
   followup_delay_minutes: 120
@@ -107,7 +108,7 @@ sites:
       logo: brand/marketing-mentalist-logo.png
       font: InstrumentSans   # the typeface the site itself uses, for the share cards
     socials: [twitter, facebook, instagram, linkedin, pinterest, telegram, threads, instagram_story, facebook_story, instagram_reel, facebook_video]
-    nostalgia: true              # one classic-ad throwback a day, at settings.nostalgia_hour
+    nostalgia: true              # five ad features a day (viral now, throwback), at settings.ad_hours
 
   - key: CRAZY
     domain: crazy4marketing.com
@@ -160,7 +161,7 @@ sites:
       font: SpaceGrotesk   # the typeface the site itself uses, for the share cards
       rail: double         # the site's own ticker rule, under the card's photo
     socials: [twitter, facebook, instagram, linkedin, pinterest, telegram, threads, instagram_story, facebook_story, instagram_reel, facebook_video]
-    nostalgia: true              # one classic-ad throwback a day, at settings.nostalgia_hour
+    nostalgia: true              # five ad features a day (viral now, throwback), at settings.ad_hours
 
   - key: JUNKIES
     domain: marketingjunkies.in
@@ -205,7 +206,7 @@ sites:
       heading_weight: 800   # matches --font-heading-weight in the theme
       rail: inset           # a typographic rule inside the column, like the site's
     socials: [twitter, facebook, instagram, linkedin, pinterest, telegram, threads, instagram_story, facebook_story, instagram_reel, facebook_video]
-    nostalgia: true              # one classic-ad throwback a day, at settings.nostalgia_hour
+    nostalgia: true              # five ad features a day (viral now, throwback), at settings.ad_hours
 
   - key: SCREENSTAT
     domain: screenstat.in

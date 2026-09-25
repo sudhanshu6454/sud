@@ -218,74 +218,34 @@ comes from the `imageio-ffmpeg` wheel, so nothing is installed on the host. Prev
 docker compose run --rm autopub python -m autopub cards --reel --site CRAZY --mood upbeat
 ```
 
-### The daily throwback
+### Ad features: viral now and throwback
 
-Once a day (`settings.nostalgia_hour`, default 15:00 in `settings.timezone`) each site marked
-`nostalgia: true` (the three marketing sites) publishes a feature revisiting one iconic ad campaign.
-`autopub/nostalgia.py` asks the model to name a campaign at least five years old that the site has
-not covered (Indian and international on alternate days; the covered list lives in `site_notes`),
-finds the official upload on YouTube (`autopub/youtube.py`, from the results page, no API key), and
-only then asks for the article: the ad, why it worked for this site's beat, what it did for the
-brand, what a marketer takes from it now. The film is **embedded** with WordPress's own YouTube
-block, so it plays with its original sound in YouTube's player and nothing is downloaded or
-re-hosted; a campaign the model misremembers has no upload to find and is dropped, not written up.
-The feature then takes the same road as the news: cards (the film's thumbnail as the photo),
-story frames, a narrated reel every time, WordPress under the **Throwback** category, every social.
-A film's URL is the dedupe key, so two sites never run the same ad. Run or preview one by hand:
+Five times a day (`settings.ad_hours`, default 09:00, 12:00, 15:00, 18:00 and 21:00 in
+`settings.timezone`) each site marked `nostalgia: true` (the three marketing sites) publishes a
+feature about one ad film, in two kinds that alternate through the day, current first, so three of
+this week's ads and two classics:
 
-```bash
-docker compose run --rm autopub python -m autopub nostalgia --dry-run          # the pick and the film, nothing published
-docker compose run --rm autopub python -m autopub nostalgia --site CRAZY       # publish today's now
-```
+- **Viral now**: the ad film everyone is sharing this week. `autopub/nostalgia.py` reads the
+  creative-industry feeds (Muse by Clio, Adweek Creativity, Campaign Brief, Brand Equity, afaqs) and
+  Google News for viral ads, the model picks the one story that is about a specific new film, the
+  article is read as the source, and the official upload is found on YouTube. The story is also
+  claimed so the hourly news does not run it again. When the week offers nothing, a classic runs.
+- **Throwback**: an iconic campaign at least five years old the network has not covered, Indian and
+  international in turn; the model names it and YouTube must have the film under the brand's name,
+  so a misremembered campaign is dropped, not written. A hot take follows two hours later.
 
-### Hooks, and the follow-ups
-
-Every card leads with a **hook**: the rewriter writes a 3-7 word scroll-stopper (`hook`) that is set
-large, and the article's headline runs beneath it as the standfirst; without a hook the card reads as
-before. The Instagram and Facebook captions open with `caption_hook`, one sentence that opens a gap,
-because the first line is all either platform shows before "more".
-
-Three pieces trail an article rather than travelling with it, queued in `site_notes` when it
-publishes and posted by a later cycle (`autopub/followups.py`, `followup_delay_minutes`, default 120):
-
-- **Steal this** (`steal_hour`, default 11:00): the first article after the hour whose source offered a
-  reusable tactic (`steal`: the idea as an imperative and how to apply it) gets a swipe-file card, with
-  a "Save this post" cue, on Instagram and the Facebook Page.
-- **The debate** (`debate_hour`, default 17:00, at half the delay): the first article after the hour
-  that raised an arguable question (`debate`: the question and two short sides) gets a 9:16 story with
-  the two sides numbered and "Reply to this story with 1 or 2". The API allows no poll sticker
-  ("Publishing stickers (i.e., link, poll, location) is not supported"), so the reply is the vote and
-  arrives as a DM.
-- **Hot take**: two hours after the daily throwback, its `hot_take` (one bold, arguable line) goes out
-  as a quote card asking for agreement or disagreement in the comments.
-
-Each is tried once and recorded in `social_posts` as `platform:kind` (e.g. `instagram:steal`); a
-slot is spent when the piece is queued. A story with no tactic or no real question leaves the slot
-to the next article.
-
-### ScreenStat's actor scorecards
-
-Five times a day (`settings.scorecard_hours`, default 08:00, 11:00, 14:00, 17:00 and 20:00, on sites
-with `scorecards: true`) ScreenStat publishes an actor's career in numbers. Every figure comes from
-Wikipedia (`autopub/wiki.py`): the filmography table gives the films and years, each recent film's
-infobox its budget and box office, Wikidata the date of birth and awards. `autopub/scorecards.py`
-computes the record (films, hits, flops, return multiples, biggest hit, the recent-five trend), writes
-the summary box and the film table itself, and hands the figures to the model, which names the day's
-actor (Hindi, Tamil, Telugu, Malayalam and Kannada industries in turn) and writes only the analysis
-around them, told to add no number of its own. ScreenStat's verdict rule is printed on every
-scorecard: blockbuster at 2.5x budget or more, hit at 1.75x, average at 1.25x, flop below; films
-Wikipedia has no figures for are counted but not judged. An actor with fewer than five recent films
-with figures is skipped, not guessed at. The card is built from the figures (the hit rate, hits
-against flops, three takeaways). The actor's lead image on Wikimedia Commons is used when its licence
-allows reuse with credit (Creative Commons attribution licences, public domain, India's GODL; never
-non-free or non-commercial files): it is uploaded to the site's media library, shown at the top of the
-scorecard with the author and licence linked, and stands behind the cards with the same credit on the
-card. Filed under **Scorecards**.
+The film is **embedded** with WordPress's own YouTube block, so it plays with its original sound in
+YouTube's player and nothing is downloaded or re-hosted. Each site writes in its own format:
+**The psychology of the ad** on Marketing Mentalist (the behavioural levers the film pulls), a
+**Campaign breakdown** on Crazy4Marketing (hook, structure, why it spread, steal this), and **Ad
+watch** on Marketing Junkies (brand, agency, response, category context). Filed under **Throwback**
+or the site's campaigns section (**Viral Ads** where it has none). The feature then takes the same
+road as the news: cards (the film's thumbnail as the photo), story frames, a narrated reel every time,
+every social. A film's URL is the dedupe key, so two sites never run the same ad.
 
 ```bash
-docker compose run --rm autopub python -m autopub scorecard --dry-run --actor "Vijay (actor)"   # the figures, nothing published
-docker compose run --rm autopub python -m autopub scorecard --actor "Alia Bhatt"               # publish one now
-docker compose run --rm autopub python -m autopub scorecard --dry-run                          # let the model pick
+docker compose run --rm autopub python -m autopub nostalgia --dry-run --kind current     # the pick and the film, nothing published
+docker compose run --rm autopub python -m autopub nostalgia --site CRAZY --kind nostalgic  # publish one now
 ```
 
 ### Viral ad coverage

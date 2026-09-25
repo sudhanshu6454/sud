@@ -148,7 +148,8 @@ def test_the_slot_publishes_a_scorecard_with_the_table_and_a_figure_card(monkeyp
     site = settings.site("SCREENSTAT")
     settings.scorecard_hours = [0]
     settings.reel_hours = settings.carousel_hours = []
-    settings.steal_hour = settings.debate_hour = settings.nostalgia_hour = None
+    settings.steal_hour = settings.debate_hour = None
+    settings.ad_hours = []
     settings.min_relevance = 0
     _fake_wiki(monkeypatch)
     monkeypatch.setattr(sources, "collect", lambda s, timeout=30: [])

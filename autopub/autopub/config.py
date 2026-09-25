@@ -44,7 +44,7 @@ class Site:
     hashtags: list[str] = field(default_factory=list)
     brand: Brand = field(default_factory=Brand)
     socials: list[str] = field(default_factory=list)
-    nostalgia: bool = False     # one classic-ad throwback feature a day, at settings.nostalgia_hour
+    nostalgia: bool = False     # ad features (this week's viral ad, a classic revisited) at settings.ad_hours
     scorecards: bool = False    # actor scorecards from Wikipedia figures, at each settings.scorecard_hours
 
     @property
@@ -103,9 +103,9 @@ class Settings:
     # A music bed under the reel, matched to the story's mood: your own licensed tracks from
     # <data_dir>/music/<mood>/ when present, else one composed on the spot. False = voice only.
     reel_music: bool = True
-    # The daily throwback: one iconic ad campaign, revisited, on sites with `nostalgia: true`. The first
-    # cycle at or after this hour (in `timezone`) publishes it. None switches it off.
-    nostalgia_hour: int | None = 15
+    # Ad features on sites with `nostalgia: true`: the first cycle at or after each hour publishes one,
+    # this week's viral ad and a classic revisited in turn (current first). [] switches them off.
+    ad_hours: list[int] = field(default_factory=lambda: [9, 12, 15, 18, 21])
     # One 'Steal this' card a day (the first article at or after this hour that offers a reusable tactic)
     # and one debate story a day (the first that raises an arguable question), each posted as a follow-up
     # `followup_delay_minutes` after the article. The throwback's hot take follows the same way. None = off.
@@ -115,7 +115,7 @@ class Settings:
     # Instagram allows 100 API publishes per account a day and every story frame counts as one, so a
     # story sequence goes out for every Nth news article (1 = every article). Throwbacks and
     # scorecards always get theirs.
-    story_every: int = 2
+    story_every: int = 3
     steal_hour: int | None = 11
     debate_hour: int | None = 17
     followup_delay_minutes: int = 120
@@ -159,4 +159,5 @@ def load(path: str | os.PathLike | None = None) -> Settings:
     settings.carousel_hours = sorted({int(h) % 24 for h in (settings.carousel_hours or [])})
     settings.reel_hours = sorted({int(h) % 24 for h in (settings.reel_hours or [])})
     settings.scorecard_hours = sorted({int(h) % 24 for h in (settings.scorecard_hours or [])})
+    settings.ad_hours = sorted({int(h) % 24 for h in (settings.ad_hours or [])})
     return settings

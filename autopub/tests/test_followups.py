@@ -70,7 +70,7 @@ def _run(monkeypatch, settings, site, tmp_path, state, rewriter, publishers, n=1
     monkeypatch.setattr(sources, "collect", lambda s, timeout=30: [sources.Candidate(f"Story{i}", f"https://pub.com/{i}", "", now, "Pub") for i in range(n)])
     monkeypatch.setattr(extract, "extract", lambda url, timeout=30: extract.Article(url=url, title=url.rsplit("/", 1)[1], text="w " * 600, sitename="Pub", image=None))
     monkeypatch.setattr(pipeline.time, "sleep", lambda s: None)
-    settings.nostalgia_hour = None
+    settings.ad_hours = []
     settings.min_relevance = 0
     wp = FakeWP()
     report = pipeline.run_site(site, settings, state, rewriter=rewriter, wp=wp, publishers=publishers, work_dir=tmp_path / "img", limit=n)
@@ -200,7 +200,8 @@ def test_no_matching_publisher_means_nothing_is_queued(monkeypatch, settings, si
 def test_the_throwback_queues_its_hot_take(monkeypatch, settings, site, tmp_path):
     from tests.test_nostalgia import FILM, FakeRewriter, Pick, _post, _quick_render
     from autopub import youtube
-    settings.nostalgia_hour = 0
+    settings.ad_hours = [0]
+    monkeypatch.setattr(nostalgia, "kind_for_slot", lambda settings, now=None: "nostalgic")
     settings.reel_hours = settings.carousel_hours = []
     settings.steal_hour = settings.debate_hour = None
     site.nostalgia = True

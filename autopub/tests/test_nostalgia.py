@@ -2,7 +2,7 @@
 down the same road as the news, once a day, never twice."""
 from datetime import datetime, timezone
 
-from autopub import carousels, nostalgia, pipeline, sources, video, youtube
+from autopub import carousels, followups, nostalgia, pipeline, sources, video, youtube
 from autopub.nostalgia import Pick
 from autopub.rewrite import Captions, CuratedPost
 from autopub.social.base import Publisher, PublishResult
@@ -99,7 +99,7 @@ def _quick_render(monkeypatch):
 
 
 def test_the_daily_throwback_is_published_with_the_film_a_reel_and_a_spent_slot(monkeypatch, settings, site, tmp_path):
-    settings.nostalgia_hour = 0
+    settings.ad_hours = [0]
     settings.reel_hours = []
     settings.carousel_hours = []
     site.nostalgia = True
@@ -112,6 +112,7 @@ def test_the_daily_throwback_is_published_with_the_film_a_reel_and_a_spent_slot(
     wp = FakeWP()
     Recorder.seen.clear(); VideoRecorder.seen.clear()
     rw = FakeRewriter([Pick(brand="Cadbury", campaign="Kuch Khaas Hai", year=1994, hook="h")])
+    monkeypatch.setattr(nostalgia, "kind_for_slot", lambda settings, now=None: "nostalgic")
     report = pipeline.run_site(site, settings, state, rewriter=rw, wp=wp, publishers=[Recorder({}), VideoRecorder({})], work_dir=tmp_path / "img")
     assert report.published == ["https://marketingmentalist.in/cadbury-kuch-khaas-hai/"]
     created = wp.posts[0]
@@ -129,7 +130,7 @@ def test_the_daily_throwback_is_published_with_the_film_a_reel_and_a_spent_slot(
 
 
 def test_a_pick_without_a_film_or_already_covered_is_asked_again_then_given_up(monkeypatch, settings, site, tmp_path):
-    settings.nostalgia_hour = 0
+    settings.ad_hours = [0]
     site.nostalgia = True
     state = State(tmp_path / "s.db")
     state.set_note(site.key, nostalgia.USED_NOTE, "Cadbury | Kuch Khaas Hai | 1994")
@@ -138,7 +139,7 @@ def test_a_pick_without_a_film_or_already_covered_is_asked_again_then_given_up(m
                        Pick(brand="Ghost", campaign="Never Aired", hook="h"),
                        Pick(brand="Ghost", campaign="Never Aired 2", hook="h")])
     from autopub.pipeline import RunReport
-    ok = nostalgia.publish_daily(site, settings, state, rw, FakeWP(), [], tmp_path, RunReport(site=site.key))
+    ok = nostalgia.publish_daily(site, settings, state, rw, FakeWP(), [], tmp_path, RunReport(site=site.key), kind="nostalgic")
     assert not ok and len(rw.systems) == nostalgia.ATTEMPTS
     assert "- Cadbury | Kuch Khaas Hai | 1994" in rw.systems[1], "the repeat is told not to repeat"
     assert "Ghost | Never Aired (no film found)" in rw.systems[2], "a campaign with no upload is not asked for again"
@@ -148,14 +149,14 @@ def test_a_pick_without_a_film_or_already_covered_is_asked_again_then_given_up(m
 def test_sites_without_the_flag_and_hours_switched_off_never_run_it(monkeypatch, settings, site, tmp_path):
     state = State(tmp_path / "s.db")
     site.nostalgia = False
-    settings.nostalgia_hour = 0
-    assert not nostalgia.due(settings, state, site) or True   # due() is about time; the flag is checked by run_site
+    settings.ad_hours = [0]
+    assert nostalgia.due(settings, state, site), "due() is about time; the flag is checked by run_site"
     monkeypatch.setattr(sources, "collect", lambda s, timeout=30: [])
     rw = FakeRewriter([Pick(brand="X", campaign="Y", hook="h")])
     pipeline.run_site(site, settings, state, rewriter=rw, wp=FakeWP(), publishers=[], work_dir=tmp_path)
     assert rw.systems == []
     site.nostalgia = True
-    settings.nostalgia_hour = None
+    settings.ad_hours = []
     assert not nostalgia.due(settings, state, site)
     pipeline.run_site(site, settings, state, rewriter=rw, wp=FakeWP(), publishers=[], work_dir=tmp_path)
     assert rw.systems == []
@@ -163,4 +164,70 @@ def test_sites_without_the_flag_and_hours_switched_off_never_run_it(monkeypatch,
 
 def test_config_marks_the_three_marketing_sites(settings):
     assert [s.key for s in settings.sites if s.nostalgia] == ["MENTALIST", "CRAZY", "JUNKIES"]
-    assert settings.nostalgia_hour == 15 and settings.reel_voice == "af_heart"
+    assert settings.ad_hours == [9, 12, 15, 18, 21] and settings.reel_voice == "af_heart"
+
+
+def test_the_days_slots_alternate_current_and_nostalgic_current_first(settings):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    settings.ad_hours = [9, 12, 15, 18, 21]
+    at = lambda h: datetime(2026, 9, 25, h, 10, tzinfo=ZoneInfo("Asia/Kolkata")).timestamp()
+    assert [nostalgia.kind_for_slot(settings, at(h)) for h in (9, 12, 15, 18, 21)] == ["current", "nostalgic", "current", "nostalgic", "current"]
+    assert nostalgia.kind_for_slot(settings, at(23)) == "current", "still the 21:00 slot"
+    assert nostalgia.category_for(settings.site("CRAZY"), "current") == "Viral Campaigns"
+    assert nostalgia.category_for(settings.site("MENTALIST"), "current") == "Viral Ads"
+    assert nostalgia.category_for(settings.site("MENTALIST"), "nostalgic") == "Throwback"
+
+
+def test_each_site_writes_in_its_own_format(site, settings):
+    rw = FakeRewriter([], _post(category="Viral Ads", image_kicker="x"))
+    post = nostalgia.write(rw, settings.site("MENTALIST"), Pick(brand="Zomato", campaign="Kuch Bhi", hook="h"), FILM, kind="current",
+                           source=None)
+    assert "The psychology of the ad" in rw.systems[0] and "behavioural science" in rw.systems[0] and "VIRAL NOW" in rw.systems[0]
+    assert post.category == "Viral Ads" and post.image_kicker == "Viral now" and "Viral ads" in post.tags and post.mood == "upbeat"
+    rw2 = FakeRewriter([], _post(category="Viral Campaigns", image_kicker="x"))
+    nostalgia.write(rw2, settings.site("CRAZY"), Pick(brand="Z", campaign="K", hook="h"), FILM, kind="current")
+    assert "Campaign breakdown" in rw2.systems[0] and "steal this" in rw2.systems[0]
+    rw3 = FakeRewriter([], _post())
+    nostalgia.write(rw3, settings.site("JUNKIES"), Pick(brand="Z", campaign="K", year=2001, hook="h"), FILM, kind="nostalgic")
+    assert "Ad watch" in rw3.systems[0] and "THROWBACK" in rw3.systems[0] and '"enum": ["Throwback"]' in rw3.systems[0]
+
+
+def test_a_current_ad_comes_from_this_weeks_stories_and_claims_its_source(monkeypatch, settings, site, tmp_path):
+    from datetime import datetime, timezone
+    from autopub import extract as ex, sources as src, youtube
+    settings.ad_hours = [0]
+    settings.reel_hours = settings.carousel_hours = []
+    settings.steal_hour = settings.debate_hour = None
+    settings.scorecard_hours = []
+    site.nostalgia = True
+    _quick_render(monkeypatch)
+    now = datetime.now(timezone.utc)
+    week = [src.Candidate("Zomato's new ad film has 40M views in three days", "https://adpress.com/zomato", "", now, "Ad Press"),
+            src.Candidate("Agency of the year shortlist announced", "https://adpress.com/awards", "", now, "Ad Press")]
+    monkeypatch.setattr(src, "collect", lambda s, timeout=30: week if s.google_news_queries == nostalgia.VIRAL_QUERIES else [])
+    monkeypatch.setattr(ex, "extract", lambda url, timeout=30: ex.Article(url=url, title="Zomato ad", text="w " * 300, sitename="Ad Press"))
+    monkeypatch.setattr(youtube, "find_ad", lambda *a, **k: dict(FILM))
+    monkeypatch.setattr(pipeline.time, "sleep", lambda s: None)
+    monkeypatch.setattr(pipeline.images, "_download_photo", lambda url, timeout: None)
+    state = State(tmp_path / "s.db")
+    wp = FakeWP()
+
+    class CurrentRewriter(FakeRewriter):
+        def ask(self, system, user, schema, validate=None, max_tokens=16000):
+            self.systems.append(system)
+            if "Choose the ONE that is about a specific new ad" in system:
+                assert "1. Zomato's new ad film" in user and "2. Agency of the year" in user
+                return Pick(index=1, brand="Zomato", campaign="Kuch Bhi", hook="40M views")
+            assert "SOURCE_TEXT:" in user, "the current feature is grounded in the article"
+            return _post(title="Zomato's Kuch Bhi", slug="zomato-kuch-bhi", category="Viral Ads", image_kicker="x")
+
+    rw = CurrentRewriter([])
+    report = pipeline.run_site(site, settings, state, rewriter=rw, wp=wp, publishers=[Recorder({})], work_dir=tmp_path / "img")
+    assert report.published == ["https://marketingmentalist.in/zomato-kuch-bhi/"]
+    assert state.is_used("https://adpress.com/zomato", site.key), "the source story is claimed so the news does not repeat it"
+    assert state.is_used(FILM["url"], site.key)
+    assert ("categories", "Viral Ads") in wp.terms
+    assert 'Source: <a href="https://adpress.com/zomato"' in wp.posts[0]["content"]
+    assert nostalgia.parse_used(state.note(site.key, nostalgia.USED_NOTE)) == ["Zomato | Kuch Bhi | " + str(datetime.now().year)]
+    assert followups.load(state, site.key) == [], "no hot take after a current ad"

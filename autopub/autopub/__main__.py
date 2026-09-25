@@ -103,9 +103,10 @@ def cmd_check(settings, args) -> int:
     if settings.scorecard_hours:
         on = [s.key for s in settings.sites if s.scorecards]
         print(f"scorecards: at or after {', '.join(f'{h:02d}:00' for h in settings.scorecard_hours)} {settings.timezone} on {on or 'no site'}")
-    if settings.nostalgia_hour is not None:
+    if settings.ad_hours:
         on = [s.key for s in settings.sites if s.nostalgia]
-        print(f"throwback: one classic ad a day at or after {settings.nostalgia_hour:02d}:00 {settings.timezone} on {on or 'no site'}")
+        print(f"ad features: viral now / throwback in turn at or after {', '.join(f'{h:02d}:00' for h in settings.ad_hours)} "
+              f"{settings.timezone} on {on or 'no site'}")
     for site in settings.sites:
         print(f"\n[{site.key}] {site.domain} -> {site.wp_base_url()}")
         try:
@@ -318,21 +319,30 @@ def cmd_nostalgia(settings, args) -> int:
             continue
         used = nostalgia.parse_used(state.note(site.key, nostalgia.USED_NOTE))
         print(f"\n[{site.key}] {site.domain}: {len(used)} throwbacks so far")
+        kind = args.kind or nostalgia.kind_for_slot(settings)
         if args.dry_run:
             try:
-                choice = nostalgia.pick(rewriter, site, nostalgia.fleet_used(state) or used, len(used) + (0 if site.key in ("MENTALIST", "JUNKIES") else 1))
+                if kind == "current":
+                    cands = nostalgia.current_candidates(site, settings, state)
+                    print(f"  {len(cands)} viral-ad stories this week")
+                    choice = nostalgia.pick_current(rewriter, site, cands, nostalgia.fleet_used(state) or used)
+                    if choice is None:
+                        print("  the model found no story about a specific ad film"); rc = 1; continue
+                    print(f"  story: {cands[choice.index - 1].title[:80]}  {cands[choice.index - 1].url}")
+                else:
+                    choice = nostalgia.pick(rewriter, site, nostalgia.fleet_used(state) or used, len(used) + (0 if site.key in ("MENTALIST", "JUNKIES") else 1))
             except RuntimeError as exc:
                 print(f"  pick failed: {exc}")
                 rc = 1
                 continue
             film = nostalgia.youtube.find_ad(choice.brand, choice.campaign, choice.year)
-            print(f"  pick: {choice.brand} - {choice.campaign} ({choice.year or 'year unsure'}) {choice.country}")
+            print(f"  {kind}: {choice.brand} - {choice.campaign} ({choice.year or 'year unsure'}) {choice.country}")
             print(f"  why:  {choice.hook}")
             print(f"  film: {film['url'] + '  ' + film['title'][:60] + '  [' + film['channel'] + ']' if film else 'NOT FOUND (would ask again)'}")
             continue
         report = RunReport(site=site.key)
         ok = nostalgia.publish_daily(site, settings, state, rewriter, make_wordpress(site), build_publishers(site),
-                                     settings.data_dir / "images", report)
+                                     settings.data_dir / "images", report, kind=kind)
         print(f"  {'published' if ok else 'nothing published'}: {report.summary()}")
         for link in report.published:
             print("  ->", link)
@@ -400,8 +410,9 @@ def main(argv=None) -> int:
     c.add_argument("--carousel", action="store_true", help="render a sample carousel: cover, content slides, closing")
     c.add_argument("--reel", action="store_true", help="render a sample reel (MP4) from the story frames")
     c.add_argument("--mood", help="music mood for the sample reel: upbeat, calm, serious or nostalgic")
-    n = sub.add_parser("nostalgia", help="publish today's classic-ad throwback now (or --dry-run to see the pick)")
+    n = sub.add_parser("nostalgia", help="publish an ad feature now: this week's viral ad or a classic (or --dry-run to see the pick)")
     n.add_argument("--site"); n.add_argument("--dry-run", action="store_true", help="pick and look up the film, publish nothing")
+    n.add_argument("--kind", choices=["current", "nostalgic"], help="which kind; default: the kind the current slot would post")
     sc = sub.add_parser("scorecard", help="publish an actor scorecard now, or --dry-run to see the figures")
     sc.add_argument("--site"); sc.add_argument("--actor", help="the actor's English Wikipedia page title")
     sc.add_argument("--dry-run", action="store_true")
