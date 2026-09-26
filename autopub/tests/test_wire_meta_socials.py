@@ -120,3 +120,29 @@ def test_graph_error_text_never_carries_the_system_token(wire, monkeypatch):
         wire.page_access_token("1424415010744386", SYSTEM_TOKEN)
     assert SYSTEM_TOKEN not in str(exc.value)
     assert "<redacted>" in str(exc.value)
+
+
+def test_inventory_walks_the_pages_over_graph_and_wires_a_new_account_without_node(wire, files, capsys):
+    """A fresh Instagram account is found by the script itself (--inventory): no assets.json, no npm needed."""
+    env, assets = files
+    assets.unlink()
+    pages = [
+        {"data": [{"id": "100000000000009", "name": "Filmybuff", "instagram_business_account": {"id": "17841400000000009", "username": "filmybuff"}},
+                  {"id": "100000000000010", "name": "Old Page"}],
+         "paging": {"next": "https://graph.facebook.com/v21.0/me/accounts?after=x"}},
+        {"data": [{"id": "100000000000011", "name": "ScreenStat", "instagram_business_account": {"id": "17841400000000001", "username": "screenstat"}}]},
+    ]
+    seen = []
+    wire.fetch_json = lambda url, token: (seen.append(url), pages.pop(0))[1]
+    wire.fetch_page_token = lambda page_id, token: PAGE_TOKEN
+    rc = wire.main(["FILMYBUFF=filmybuff", "--facebook", "--inventory", "--env", str(env), "--assets", str(assets)])
+    out = capsys.readouterr().out
+    assert rc == 0, out
+    assert "instagram_business_account" in seen[0] and SYSTEM_TOKEN in seen[0] and seen[1].endswith("after=x")
+    assert "2 Instagram accounts" in out and "Old Page" in out
+    got = json.loads(assets.read_text())
+    assert [a["username"] for a in got["ig"]] == ["filmybuff", "screenstat"]
+    values = _env(env)
+    assert values["INSTAGRAM_FILMYBUFF_USER_ID"] == "17841400000000009" and values["FACEBOOK_FILMYBUFF_PAGE_ID"] == "100000000000009"
+    assert values["FACEBOOK_FILMYBUFF_PAGE_TOKEN"] == PAGE_TOKEN and values["INSTAGRAM_FILMYBUFF_ACCESS_TOKEN"] == SYSTEM_TOKEN
+    assert SYSTEM_TOKEN not in out and PAGE_TOKEN not in out

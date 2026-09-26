@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Point autopub's Instagram (and optionally Facebook) publishing at accounts the Meta System User can see.
 
-    python3 infra/wire-meta-socials.py SCREENSTAT=screenstat CRAZY=crazy4marketingg [--facebook]
+    python3 infra/wire-meta-socials.py SCREENSTAT=screenstat CRAZY=crazy4marketingg [--facebook] [--inventory]
 
 Each SITE=username names an Instagram handle from pulse-worker/config/assets.json (written by
-`npm run inventory`). For every site this writes INSTAGRAM_<SITE>_USER_ID and _ACCESS_TOKEN into
+`npm run inventory`, or by this script with --inventory, which walks the System User's Pages over
+Graph itself and needs no node; a missing assets.json is fetched the same way). For every site this writes INSTAGRAM_<SITE>_USER_ID and _ACCESS_TOKEN into
 .env, and with --facebook also FACEBOOK_<SITE>_PAGE_ID and _PAGE_TOKEN for the Page that account
 is connected to.
 
@@ -55,6 +56,44 @@ def page_access_token(page_id: str, system_token: str) -> str:
 fetch_page_token = page_access_token     # tests swap this out; nothing else should
 
 
+def graph_get(url: str, system_token: str) -> dict:
+    try:
+        with urllib.request.urlopen(url, timeout=30) as resp:
+            return json.load(resp)
+    except urllib.error.HTTPError as exc:
+        try:
+            data = json.load(exc)
+        except Exception:  # noqa: BLE001
+            data = {}
+        message = (data.get("error") or {}).get("message") or f"HTTP {exc.code}"
+        raise RuntimeError(message.replace(system_token, "<redacted>")) from None
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"network: {exc.reason}") from None
+
+
+fetch_json = graph_get                   # tests swap this out
+
+
+def inventory(system_token: str) -> dict:
+    """Every Page the System User can see and the Instagram account connected to each: the same
+    shape pulse-worker's `npm run inventory` writes to config/assets.json."""
+    from datetime import datetime, timezone
+    fb, ig = [], []
+    query = urllib.parse.urlencode({"fields": "id,name,instagram_business_account{id,username}", "limit": 100,
+                                    "access_token": system_token})
+    url = f"{GRAPH}/me/accounts?{query}"
+    while url:
+        data = fetch_json(url, system_token)
+        for page in data.get("data") or []:
+            acct = page.get("instagram_business_account")
+            fb.append({"page_id": page["id"], "name": page.get("name", ""), "has_ig": bool(acct)})
+            if acct:
+                ig.append({"ig_user_id": acct["id"], "username": acct.get("username", ""), "page_id": page["id"],
+                           "page_name": page.get("name", "")})
+        url = (data.get("paging") or {}).get("next")
+    return {"generated_at": datetime.now(timezone.utc).isoformat(), "ig": ig, "fb": fb}
+
+
 def upsert(lines: list[str], key: str, value: str) -> list[str]:
     out, done = [], False
     for line in lines:
@@ -90,9 +129,18 @@ def main(argv: list[str]) -> int:
     if not token:
         print("META_SYSTEM_USER_TOKEN is not set in .env - generate the System User token first")
         return 1
-    if not assets_path.exists():
-        print(f"{assets_path} not found - run `npm run inventory` in pulse-worker first")
-        return 1
+    if "--inventory" in argv or not assets_path.exists():
+        try:
+            assets = inventory(token)
+        except RuntimeError as exc:
+            print(f"Could not list the System User's Pages: {exc}\nNothing was written.")
+            return 1
+        assets_path.parent.mkdir(parents=True, exist_ok=True)
+        assets_path.write_text(json.dumps(assets, indent=2), encoding="utf-8")
+        without = [p["name"] for p in assets["fb"] if not p["has_ig"]]
+        print(f"Inventory: {len(assets['fb'])} Pages, {len(assets['ig'])} Instagram accounts -> {assets_path}")
+        if without:
+            print("Pages without a connected Instagram account:\n  " + "\n  ".join(without))
     by_user = {a["username"].lower(): a for a in json.loads(assets_path.read_text(encoding="utf-8")).get("ig", [])}
 
     # validate everything before writing anything
@@ -110,7 +158,7 @@ def main(argv: list[str]) -> int:
         for m in missing:
             print(f"  {m}")
         print("\nFor each: make sure it is a Professional account, connected to a Facebook Page, and that"
-              " Page is assigned to the system user in Business Settings. Then re-run `npm run inventory`."
+              " Page is assigned to the system user in Business Settings. Then re-run with --inventory."
               "\nNothing was written.")
         return 1
 
