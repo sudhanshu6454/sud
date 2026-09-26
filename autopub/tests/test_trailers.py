@@ -46,6 +46,16 @@ def test_the_studios_upload_wins_over_a_fan_reaction():
     assert youtube.is_official_trailer({"channel": "Marvel Entertainment"}, "Thunderbolts", "Marvel Studios"), "most of the studio's words"
 
 
+def test_a_studio_channel_is_recognised_without_the_model_naming_it():
+    """The model often does not know the studio; the channel's own name has to carry it."""
+    dharma = {"title": "Udta Teer Official Trailer | Ayushmann Khurrana", "channel": "Dharma Productions and Sikhya Entertainment"}
+    assert youtube.is_official_trailer(dharma, "Udta Teer", "")
+    assert youtube.is_official_trailer({"title": "x official trailer", "channel": "Some Small Films"}, "x", ""), "reads like a studio"
+    for fan in ("Judwaaz TV", "Cinema Stars Tv", "Feature Friday Clips", "OUR STUPID REACTIONS", "YOGI BOLTA HAI", "Filmy Reactions"):
+        assert not youtube.is_official_trailer({"title": "Udta Teer Official Trailer", "channel": fan}, "Udta Teer", ""), fan
+    assert not youtube.is_official_trailer({"title": "Udta Teer trailer breakdown", "channel": "Some Small Films"}, "Udta Teer", ""), "no 'official' in the title"
+
+
 def test_a_video_without_a_trailer_word_or_the_film_is_not_the_trailer():
     review = {"id": "r", "title": "War 3 review: worth it?", "channel": "Yash Raj Films", "seconds": 100, "views": 1}
     other = {"id": "o", "title": "Dhurandhar official trailer", "channel": "Yash Raj Films", "seconds": 100, "views": 1}

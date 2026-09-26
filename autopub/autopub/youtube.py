@@ -128,9 +128,29 @@ def choose_trailer(results: list[dict], film: str, studio: str = "") -> dict | N
     return max(good, key=score)
 
 
+STUDIO_WORDS = ("productions", "production", "films", "film", "studios", "studio", "pictures", "movies", "motion pictures",
+                "entertainment", "music", "records", "cinemas", "creations", "company", "international", "arts", "banner")
+FAN_WORDS = ("reaction", "reacts", "review", "tv", "clips", "edits", "fan", "status", "bolta", "explained", "dubbed", "spoof",
+             "recap", "shorts", "vlog", "podcast", "channel", "news", "updates", "trailers", "cinema stars", "buzz", "talkies")
+KNOWN_STUDIOS = ("yash raj films", "dharma productions", "t-series", "zee music company", "zee studios", "sony pictures",
+                 "sony music india", "excel movies", "maddock films", "hombale films", "mythri movie makers", "sun pictures",
+                 "red chillies entertainment", "eros now", "tips official", "saregama", "aanand l rai", "colour yellow",
+                 "jio studios", "netflix india", "netflix", "prime video india", "prime video", "jiohotstar", "disney plus hotstar",
+                 "sonyliv", "zee5", "marvel entertainment", "warner bros", "universal pictures", "paramount pictures",
+                 "20th century studios", "lionsgate", "a24", "lyca productions", "aashirvaad cinemas", "geetha arts",
+                 "sithara entertainments", "haarika & hassine", "dvv entertainment", "vyjayanthi movies", "kvn productions",
+                 "pen movies", "viacom18 studios", "balaji motion pictures", "nadiadwala grandson", "sajid nadiadwala",
+                 "junglee pictures", "sikhya entertainment", "roy kapur films", "rsvp movies", "bhansali productions",
+                 "phantom films", "clean slate filmz", "matchbox shots", "anil kapoor film company", "ajay devgn ffilms",
+                 "salman khan films", "tips industries", "panorama studios", "abundantia entertainment", "cinema1 studios")
+
+
 def is_official_trailer(video: dict, film: str, studio: str = "") -> bool:
-    """Whether the upload is the studio's own, or the film's own channel: the studio's name (or the film's) in the channel."""
-    ch = re.sub(r"[^a-z0-9]", "", (video.get("channel") or "").lower())
+    """Whether the upload is the studio's own (or the film's own channel), never a fan's, a reaction's or a
+    review channel's. The named studio decides when there is one; otherwise the channel's own name does:
+    a known studio, or a name that reads like one (Productions, Films, Pictures...) with no fan word in it."""
+    channel = (video.get("channel") or "").lower()
+    ch = re.sub(r"[^a-z0-9]", "", channel)
     studio_l = re.sub(r"[^a-z0-9]", "", (studio or "").lower())
     film_l = re.sub(r"[^a-z0-9]", "", film.lower())
     if studio_l and len(studio_l) >= 4 and (studio_l in ch or ch in studio_l):
@@ -138,7 +158,13 @@ def is_official_trailer(video: dict, film: str, studio: str = "") -> bool:
     words = [re.sub(r"[^a-z0-9]", "", w) for w in (studio or "").lower().split() if len(w) > 3]
     if words and sum(1 for w in words if w in ch) >= max(1, len(words) - 1):
         return True
-    return bool(film_l) and len(film_l) >= 5 and film_l in ch
+    if film_l and len(film_l) >= 5 and film_l in ch:
+        return True
+    if any(re.sub(r"[^a-z0-9]", "", k) in ch for k in KNOWN_STUDIOS):
+        return True
+    fan = any(re.search(r"\b" + re.escape(w) + r"\b", channel) for w in FAN_WORDS)
+    looks_like_studio = any(re.search(r"\b" + re.escape(w) + r"\b", channel) for w in STUDIO_WORDS)
+    return looks_like_studio and not fan and "official" in (video.get("title") or "").lower()
 
 
 def find_trailer(film: str, studio: str = "", year: int | str | None = None, timeout: int = 20) -> dict | None:
