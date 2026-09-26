@@ -1,0 +1,55 @@
+<!-- wp:template-part {"slug":"header","tagName":"div","className":"mj-site-header"} /-->
+
+<!-- wp:group {"tagName":"main","className":"mj-layout","layout":{"type":"default"}} -->
+<main class="wp-block-group mj-layout">
+<!-- wp:group {"tagName":"section","className":"mj-main mj-archive","layout":{"type":"default"}} -->
+<section class="wp-block-group mj-main mj-archive">
+<!-- wp:query-title {"type":"archive","showPrefix":false,"className":"mj-archive__title"} /-->
+
+<!-- wp:query-title {"type":"search","className":"mj-archive__title"} /-->
+
+<!-- wp:term-description {"className":"mj-archive__intro"} /-->
+
+<!-- wp:query {"queryId":1,"query":{"perPage":12,"pages":0,"offset":0,"postType":"post","order":"desc","orderBy":"date","inherit":true},"className":"mj-list"} -->
+<div class="wp-block-query mj-list">
+<!-- wp:post-template {"className":"mj-list__items","layout":{"type":"default"}} -->
+<!-- wp:group {"tagName":"article","className":"mj-list__item","layout":{"type":"default"}} -->
+<article class="wp-block-group mj-list__item">
+<!-- wp:post-featured-image {"isLink":true,"aspectRatio":"1200/630","sizeSlug":"mj-card","className":"mj-list__media grayscale"} /-->
+
+<!-- wp:group {"className":"mj-list__text","layout":{"type":"default"}} -->
+<div class="wp-block-group mj-list__text">
+<!-- wp:post-terms {"term":"category","className":"mj-kicker"} /-->
+
+<!-- wp:post-title {"level":2,"isLink":true,"className":"mj-list__title"} /-->
+
+<!-- wp:post-excerpt {"excerptLength":40,"className":"mj-list__excerpt"} /-->
+
+<!-- wp:post-date {"format":"j M Y","className":"mj-list__meta"} /-->
+</div>
+<!-- /wp:group -->
+</article>
+<!-- /wp:group -->
+<!-- /wp:post-template -->
+
+<!-- wp:query-pagination {"className":"mj-pagination","layout":{"type":"flex","justifyContent":"space-between"}} -->
+<!-- wp:query-pagination-previous /-->
+<!-- wp:query-pagination-numbers /-->
+<!-- wp:query-pagination-next /-->
+<!-- /wp:query-pagination -->
+
+<!-- wp:query-no-results -->
+<!-- wp:paragraph -->
+<p>No stories here yet.</p>
+<!-- /wp:paragraph -->
+<!-- /wp:query-no-results -->
+</div>
+<!-- /wp:query -->
+</section>
+<!-- /wp:group -->
+
+<!-- wp:template-part {"slug":"sidebar","tagName":"aside","className":"mj-sidebar"} /-->
+</main>
+<!-- /wp:group -->
+
+<!-- wp:template-part {"slug":"footer","tagName":"div","className":"mj-site-footer"} /-->

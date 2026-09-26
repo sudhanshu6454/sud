@@ -101,7 +101,7 @@ def publish_one(site: Site, settings: Settings, state: State, cand: sources.Cand
             except WordPressError as exc:
                 log.warning("tag %r failed: %s", tag, exc)
         wp_post = wp.create_post(
-            title=post.title, content=post.body_html, excerpt=post.excerpt, slug=stem,
+            title=post.title, content=post.content_html(), excerpt=post.excerpt, slug=stem,
             category_ids=[cat_id] if cat_id else [], tag_ids=tag_ids,
             featured_media=landscape_media["id"] if landscape_media else None,
         )

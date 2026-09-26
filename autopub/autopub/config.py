@@ -38,6 +38,8 @@ class Site:
     hashtags: list[str] = field(default_factory=list)
     brand: Brand = field(default_factory=Brand)
     socials: list[str] = field(default_factory=list)
+    # Directory name under themes/ bind-mounted into WordPress; empty means use WP_THEME from .env.
+    theme: str = ""
 
     @property
     def public_url(self) -> str:

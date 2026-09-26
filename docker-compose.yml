@@ -217,6 +217,7 @@ services:
     volumes:
     - wp_junkies_data:/var/www/html
     - ./infra/wp/uploads.ini:/usr/local/etc/php/conf.d/uploads.ini:ro
+    - ./themes/marketing-junkies:/var/www/html/wp-content/themes/marketing-junkies:ro
     networks:
     - web
     - internal
@@ -247,6 +248,7 @@ services:
         '
     volumes:
     - wp_junkies_data:/var/www/html
+    - ./themes/marketing-junkies:/var/www/html/wp-content/themes/marketing-junkies:ro
     networks:
     - internal
     - web

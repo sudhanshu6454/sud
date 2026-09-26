@@ -18,6 +18,10 @@ jobs:
       - run: python infra/gen_compose.py --check
       - run: python -m py_compile infra/dns.py infra/gen_compose.py
       - run: bash -n infra/bootstrap.sh infra/wp/init-sites.sh infra/linode/provision.sh infra/db/init-databases.sh
+      - name: themes
+        run: |
+          find themes -name '*.php' -print0 | xargs -0 -n1 php -l
+          python -c "import glob, json; [json.load(open(f)) for f in glob.glob('themes/*/theme.json')]"
       - name: docker compose config
         run: |
           cp .env.example .env

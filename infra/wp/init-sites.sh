@@ -24,19 +24,22 @@ upsert_env() {  # upsert_env KEY VALUE
   fi
 }
 
-# key|domain|name|tagline per line, read into an array up front: the loop body runs docker,
+# key|domain|name|tagline|theme per line, read into an array up front: the loop body runs docker,
 # which would otherwise swallow the rest of a piped/heredoc list and stop after the first site.
+# A site's `theme` names a directory under themes/ that docker-compose bind-mounts into
+# wp-content/themes, so `wp theme is-installed` finds it and nothing is downloaded.
 mapfile -t SITE_LINES < <(python3 - <<'PY'
 import yaml
 for s in yaml.safe_load(open("autopub/config/sites.yaml"))["sites"]:
-    print("|".join([s["key"].upper(), s["domain"], s["name"], s.get("tagline", "")]))
+    print("|".join([s["key"].upper(), s["domain"], s["name"], s.get("tagline", ""), s.get("theme", "")]))
 PY
 )
 echo "sites to set up: ${#SITE_LINES[@]}"
 
 for LINE in "${SITE_LINES[@]}"; do
-  IFS='|' read -r KEY DOMAIN NAME TAGLINE <<< "$LINE"
+  IFS='|' read -r KEY DOMAIN NAME TAGLINE SITE_THEME <<< "$LINE"
   [ -z "$KEY" ] && continue
+  SITE_THEME="${SITE_THEME:-$THEME}"
   slug=$(echo "$KEY" | tr '[:upper:]' '[:lower:]')
   wp() { docker compose run --rm -T "cli_${slug}" "$@" </dev/null; }
   echo
@@ -67,8 +70,10 @@ for LINE in "${SITE_LINES[@]}"; do
   wp option update default_comment_status closed >/dev/null
 
   echo "-- theme + plugins"
-  wp theme is-installed "$THEME" >/dev/null 2>&1 || wp theme install "$THEME"
-  wp theme activate "$THEME" >/dev/null 2>&1 || true
+  wp theme is-installed "$SITE_THEME" >/dev/null 2>&1 || wp theme install "$SITE_THEME"
+  wp theme activate "$SITE_THEME" >/dev/null 2>&1 || true
+  # themes that register rewrite endpoints (news sitemap, llms.txt) need a flush after activation
+  wp rewrite flush --hard >/dev/null 2>&1 || true
   for p in $PLUGINS; do
     wp plugin is-installed "$p" >/dev/null 2>&1 || wp plugin install "$p"
     wp plugin activate "$p" >/dev/null 2>&1 || true

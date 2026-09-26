@@ -1,0 +1,14 @@
+/*
+Theme Name: Marketing Junkies
+Theme URI: https://marketingjunkies.in
+Author: Marketing Junkies
+Description: Block theme for marketingjunkies.in. Modernist grid, 2px rules and Archivo type in the logo's cream, ink and bronze. Built around the fields the autopub pipeline publishes (title, excerpt, category, tags, 1200x630 featured image, source line, key takeaways, FAQ), with reserved ad slots, a sponsored-article template and one JSON-LD graph per article.
+Requires at least: 6.6
+Tested up to: 6.8
+Requires PHP: 8.1
+Version: 1.0.0
+License: GNU General Public License v2 or later
+License URI: https://www.gnu.org/licenses/gpl-2.0.html
+Text Domain: marketing-junkies
+Tags: block-theme, news, blog, full-site-editing
+*/

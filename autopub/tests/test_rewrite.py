@@ -101,3 +101,24 @@ def test_tags_are_clamped(site):
     data = dict(GOOD, tags=[f"t{i}" for i in range(12)] + ["  "])
     post = Rewriter(client=FakeClient(_resp(json.dumps(data)))).rewrite(site, ARTICLE)
     assert len(post.tags) == 8
+
+
+def test_takeaways_and_faq_are_clamped_and_composed(site):
+    data = dict(
+        GOOD,
+        key_takeaways=["One <b>", "Two", "Three", "Four", " "],
+        faq=[{"question": "Q1?", "answer": "A1 & more."}, {"question": " ", "answer": "dropped"},
+             {"question": "Q2?", "answer": "A2."}, {"question": "Q3?", "answer": "A3."}, {"question": "Q4?", "answer": "A4."}],
+    )
+    post = Rewriter(client=FakeClient(_resp(json.dumps(data)))).rewrite(site, ARTICLE)
+    assert post.key_takeaways == ["One <b>", "Two", "Three"]
+    assert [f.question for f in post.faq] == ["Q1?", "Q2?", "Q3?"]
+    html = post.content_html()
+    assert html.startswith("<ul><li>One &lt;b&gt;</li><li>Two</li><li>Three</li></ul>\n<p>Body</p>")
+    assert html.index("Source:") < html.index('<section class="faq" id="faq">')
+    assert "<details><summary>Q1?</summary><p>A1 &amp; more.</p></details>" in html
+
+
+def test_content_without_extras_is_just_the_body(site):
+    post = Rewriter(client=FakeClient(_resp(json.dumps(GOOD)))).rewrite(site, ARTICLE)
+    assert post.content_html() == GOOD["body_html"]

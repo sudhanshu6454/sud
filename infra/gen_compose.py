@@ -88,6 +88,8 @@ def build(sites: list[dict]) -> dict:
     for s in sites:
         key, domain = s["key"].upper(), s["domain"]
         slug = key.lower()
+        theme = s.get("theme")
+        theme_mount = [f"./themes/{theme}:/var/www/html/wp-content/themes/{theme}:ro"] if theme else []
         services[f"wp_{slug}"] = {
             "image": "wordpress:6-php8.3-apache",
             "container_name": f"wp_{slug}",
@@ -98,7 +100,7 @@ def build(sites: list[dict]) -> dict:
                 "VIRTUAL_HOST": f"{domain},www.{domain}",
                 "LETSENCRYPT_HOST": f"{domain},www.{domain}",
             },
-            "volumes": [f"wp_{slug}_data:/var/www/html", "./infra/wp/uploads.ini:/usr/local/etc/php/conf.d/uploads.ini:ro"],
+            "volumes": [f"wp_{slug}_data:/var/www/html", "./infra/wp/uploads.ini:/usr/local/etc/php/conf.d/uploads.ini:ro", *theme_mount],
             "networks": ["web", "internal"],
         }
         services[f"cli_{slug}"] = {
@@ -107,7 +109,7 @@ def build(sites: list[dict]) -> dict:
             "user": "33:33",
             "depends_on": {"db": {"condition": "service_healthy"}},
             "environment": wp_env(key, domain),
-            "volumes": [f"wp_{slug}_data:/var/www/html"],
+            "volumes": [f"wp_{slug}_data:/var/www/html", *theme_mount],
             "networks": ["internal", "web"],
             "entrypoint": ["wp"],
         }

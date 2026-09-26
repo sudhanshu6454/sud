@@ -41,7 +41,9 @@ Repository layout:
 
 ```
 autopub/            Python service (curation → WordPress → socials) + tests
-  config/sites.yaml   the fleet definition: domains, beats, feeds, brand colours, socials
+  config/sites.yaml   the fleet definition: domains, beats, feeds, brand colours, socials, theme
+themes/
+  marketing-junkies/  block theme for marketingjunkies.in (see its README)
 infra/
   gen_compose.py      generates docker-compose.yml from sites.yaml
   linode/provision.sh one-shot: create Linode → DNS → deploy → install WordPress
@@ -104,6 +106,17 @@ make logs       # follow the publisher
 
 Tuning lives in `sites.yaml` (`settings:` block and per-site `max_posts_per_run`, `max_age_hours`, feeds,
 keywords). After editing: `make up` (the config is mounted into the container, a restart is enough).
+
+## Site themes
+
+Sites use `WP_THEME` from `.env` (Astra) unless their `sites.yaml` block sets `theme:`. The value names a
+directory under `themes/`; `make compose` bind-mounts it into that site's WordPress and wp-cli containers,
+and `make init` activates it. marketingjunkies.in uses `themes/marketing-junkies`. To roll it out on a
+running server, sync the repo, then run `make up && make init`.
+
+Every article opens with three key takeaways and ends with a short FAQ, written by the model along with the body.
+Any theme shows them as a list and `<details>` elements. The Marketing Junkies theme turns them into its
+Key takeaways box and FAQ block, with FAQPage schema.
 
 ## Adding site 4 and 5
 

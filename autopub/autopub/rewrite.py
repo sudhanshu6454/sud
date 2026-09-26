@@ -1,6 +1,7 @@
 """Turn a source story into an original, attributed article + social captions with Claude."""
 from __future__ import annotations
 
+import html
 import json
 import logging
 import os
@@ -38,28 +39,65 @@ class Captions(BaseModel):
     threads: str
 
 
+class FaqItem(BaseModel):
+    question: str
+    answer: str
+
+
 class CuratedPost(BaseModel):
     title: str = Field(max_length=120)
     slug: str
     excerpt: str
     body_html: str
     tags: list[str] = Field(default_factory=list)
+    key_takeaways: list[str] = Field(default_factory=list)
+    faq: list[FaqItem] = Field(default_factory=list)
     image_headline: str
     image_kicker: str
     captions: Captions
+
+    def content_html(self) -> str:
+        """The post body WordPress receives.
+
+        Key takeaways go first as a plain <ul> and the FAQ last as <details> elements inside
+        <section class="faq">. Any theme renders them as normal HTML; the marketing-junkies theme
+        turns a leading <ul> into its Key takeaways box and the section into its FAQ + FAQPage schema.
+        """
+        parts = []
+        if self.key_takeaways:
+            items = "".join(f"<li>{html.escape(t)}</li>" for t in self.key_takeaways)
+            parts.append(f"<ul>{items}</ul>")
+        parts.append(self.body_html)
+        if self.faq:
+            qa = "".join(
+                f"<details><summary>{html.escape(f.question)}</summary><p>{html.escape(f.answer)}</p></details>"
+                for f in self.faq
+            )
+            parts.append(f'<section class="faq" id="faq"><h2>Frequently asked</h2>{qa}</section>')
+        return "\n".join(parts)
 
 
 OUTPUT_SCHEMA: dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,
-    "required": ["title", "slug", "excerpt", "body_html", "tags", "image_headline", "image_kicker", "captions"],
+    "required": ["title", "slug", "excerpt", "body_html", "tags", "key_takeaways", "faq", "image_headline", "image_kicker", "captions"],
     "properties": {
         "title": {"type": "string", "description": "SEO headline, max 65 characters, no clickbait, no quotes around it"},
         "slug": {"type": "string", "description": "lowercase-hyphenated url slug, max 8 words"},
         "excerpt": {"type": "string", "description": "Meta description / excerpt, 120-155 characters"},
-        "body_html": {"type": "string", "description": "Article body as clean HTML (p, h2, h3, ul, ol, li, strong, em, blockquote, a). No h1, no img, no script."},
+        "body_html": {"type": "string", "description": "Article body as clean HTML (p, h2, h3, ul, ol, li, strong, em, blockquote, a). No h1, no img, no script. Do not start with a list and do not include the key takeaways or FAQ here."},
         # structured outputs only accept minItems 0/1 and no maxItems; the count is enforced after parsing
         "tags": {"type": "array", "items": {"type": "string"}, "description": "4 to 8 short topical tags"},
+        "key_takeaways": {"type": "array", "items": {"type": "string"},
+                          "description": "Exactly 3 plain-text takeaways, one sentence each, max 200 characters, facts from the source only"},
+        "faq": {
+            "type": "array",
+            "description": "2 or 3 questions a reader would search for, answered in 1-2 plain-text sentences from the source facts only",
+            "items": {
+                "type": "object", "additionalProperties": False, "required": ["question", "answer"],
+                "properties": {"question": {"type": "string"}, "answer": {"type": "string"}},
+            },
+        },
         "image_headline": {"type": "string", "description": "Short headline for the share image, max 70 characters"},
         "image_kicker": {"type": "string", "description": "2-3 word label for the share image, e.g. 'Brand Strategy'"},
         "captions": {
@@ -92,6 +130,7 @@ You receive one news story from another publisher. Write an ORIGINAL curated art
 - Length 450-750 words. Use <h2> subheadings, short paragraphs, and one bullet list where it helps.
 - Facts, names, numbers and dates must come from the source; do not invent details. If the source is thin, keep the piece shorter rather than padding.
 - End the body with a paragraph: <p><em>Source: <a href="SOURCE_URL" rel="nofollow noopener" target="_blank">SOURCE_NAME</a></em></p> using the real source URL and publisher name.
+- Key takeaways and FAQ go in their own fields, never in body_html. If the source cannot support a real FAQ answer, return fewer questions rather than guessing.
 - Never mention that you are an AI or that this is a rewrite.
 - Captions must be platform-native, mention the key takeaway, and must not include any URL (the link is appended automatically where the platform supports it).
 """
@@ -160,6 +199,8 @@ class Rewriter:
         except (json.JSONDecodeError, ValidationError) as exc:
             raise RuntimeError(f"unusable model output: {exc}") from exc
         post.tags = [t.strip() for t in post.tags if t and t.strip()][:8]
+        post.key_takeaways = [t.strip() for t in post.key_takeaways if t and t.strip()][:3]
+        post.faq = [f for f in post.faq if f.question.strip() and f.answer.strip()][:3]
         usage = response.usage
         log.info("rewrite ok: %s (in=%s cached=%s out=%s)", post.title, usage.input_tokens,
                  getattr(usage, "cache_read_input_tokens", 0), usage.output_tokens)
