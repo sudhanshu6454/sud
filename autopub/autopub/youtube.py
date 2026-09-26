@@ -131,7 +131,14 @@ def choose_trailer(results: list[dict], film: str, studio: str = "") -> dict | N
 STUDIO_WORDS = ("productions", "production", "films", "film", "studios", "studio", "pictures", "movies", "motion pictures",
                 "entertainment", "music", "records", "cinemas", "creations", "company", "international", "arts", "banner")
 FAN_WORDS = ("reaction", "reacts", "review", "tv", "clips", "edits", "fan", "status", "bolta", "explained", "dubbed", "spoof",
-             "recap", "shorts", "vlog", "podcast", "channel", "news", "updates", "trailers", "cinema stars", "buzz", "talkies")
+             "recap", "shorts", "vlog", "podcast", "channel", "news", "updates", "trailers", "cinema stars", "buzz", "talkies",
+             # entertainment press and trailer aggregators re-upload trailers; they are not the rights holder
+             "entertainment tonight", "et canada", "access", "extra", "e!", "variety", "deadline", "hollywood reporter",
+             "rotten tomatoes", "fandango", "movieclips", "ign", "collider", "screenrant", "screen rant", "kinocheck",
+             "one media", "trailer zone", "insider", "tonight", "paps", "paparazzi", "times", "hungama", "pinkvilla",
+             "filmibeat", "koimoi", "zoom", "spy", "bollywood now", "hindustan", "express", "ndtv", "india today", "abp",
+             "aaj tak", "mirchi", "red fm", "radio", "magazine", "gossip", "masala", "filmfare", "jimmy", "late night",
+             "the tonight show", "good morning", "today show", "cnn", "bbc", "cbs", "nbc", "abc")
 KNOWN_STUDIOS = ("yash raj films", "dharma productions", "t-series", "zee music company", "zee studios", "sony pictures",
                  "sony music india", "excel movies", "maddock films", "hombale films", "mythri movie makers", "sun pictures",
                  "red chillies entertainment", "eros now", "tips official", "saregama", "aanand l rai", "colour yellow",
@@ -142,7 +149,11 @@ KNOWN_STUDIOS = ("yash raj films", "dharma productions", "t-series", "zee music 
                  "pen movies", "viacom18 studios", "balaji motion pictures", "nadiadwala grandson", "sajid nadiadwala",
                  "junglee pictures", "sikhya entertainment", "roy kapur films", "rsvp movies", "bhansali productions",
                  "phantom films", "clean slate filmz", "matchbox shots", "anil kapoor film company", "ajay devgn ffilms",
-                 "salman khan films", "tips industries", "panorama studios", "abundantia entertainment", "cinema1 studios")
+                 "salman khan films", "tips industries", "panorama studios", "abundantia entertainment", "cinema1 studios",
+                 "hbo max", "hbo", "apple tv", "peacock", "hulu", "amazon mgm studios", "mgm", "paramount plus", "disney plus",
+                 "pixar", "dreamworks", "focus features", "searchlight pictures", "neon", "mubi", "sony pictures classics",
+                 "legendary", "blumhouse", "annapurna pictures", "studiocanal", "bleecker street", "ifc films", "magnolia pictures",
+                 "aha video", "sun nxt", "manorama max", "hoichoi", "shemaroo", "ultra bollywood", "rajshri", "venus", "goldmines")
 
 
 def is_official_trailer(video: dict, film: str, studio: str = "") -> bool:

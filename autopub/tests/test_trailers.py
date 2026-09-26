@@ -56,6 +56,15 @@ def test_a_studio_channel_is_recognised_without_the_model_naming_it():
     assert not youtube.is_official_trailer({"title": "Udta Teer trailer breakdown", "channel": "Some Small Films"}, "Udta Teer", ""), "no 'official' in the title"
 
 
+def test_the_entertainment_press_and_aggregators_are_not_the_studio():
+    """Entertainment Tonight re-uploads trailers with 'official' in the title; the rights are not theirs."""
+    for outlet in ("Entertainment Tonight", "Rotten Tomatoes Trailers", "Movieclips Trailers", "KinoCheck", "Bollywood Hungama",
+                   "Pinkvilla", "Variety", "Filmfare", "The Tonight Show Starring Jimmy Fallon"):
+        assert not youtube.is_official_trailer({"title": "I'm Chris Hansen Official Trailer", "channel": outlet}, "I'm Chris Hansen", ""), outlet
+    for studio in ("Peacock", "HBO Max", "Apple TV", "Neon", "Focus Features", "Hombale Films"):
+        assert youtube.is_official_trailer({"title": "Official Trailer", "channel": studio}, "Some Film", ""), studio
+
+
 def test_a_video_without_a_trailer_word_or_the_film_is_not_the_trailer():
     review = {"id": "r", "title": "War 3 review: worth it?", "channel": "Yash Raj Films", "seconds": 100, "views": 1}
     other = {"id": "o", "title": "Dhurandhar official trailer", "channel": "Yash Raj Films", "seconds": 100, "views": 1}
