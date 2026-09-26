@@ -72,7 +72,9 @@ def _ink_ground(size: tuple[int, int], ink, accent) -> Image.Image:
     """No still: the brand's ink, a faint grain, the red square high on the left as the kit places it."""
     w, h = size
     img = Image.new("RGB", (w, h), ink)
-    noise = Image.effect_noise((w // 4, h // 4), 18).resize((w, h), Image.BILINEAR)
+    import numpy as np   # a fixed seed: the same ground every time, so two frames of one reel match to the pixel
+    grain = np.random.default_rng(7).integers(96, 160, size=(h // 4, w // 4), dtype=np.uint8)
+    noise = Image.fromarray(grain, "L").resize((w, h), Image.BILINEAR)
     img.paste(Image.new("RGB", (w, h), tuple(min(255, c + 10) for c in ink)), (0, 0), noise.point(lambda v: int(v * 0.35)))
     d = ImageDraw.Draw(img)
     s = int(w * 0.03)
@@ -311,6 +313,36 @@ def closing(headline: str, site: Site, out_path: Path) -> Path:
     y += dfont.size + 20
     _tracked_centre(draw, y, "Link in bio", sfont, paper, w, track=0.14)
     return images._to_feed_ratio(img, out_path)
+
+
+def frame(kicker: str, title: str, credit: str, site: Site, out_path: Path) -> Path:
+    """The reel frame the film plays inside (adclip.compose): the story-sized ink ground with the handle at
+    the top, the title uppercase and centred above the window, the credit under it, the lockup at the bottom.
+    The window itself (images.AD_WINDOW_TOP / AD_WINDOW_H) stays clear."""
+    w, h = images.STORY_SIZE
+    ink, accent, paper = hex_to_rgb(site.brand.primary), hex_to_rgb(site.brand.accent), hex_to_rgb(site.brand.text)
+    img = _ink_ground((w, h), ink, accent)
+    draw = ImageDraw.Draw(img, "RGBA")
+    family = site.brand.font
+    margin = int(w * 0.08)
+    column = w - margin * 2
+    top = images.STORY_SAFE + 20
+    hfont = _font(26, bold=True, family=family, weight=700)
+    _tracked_centre(draw, top + 20, f"{site.name.replace(' ', '')}   ·   {kicker}", hfont, tuple(int(c * 0.85) for c in paper), w, track=0.2)
+    tfont, tlines, tline_h = _title_lines(draw, title, family, column, 0.9)
+    tlines = tlines[:3]
+    block = len(tlines) * tline_h
+    y = max(top + 90, images.AD_WINDOW_TOP - 60 - block)
+    _centred(draw, y, tlines, tfont, tline_h, paper, w, shadow=False)
+    cfont = _font(26, bold=False, family=family)
+    cy = images.AD_WINDOW_TOP + images.AD_WINDOW_H + 40
+    for line in _wrap(draw, credit, cfont, column)[:2]:
+        draw.text(((w - draw.textlength(line, font=cfont)) / 2, cy), line, font=cfont, fill=tuple(int(c * 0.7) for c in paper))
+        cy += 38
+    _mark(img, site, h - images.STORY_SAFE - 40, 96, paper)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    img.save(out_path, format="PNG", optimize=True)
+    return out_path
 
 
 def still_for(url: str | None, timeout: int = 20) -> bool:

@@ -1596,6 +1596,9 @@ AD_WINDOW_TOP, AD_WINDOW_H = 860, 1100     # in STORY_SIZE pixels; adclip.compos
 def ad_frame(kicker: str, hook: str, credit: str, site: Site, out_path: Path) -> Path:
     """The still the film is composed onto: kicker, the hook set large above the window, the
     credit line under it, the site's footer. Saved as PNG so the type stays crisp under ffmpeg."""
+    if site.brand.style == "poster":
+        from . import poster
+        return poster.frame(kicker, hook, credit, site, out_path)
     img, primary, accent, text = _story_canvas(site)
     w, h = img.size
     S = lambda v: int(round(v * CARD_SCALE))

@@ -10,7 +10,7 @@ import time
 
 from pathlib import Path
 
-from . import adclip, cards, carousels, config, images, nostalgia, rank, scorecards, sources, video, watchlists
+from . import adclip, cards, carousels, config, images, nostalgia, rank, scorecards, sources, trailers, video, watchlists
 from .pipeline import make_wordpress, run_all
 from .rewrite import effective_model
 from .social import build_publishers
@@ -103,6 +103,10 @@ def cmd_check(settings, args) -> int:
     if settings.scorecard_hours:
         on = [s.key for s in settings.sites if s.scorecards]
         print(f"scorecards: at or after {', '.join(f'{h:02d}:00' for h in settings.scorecard_hours)} {settings.timezone} on {on or 'no site'}")
+    if settings.trailer_hours:
+        on = [s.key for s in settings.sites if s.trailers]
+        print(f"trailers: at or after {', '.join(f'{h:02d}:00' for h in settings.trailer_hours)} {settings.timezone} on {on or 'no site'}"
+              + ("" if settings.repost_ads else "; repost_ads is off, so trailers stay embeds"))
     if settings.watchlist_hours:
         on = [s.key for s in settings.sites if s.watchlists]
         print(f"watchlists: at or after {', '.join(f'{h:02d}:00' for h in settings.watchlist_hours)} {settings.timezone} on {on or 'no site'}; "
@@ -401,6 +405,41 @@ def cmd_watchlist(settings, args) -> int:
     return rc
 
 
+def cmd_trailer(settings, args) -> int:
+    """Publish a trailer feature now, or --dry-run to see the pick and the upload it would fetch."""
+    from .pipeline import RunReport
+    from .rewrite import Rewriter
+    state = State(settings.data_dir / "autopub.db", settings.dedupe_across_sites)
+    rewriter = Rewriter(model=effective_model(settings.llm_model), effort=settings.llm_effort)
+    rc = 0
+    for site in settings.sites:
+        if args.site and site.key != args.site.upper():
+            continue
+        if not site.trailers and not args.site:
+            continue
+        used = trailers.parse_used(state.note(site.key, trailers.USED_NOTE))
+        print(f"\n[{site.key}] {site.domain}: {len(used)} trailers so far")
+        cands = trailers.candidates(site, settings, state)
+        print(f"  {len(cands)} trailer stories this week")
+        if args.dry_run:
+            choice = trailers.pick(rewriter, site, cands, trailers.fleet_used(state) or used)
+            if choice is None:
+                print("  the model found no story about a specific trailer"); rc = 1; continue
+            print(f"  story: {cands[choice.index - 1].title[:80]}  {cands[choice.index - 1].url}")
+            film = trailers.youtube.find_trailer(choice.film, choice.studio, choice.year)
+            print(f"  pick: {choice.film} ({choice.year or 'year?'}) by {choice.studio or 'studio?'}: {choice.hook}")
+            print(f"  upload: {film['url'] + '  ' + film['title'][:60] + '  [' + film['channel'] + ']' + ('  official' if film.get('official') else '  NOT the studio: would stay an embed') if film else 'NOT FOUND'}")
+            continue
+        report = RunReport(site=site.key)
+        ok = trailers.publish_daily(site, settings, state, rewriter, make_wordpress(site), build_publishers(site),
+                                    settings.data_dir / "images", report)
+        print(f"  {'published' if ok else 'nothing published'}: {report.summary()}")
+        for link in report.published:
+            print("  ->", link)
+        rc = rc or (0 if ok else 1)
+    return rc
+
+
 def cmd_adclip(settings, args) -> int:
     """Fetch an ad film (or take --file) and render it inside the site's reel frame, to be eyeballed
     before repost_ads goes live. Publishes nothing."""
@@ -507,6 +546,8 @@ def main(argv=None) -> int:
     n = sub.add_parser("nostalgia", help="publish an ad feature now: this week's viral ad or a classic (or --dry-run to see the pick)")
     n.add_argument("--site"); n.add_argument("--dry-run", action="store_true", help="pick and look up the film, publish nothing")
     n.add_argument("--kind", choices=["current", "nostalgic"], help="which kind; default: the kind the current slot would post")
+    tr = sub.add_parser("trailer", help="publish a trailer feature now (the studio's upload, in the frame), or --dry-run")
+    tr.add_argument("--site"); tr.add_argument("--dry-run", action="store_true")
     wl = sub.add_parser("watchlist", help="publish a curated watchlist now, or --dry-run to see the list")
     wl.add_argument("--site"); wl.add_argument("--theme", help="the theme to use instead of letting the model choose")
     wl.add_argument("--dry-run", action="store_true")
@@ -523,7 +564,7 @@ def main(argv=None) -> int:
     settings = config.load(args.config)
     commands = {"serve": cmd_serve, "run": cmd_run, "check": cmd_check, "sources": cmd_sources,
                 "status": cmd_status, "cards": cmd_cards, "instagram-probe": cmd_instagram_probe,
-                "nostalgia": cmd_nostalgia, "scorecard": cmd_scorecard, "adclip": cmd_adclip, "watchlist": cmd_watchlist}
+                "nostalgia": cmd_nostalgia, "scorecard": cmd_scorecard, "adclip": cmd_adclip, "watchlist": cmd_watchlist, "trailer": cmd_trailer}
     return commands[args.cmd](settings, args)
 
 

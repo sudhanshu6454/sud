@@ -9,7 +9,7 @@ from pathlib import Path
 
 from slugify import slugify
 
-from . import adclip, cards, carousels, extract, followups, images, music, nostalgia, rank, scorecards, sources, speech, video, watchlists
+from . import adclip, cards, carousels, extract, followups, images, music, nostalgia, rank, scorecards, sources, speech, trailers, video, watchlists
 from .config import Settings, Site
 from .rewrite import CuratedPost, Rewriter, RewriteSkipped, effective_model
 from .social import SocialPost, build_publishers, dispatch
@@ -519,6 +519,13 @@ def run_site(site: Site, settings: Settings, state: State, rewriter: Rewriter | 
             scorecards.publish_daily(site, settings, state, rewriter, wp, publishers, work_dir, report)
         except Exception as exc:  # noqa: BLE001
             log.exception("[%s] scorecard failed: %s", site.key, exc)
+    # Filmybuff's trailers: the studio's own upload, in the frame, as the article's video and the reel
+    if site.trailers and trailers.due(settings, state, site):
+        try:
+            ready()
+            trailers.publish_daily(site, settings, state, rewriter, wp, publishers, work_dir, report)
+        except Exception as exc:  # noqa: BLE001
+            log.exception("[%s] trailer failed: %s", site.key, exc)
     # Filmybuff's watchlists: a theme, eight films, a poster carousel, on top of the news
     if site.watchlists and watchlists.due(settings, state, site):
         try:

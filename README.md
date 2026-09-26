@@ -283,7 +283,18 @@ carousel is the cover, one slide per film, the closing. With `TMDB_API_KEY` in `
 themoviedb.org) the slides sit on each film's poster and the cover on a backdrop, with TMDB
 credited in the article and caption; without it the slides are typographic.
 
+Twice more a day (`settings.trailer_hours`, 11:00 and 19:00) the site runs a **trailer feature**
+(`autopub/trailers.py`): from the week's stories in its own feeds about a specific trailer, teaser,
+first look or song, the model picks one; the upload is found on YouTube and, when it is the
+studio's or the film's own channel (a fan's stays an embed), fetched with yt-dlp and published as
+the article's self-hosted video and as the reel inside Filmybuff's poster frame on Instagram and
+the Facebook Page, with the credit ("War 3 (2026): the trailer. Video: Yash Raj Films on YouTube.
+Shown for review.") on the frame, in the article and in the caption. `repost_ads` is the switch,
+as for the ad films.
+
 ```bash
+docker compose run --rm autopub python -m autopub trailer --site FILMYBUFF --dry-run              # the pick and the upload, nothing published
+docker compose run --rm autopub python -m autopub trailer --site FILMYBUFF                        # publish one now
 docker compose run --rm autopub python -m autopub watchlist --site FILMYBUFF --dry-run            # the list, nothing published
 docker compose run --rm autopub python -m autopub watchlist --site FILMYBUFF --theme "Films about Mumbai"
 docker compose run --rm autopub python -m autopub cards --site FILMYBUFF --image https://... --headline "Films to watch in your 20s"

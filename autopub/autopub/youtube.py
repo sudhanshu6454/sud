@@ -103,6 +103,58 @@ def search(query: str, timeout: int = 20) -> list[dict]:
     return parse(resp.text)
 
 
+TRAILER_WORDS = ("trailer", "teaser", "first look", "glimpse", "title reveal", "song")
+
+
+def choose_trailer(results: list[dict], film: str, studio: str = "") -> dict | None:
+    """The upload most likely to be the trailer itself: the film in the title with a trailer word, an
+    ad-film length, the studio's (or the film's own) channel first, then the most watched."""
+    film_l = film.lower()
+    film_words = [w for w in re.findall(r"\w+", film_l) if len(w) > 2]
+    studio_l = re.sub(r"[^a-z0-9]", "", (studio or "").lower())
+
+    def fits(v):
+        t = v["title"].lower()
+        named = film_l in t or (film_words and sum(1 for w in film_words if w in t) >= max(1, len(film_words) - 1))
+        return named and any(w in t for w in TRAILER_WORDS) and v["seconds"] and MIN_SECONDS <= v["seconds"] <= MAX_SECONDS
+
+    good = [v for v in results if fits(v)]
+    if not good:
+        return None
+
+    def score(v):
+        return (is_official_trailer(v, film, studio), "official" in v["title"].lower(), v["views"])
+
+    return max(good, key=score)
+
+
+def is_official_trailer(video: dict, film: str, studio: str = "") -> bool:
+    """Whether the upload is the studio's own, or the film's own channel: the studio's name (or the film's) in the channel."""
+    ch = re.sub(r"[^a-z0-9]", "", (video.get("channel") or "").lower())
+    studio_l = re.sub(r"[^a-z0-9]", "", (studio or "").lower())
+    film_l = re.sub(r"[^a-z0-9]", "", film.lower())
+    if studio_l and len(studio_l) >= 4 and (studio_l in ch or ch in studio_l):
+        return True
+    words = [re.sub(r"[^a-z0-9]", "", w) for w in (studio or "").lower().split() if len(w) > 3]
+    if words and sum(1 for w in words if w in ch) >= max(1, len(words) - 1):
+        return True
+    return bool(film_l) and len(film_l) >= 5 and film_l in ch
+
+
+def find_trailer(film: str, studio: str = "", year: int | str | None = None, timeout: int = 20) -> dict | None:
+    """The trailer on YouTube, or None. Returns id, title, channel, url, thumbnail, and `official`."""
+    query = " ".join(p for p in (film, "official trailer", str(year) if year else "") if p)
+    pick = choose_trailer(search(query, timeout), film, studio)
+    if pick is None:
+        pick = choose_trailer(search(f"{film} teaser trailer {studio}".strip(), timeout), film, studio)
+    if pick is None:
+        return None
+    pick["official"] = is_official_trailer(pick, film, studio)
+    pick["url"] = f"https://www.youtube.com/watch?v={pick['id']}"
+    pick["thumbnail"] = f"https://i.ytimg.com/vi/{pick['id']}/maxresdefault.jpg"
+    return pick
+
+
 def find_ad(brand: str, campaign: str, year: int | str | None = None, timeout: int = 20) -> dict | None:
     """The ad on YouTube, or None. Returns id, title, channel, url, thumbnail, and `official`: whether
     the upload is the brand's own (the only kind adclip will ever fetch)."""
