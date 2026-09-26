@@ -305,13 +305,13 @@ sites:
       - OTT release this week India
       - South Indian film release
     hashtags: [Bollywood, Movies, OTT, Filmybuff]
-    brand:                          # marquee brand: near-black ground, amber accent, white type
-      primary: "#14101C"
-      accent: "#FFB627"
-      text: "#FFFFFF"
-      logo: brand/filmybuff-logo.png
-      font: SpaceGrotesk   # a display grotesk with a poster feel, for the share cards
-      heading_weight: 700
-      rail: double          # a marquee rule: two lines
+    brand:                          # the Filmy Buff brand kit: ink ground, signal red, paper type, Archivo set heavy
+      primary: "#201E1D"
+      accent: "#EC3013"
+      text: "#F3F2F2"
+      logo: brand/filmybuff-logo.png   # the kit's lockup in white, from themes/filmybuff
+      font: Archivo   # the typeface the site itself uses, for the share cards
+      heading_weight: 800
+      rail: solid           # the kit's two-pixel rule
     socials: [twitter, facebook, instagram, linkedin, pinterest, telegram, threads, instagram_story, facebook_story, instagram_reel, facebook_video]
     scorecards: true             # five actor scorecards a day, at settings.scorecard_hours (the fleet never repeats an actor)

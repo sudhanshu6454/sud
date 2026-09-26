@@ -23,6 +23,7 @@ declare -A LOCAL_THEMES=(
   [MENTALIST]="marketing-mentalist"
   [CRAZY]="crazy4marketing"
   [SCREENSTAT]="screenstat"
+  [FILMYBUFF]="filmybuff"
 )
 
 # Per-site header logo (PNG in the repo) set as the WordPress custom logo; block themes draw it
