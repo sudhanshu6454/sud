@@ -298,7 +298,14 @@ docker compose run --rm autopub python -m autopub trailer --site FILMYBUFF      
 docker compose run --rm autopub python -m autopub watchlist --site FILMYBUFF --dry-run            # the list, nothing published
 docker compose run --rm autopub python -m autopub watchlist --site FILMYBUFF --theme "Films about Mumbai"
 docker compose run --rm autopub python -m autopub cards --site FILMYBUFF --image https://... --headline "Films to watch in your 20s"
+docker compose run --rm autopub python -m autopub refresh-featured --site FILMYBUFF                # older posts: the clean still as the featured image
 ```
+
+The website's featured image on a poster-style site is the clean still with no type on it: the
+theme sets the title over the hero and crops posters out of it, so a title baked in would double up
+and be sliced. `refresh-featured` re-renders it for the posts published before that rule (from the
+article's own photo, a trailer's YouTube thumbnail, or the ink ground with the lockup); `--dry-run`
+lists what it would touch and `--limit N` takes the newest N.
 
 ### Viral ad coverage
 

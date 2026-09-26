@@ -103,6 +103,13 @@ class State:
         ).fetchone()
         return row["t"] if row and row["t"] is not None else None
 
+    def published(self, site: str) -> list[sqlite3.Row]:
+        """Every post published for the site that WordPress knows the id of, newest first."""
+        return self.conn.execute(
+            "SELECT url,title,wp_post_id,wp_url FROM articles WHERE site=? AND status='published' AND wp_post_id IS NOT NULL "
+            "ORDER BY updated_at DESC", (site,)
+        ).fetchall()
+
     def count(self, site: str | None = None, status: str = "published") -> int:
         if site:
             row = self.conn.execute("SELECT COUNT(*) c FROM articles WHERE site=? AND status=?", (site, status)).fetchone()

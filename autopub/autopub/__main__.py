@@ -10,7 +10,7 @@ import time
 
 from pathlib import Path
 
-from . import adclip, cards, carousels, config, images, nostalgia, rank, scorecards, sources, trailers, video, watchlists
+from . import adclip, cards, carousels, config, images, nostalgia, rank, refresh, scorecards, sources, trailers, video, watchlists
 from .pipeline import make_wordpress, run_all
 from .rewrite import effective_model
 from .social import build_publishers
@@ -513,6 +513,25 @@ def cmd_scorecard(settings, args) -> int:
     return 0 if ok else 1
 
 
+def cmd_refresh_featured(settings, args) -> int:
+    """Give the posts already on a poster-style site the clean featured image (no title baked in)."""
+    state = State(settings.data_dir / "autopub.db", settings.dedupe_across_sites)
+    rc = 0
+    for site in settings.sites:
+        if args.site and site.key != args.site.upper():
+            continue
+        if site.brand.style != "poster" and not args.site:
+            continue
+        print(f"\n[{site.key}] {site.domain}: {len(state.published(site.key))} published posts" + (" (dry run)" if args.dry_run else ""))
+        wp = None if args.dry_run else make_wordpress(site)
+        done = refresh.refresh(site, settings, state, wp, settings.data_dir / "images", limit=args.limit, dry_run=args.dry_run)
+        for post_id, still in done:
+            print(f"  post {post_id}: {still}")
+        print(f"  {len(done)} featured image(s) {'would be' if args.dry_run else ''}replaced".replace("  replaced", " replaced"))
+        rc = rc or (0 if done or args.dry_run else 1)
+    return rc
+
+
 def cmd_status(settings, args) -> int:
     state = State(settings.data_dir / "autopub.db", settings.dedupe_across_sites)
     for site in settings.sites:
@@ -558,13 +577,16 @@ def main(argv=None) -> int:
     sc = sub.add_parser("scorecard", help="publish an actor scorecard now, or --dry-run to see the figures")
     sc.add_argument("--site"); sc.add_argument("--actor", help="the actor's English Wikipedia page title")
     sc.add_argument("--dry-run", action="store_true")
+    rf = sub.add_parser("refresh-featured", help="re-render the featured image of posts already published on a poster-style site, with no title baked in")
+    rf.add_argument("--site"); rf.add_argument("--limit", type=int, help="only the newest N posts"); rf.add_argument("--dry-run", action="store_true")
     ip = sub.add_parser("instagram-probe", help="ask Instagram whether it accepts a taller card yet (posts nothing)")
     ip.add_argument("--site"); ip.add_argument("--ratio", help="3:4 (default), 4:5 or 1:1"); ip.add_argument("--out")
     args = p.parse_args(argv)
     settings = config.load(args.config)
     commands = {"serve": cmd_serve, "run": cmd_run, "check": cmd_check, "sources": cmd_sources,
                 "status": cmd_status, "cards": cmd_cards, "instagram-probe": cmd_instagram_probe,
-                "nostalgia": cmd_nostalgia, "scorecard": cmd_scorecard, "adclip": cmd_adclip, "watchlist": cmd_watchlist, "trailer": cmd_trailer}
+                "nostalgia": cmd_nostalgia, "scorecard": cmd_scorecard, "adclip": cmd_adclip, "watchlist": cmd_watchlist, "trailer": cmd_trailer,
+                "refresh-featured": cmd_refresh_featured}
     return commands[args.cmd](settings, args)
 
 
