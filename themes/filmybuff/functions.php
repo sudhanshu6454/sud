@@ -4,7 +4,8 @@
  */
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'FB_VERSION', '2.0.0' );
+// the stylesheet's own Version header, so every release busts the browser and edge caches
+define( 'FB_VERSION', wp_get_theme( 'filmybuff' )->get( 'Version' ) ?: '2.1.0' );
 
 function fb_setup() {
 	load_theme_textdomain( 'filmybuff', get_template_directory() . '/languages' );
