@@ -9,7 +9,7 @@ from pathlib import Path
 
 from slugify import slugify
 
-from . import adclip, cards, carousels, extract, followups, images, music, nostalgia, rank, scorecards, sources, speech, video
+from . import adclip, cards, carousels, extract, followups, images, music, nostalgia, rank, scorecards, sources, speech, video, watchlists
 from .config import Settings, Site
 from .rewrite import CuratedPost, Rewriter, RewriteSkipped, effective_model
 from .social import SocialPost, build_publishers, dispatch
@@ -147,13 +147,14 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
                  use_source_image: bool | None = None, want_carousel: bool = False, want_reel: bool = False,
                  force_reel: bool = False, carousel_log: list[float] | None = None, reel_log: list[float] | None = None,
                  card_brief=None, force_story: bool = False, ad_clip: Path | None = None,
-                 ad_caption: str | None = None) -> bool:
+                 ad_caption: str | None = None, slide_photos: dict[int, str] | None = None) -> bool:
     """Everything after the words exist: cards, story frames, reel, carousel, WordPress, socials.
 
     `url` is the claimed source key in `state`; `image_url` and `credit` are the source photo and
     who it belongs to. Shared by the hourly news post and the daily throwback feature. `ad_clip`
     is the ad film itself (adclip.fetch): it becomes the reel, inside the site's frame, instead of
-    the narrated one, and the article's video slot, with `ad_caption` as the credit."""
+    the narrated one, and the article's video slot, with `ad_caption` as the credit. `slide_photos`
+    maps a carousel slide's 1-based index to a still for it (the poster family draws it)."""
     carousel_log = carousel_log if carousel_log is not None else carousels.parse_log(state.note(site.key, carousels.NOTE))
     reel_log = reel_log if reel_log is not None else carousels.parse_log(state.note(site.key, REEL_NOTE))
     # 3. images. The Instagram card takes one of a small family of formats, chosen from what the
@@ -285,7 +286,8 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
                 for i, (heading, body) in enumerate(slides, 1):
                     carousel_slides.append(images.carousel_text_slide(heading, body, i, len(slides), site,
                                                                       work_dir / site.slug / f"{stem}-slide-{i}.jpg",
-                                                                      kicker=post.image_kicker or post.category))
+                                                                      kicker=post.image_kicker or post.category,
+                                                                      photo_url=(slide_photos or {}).get(i)))
                 carousel_slides.append(images.carousel_closing_slide(post.image_headline or post.title, site,
                                                                      work_dir / site.slug / f"{stem}-slide-end.jpg"))
                 log.info("[%s] carousel: cover + %d slides + closing", site.key, len(slides))
@@ -517,6 +519,13 @@ def run_site(site: Site, settings: Settings, state: State, rewriter: Rewriter | 
             scorecards.publish_daily(site, settings, state, rewriter, wp, publishers, work_dir, report)
         except Exception as exc:  # noqa: BLE001
             log.exception("[%s] scorecard failed: %s", site.key, exc)
+    # Filmybuff's watchlists: a theme, eight films, a poster carousel, on top of the news
+    if site.watchlists and watchlists.due(settings, state, site):
+        try:
+            ready()
+            watchlists.publish_daily(site, settings, state, rewriter, wp, publishers, work_dir, report)
+        except Exception as exc:  # noqa: BLE001
+            log.exception("[%s] watchlist failed: %s", site.key, exc)
     log.info(report.summary())
     return report
 

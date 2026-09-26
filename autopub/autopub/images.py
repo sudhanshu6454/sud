@@ -1358,6 +1358,9 @@ def render_card(headline: str, kicker: str, site: Site, out_path: Path, variant:
     kicker = (kicker or "").strip()
     if len(kicker) < 3:
         kicker = site.category
+    if site.brand.style == "poster":
+        from . import poster    # the poster family draws every shape its own way
+        return poster.card(headline, kicker, site, out_path, variant, backdrop_url, standfirst, credit, card=card)
 
     if variant == "portrait":
         return _render_portrait(headline, kicker, standfirst, site, out_path, primary, accent, text_color,
@@ -1673,9 +1676,13 @@ def _short_kicker(kicker: str | None, limit: int = 15) -> str:
 
 
 def carousel_text_slide(heading: str, body: str, index: int, total: int, site: Site, out_path: Path,
-                        kicker: str | None = None) -> Path:
+                        kicker: str | None = None, photo_url: str | None = None) -> Path:
     """One content slide: kicker with its place in the sequence, a bold heading, an accent rule and
-    the body in reading type. Together the slides are the article for a viewer who never taps out."""
+    the body in reading type. Together the slides are the article for a viewer who never taps out.
+    `photo_url` is a still for the slide, used by the poster family only."""
+    if site.brand.style == "poster":
+        from . import poster
+        return poster.slide(heading, body, index, total, site, out_path, kicker=kicker, photo_url=photo_url)
     img, primary, accent, text, S = _slide_canvas(site)
     family, weight = site.brand.font, site.brand.heading_weight
     draw = ImageDraw.Draw(img, "RGBA")
@@ -1712,6 +1719,9 @@ def carousel_text_slide(heading: str, body: str, index: int, total: int, site: S
 
 def carousel_closing_slide(headline: str, site: Site, out_path: Path) -> Path:
     """The last slide: the title as a reminder, the site large in the accent, and the way there."""
+    if site.brand.style == "poster":
+        from . import poster
+        return poster.closing(headline, site, out_path)
     img, primary, accent, text, S = _slide_canvas(site)
     family, weight = site.brand.font, site.brand.heading_weight
     draw = ImageDraw.Draw(img, "RGBA")

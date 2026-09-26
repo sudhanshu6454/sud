@@ -10,7 +10,7 @@ import time
 
 from pathlib import Path
 
-from . import adclip, cards, carousels, config, images, nostalgia, rank, scorecards, sources, video
+from . import adclip, cards, carousels, config, images, nostalgia, rank, scorecards, sources, video, watchlists
 from .pipeline import make_wordpress, run_all
 from .rewrite import effective_model
 from .social import build_publishers
@@ -103,6 +103,10 @@ def cmd_check(settings, args) -> int:
     if settings.scorecard_hours:
         on = [s.key for s in settings.sites if s.scorecards]
         print(f"scorecards: at or after {', '.join(f'{h:02d}:00' for h in settings.scorecard_hours)} {settings.timezone} on {on or 'no site'}")
+    if settings.watchlist_hours:
+        on = [s.key for s in settings.sites if s.watchlists]
+        print(f"watchlists: at or after {', '.join(f'{h:02d}:00' for h in settings.watchlist_hours)} {settings.timezone} on {on or 'no site'}; "
+              f"film stills {'from TMDB' if os.environ.get('TMDB_API_KEY') else 'off (set TMDB_API_KEY for posters on the slides)'}")
     if settings.ad_hours:
         on = [s.key for s in settings.sites if s.nostalgia]
         print(f"ad features: viral now / throwback in turn at or after {', '.join(f'{h:02d}:00' for h in settings.ad_hours)} "
@@ -363,6 +367,40 @@ def cmd_nostalgia(settings, args) -> int:
     return rc
 
 
+def cmd_watchlist(settings, args) -> int:
+    """Publish a watchlist now (--theme picks the theme, else the model does), or --dry-run to see the list."""
+    from .pipeline import RunReport
+    from .rewrite import Rewriter
+    state = State(settings.data_dir / "autopub.db", settings.dedupe_across_sites)
+    rewriter = Rewriter(model=effective_model(settings.llm_model), effort=settings.llm_effort)
+    rc = 0
+    for site in settings.sites:
+        if args.site and site.key != args.site.upper():
+            continue
+        if not site.watchlists and not args.site:
+            continue
+        used = watchlists.parse_used(state.note(site.key, watchlists.USED_NOTE))
+        print(f"\n[{site.key}] {site.domain}: {len(used)} watchlists so far")
+        if args.dry_run:
+            try:
+                wl = watchlists.pick(rewriter, site, watchlists.fleet_used(state) or used, seeds=[args.theme] if args.theme else None)
+            except RuntimeError as exc:
+                print(f"  pick failed: {exc}"); rc = 1; continue
+            photos, cover, found = watchlists.stills(wl, settings.request_timeout)
+            print(f"  {wl.theme}  ·  {wl.subline}\n  {wl.intro}\n  stills: {found}/{len(wl.entries)}" + ("" if os.environ.get("TMDB_API_KEY") else " (no TMDB key)"))
+            for i, e in enumerate(wl.entries, 1):
+                print(f"  {i:02d}. {e.title} ({e.year}, {e.language}{', ' + e.where if e.where else ''}): {e.why}")
+            continue
+        report = RunReport(site=site.key)
+        ok = watchlists.publish_daily(site, settings, state, rewriter, make_wordpress(site), build_publishers(site),
+                                      settings.data_dir / "images", report, theme=args.theme)
+        print(f"  {'published' if ok else 'nothing published'}: {report.summary()}")
+        for link in report.published:
+            print("  ->", link)
+        rc = rc or (0 if ok else 1)
+    return rc
+
+
 def cmd_adclip(settings, args) -> int:
     """Fetch an ad film (or take --file) and render it inside the site's reel frame, to be eyeballed
     before repost_ads goes live. Publishes nothing."""
@@ -469,6 +507,9 @@ def main(argv=None) -> int:
     n = sub.add_parser("nostalgia", help="publish an ad feature now: this week's viral ad or a classic (or --dry-run to see the pick)")
     n.add_argument("--site"); n.add_argument("--dry-run", action="store_true", help="pick and look up the film, publish nothing")
     n.add_argument("--kind", choices=["current", "nostalgic"], help="which kind; default: the kind the current slot would post")
+    wl = sub.add_parser("watchlist", help="publish a curated watchlist now, or --dry-run to see the list")
+    wl.add_argument("--site"); wl.add_argument("--theme", help="the theme to use instead of letting the model choose")
+    wl.add_argument("--dry-run", action="store_true")
     ac = sub.add_parser("adclip", help="fetch an ad film and render it inside the site's reel frame, for a look (posts nothing)")
     ac.add_argument("--site", required=True); ac.add_argument("--url", help="the YouTube link of the brand's own upload")
     ac.add_argument("--file", help="an MP4 already on disk, instead of --url"); ac.add_argument("--out", help="directory to write into")
@@ -482,7 +523,7 @@ def main(argv=None) -> int:
     settings = config.load(args.config)
     commands = {"serve": cmd_serve, "run": cmd_run, "check": cmd_check, "sources": cmd_sources,
                 "status": cmd_status, "cards": cmd_cards, "instagram-probe": cmd_instagram_probe,
-                "nostalgia": cmd_nostalgia, "scorecard": cmd_scorecard, "adclip": cmd_adclip}
+                "nostalgia": cmd_nostalgia, "scorecard": cmd_scorecard, "adclip": cmd_adclip, "watchlist": cmd_watchlist}
     return commands[args.cmd](settings, args)
 
 

@@ -39,6 +39,15 @@ PLATFORM_LIMITS = {
 }
 
 
+def house_formats(site: Site) -> str:
+    """The site's own post shapes, when sites.yaml names them: the writer picks the one the story fits."""
+    if not site.formats:
+        return ""
+    return ("\nHOUSE FORMATS. This site writes in a few recognisable shapes; choose the one this story genuinely fits and "
+            "let it shape the title, the hook, the story frames and the carousel:\n"
+            + "".join(f"- {f}\n" for f in site.formats))
+
+
 class Captions(BaseModel):
     twitter: str
     facebook: str
@@ -335,7 +344,7 @@ class Rewriter:
             name=site.name, domain=site.domain, tagline=site.tagline,
             niche=site.niche, audience=site.audience, tone=site.tone,
             sections=", ".join(site.categories or [site.category]),
-        ) + (CAROUSEL_PROMPT if carousel else "") + JSON_CONTRACT.format(schema=json.dumps(schema))
+        ) + house_formats(site) + (CAROUSEL_PROMPT if carousel else "") + JSON_CONTRACT.format(schema=json.dumps(schema))
         user = (
             f"SOURCE_URL: {article.url}\n"
             f"SOURCE_NAME: {article.sitename or article.url.split('/')[2]}\n"

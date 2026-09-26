@@ -62,6 +62,10 @@ settings:
   # ScreenStat's actor scorecards: five a day, an actor's career in numbers (films, hits, flops, return
   # on budget) with every figure read from Wikipedia. The first cycle at or after each hour publishes one.
   scorecard_hours: [8, 11, 14, 17, 20]
+  # Filmybuff's watchlists (sites with watchlists: true): a theme, six to eight films, one honest line
+  # each, as an article and a poster carousel (film posters on the slides with a TMDB_API_KEY in .env,
+  # the ink ground without). The first cycle at or after each hour publishes one.
+  watchlist_hours: [10, 16]
   # Instagram allows 100 API publishes per account a day and every story frame counts as one. A story
   # sequence (cover, 1-3 text frames, closing) therefore goes out for every 3rd news article; the ad
   # features and scorecards always get theirs. 1 = every article.
@@ -279,7 +283,15 @@ sites:
     audience: Movie lovers in India and the diaspora who watch everything from a Friday release to a Netflix drop and want to know what is worth their time.
     tone: Warm, fan-first, opinionated but fair; enthusiastic without gushing, never gossipy about private lives.
     category: Bollywood
-    categories: [Bollywood, Hollywood, South Cinema, OTT Releases, Box Office, Trailers]
+    categories: [Bollywood, Hollywood, South Cinema, OTT Releases, Box Office, Trailers, Watchlists]
+    # the house shapes, told to the writer (the reference account's grid): every post is a poster with a
+    # fan's first-person title, and most of them are lists
+    formats:
+      - "The watchlist: a theme and six to eight films with the year and one honest line each ('Films to watch in your 20s', 'Horror on OTT that is actually scary')"
+      - "Best performances: an actor's or a director's finest work, ranked, one line on why each"
+      - "Unpopular opinion: one arguable take about a film, a star or a trend, argued honestly in the first person"
+      - "What to watch this weekend: the new OTT arrivals sorted into worth it / skip it, with where to stream"
+      - "The poster: a news story told as one line that matters on the image, then the full story underneath (a release date, a casting, an award, a box office record)"
     max_posts_per_run: 1
     max_age_hours: 36
     min_words: 200
@@ -313,5 +325,9 @@ sites:
       font: Archivo   # the typeface the site itself uses, for the share cards
       heading_weight: 800
       rail: solid           # the kit's two-pixel rule
+      style: poster         # the share images are posters (autopub/poster.py): the still full bleed, graded dark and
+                            # warm, the handle above, the title centred and uppercase, the lockup below, like the
+                            # reference account; slides and stories follow the same grammar
     socials: [twitter, facebook, instagram, linkedin, pinterest, telegram, threads, instagram_story, facebook_story, instagram_reel, facebook_video]
     scorecards: true             # five actor scorecards a day, at settings.scorecard_hours (the fleet never repeats an actor)
+    watchlists: true             # two curated watchlists a day as poster carousels, at settings.watchlist_hours

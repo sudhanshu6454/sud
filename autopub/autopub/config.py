@@ -20,6 +20,8 @@ class Brand:
     font: str | None = None  # typeface for the share cards: a file stem in autopub/fonts (e.g. "Inter")
     heading_weight: int = 700   # the weight that site's own headings use, so the cards match it
     rail: str = "solid"         # the card's section rule: solid | double | inset | bars
+    style: str = "cards"        # the share-image family: "cards" (the news card formats) or "poster" (a film still
+                                # with a centred uppercase title, the handle above, the mark below: autopub/poster.py)
 
 
 @dataclass
@@ -46,6 +48,8 @@ class Site:
     socials: list[str] = field(default_factory=list)
     nostalgia: bool = False     # ad features (this week's viral ad, a classic revisited) at settings.ad_hours
     scorecards: bool = False    # actor scorecards from Wikipedia figures, at each settings.scorecard_hours
+    watchlists: bool = False    # curated watchlists (a theme, eight films, one line each) at settings.watchlist_hours
+    formats: list[str] = field(default_factory=list)   # the site's house post shapes, told to the writer (see sites.yaml)
 
     @property
     def public_url(self) -> str:
@@ -120,6 +124,9 @@ class Settings:
     # Actor scorecards (sites with scorecards: true): the first cycle at or after each of these hours
     # publishes one actor's career in numbers, figures from Wikipedia. [] switches them off.
     scorecard_hours: list[int] = field(default_factory=lambda: [8, 11, 14, 17, 20])
+    # Watchlists (sites with watchlists: true): the first cycle at or after each hour publishes one
+    # curated list as an article and a poster carousel. [] switches them off.
+    watchlist_hours: list[int] = field(default_factory=lambda: [10, 16])
     # Instagram allows 100 API publishes per account a day and every story frame counts as one, so a
     # story sequence goes out for every Nth news article (1 = every article). Throwbacks and
     # scorecards always get theirs.
@@ -167,5 +174,6 @@ def load(path: str | os.PathLike | None = None) -> Settings:
     settings.carousel_hours = sorted({int(h) % 24 for h in (settings.carousel_hours or [])})
     settings.reel_hours = sorted({int(h) % 24 for h in (settings.reel_hours or [])})
     settings.scorecard_hours = sorted({int(h) % 24 for h in (settings.scorecard_hours or [])})
+    settings.watchlist_hours = sorted({int(h) % 24 for h in (settings.watchlist_hours or [])})
     settings.ad_hours = sorted({int(h) % 24 for h in (settings.ad_hours or [])})
     return settings

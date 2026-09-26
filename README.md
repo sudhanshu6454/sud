@@ -262,6 +262,33 @@ docker compose run --rm autopub python -m autopub nostalgia --site CRAZY --kind 
 docker compose run --rm autopub python -m autopub adclip --site CRAZY --url https://www.youtube.com/watch?v=VIDEO_ID --brand "The brand"  # fetch a film and render it in the frame, posts nothing
 ```
 
+### Filmybuff's Instagram: posters and watchlists
+
+filmybuff.com's share images are a different family from the news cards (`brand.style: poster` in
+sites.yaml, drawn by `autopub/poster.py`): the film still runs full bleed, graded dark and warm,
+with the handle small at the top, the title centred and set uppercase in Archivo 900, one tracked
+subline under it, and the lockup at the bottom; a carousel cover says "swipe". Without a usable
+still the same type sits on the ink ground. Slides carry the number in red, the heading uppercase
+and the line under it, on the film's own poster when there is one; the closing slide is the lockup.
+An "Unpopular opinion" kicker is set with its UN struck through in red. The writer is told the
+site's house shapes (`formats` in sites.yaml: the watchlist, best performances, unpopular opinion,
+what to watch this weekend, the poster), so titles read like a fan's, not a wire's.
+
+Twice a day (`settings.watchlist_hours`, 10:00 and 16:00) the site publishes a **watchlist**
+(`autopub/watchlists.py`): the model picks a theme from the house seeds ("Films to watch in your
+20s", "Horror on OTT that is actually scary") or its own in that spirit, never one the fleet has
+run, and names six to eight real films with year, language, where to stream and one honest
+first-person line each. The article opens with the list as a table, then a section per film; the
+carousel is the cover, one slide per film, the closing. With `TMDB_API_KEY` in `.env` (free, from
+themoviedb.org) the slides sit on each film's poster and the cover on a backdrop, with TMDB
+credited in the article and caption; without it the slides are typographic.
+
+```bash
+docker compose run --rm autopub python -m autopub watchlist --site FILMYBUFF --dry-run            # the list, nothing published
+docker compose run --rm autopub python -m autopub watchlist --site FILMYBUFF --theme "Films about Mumbai"
+docker compose run --rm autopub python -m autopub cards --site FILMYBUFF --image https://... --headline "Films to watch in your 20s"
+```
+
 ### Viral ad coverage
 
 Crazy4Marketing's beat names viral ads, brand films and stunts explicitly, has a **Viral Campaigns**
