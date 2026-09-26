@@ -320,13 +320,18 @@ watchlists already use the first film's backdrop. `refresh-featured` does the sa
 from a tag that is a film's exact title or a watchlist's table. The credit on the poster reads
 "Still: Film (Year), via TMDB".
 
-### A face and the title never share a band
+### The poster's look, and where the title goes
 
-The poster's title sits in the top third, where a portrait crop of a still puts the faces. Two rules
-keep them apart (`poster.TITLE_ZONE`): the crop keeps the faces below the title zone when the still is
-tall enough to allow it (`images._cover_fit(clear_top=...)`), and when it is not (a wide frame filling
-a 3:4 poster has no vertical slack) the title moves to the band above the lockup, provided that band
-is the clearer of the two. The handle stays at the top and the mark at the bottom either way.
+The poster family (`poster.py`) follows the reference grid's look: the still stays bright under a
+print grade (blacks lifted to a fade, highlights rolled towards cream, a little less colour, a gentle
+vignette, fine grain), the title is set in cream rather than paper white, and a soft elliptical shadow
+sits behind the type instead of a darkened frame. The title goes where the frame is clear, in this
+order: centred high (the default); when a face would sit under it and the still is tall enough, the
+crop keeps the faces below the title zone (`images._cover_fit(clear_top=...)`); when the frame is wide
+with no height to spare, the crop sets the subject to one side (`SUBJECT_X`) and the title is ranged
+on the other, beside it; failing all that, the title goes low, above the lockup. Every placement is
+scored by how much of the faces it would cover, and the first clear one wins. The handle stays at
+the top, the mark at the bottom, and the still's credit (or the site's tagline) bottom-left.
 
 ### Image quality
 

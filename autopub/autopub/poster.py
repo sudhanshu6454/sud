@@ -20,7 +20,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter
 
 from . import images
 from .cards import CardBrief
@@ -32,40 +32,67 @@ log = logging.getLogger(__name__)
 
 MASTER = (int(SIZES["portrait"][0] * CARD_SCALE), int(SIZES["portrait"][1] * CARD_SCALE))   # 1440x1920, 3:4
 TITLE_LADDER = [(24, 148), (40, 124), (60, 104), (80, 90), (10 ** 6, 78)]   # (max chars, size) at master scale
-GRADE_WARMTH = (14, 6, -10)         # the still is pushed a little towards amber, like a print
-GRADE_DARKEN = 0.72                 # and darkened, so paper type reads on it everywhere
-VIGNETTE = 0.55                     # how much darker the edges go than the centre
+# the look of the reference grid: a print, not a screen grab. Blacks lifted (a fade), highlights rolled
+# off towards cream, a touch less colour, a gentle vignette, a little grain; the still stays bright and
+# the type gets a soft local shadow behind it instead of a darkened frame.
+GRADE_LIFT = 20                     # where black ends up (0-255): the fade
+GRADE_GAIN = 0.86                   # how much of the range the still keeps above the lift
+GRADE_WARMTH = (10, 4, -12)         # the cream cast, per channel
+GRADE_COLOUR = 0.86                 # saturation kept
+VIGNETTE = 0.30                     # how much darker the edges go than the centre
+GRAIN = 0.07                        # the grain's strength on a still
+CREAM = (243, 233, 190)             # the title's colour: the reference's pale yellow, not paper white
+SCRIM = 0.55                        # the soft shadow behind the title, at its darkest
 
 
 # ---- ground --------------------------------------------------------------------------------------------
 
 def _grade(photo: Image.Image) -> Image.Image:
-    """The reference grid's look: darker, warmer, a soft vignette, a shade more at top and bottom."""
+    """The reference grid's print look: lifted blacks, cream highlights, a little less colour, a gentle
+    vignette, fine grain; a soft band at the very top and bottom for the handle and the mark only."""
+    import numpy as np
     w, h = photo.size
     img = photo.convert("RGB")
+    lut = [min(255, int(GRADE_LIFT + v * GRADE_GAIN)) for v in range(256)]
     r, g, b = img.split()
-    img = Image.merge("RGB", (r.point(lambda v: min(255, int(v * GRADE_DARKEN) + GRADE_WARMTH[0])),
-                              g.point(lambda v: min(255, int(v * GRADE_DARKEN) + GRADE_WARMTH[1])),
-                              b.point(lambda v: max(0, int(v * GRADE_DARKEN) + GRADE_WARMTH[2]))))
+    img = Image.merge("RGB", (r.point([min(255, v + GRADE_WARMTH[0]) for v in lut]),
+                              g.point([min(255, v + GRADE_WARMTH[1]) for v in lut]),
+                              b.point([max(0, v + GRADE_WARMTH[2]) for v in lut])))
+    img = ImageEnhance.Color(img).enhance(GRADE_COLOUR)
     # vignette: a soft radial mask multiplied in
     mask = Image.new("L", (w // 8, h // 8), 0)
     d = ImageDraw.Draw(mask)
-    d.ellipse([-mask.width * 0.15, -mask.height * 0.1, mask.width * 1.15, mask.height * 1.1], fill=255)
-    mask = mask.resize((w, h), Image.BILINEAR).filter(ImageFilter.GaussianBlur(w // 10))
+    d.ellipse([-mask.width * 0.2, -mask.height * 0.15, mask.width * 1.2, mask.height * 1.15], fill=255)
+    mask = mask.resize((w, h), Image.BILINEAR).filter(ImageFilter.GaussianBlur(w // 8))
     dark = Image.new("RGB", (w, h), (0, 0, 0))
     img = Image.composite(img, Image.blend(img, dark, VIGNETTE), mask)
-    # the top and bottom bands: where the handle, the title and the mark sit
+    # grain: seeded, so two renders of one still match
+    grain = np.random.default_rng(11).integers(0, 255, size=(h // 2, w // 2), dtype=np.uint8)
+    noise = Image.fromarray(grain, "L").resize((w, h), Image.BILINEAR)
+    img = Image.blend(img, Image.merge("RGB", (noise, noise, noise)), GRAIN * 0.5)
+    # the bands the handle and the mark sit in, no deeper than they need
     band = Image.new("L", (1, h))
     for y in range(h):
         t = y / h
         v = 0
-        if t < 0.42:
-            v = int(150 * (1 - t / 0.42) ** 1.6)
-        elif t > 0.70:
-            v = int(190 * ((t - 0.70) / 0.30) ** 1.3)
+        if t < 0.16:
+            v = int(120 * (1 - t / 0.16) ** 1.5)
+        elif t > 0.80:
+            v = int(170 * ((t - 0.80) / 0.20) ** 1.4)
         band.putpixel((0, y), min(255, v))
     img.paste(dark, (0, 0), band.resize((w, h)))
     return img
+
+
+def _scrim(img: Image.Image, box: tuple[int, int, int, int], strength: float = SCRIM) -> None:
+    """A soft dark shadow behind a block of type, wide and blurred enough to read as light, not a box."""
+    w, h = img.size
+    x0, y0, x1, y1 = box
+    px, py = int((x1 - x0) * 0.35) + int(w * 0.06), int((y1 - y0) * 0.6) + int(h * 0.04)
+    mask = Image.new("L", (w // 4, h // 4), 0)
+    ImageDraw.Draw(mask).ellipse([(x0 - px) // 4, (y0 - py) // 4, (x1 + px) // 4, (y1 + py) // 4], fill=int(255 * strength))
+    mask = mask.resize((w, h), Image.BILINEAR).filter(ImageFilter.GaussianBlur(int(w * 0.09)))
+    img.paste(Image.new("RGB", (w, h), (0, 0, 0)), (0, 0), mask)
 
 
 def _ink_ground(size: tuple[int, int], ink, accent) -> Image.Image:
@@ -83,6 +110,7 @@ def _ink_ground(size: tuple[int, int], ink, accent) -> Image.Image:
 
 
 TITLE_ZONE = 0.44                   # the top fraction the handle, the title and the subline occupy: faces are kept out of it
+SUBJECT_X = 0.72                    # where the subject goes, as a fraction of the width, when the title needs the other side
 
 
 def _ground(photo_url: str | None, size: tuple[int, int], ink, accent) -> tuple[Image.Image, bool, Box | None]:
@@ -90,6 +118,14 @@ def _ground(photo_url: str | None, size: tuple[int, int], ink, accent) -> tuple[
     enough), or the ink ground. Also whether a still is there, and where its faces sit in it."""
     if photo_url:
         got = _backdrop(photo_url, size, clear_bottom=0.0, clear_top=TITLE_ZONE)
+        if got is not None and got[1] is not None and _overlap(got[1], 0, int(size[1] * TITLE_ZONE)) > 0.15:
+            # the faces sit under the title and the still had no height to spare: set the subject to one
+            # side instead, as the reference does, and the title goes in the room that leaves
+            for fx in (SUBJECT_X, 1 - SUBJECT_X):
+                aside = _backdrop(photo_url, size, clear_bottom=0.0, clear_top=TITLE_ZONE, focus_x=fx)
+                if aside is not None and aside[1] is not None and abs((aside[1][0] + aside[1][2]) / 2 - size[0] * fx) < size[0] * 0.08:
+                    got = aside
+                    break
         if got is not None:
             return _grade(got[0]), True, got[1]
     return _ink_ground(size, ink, accent), False, None
@@ -129,13 +165,40 @@ def _centred(draw, y: int, lines: list[str], font, line_h: int, fill, w: int, sh
 
 def _tracked_centre(draw, y: int, text: str, font, fill, w: int, track: float = 0.16) -> None:
     """Small uppercase type with letter-spacing, centred: the handle and the sublines."""
+    _tracked(draw, y, text, font, fill, w, track, "centre", 0)
+
+
+def _tracked(draw, y: int, text: str, font, fill, w: int, track: float, align: str, x_edge: int) -> None:
+    """Tracked small caps centred on the frame, or set left from / right against `x_edge`."""
     text = text.upper()
     gap = font.size * track
     total = sum(draw.textlength(ch, font=font) for ch in text) + gap * (len(text) - 1)
-    x = (w - total) / 2
+    x = (w - total) / 2 if align == "centre" else (x_edge if align == "left" else x_edge - total)
     for ch in text:
         draw.text((x, y), ch, font=font, fill=fill)
         x += draw.textlength(ch, font=font) + gap
+
+
+def _aligned(draw, y: int, lines: list[str], font, line_h: int, fill, w: int, align: str, x_edge: int) -> int:
+    """The title lines centred, or ranged left from / right against `x_edge`, with the soft shadow."""
+    for line in lines:
+        tw = draw.textlength(line, font=font)
+        x = (w - tw) / 2 if align == "centre" else (x_edge if align == "left" else x_edge - tw)
+        draw.text((x + 2, y + 3), line, font=font, fill=(0, 0, 0, 130))
+        draw.text((x, y), line, font=font, fill=fill)
+        y += line_h
+    return y
+
+
+def _covered(faces: Box | None, box: tuple[int, int, int, int]) -> float:
+    """How much of the faces' area a block of type would cover."""
+    if not faces or len(faces) < 4:
+        return 0.0
+    fl, ft, fr, fb = faces
+    area = max(1, (fr - fl) * (fb - ft))
+    ix = max(0, min(fr, box[2]) - max(fl, box[0]))
+    iy = max(0, min(fb, box[3]) - max(ft, box[1]))
+    return ix * iy / area
 
 
 def _strike(draw, y: int, text: str, prefix: str, font, fill, accent, w: int, track: float) -> None:
@@ -231,34 +294,62 @@ def card(headline: str, kicker: str, site: Site, out_path: Path, variant: str = 
     handle_y = bleed + int(h * 0.055)
     _tracked_centre(draw, handle_y, site.name.replace(" ", ""), hfont, tuple(int(c * 0.85) for c in paper), w, track=0.22)
 
-    # the title, centred, in the upper third of the frame (the reference sets it high, over the still's dark band)
-    tfont, tlines, tline_h = _title_lines(draw, title, family, column, scale if variant != "portrait" else 1.0)
-    if variant != "portrait":
-        tfont, tlines, tline_h = _title_lines(draw, title, family, column, scale * 0.78)
-    block = len(tlines) * tline_h
+    # the title goes where the frame is clear: centred high (the reference's default), else ranged beside
+    # the subject on the emptier side, else centred low above the mark; never over a face
     sfont = _font(int((32 if variant == "portrait" else 18) * (1.0 if variant == "portrait" else scale)), bold=True, family=family, weight=700)
-    sub = _wrap(draw, subline, sfont, int(column * 0.8))[:2] if subline else []
-    sub_h = (int(h * 0.012) + len(sub) * int(sfont.size * 1.5)) if sub else 0
     mark_h = int(h * (0.052 if variant == "portrait" else 0.075))
     mark_bottom = h - bleed - int(h * 0.055)
-    if has_still:
-        y = handle_y + int(h * (0.08 if variant == "portrait" else 0.10))
-        # a face under the title is the one thing the poster must not do: when the crop could not keep
-        # the faces below the title zone, the title goes to the band above the mark instead, if that
-        # band is the clearer of the two
-        low = mark_bottom - mark_h - int(h * 0.05) - block - sub_h
-        if _overlap(faces, y, y + block + sub_h) > 0.15 and _overlap(faces, low, low + block + sub_h) < _overlap(faces, y, y + block + sub_h):
-            y = low
+    tscale = 1.0 if variant == "portrait" else scale * 0.78
+    high_y = handle_y + int(h * (0.08 if variant == "portrait" else 0.10))
+    options, low = [], None
+    gutter = int(w * 0.04)
+    side_l = min(int(w * 0.56), (faces[0] - margin - gutter) if faces else int(w * 0.56))      # the room to the left of the subject
+    side_r = min(int(w * 0.56), (w - faces[2] - margin - gutter) if faces else int(w * 0.56))  # and to its right
+    for align, col in (("centre", column), ("left", side_l), ("right", side_r)):
+        if align != "centre" and col < int(w * 0.34):
+            continue
+        tfont, tlines, tline_h = _title_lines(draw, title, family, col, tscale)
+        if align != "centre" and len(tlines) > 5:
+            continue
+        sub = _wrap(draw, subline, sfont, int(col * (0.8 if align == "centre" else 1.0)))[:2] if subline else []
+        sub_h = (int(h * 0.012) + len(sub) * int(sfont.size * 1.5)) if sub else 0
+        block_h = len(tlines) * tline_h + sub_h
+        block_w = max([draw.textlength(l, font=tfont) for l in tlines] + [draw.textlength(l, font=sfont) for l in sub])
+        if align == "centre":
+            xs = [((w - block_w) / 2, high_y)]
+        elif align == "left":
+            xs = [(margin, high_y + int(h * 0.06))]
+        else:
+            xs = [(w - margin - block_w, high_y + int(h * 0.06))]
+        for x0, y0 in xs:
+            box = (int(x0), int(y0), int(x0 + block_w), int(y0 + block_h))
+            options.append((_covered(faces, box) if has_still else 0.0, len(options), align, y0, tfont, tlines, tline_h, sub, box))
+        if align == "centre":     # the same block, low above the mark: the last resort, after the sides
+            y0 = mark_bottom - mark_h - int(h * 0.05) - block_h
+            box = (int((w - block_w) / 2), int(y0), int((w + block_w) / 2), int(y0 + block_h))
+            low = (_covered(faces, box) if has_still else 0.0, 99, "centre", y0, tfont, tlines, tline_h, sub, box)
+    options.append(low)
+    if not has_still:
+        tfont, tlines, tline_h = options[0][4], options[0][5], options[0][6]
+        block_h = len(tlines) * tline_h + (options[0][8][3] - options[0][8][1] - len(tlines) * tline_h)
+        y0 = max(handle_y + int(h * 0.08), (h - block_h) // 2 - int(h * 0.06))
+        chosen = (0.0, 0, "centre", y0, tfont, tlines, tline_h, options[0][7], options[0][8])
     else:
-        y = max(handle_y + int(h * 0.08), (h - block) // 2 - int(h * 0.06))
-    y = _centred(draw, y, tlines, tfont, tline_h, paper, w)
+        clear = [o for o in options if o[0] < 0.02]
+        chosen = clear[0] if clear else min(options, key=lambda o: (o[0], o[1]))
+    _cov, _i, align, y, tfont, tlines, tline_h, sub, box = chosen
+    x_edge = margin if align == "left" else (w - margin if align == "right" else 0)
+    if has_still:
+        _scrim(img, box)
+        draw = ImageDraw.Draw(img, "RGBA")
+    y = _aligned(draw, int(y), tlines, tfont, tline_h, CREAM, w, align, x_edge)
     if sub:
         sy = y + int(h * 0.012)
         for i, line in enumerate(sub):
-            if strike and i == 0:
-                _strike(draw, sy, line, strike, sfont, paper, accent, w, 0.12)
+            if strike and i == 0 and align == "centre":
+                _strike(draw, sy, line, strike, sfont, CREAM, accent, w, 0.12)
             else:
-                _tracked_centre(draw, sy, line, sfont, tuple(int(c * 0.88) for c in paper), w, track=0.12)
+                _tracked(draw, sy, line, sfont, tuple(int(c * 0.92) for c in CREAM), w, 0.12, align, x_edge)
             sy += int(sfont.size * 1.5)
 
     # the mark at the bottom, and the swipe cue beside it on a carousel cover
@@ -266,9 +357,11 @@ def card(headline: str, kicker: str, site: Site, out_path: Path, variant: str = 
     if swipe:
         cfont = _font(int(20 * scale) if variant == "portrait" else int(16 * scale), bold=True, family=family, weight=700)
         _swipe(draw, w - margin, mark_bottom - int(mark_h * 0.2), cfont, tuple(int(c * 0.8) for c in paper))
-    if credit and has_still and variant == "portrait":
+    if variant == "portrait":
         cfont = _font(18, bold=False, family=family)
-        draw.text((margin, mark_bottom - cfont.size - int(mark_h * 0.2)), credit[:60], font=cfont, fill=(*paper, 120))
+        left_note = credit[:60] if (credit and has_still) else (site.tagline or "")[:40]
+        if left_note:
+            draw.text((margin, mark_bottom - cfont.size - int(mark_h * 0.2)), left_note, font=cfont, fill=(*paper, 120))
     return _save(img, out_path, quality=90)
 
 
