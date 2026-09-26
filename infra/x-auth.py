@@ -30,7 +30,7 @@ ROOT = Path(__file__).resolve().parents[1]
 REQUEST_TOKEN = "https://api.x.com/oauth/request_token"
 AUTHORIZE = "https://api.x.com/oauth/authorize"
 ACCESS_TOKEN = "https://api.x.com/oauth/access_token"
-SITES = ("MENTALIST", "CRAZY", "JUNKIES", "SCREENSTAT")
+SITES = ("MENTALIST", "CRAZY", "JUNKIES", "SCREENSTAT", "FILMYBUFF")
 
 
 def pct(s: str) -> str:

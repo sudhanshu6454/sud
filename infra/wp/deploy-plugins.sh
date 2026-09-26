@@ -17,6 +17,7 @@ declare -A LOCAL_PLUGINS=(
   [CRAZY]="fleet-linkinbio"
   [JUNKIES]="fleet-linkinbio"
   [SCREENSTAT]="screenstat-pulse fleet-linkinbio"
+  [FILMYBUFF]="fleet-linkinbio"
 )
 
 WANT="${1:-}"

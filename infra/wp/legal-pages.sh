@@ -10,11 +10,11 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 
 OPERATOR="${OPERATOR:-Digital Sukoon}"
-declare -A NAMES=( [MENTALIST]="Marketing Mentalist" [CRAZY]="Crazy4Marketing" [JUNKIES]="Marketing Junkies" [SCREENSTAT]="ScreenStat" )
-declare -A DOMAINS=( [MENTALIST]="marketingmentalist.in" [CRAZY]="crazy4marketing.com" [JUNKIES]="marketingjunkies.in" [SCREENSTAT]="screenstat.in" )
+declare -A NAMES=( [MENTALIST]="Marketing Mentalist" [CRAZY]="Crazy4Marketing" [JUNKIES]="Marketing Junkies" [SCREENSTAT]="ScreenStat" [FILMYBUFF]="Filmybuff" )
+declare -A DOMAINS=( [MENTALIST]="marketingmentalist.in" [CRAZY]="crazy4marketing.com" [JUNKIES]="marketingjunkies.in" [SCREENSTAT]="screenstat.in" [FILMYBUFF]="filmybuff.com" )
 
 WANT="${1:-}"
-for KEY in MENTALIST CRAZY JUNKIES SCREENSTAT; do
+for KEY in MENTALIST CRAZY JUNKIES SCREENSTAT FILMYBUFF; do
   [ -n "$WANT" ] && [ "$WANT" != "$KEY" ] && continue
   slug=$(echo "$KEY" | tr '[:upper:]' '[:lower:]')
   domain="${DOMAINS[$KEY]}"; name="${NAMES[$KEY]}"; email="${EMAIL:-contact@$domain}"

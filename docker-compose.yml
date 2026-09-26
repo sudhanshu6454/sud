@@ -43,11 +43,12 @@ services:
     - --innodb-buffer-pool-size=256M
     environment:
       MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
-      SITE_KEYS: MENTALIST,CRAZY,JUNKIES,SCREENSTAT
+      SITE_KEYS: MENTALIST,CRAZY,JUNKIES,SCREENSTAT,FILMYBUFF
       WP_MENTALIST_DB_PASSWORD: ${WP_MENTALIST_DB_PASSWORD}
       WP_CRAZY_DB_PASSWORD: ${WP_CRAZY_DB_PASSWORD}
       WP_JUNKIES_DB_PASSWORD: ${WP_JUNKIES_DB_PASSWORD}
       WP_SCREENSTAT_DB_PASSWORD: ${WP_SCREENSTAT_DB_PASSWORD}
+      WP_FILMYBUFF_DB_PASSWORD: ${WP_FILMYBUFF_DB_PASSWORD}
     volumes:
     - db_data:/var/lib/mysql
     - ./infra/db/init-databases.sh:/docker-entrypoint-initdb.d/10-init-databases.sh:ro
@@ -354,6 +355,79 @@ services:
     - web
     entrypoint:
     - wp
+  wp_filmybuff:
+    image: wordpress:6-php8.3-apache
+    container_name: wp_filmybuff
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_NAME: wp_filmybuff
+      WORDPRESS_DB_USER: wp_filmybuff
+      WORDPRESS_DB_PASSWORD: ${WP_FILMYBUFF_DB_PASSWORD}
+      WORDPRESS_TABLE_PREFIX: wp_
+      WORDPRESS_CONFIG_EXTRA: 'define(''WP_HOME'', ''https://filmybuff.com'');
+
+        define(''WP_SITEURL'', ''https://filmybuff.com'');
+
+        define(''WP_MEMORY_LIMIT'', ''256M'');
+
+        define(''DISALLOW_FILE_EDIT'', true);
+
+        define(''FORCE_SSL_ADMIN'', true);
+
+        define(''WP_POST_REVISIONS'', 10);
+
+        define(''WP_AUTO_UPDATE_CORE'', ''minor'');
+
+        '
+      VIRTUAL_HOST: filmybuff.com,www.filmybuff.com
+      LETSENCRYPT_HOST: filmybuff.com,www.filmybuff.com
+      HSTS: max-age=31536000; includeSubDomains
+    volumes:
+    - wp_filmybuff_data:/var/www/html
+    - ./infra/wp/uploads.ini:/usr/local/etc/php/conf.d/uploads.ini:ro
+    networks:
+    - web
+    - internal
+  cli_filmybuff:
+    image: wordpress:cli-php8.3
+    profiles:
+    - cli
+    user: '33:33'
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_NAME: wp_filmybuff
+      WORDPRESS_DB_USER: wp_filmybuff
+      WORDPRESS_DB_PASSWORD: ${WP_FILMYBUFF_DB_PASSWORD}
+      WORDPRESS_TABLE_PREFIX: wp_
+      WORDPRESS_CONFIG_EXTRA: 'define(''WP_HOME'', ''https://filmybuff.com'');
+
+        define(''WP_SITEURL'', ''https://filmybuff.com'');
+
+        define(''WP_MEMORY_LIMIT'', ''256M'');
+
+        define(''DISALLOW_FILE_EDIT'', true);
+
+        define(''FORCE_SSL_ADMIN'', true);
+
+        define(''WP_POST_REVISIONS'', 10);
+
+        define(''WP_AUTO_UPDATE_CORE'', ''minor'');
+
+        '
+    volumes:
+    - wp_filmybuff_data:/var/www/html
+    networks:
+    - internal
+    - web
+    entrypoint:
+    - wp
   autopub:
     build: ./autopub
     container_name: autopub
@@ -374,6 +448,7 @@ services:
     - wp_crazy
     - wp_junkies
     - wp_screenstat
+    - wp_filmybuff
     networks:
     - internal
     - web
@@ -413,4 +488,5 @@ volumes:
   wp_crazy_data: {}
   wp_junkies_data: {}
   wp_screenstat_data: {}
+  wp_filmybuff_data: {}
   pulse_worker_data: {}

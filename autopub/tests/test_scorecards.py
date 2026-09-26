@@ -195,9 +195,13 @@ def test_an_actor_without_figures_is_skipped_and_the_next_pick_asked(monkeypatch
     assert state.note(site.key, scorecards.NOTE) is None, "the slot stays open"
 
 
-def test_only_screenstat_runs_scorecards(settings):
-    assert [s.key for s in settings.sites if s.scorecards] == ["SCREENSTAT"]
+def test_the_two_film_sites_run_scorecards_and_never_share_an_actor(settings, tmp_path):
+    assert [s.key for s in settings.sites if s.scorecards] == ["SCREENSTAT", "FILMYBUFF"]
     assert settings.scorecard_hours == [8, 11, 14, 17, 20]
+    state = State(tmp_path / "s.db")
+    state.set_note("SCREENSTAT", scorecards.USED_NOTE, "Ranbir Kapoor\nAlia Bhatt")
+    state.set_note("FILMYBUFF", scorecards.USED_NOTE, "alia bhatt\nVijay")
+    assert scorecards.fleet_used(state) == ["Ranbir Kapoor", "Alia Bhatt", "Vijay"], "one list for the fleet, case-insensitive"
 
 
 def test_the_scorecard_card_shows_the_face_and_the_record(monkeypatch, settings, tmp_path):

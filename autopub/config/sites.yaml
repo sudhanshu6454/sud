@@ -267,3 +267,51 @@ sites:
       rail: bars            # a numbers brand: the section rule is a bar chart
     socials: [twitter, facebook, instagram, linkedin, pinterest, telegram, threads, instagram_story, facebook_story, instagram_reel, facebook_video]
     scorecards: true             # five actor scorecards a day, at settings.scorecard_hours
+
+  - key: FILMYBUFF
+    domain: filmybuff.com
+    name: Filmybuff
+    tagline: For people who love the movies
+    niche: >
+      Cinema for the fans: Bollywood, Hollywood and South Indian film news, new releases and what
+      to watch, trailers and first looks, box office, OTT arrivals, casting and star news, festival
+      and awards buzz, and the stories behind the films.
+    audience: Movie lovers in India and the diaspora who watch everything from a Friday release to a Netflix drop and want to know what is worth their time.
+    tone: Warm, fan-first, opinionated but fair; enthusiastic without gushing, never gossipy about private lives.
+    category: Bollywood
+    categories: [Bollywood, Hollywood, South Cinema, OTT Releases, Box Office, Trailers]
+    max_posts_per_run: 1
+    max_age_hours: 36
+    min_words: 200
+    include_keywords: []
+    exclude_keywords: [sponsored, giveaway, coupon code, casino, betting, leaked, nude, divorce, affair, wardrobe]
+    feeds:
+      - https://www.bollywoodhungama.com/rss/news.xml
+      - https://www.bollywoodhungama.com/feed/
+      - https://indianexpress.com/section/entertainment/bollywood/feed/
+      - https://www.hindustantimes.com/feeds/rss/entertainment/bollywood/rssfeed.xml
+      - https://timesofindia.indiatimes.com/rssfeeds/1081479906.cms
+      - https://www.rediff.com/rss/moviesrss.xml
+      - https://variety.com/v/film/feed/
+      - https://deadline.com/v/film/feed/
+      - https://www.hollywoodreporter.com/c/movies/feed/
+      - https://collider.com/feed/
+      - https://screenrant.com/feed/
+      - https://www.slashfilm.com/feed/
+      - https://www.joblo.com/feed/
+    google_news_queries:
+      - new movie trailer released
+      - box office collection day
+      - OTT release this week India
+      - South Indian film release
+    hashtags: [Bollywood, Movies, OTT, Filmybuff]
+    brand:                          # marquee brand: near-black ground, amber accent, white type
+      primary: "#14101C"
+      accent: "#FFB627"
+      text: "#FFFFFF"
+      logo: brand/filmybuff-logo.png
+      font: SpaceGrotesk   # a display grotesk with a poster feel, for the share cards
+      heading_weight: 700
+      rail: double          # a marquee rule: two lines
+    socials: [twitter, facebook, instagram, linkedin, pinterest, telegram, threads, instagram_story, facebook_story, instagram_reel, facebook_video]
+    scorecards: true             # five actor scorecards a day, at settings.scorecard_hours (the fleet never repeats an actor)

@@ -298,6 +298,17 @@ def parse_used(raw: str | None) -> list[str]:
     return [line.strip() for line in (raw or "").splitlines() if line.strip()]
 
 
+def fleet_used(state: State) -> list[str]:
+    """Every actor any site has a scorecard for, so two film sites never pick the same one.
+    The Wikipedia URL is the claim that makes it certain; this keeps the model from even suggesting them."""
+    seen: list[str] = []
+    for value in state.notes(USED_NOTE).values():
+        for actor in parse_used(value):
+            if actor.lower() not in (s.lower() for s in seen):
+                seen.append(actor)
+    return seen
+
+
 def pick(rewriter: Rewriter, site: Site, used: list[str], index: int) -> Pick:
     industry = INDUSTRIES[index % len(INDUSTRIES)]
     system = PICK_PROMPT.format(name=site.name, domain=site.domain, niche=site.niche, audience=site.audience,
@@ -344,7 +355,7 @@ def publish_daily(site: Site, settings: Settings, state: State, rewriter: Rewrit
     used = parse_used(state.note(site.key, USED_NOTE))
     slot_log = carousels.parse_log(state.note(site.key, NOTE))
     facts = choice = url = None
-    tried = list(used)
+    tried = fleet_used(state)     # every site's actors go to the model, so two film sites never pick the same one
     for attempt in range(ATTEMPTS if actor is None else 1):
         if actor is not None:
             choice = Pick(actor=actor, why_now="requested by hand")

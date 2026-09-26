@@ -268,8 +268,8 @@ def cmd_cards(settings, args) -> int:
             with _Image.open(path) as im:
                 w, h = im.size
             print(f"   {shape:<9} {w}x{h}  ratio {w / h:.3f}  {path.stat().st_size // 1024:>4} KB  {path}")
-        if cards.get("portrait"):
-            feed = images.instagram_asset(cards["portrait"], ratio=settings.instagram_ratio,
+        if rendered.get("portrait"):
+            feed = images.instagram_asset(rendered["portrait"], ratio=settings.instagram_ratio,
                                           out_path=out_dir / f"{site.slug}-instagram.jpg")
             from PIL import Image as _Image
             with _Image.open(feed) as im:

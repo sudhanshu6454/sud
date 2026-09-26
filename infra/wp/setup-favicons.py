@@ -23,12 +23,15 @@ ICONS = {
     "MENTALIST": ("marketing-mentalist", "themes/marketing-mentalist/assets/img/mark.png",    "#0a0908", 0.72, "#f7f5ef"),
     "CRAZY":     ("crazy4marketing",     "themes/crazy4marketing/assets/symbol_dark.png",     "#0a0a0a", 0.86, None),
     "SCREENSTAT": (None,                 "themes/screenstat/assets/images/site-icon.png",    None,      1.0,  None),
+    "FILMYBUFF": (None,                  "autopub/config/brand/filmybuff-mark.png",          "#14101C", 0.78, None),
 }
 
 # Sites without a designed logo get a typographic one, generated here: a wordmark PNG for the cover
 # plate (brand.logo in sites.yaml) and a lettermark that ICONS above turns into the site icon.
 # key -> (wordmark text, lettermark text, ink colour, accent colour)
-TEXT_MARKS: dict[str, tuple[str, str, str, str]] = {}   # (none right now: every site has a designed mark)
+TEXT_MARKS: dict[str, tuple[str, str, str, str]] = {
+    "FILMYBUFF": ("filmybuff", "fb", "#FFFFFF", "#FFB627"),   # white type on the marquee ground, amber point
+}
 FONT_BOLD = next((f for f in ("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
                               "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf") if Path(f).exists()), None)
 

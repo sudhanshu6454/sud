@@ -10,6 +10,7 @@ accounts with a generated share image. No human in the loop after setup.
 | crazy4marketing.com   | `CRAZY`     | Digital / performance marketing, growth, AI in marketing |
 | marketingjunkies.in   | `JUNKIES`   | Marketing, media, martech industry news |
 | screenstat.in         | `SCREENSTAT`| Streaming, TV, film and box-office news and data |
+| filmybuff.com         | `FILMYBUFF` | Movies for the fans: Bollywood, Hollywood, South cinema, OTT, trailers, box office |
 
 Domains are at GoDaddy, hosting is on Linode. Everything is defined in `autopub/config/sites.yaml`.
 

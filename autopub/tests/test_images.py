@@ -40,7 +40,7 @@ def test_renders_both_share_sizes_as_progressive_jpegs(site, tmp_path):
     assert land.format == "JPEG" and land.info.get("progressive")
 
 
-@pytest.mark.parametrize("key", ["MENTALIST", "CRAZY", "JUNKIES", "SCREENSTAT"])
+@pytest.mark.parametrize("key", ["MENTALIST", "CRAZY", "JUNKIES", "SCREENSTAT", "FILMYBUFF"])
 def test_every_site_ships_a_real_logo(settings, key):
     site = settings.site(key)
     assert site.brand.logo and Path(site.brand.logo).exists(), f"{key} has no cover logo"
@@ -180,7 +180,7 @@ def test_instagram_asset_is_the_tallest_shape_the_api_accepts(site, tmp_path):
 
 def test_the_bleed_bands_a_4_5_crop_removes_carry_no_content(settings, tmp_path):
     """The card is drawn 3:4 but posted 4:5, so the trimmed bands must be background only."""
-    for key in ("MENTALIST", "CRAZY", "JUNKIES", "SCREENSTAT"):
+    for key in ("MENTALIST", "CRAZY", "JUNKIES", "SCREENSTAT", "FILMYBUFF"):
         site = settings.site(key)
         card = images.render_card("Scarcity marketing has stopped working on younger buyers", "Section",
                                   site, tmp_path / f"{key}.jpg", "portrait")
