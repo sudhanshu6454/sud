@@ -25,7 +25,7 @@ from PIL import Image, ImageDraw, ImageFilter
 from . import images
 from .cards import CardBrief
 from .config import Site
-from .images import (CARD_SCALE, IG_RATIOS, SIZES, _backdrop, _download_photo, _font, _load_logo, _save, _spell_out,
+from .images import (CARD_SCALE, IG_RATIOS, SIZES, Box, _backdrop, _download_photo, _font, _load_logo, _save, _spell_out,
                      _wrap, hex_to_rgb, tidy)
 
 log = logging.getLogger(__name__)
@@ -82,13 +82,24 @@ def _ink_ground(size: tuple[int, int], ink, accent) -> Image.Image:
     return img
 
 
-def _ground(photo_url: str | None, size: tuple[int, int], ink, accent) -> tuple[Image.Image, bool]:
-    """The graded still cover-fitted around its people, or the ink ground. Second value: whether a still is there."""
+TITLE_ZONE = 0.44                   # the top fraction the handle, the title and the subline occupy: faces are kept out of it
+
+
+def _ground(photo_url: str | None, size: tuple[int, int], ink, accent) -> tuple[Image.Image, bool, Box | None]:
+    """The graded still cover-fitted around its people (kept below the title zone when the still is tall
+    enough), or the ink ground. Also whether a still is there, and where its faces sit in it."""
     if photo_url:
-        got = _backdrop(photo_url, size, clear_bottom=0.0)
+        got = _backdrop(photo_url, size, clear_bottom=0.0, clear_top=TITLE_ZONE)
         if got is not None:
-            return _grade(got[0]), True
-    return _ink_ground(size, ink, accent), False
+            return _grade(got[0]), True, got[1]
+    return _ink_ground(size, ink, accent), False, None
+
+
+def _overlap(faces: Box | None, top: int, bottom: int) -> float:
+    """How much of the faces' height falls between `top` and `bottom`."""
+    if not faces or len(faces) < 4 or faces[3] <= faces[1]:
+        return 0.0
+    return max(0, min(faces[3], bottom) - max(faces[1], top)) / (faces[3] - faces[1])
 
 
 # ---- type ----------------------------------------------------------------------------------------------
@@ -207,7 +218,7 @@ def card(headline: str, kicker: str, site: Site, out_path: Path, variant: str = 
     w, h = size
     scale = w / MASTER[0] if variant == "portrait" else (w / 1080)
     ink, accent, paper = hex_to_rgb(site.brand.primary), hex_to_rgb(site.brand.accent), hex_to_rgb(site.brand.text)
-    img, has_still = _ground(backdrop_url, size, ink, accent)
+    img, has_still, faces = _ground(backdrop_url, size, ink, accent)
     draw = ImageDraw.Draw(img, "RGBA")
     family = site.brand.font
     title, subline, strike = _texts(card, headline, kicker, standfirst)
@@ -225,15 +236,24 @@ def card(headline: str, kicker: str, site: Site, out_path: Path, variant: str = 
     if variant != "portrait":
         tfont, tlines, tline_h = _title_lines(draw, title, family, column, scale * 0.78)
     block = len(tlines) * tline_h
+    sfont = _font(int((32 if variant == "portrait" else 18) * (1.0 if variant == "portrait" else scale)), bold=True, family=family, weight=700)
+    sub = _wrap(draw, subline, sfont, int(column * 0.8))[:2] if subline else []
+    sub_h = (int(h * 0.012) + len(sub) * int(sfont.size * 1.5)) if sub else 0
+    mark_h = int(h * (0.052 if variant == "portrait" else 0.075))
+    mark_bottom = h - bleed - int(h * 0.055)
     if has_still:
         y = handle_y + int(h * (0.08 if variant == "portrait" else 0.10))
+        # a face under the title is the one thing the poster must not do: when the crop could not keep
+        # the faces below the title zone, the title goes to the band above the mark instead, if that
+        # band is the clearer of the two
+        low = mark_bottom - mark_h - int(h * 0.05) - block - sub_h
+        if _overlap(faces, y, y + block + sub_h) > 0.15 and _overlap(faces, low, low + block + sub_h) < _overlap(faces, y, y + block + sub_h):
+            y = low
     else:
         y = max(handle_y + int(h * 0.08), (h - block) // 2 - int(h * 0.06))
     y = _centred(draw, y, tlines, tfont, tline_h, paper, w)
-    if subline:
-        sfont = _font(int((32 if variant == "portrait" else 18) * (1.0 if variant == "portrait" else scale)), bold=True, family=family, weight=700)
+    if sub:
         sy = y + int(h * 0.012)
-        sub = _wrap(draw, subline, sfont, int(column * 0.8))[:2]
         for i, line in enumerate(sub):
             if strike and i == 0:
                 _strike(draw, sy, line, strike, sfont, paper, accent, w, 0.12)
@@ -242,8 +262,6 @@ def card(headline: str, kicker: str, site: Site, out_path: Path, variant: str = 
             sy += int(sfont.size * 1.5)
 
     # the mark at the bottom, and the swipe cue beside it on a carousel cover
-    mark_h = int(h * (0.052 if variant == "portrait" else 0.075))
-    mark_bottom = h - bleed - int(h * 0.055)
     _mark(img, site, mark_bottom, mark_h, paper)
     if swipe:
         cfont = _font(int(20 * scale) if variant == "portrait" else int(16 * scale), bold=True, family=family, weight=700)
@@ -262,7 +280,7 @@ def slide(heading: str, body: str, index: int, total: int, site: Site, out_path:
     On the still when the slide has one (a film's poster or backdrop), on the ink ground otherwise."""
     w, h = MASTER
     ink, accent, paper = hex_to_rgb(site.brand.primary), hex_to_rgb(site.brand.accent), hex_to_rgb(site.brand.text)
-    img, has_still = _ground(photo_url, MASTER, ink, accent)
+    img, has_still, _faces = _ground(photo_url, MASTER, ink, accent)
     draw = ImageDraw.Draw(img, "RGBA")
     family = site.brand.font
     bleed = int(round(images.PORTRAIT_BLEED * CARD_SCALE))

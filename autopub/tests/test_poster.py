@@ -242,3 +242,40 @@ def test_the_house_formats_reach_the_writer(buff, settings):
 def test_config_sets_the_watchlist_slots(settings):
     assert settings.watchlist_hours == [10, 16]
     assert [s.key for s in settings.sites if s.watchlists] == ["FILMYBUFF"]
+
+
+# ---- faces and the title never share a band -----------------------------------------------------------------
+
+def _paper_rows(path: Path, top: float, bottom: float) -> int:
+    """How many near-paper pixels (the title's) sit between two fractions of the poster's height."""
+    with Image.open(path) as im:
+        band = im.crop((0, int(im.height * top), im.width, int(im.height * bottom))).convert("RGB")
+        return sum(1 for px in band.resize((band.width // 4, band.height // 4)).getdata() if min(px) > 232)
+
+
+def test_the_crop_keeps_faces_below_the_title_zone_when_the_still_is_tall_enough():
+    tall = Image.new("RGB", (1000, 3000), (50, 50, 50))
+    face = (300, 1500, 700, 1900)
+    crop, box = images._cover_fit(tall, poster.MASTER, face, clear_top=poster.TITLE_ZONE)
+    assert crop.size == poster.MASTER and box[1] >= int(poster.MASTER[1] * poster.TITLE_ZONE) - 1
+    crop, box = images._cover_fit(tall, poster.MASTER, face)
+    assert box[1] < int(poster.MASTER[1] * poster.TITLE_ZONE), "without the rule the face sits under the title"
+
+
+def test_the_title_moves_to_the_lower_band_when_a_face_fills_the_upper_one(buff, tmp_path, monkeypatch):
+    def wide_still(url, timeout):
+        im = Image.new("RGB", (1600, 1000), (120, 80, 60))
+        from PIL import ImageDraw
+        ImageDraw.Draw(im).ellipse([700, 150, 900, 400], fill=(210, 170, 140))
+        return im
+    monkeypatch.setattr(images, "_download_photo", wide_still)
+    images._LAST_PHOTO = None
+    monkeypatch.setattr(images, "_detect_faces", lambda img: [(700, 150, 900, 400)])   # a head in the upper middle, no room to move it
+    low = images.render_card("A face and a title cannot share a band", "Bollywood", buff, tmp_path / "low.jpg", "portrait", backdrop_url=STILL)
+    monkeypatch.setattr(images, "_detect_faces", lambda img: [])
+    images._LAST_PHOTO = None
+    high = images.render_card("A face and a title cannot share a band", "Bollywood", buff, tmp_path / "high.jpg", "portrait", backdrop_url=STILL)
+    assert _paper_rows(high, 0.14, 0.42) > 200, "no face: the title sits high, as the reference does"
+    assert _paper_rows(low, 0.14, 0.42) < 20, "a face there: the title has left the upper band"
+    assert _paper_rows(low, 0.55, 0.86) > 200, "and sits above the mark instead"
+    import shutil; shutil.copy(low, "/tmp/claude-0/-home-user-sud/adff1246-dc34-5627-9f7c-49369fb7a05b/scratchpad/poster-face-low.jpg")

@@ -273,11 +273,12 @@ def _salient_box(img: Image.Image) -> Box:
 
 
 def _cover_fit(img: Image.Image, size: tuple[int, int], focus: Box | None = None,
-               clear_bottom: float = 0.0) -> tuple[Image.Image, Box | None]:
+               clear_bottom: float = 0.0, clear_top: float = 0.0) -> tuple[Image.Image, Box | None]:
     """Scale to cover `size`, then choose the crop window around `focus` (faces, else the salient region).
 
     The window is placed so the whole focus box fits with breathing room above it, and, when
-    `clear_bottom` is set, so the box stays out of the bottom fraction that text will cover.
+    `clear_bottom` or `clear_top` is set, so the box stays out of that fraction of the frame, which
+    text will cover, as far as the source's own height allows.
     Returns the crop and the focus box translated into crop coordinates (None if no focus).
     """
     w, h = size
@@ -297,6 +298,8 @@ def _cover_fit(img: Image.Image, size: tuple[int, int], focus: Box | None = None
     top = min(top, ft - pad_top)
     bottom_limit = h * (1 - clear_bottom) if clear_bottom else h
     top = max(top, fb - bottom_limit)                          # keep the box above the text zone
+    if clear_top:
+        top = min(top, ft - h * clear_top)                     # and below the title zone, when there is room
     left = max(0, min(left, rw - w)); top = max(0, min(top, rh - h))
     left, top = int(left), int(top)
     crop = img.crop((left, top, left + w, top + h))
@@ -410,14 +413,14 @@ def _fetch_image(url: str, timeout: int) -> Image.Image | None:
 
 
 def _backdrop(url: str, size: tuple[int, int], timeout: int = 20,
-              clear_bottom: float = 0.0) -> tuple[Image.Image, Box | None] | None:
+              clear_bottom: float = 0.0, clear_top: float = 0.0) -> tuple[Image.Image, Box | None] | None:
     """The article's own photo, cover-fitted around its people. None when it cannot be used."""
     got = _source_photo(url, timeout)
     if got is None:
         return None
     img, faces = got
     focus = _union(faces) if faces else _salient_box(img)
-    crop, focus_in_crop = _cover_fit(img, size, focus, clear_bottom)
+    crop, focus_in_crop = _cover_fit(img, size, focus, clear_bottom, clear_top)
     crop = enhance(crop, max(size[0] / img.width, size[1] / img.height))
     return crop, (focus_in_crop if faces else None)
 

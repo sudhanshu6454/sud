@@ -320,6 +320,14 @@ watchlists already use the first film's backdrop. `refresh-featured` does the sa
 from a tag that is a film's exact title or a watchlist's table. The credit on the poster reads
 "Still: Film (Year), via TMDB".
 
+### A face and the title never share a band
+
+The poster's title sits in the top third, where a portrait crop of a still puts the faces. Two rules
+keep them apart (`poster.TITLE_ZONE`): the crop keeps the faces below the title zone when the still is
+tall enough to allow it (`images._cover_fit(clear_top=...)`), and when it is not (a wide frame filling
+a 3:4 poster has no vertical slack) the title moves to the band above the lockup, provided that band
+is the clearer of the two. The handle stays at the top and the mark at the bottom either way.
+
 ### Image quality
 
 Every still is fetched as the largest copy its URL points to (`images.photo_upgrades`: the WordPress
