@@ -12,6 +12,7 @@ function fb_customize( $wp_customize ) {
 		'fb_boxoffice_cat'     => array( 'text', __( 'Box office board: section slug', 'filmybuff' ), 'box-office' ),
 		'fb_ott_cat'           => array( 'text', __( 'Streaming tonight: section slug', 'filmybuff' ), 'ott-releases' ),
 		'fb_trailers_cat'      => array( 'text', __( 'Trailers row: section slug', 'filmybuff' ), 'trailers' ),
+		'fb_watchlists_cat'    => array( 'text', __( 'What to watch shelf: section slug', 'filmybuff' ), 'watchlists' ),
 		'fb_ledger_title'      => array( 'text', __( 'Box office note: headline', 'filmybuff' ), __( 'Opening day tells you the marketing. Day eight tells you the film.', 'filmybuff' ) ),
 		'fb_ledger_body'       => array( 'textarea', __( 'Box office note: text', 'filmybuff' ), __( 'We report collections as the trade reports them, in crore, gross and net where both are known, and we say when they are estimates.', 'filmybuff' ) ),
 		'fb_newsletter_action' => array( 'url', __( 'Newsletter form action URL (Mailchimp / Beehiiv / Substack embed endpoint)', 'filmybuff' ), '' ),

@@ -16,6 +16,28 @@ function fb_poster( $n = 0 ) { $c = fb_primary_cat(); ?>
 	</a>
 <?php }
 
+/** A fresh print: the still in its own frame, the section, the title and the standfirst under it. */
+function fb_print() { $c = fb_primary_cat(); ?>
+	<article <?php post_class( 'print' ); ?>>
+		<a class="thumb thumb--cover" href="<?php the_permalink(); ?>"><?php if ( has_post_thumbnail() ) the_post_thumbnail( 'fb-card' ); ?></a>
+		<div class="print__body">
+			<?php if ( $c ) : ?><a class="kicker" href="<?php echo esc_url( get_category_link( $c ) ); ?>"><?php echo esc_html( $c->name ); ?></a><?php endif; ?>
+			<h3><a href="<?php the_permalink(); ?>"><?php the_title(); ?></a></h3>
+			<p class="dek"><?php echo esc_html( get_the_excerpt() ); ?></p>
+			<span class="meta"><?php echo esc_html( human_time_diff( get_the_time( 'U' ) ) . ' ' . __( 'ago', 'filmybuff' ) ); ?> · <?php echo esc_html( fb_reading_time() ); ?></span>
+		</div>
+	</article>
+<?php }
+
+/** A sleeve: a 2:3 poster with the title set beneath it, never over it. */
+function fb_sleeve( $n = 0 ) { ?>
+	<a class="sleeve" href="<?php the_permalink(); ?>">
+		<span class="sleeve__art <?php echo has_post_thumbnail() ? '' : 'sleeve__art--empty'; ?>"><?php if ( has_post_thumbnail() ) the_post_thumbnail( 'fb-poster' ); ?><?php if ( $n ) : ?><span class="poster__n"><?php echo esc_html( str_pad( $n, 2, '0', STR_PAD_LEFT ) ); ?></span><?php endif; ?></span>
+		<h3><?php the_title(); ?></h3>
+		<span class="meta"><?php echo esc_html( get_the_date( 'd M' ) ); ?> · <?php echo esc_html( fb_reading_time() ); ?></span>
+	</a>
+<?php }
+
 /** A row of the screening log: the day large, the story, the still. */
 function fb_log_row() { $c = fb_primary_cat(); ?>
 	<article <?php post_class( 'log__row' ); ?>>
