@@ -93,9 +93,15 @@ def is_official(video: dict, brand: str) -> bool:
     return brand.lower().replace(" ", "") in (video.get("channel") or "").lower().replace(" ", "")
 
 
-def search(query: str, timeout: int = 20) -> list[dict]:
+# YouTube's own search filters, as the `sp` parameter carries them
+FILTER_VIDEO = "EgIQAQ=="            # type: video
+FILTER_VIRAL_MONTH = "CAMSBAgEEAE="  # sort by view count, uploaded this month, video
+FILTER_VIRAL_ALL = "CAMSAhAB"        # sort by view count, video
+
+
+def search(query: str, timeout: int = 20, sp: str = FILTER_VIDEO) -> list[dict]:
     try:
-        resp = requests.get(SEARCH, params={"search_query": query, "sp": "EgIQAQ%3D%3D"}, headers=HEADERS, timeout=timeout)
+        resp = requests.get(SEARCH, params={"search_query": query, "sp": sp}, headers=HEADERS, timeout=timeout)
         resp.raise_for_status()
     except requests.RequestException as exc:
         log.warning("youtube search failed for %r: %s", query, exc)
@@ -183,7 +189,7 @@ def is_official_trailer(video: dict, film: str, studio: str = "") -> bool:
 
 
 SCENE_WORDS = ("scene", "song", "monologue", "dialogue", "climax", "clip", "moment", "sequence", "best of", "full song", "video song")
-MIN_SCENE_SECONDS, MAX_SCENE_SECONDS = 20, 8 * 60
+MIN_SCENE_SECONDS, MAX_SCENE_SECONDS = 20, 12 * 60      # streamers cut a scene long; the reel takes the first ad_clip_max_seconds of it
 # a studio's channel also carries what is not the scene: its trailer, the making, the press round, the review
 NOT_A_SCENE = re.compile(r"\b(trailer|teaser|review|reaction|interview|making|behind the scenes|bts|press|podcast|full movie|full film|"
                          r"promo|announcement|first look|explained|recap)\b", re.I)
@@ -250,6 +256,38 @@ def find_scene(film: str, query: str, studio: str = "", year: int | str | None =
     pick["url"] = f"https://www.youtube.com/watch?v={pick['id']}"
     pick["thumbnail"] = f"https://i.ytimg.com/vi/{pick['id']}/maxresdefault.jpg"
     return pick
+
+
+# what people search for when they want the scene, not the film: the discovery runs these on the
+# rights holders' catalogue and on the languages the site covers, this month and all time
+SCENE_QUERIES = ("best bollywood scene", "iconic hindi film scene", "bollywood dialogue scene", "hindi movie climax scene",
+                 "tamil movie best scene", "telugu movie best scene", "malayalam movie best scene", "kannada movie best scene",
+                 "hollywood iconic movie scene", "movie monologue scene", "bollywood full video song",
+                 "shemaroo movies scene", "ultra bollywood scene", "goldmines scene", "yrf scene", "netflix india scene",
+                 "prime video india scene", "jiohotstar scene", "sony pictures scene", "warner bros scene")
+
+
+def viral_scenes(queries=SCENE_QUERIES, min_views: int = 500_000, timeout: int = 20, per_query: int = 20,
+                 exclude=None, limit: int = 40) -> list[dict]:
+    """The scene clips YouTube itself ranks highest by views, this month and all time, kept only when they sit
+    on a rights holder's channel, run a scene's length and are not a trailer, review or full film. Most
+    watched first; `exclude` is a set of URLs already used."""
+    exclude = exclude or set()
+    found: dict[str, dict] = {}
+    for sp in (FILTER_VIRAL_MONTH, FILTER_VIRAL_ALL):
+        for q in queries:
+            for v in search(q, timeout, sp)[:per_query]:
+                url = f"https://www.youtube.com/watch?v={v['id']}"
+                if url in exclude or v["id"] in found:
+                    continue
+                t = v.get("title") or ""
+                if NOT_A_SCENE.search(t) or not v.get("seconds") or not (MIN_SCENE_SECONDS <= v["seconds"] <= MAX_SCENE_SECONDS):
+                    continue
+                if (v.get("views") or 0) < min_views or not is_official_trailer(v, "", ""):
+                    continue
+                found[v["id"]] = {**v, "url": url, "thumbnail": f"https://i.ytimg.com/vi/{v['id']}/maxresdefault.jpg",
+                                  "official": True, "this_month": sp == FILTER_VIRAL_MONTH}
+    return sorted(found.values(), key=lambda v: (v.get("this_month", False), v.get("views") or 0), reverse=True)[:limit]
 
 
 def find_trailer(film: str, studio: str = "", year: int | str | None = None, timeout: int = 20) -> dict | None:

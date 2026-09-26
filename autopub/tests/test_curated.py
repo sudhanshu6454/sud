@@ -37,26 +37,45 @@ def test_a_scene_comes_only_from_the_rights_holders_channel():
     assert youtube.choose_scene([review], "Gangs of Wasseypur", "Viacom18 Studios") is None
 
 
+def test_the_discovery_keeps_only_viral_scene_clips_on_rights_holders_channels(monkeypatch):
+    month = {"id": "m1", "title": "Mere Paas Maa Hai | Deewaar | Best Dialogue", "channel": "Shemaroo Movies", "seconds": 140, "views": 2_400_000}
+    ever = {"id": "e1", "title": "Chaiyya Chaiyya | Dil Se | Full Video Song", "channel": "Saregama Music", "seconds": 400, "views": 90_000_000}
+    fan = {"id": "f1", "title": "Deewar best scene", "channel": "Bollywood Clips TV", "seconds": 140, "views": 9_000_000}
+    small = {"id": "s1", "title": "Some Film | scene", "channel": "Shemaroo Movies", "seconds": 140, "views": 40_000}
+    trailer = {"id": "t1", "title": "War 3 | Official Trailer", "channel": "Yash Raj Films", "seconds": 150, "views": 50_000_000}
+    full = {"id": "x1", "title": "Deewaar Full Movie", "channel": "Shemaroo Movies", "seconds": 9000, "views": 30_000_000}
+    calls = []
+    def fake_search(q, timeout=20, sp=youtube.FILTER_VIDEO):
+        calls.append(sp)
+        return [month, fan, small, trailer, full] if sp == youtube.FILTER_VIRAL_MONTH else [ever, month]
+    monkeypatch.setattr(youtube, "search", fake_search)
+    got = youtube.viral_scenes(queries=("best bollywood scene",), min_views=500_000, exclude={"https://www.youtube.com/watch?v=e1"})
+    assert [g["id"] for g in got] == ["m1"], "a fan's clip, a small one, a trailer, a full film and a used one are all out"
+    assert got[0]["this_month"] and got[0]["url"].endswith("m1") and got[0]["official"]
+    assert set(calls) == {youtube.FILTER_VIRAL_MONTH, youtube.FILTER_VIRAL_ALL}
+    got = youtube.viral_scenes(queries=("best bollywood scene",), min_views=500_000)
+    assert [g["id"] for g in got] == ["m1", "e1"], "this month's clips come before the evergreen ones"
+
+
 class SceneWriter:
     def __init__(self, picks):
         self.picks = list(picks)
+        self.listings = []
 
     def ask(self, system, user, schema, validate=None, max_tokens=16000):
-        if "Choose ONE scene" in system:
+        if "Choose the ONE to break down" in system:
+            self.listings.append(user)
             return self.picks.pop(0)
         return _post()
 
 
-def _run_scene(monkeypatch, settings, tmp_path, clip, picks):
+def _run_scene(monkeypatch, settings, tmp_path, clips, picks):
     site = settings.site("FILMYBUFF")
     settings.scene_hours = [0]
     settings.trailer_hours = settings.deepdive_hours = settings.watchlist_hours = settings.scorecard_hours = settings.carousel_hours = settings.reel_hours = []
     settings.repost_ads = True
     site.news_hours = []
-    monkeypatch.setattr(tmdb, "trending", lambda kind="movie", window="week", timeout=15, limit=12: [{"title": "War 3", "year": 2026, "language": "hi"}])
-    monkeypatch.setattr(tmdb, "popular_india", lambda days=120, timeout=15, limit=12: [])
-    monkeypatch.setattr(src, "collect", lambda s, timeout=30: [])
-    monkeypatch.setattr(youtube, "find_scene", lambda film, query, studio="", year=None, timeout=20, scene="": dict(clip) if clip else None)
+    monkeypatch.setattr(youtube, "viral_scenes", lambda **kw: [dict(c) for c in clips])
     monkeypatch.setattr(tmdb, "film_still", lambda *a, **k: None)
     monkeypatch.setattr(pipeline.time, "sleep", lambda s: None)
     monkeypatch.setattr(pipeline, "narrator_for", lambda settings: None)
@@ -67,29 +86,36 @@ def _run_scene(monkeypatch, settings, tmp_path, clip, picks):
     monkeypatch.setattr(adclip, "fetch", lambda url, out_dir, **kw: (out_dir.mkdir(parents=True, exist_ok=True), Path(shutil.copy(src_clip, out_dir / "s1.mp4")))[1])
     monkeypatch.setattr(adclip, "compose", lambda clip_, frame, intro, outro, out, **kw: (shutil.copy(src_clip, out), out)[1])
     state = State(tmp_path / "s.db"); wp = FakeWP(); Recorder.seen.clear(); VideoRecorder.seen.clear()
-    report = pipeline.run_site(site, settings, state, rewriter=SceneWriter(picks), wp=wp, publishers=[Recorder({}), VideoRecorder({})], work_dir=tmp_path / "img")
-    return report, wp, state
+    writer = SceneWriter(picks)
+    report = pipeline.run_site(site, settings, state, rewriter=writer, wp=wp, publishers=[Recorder({}), VideoRecorder({})], work_dir=tmp_path / "img")
+    return report, wp, state, writer
 
 
-def test_the_scene_is_fetched_from_the_rights_holder_and_posted_credited(monkeypatch, settings, tmp_path):
-    clip = {**CLIP, "official": True, "url": "https://www.youtube.com/watch?v=s1", "thumbnail": "https://i.ytimg.com/vi/s1/maxresdefault.jpg"}
-    pick = scenes.Pick(film="Gangs of Wasseypur", year=2012, studio="Viacom18 Studios", scene="Ramadhir Singh on why he is still alive", kind="scene",
-                       query="Gangs of Wasseypur Ramadhir Singh cinema dialogue scene", hook="The line every fan quotes")
-    report, wp, state = _run_scene(monkeypatch, settings, tmp_path, clip, [pick])
+VIRAL = {**CLIP, "url": "https://www.youtube.com/watch?v=s1", "thumbnail": "https://i.ytimg.com/vi/s1/maxresdefault.jpg", "official": True, "this_month": True}
+
+
+def test_the_viral_clip_is_fetched_from_the_rights_holder_and_posted_as_a_breakdown(monkeypatch, settings, tmp_path):
+    pick = scenes.Pick(index=1, film="Gangs of Wasseypur", year=2012, studio="Viacom18 Studios", scene="Ramadhir Singh on why he is still alive", kind="scene", hook="The line every fan quotes")
+    report, wp, state, writer = _run_scene(monkeypatch, settings, tmp_path, [VIRAL], [pick])
     assert report.published
+    assert "Viacom18 Studios | 5.0M views | 1:35 | this month" in writer.listings[0], "the editor chooses from what is viral, with the numbers"
     content = wp.posts[0]["content"]
     assert content.startswith("<!-- wp:video") and "Viacom18 Studios on YouTube" in content and "Shown for review" in content
     assert ("categories", "Scenes") in wp.terms
     reel = VideoRecorder.seen[0]
     assert reel.video_url and "Gangs of Wasseypur (2012): the scene. Video: Viacom18 Studios on YouTube. Shown for review." in reel.captions["instagram"]
     assert scenes.parse_used(state.note("FILMYBUFF", scenes.USED_NOTE)) == ["Gangs of Wasseypur: Ramadhir Singh on why he is still alive"]
-    assert state.is_used(clip["url"], "FILMYBUFF")
+    assert state.is_used(VIRAL["url"], "FILMYBUFF")
 
 
-def test_a_scene_with_no_rights_holder_upload_is_skipped_for_the_next_pick(monkeypatch, settings, tmp_path):
-    pick = scenes.Pick(film="Some Film", year=2010, studio="", scene="x", kind="scene", query="some film scene", hook="h")
-    report, wp, state = _run_scene(monkeypatch, settings, tmp_path, None, [pick, pick, pick])
-    assert report.published == [] and wp.posts == []
+def test_nothing_is_published_when_the_editor_passes_on_every_clip(monkeypatch, settings, tmp_path):
+    report, wp, state, writer = _run_scene(monkeypatch, settings, tmp_path, [VIRAL], [scenes.Pick(index=-1)])
+    assert report.published == [] and wp.posts == [] and not state.is_used(VIRAL["url"], "FILMYBUFF")
+
+
+def test_the_breakdown_prompt_asks_for_the_beats():
+    for beat in ("The setup", "The turn", "The line", "The performance", "The craft", "Why it travels"):
+        assert beat in scenes.WRITE_PROMPT
 
 
 # ---- the deep dive ------------------------------------------------------------------------------------

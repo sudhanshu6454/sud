@@ -454,15 +454,17 @@ def cmd_scene(settings, args) -> int:
             continue
         used = scenes.parse_used(state.note(site.key, scenes.USED_NOTE))
         print(f"\n[{site.key}] {site.domain}: {len(used)} scenes so far")
+        clips = scenes.candidates(site, settings, state)
+        print(f"  {len(clips)} viral scene clips on rights holders' channels (>= {settings.scene_min_views:,} views)")
         if args.dry_run:
-            trending, news = scenes.subjects(site, settings, state)
-            print(f"  trending: {', '.join(trending[:6]) or 'unknown'}")
-            choice = scenes.pick(rewriter, site, trending, news, scenes.fleet_used(state) or used)
+            for line in scenes.listing(clips[:12]).splitlines():
+                print("   ", line)
+            choice = scenes.pick(rewriter, site, clips, scenes.fleet_used(state) or used)
             if choice is None:
-                print("  the model offered no scene"); rc = 1; continue
-            print(f"  pick: {choice.film} ({choice.year}) {choice.kind}: {choice.scene}\n  why: {choice.hook}\n  query: {choice.query}")
-            clip = scenes.youtube.find_scene(choice.film, choice.query, choice.studio, choice.year, scene=choice.scene)
-            print(f"  upload: {clip['url'] + '  ' + clip['title'][:60] + '  [' + clip['channel'] + ']' if clip else 'NOT FOUND on a rights holder channel'}")
+                print("  the editor found no scene worth breaking down"); rc = 1; continue
+            clip = clips[choice.index - 1]
+            print(f"  pick: {choice.film} ({choice.year}) {choice.kind}: {choice.scene}\n  why: {choice.hook}")
+            print(f"  clip: {clip['url']}  {clip['title'][:60]}  [{clip['channel']}, {scenes._views(clip.get('views') or 0)} views]")
             continue
         report = RunReport(site=site.key)
         ok = scenes.publish_daily(site, settings, state, rewriter, make_wordpress(site), build_publishers(site), settings.data_dir / "images", report)

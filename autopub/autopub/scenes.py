@@ -1,13 +1,16 @@
-"""Scenes: an iconic or viral scene, song or monologue, the rights holder's own upload, in the frame, credited.
+"""Scenes: a clip already viral on YouTube, from the rights holder's own channel, posted with the scene broken down.
 
-Twice a day (settings.scene_hours, on sites with `scenes: true`) the feature picks a scene people quote,
-share or argue about: from a film trending this week, one in this week's news, or a classic the editor
-reaches for. It finds the clip on YouTube and takes it only from the rights holder's own channel (the
-studio, the streamer, the label or the film's own channel; never a fan's or a reaction channel's),
-fetches it with yt-dlp (adclip) and publishes: an article on why the scene works, with the clip as a
-self-hosted video and a link to the original; and the clip inside the site's frame as the reel on
-Instagram and the video on the Facebook Page, credited on the frame and in the caption. `repost_ads`
-is the switch, as for trailers; without it the scene runs as an embed with a narrated reel.
+Twice a day (settings.scene_hours, on sites with `scenes: true`) the feature starts from YouTube itself:
+the scene clips YouTube ranks highest by views, this month and all time, on the searches fans make
+(`youtube.viral_scenes`). Only clips on a rights holder's own channel qualify (the studio, the streamer,
+the label, a catalogue channel like Shemaroo, Ultra or Goldmines, or the film's own channel; never a
+fan's or a reaction channel's), of a scene's length, past `scene_min_views`. The editor picks one from
+that list and names the film and the moment; the clip is fetched with yt-dlp (adclip) and published as
+the page: the scene broken down beat by beat (the setup, the turn, the line, the performance, the
+craft, why it travels) with the clip as a self-hosted video and a link to the original, and the clip
+inside the site's frame as the reel on Instagram and the video on the Facebook Page, credited on the
+frame and in the caption. `repost_ads` is the switch; without it the scene runs as an embed with a
+narrated reel.
 
 `scenes_used` in site_notes lists every scene covered (film: scene); the upload's URL is the claim.
 """
@@ -21,7 +24,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from . import adclip, carousels, sources, tmdb, youtube
+from . import adclip, carousels, youtube
 from .config import Settings, Site
 from .rewrite import Film, JSON_CONTRACT, CuratedPost, Rewriter, schema_for
 from .state import State
@@ -36,58 +39,57 @@ ATTEMPTS = 3
 
 
 class Pick(BaseModel):
-    film: str = Field(max_length=80)
+    index: int
+    film: str = Field(default="", max_length=80)
     year: int | None = None
-    studio: str = Field(default="", max_length=80)      # whose channel the clip would be on
-    scene: str = Field(max_length=140)                  # what happens, in one line, no spoilers beyond the moment itself
+    studio: str = Field(default="", max_length=80)
+    scene: str = Field(default="", max_length=140)      # what happens, in one line
     kind: str = Field(default="scene", max_length=20)   # scene | song | monologue | climax
-    query: str = Field(max_length=120)                  # the YouTube search that finds it
-    hook: str = Field(max_length=200)                   # why people still talk about it
+    hook: str = Field(default="", max_length=200)       # why people share it
 
 
 PICK_SCHEMA = {
     "type": "object", "additionalProperties": False,
-    "required": ["film", "year", "studio", "scene", "kind", "query", "hook"],
+    "required": ["index", "film", "year", "studio", "scene", "kind", "hook"],
     "properties": {
-        "film": {"type": "string", "description": "The film or show's title, as released, or an empty string if you have nothing"},
+        "index": {"type": "integer", "description": "The number of the clip you chose, or -1 if none of them is a scene, song or monologue from a specific film or show"},
+        "film": {"type": "string", "description": "The film or show the clip is from, as released"},
         "year": {"type": "integer", "description": "Its release year"},
-        "studio": {"type": "string", "description": "The rights holder whose YouTube channel carries clips of it: the studio (Yash Raj Films, Dharma, Hombale...), the streamer (Netflix India, Prime Video India), the label for a song (T-Series, Zee Music, Sony Music India, Saregama), a catalogue channel (Shemaroo, Ultra, Rajshri, Goldmines) or the film's own channel; empty if unsure"},
-        "scene": {"type": "string", "description": "The scene in one line, max 120 characters: who, where, what happens"},
+        "studio": {"type": "string", "description": "The rights holder whose channel carries it, as the listing names the channel"},
+        "scene": {"type": "string", "description": "The moment in one line, max 120 characters: who, where, what happens"},
         "kind": {"type": "string", "description": "scene, song, monologue or climax"},
-        "query": {"type": "string", "description": "The YouTube search that finds the clip, e.g. 'Gangs of Wasseypur Ramadhir Singh cinema dialogue scene'"},
-        "hook": {"type": "string", "description": "One sentence, max 180 characters, on why this scene is the one"},
+        "hook": {"type": "string", "description": "One sentence, max 180 characters, on why people share this one"},
     },
 }
 
 PICK_PROMPT = """You are the scenes editor of {name} ({domain}): {tagline}. Audience: {audience}. Tone: {tone}.
-Choose ONE scene, song, monologue or climax that people quote, share or argue about, for a feature where the clip plays on
-the page and goes out as a reel. Prefer, in this order: a scene from a film trending this week; a scene from a film in this
-week's news; a classic scene everyone knows (any era, any language the site covers). Indian cinema first, world cinema when
-the scene is the bigger one.
+Below are the scene clips people are watching most on YouTube right now, all on the rights holders' own channels.
+Choose the ONE to break down today for a feature where the clip plays on the page and goes out as a reel.
 Rules:
-- The clip must exist on the rights holder's own channel (studio, streamer, label, catalogue channel or the film's own),
-  because that is the only kind the feature may use. Song videos on a label's channel count.
-- Not any scene already covered (list below), and not a film covered in the last month.
-- Give a search query that a person would type to find that exact clip.
-
-TRENDING THIS WEEK:
-{trending}
-
-IN THIS WEEK'S NEWS:
-{news}
+- A scene, song, monologue or climax from a specific film or show that you can name with its year; not a compilation,
+  a mashup, an interview or a promo.
+- Prefer the clip people are sharing this month over an evergreen one; Indian cinema first, world cinema when the
+  clip is the bigger one; the languages the site covers.
+- Not a film already covered (list below).
+Return -1 if nothing qualifies.
 
 ALREADY COVERED:
 {used}
 """
 
 WRITE_PROMPT = """You are the film-obsessed editor of {name} ({domain}): {tagline}. Audience: {audience}. Tone: {tone}.
-Write today's scene feature. The clip plays at the top of the page, so do not narrate it shot by shot; write what a fan
-wants after watching it, in the first person.
+Write today's scene breakdown. The clip plays at the top of the page, so the reader has just watched it; take it apart
+for them, in the first person, as a fan who knows craft.
 
-Structure: the setup in two sentences (where the scene sits in the film, no spoilers beyond it); why it works, as craft
-(the writing, the performance, the staging, the cut, the music, whichever carries it); the line or beat people quote;
-what it did for the film or the star; one honest note on what a first-time viewer should watch for. 300 to 550 words.
-Category: {category}.
+Use these sections, as <h2> headings, in this order:
+1. The setup: where the scene sits in the film and what is at stake, in two or three sentences, no spoilers beyond it.
+2. The turn: the beat where the scene changes gear, and how the film gets there.
+3. The line: the line or the moment people quote, and why it lands (the writing, the timing, the delivery).
+4. The performance: what the actor or actors do, precisely, that a lesser scene would not.
+5. The craft: the staging, the cut, the music, the sound, the camera, whichever carries it, with one specific choice
+   named for each you mention.
+6. Why it travels: why this scene is the one people share, decades or days later.
+350 to 650 words. Category: {category}.
 The share image is a poster set from the hook, so `hook` is 3 to 7 words a fan would say, `image_kicker` is "{kicker}",
 `image_headline` names the film, and `film` is the film with its year.
 Never mention that you are an AI. Do not link out; do not mention YouTube or that a video is embedded.
@@ -114,31 +116,33 @@ def fleet_used(state: State) -> list[str]:
     return seen
 
 
-def subjects(site: Site, settings: Settings, state: State) -> tuple[list[str], list[str]]:
-    """What is trending on TMDB this week and what this week's news is about, as lines for the editor."""
-    trending = []
-    try:
-        trending = [f"{t['title']} ({t['year'] or '?'}, {t['language']}) - popular in India" for t in tmdb.popular_india(timeout=settings.request_timeout)]
-        trending += [f"{t['title']} ({t['year'] or '?'}, {t['language']})" for t in tmdb.trending("movie", timeout=settings.request_timeout)]
-        trending += [f"{t['title']} ({t['year'] or '?'}, {t['language']}, series)" for t in tmdb.trending("tv", timeout=settings.request_timeout)[:5]]
-    except Exception as exc:  # noqa: BLE001
-        log.debug("tmdb trending failed: %s", exc)
-    news = []
-    try:
-        news = [c.title for c in sources.collect(site, timeout=settings.request_timeout)[:40]]
-    except Exception as exc:  # noqa: BLE001
-        log.debug("news candidates failed: %s", exc)
-    return trending, news
+def _views(n: int) -> str:
+    return f"{n / 1_000_000:.1f}M" if n >= 1_000_000 else f"{n // 1000}K"
 
 
-def pick(rewriter: Rewriter, site: Site, trending: list[str], news: list[str], used: list[str]) -> Pick | None:
+def _length(seconds: int) -> str:
+    return f"{seconds // 60}:{seconds % 60:02d}"
+
+
+def candidates(site: Site, settings: Settings, state: State) -> list[dict]:
+    """The viral scene clips YouTube ranks highest, on rights holders' channels, not yet used by this site."""
+    clips = youtube.viral_scenes(min_views=settings.scene_min_views, timeout=settings.request_timeout)
+    return [c for c in clips if not state.is_used(c["url"], site.key)]
+
+
+def listing(clips: list[dict]) -> str:
+    return "\n".join(f"{i + 1}. {c['title'][:90]} | {c['channel']} | {_views(c.get('views') or 0)} views | {_length(c['seconds'])}"
+                     f"{' | this month' if c.get('this_month') else ''}" for i, c in enumerate(clips))
+
+
+def pick(rewriter: Rewriter, site: Site, clips: list[dict], used: list[str]) -> Pick | None:
+    if not clips:
+        return None
     system = PICK_PROMPT.format(name=site.name, domain=site.domain, tagline=site.tagline, audience=site.audience, tone=site.tone,
-                                trending="\n".join(f"- {t}" for t in trending) or "- (unknown)",
-                                news="\n".join(f"- {n}" for n in news[:30]) or "- (none)",
                                 used="\n".join(f"- {u}" for u in used[-150:]) or "- (none yet)")
     system += JSON_CONTRACT.format(schema=json.dumps(PICK_SCHEMA))
-    p = rewriter.ask(system, f"Today is {time.strftime('%d %B %Y')}. Choose the scene.", PICK_SCHEMA, Pick.model_validate, max_tokens=4000)
-    if not p.film.strip() or not p.query.strip():
+    p = rewriter.ask(system, f"Today is {time.strftime('%d %B %Y')}.\n\nCLIPS:\n{listing(clips)}", PICK_SCHEMA, Pick.model_validate, max_tokens=4000)
+    if p.index is None or p.index < 1 or p.index > len(clips) or not p.film.strip():
         return None
     p.year = p.year or date.today().year
     return p
@@ -150,8 +154,9 @@ def write(rewriter: Rewriter, site: Site, choice: Pick, clip: dict) -> CuratedPo
     system = WRITE_PROMPT.format(name=site.name, domain=site.domain, tagline=site.tagline, audience=site.audience,
                                  tone=site.tone, category=CATEGORY, kicker=KICKER)
     system += JSON_CONTRACT.format(schema=json.dumps(schema))
-    brief = (f"FILM: {choice.film} ({choice.year})\nSTUDIO / RIGHTS HOLDER: {choice.studio or 'not certain'}\n"
-             f"THE {choice.kind.upper()}: {choice.scene}\nWHY: {choice.hook}\nUPLOAD: {clip['title']} ({clip['channel']})\n"
+    brief = (f"FILM: {choice.film} ({choice.year})\nRIGHTS HOLDER / CHANNEL: {clip['channel']}\n"
+             f"THE {choice.kind.upper()}: {choice.scene}\nWHY PEOPLE SHARE IT: {choice.hook}\n"
+             f"UPLOAD: {clip['title']} ({_views(clip.get('views') or 0)} views, {_length(clip['seconds'])})\n"
              f"SITE_HASHTAGS (use some in instagram/twitter captions): {' '.join('#' + h for h in site.hashtags)}")
     post = rewriter.ask(system, brief, schema, CuratedPost.model_validate)
     post.category = CATEGORY
@@ -182,27 +187,27 @@ def fetch_clip(site: Site, settings: Settings, clip: dict, work_dir: Path) -> Pa
 
 def publish_daily(site: Site, settings: Settings, state: State, rewriter: Rewriter, wp, publishers, work_dir: Path,
                   report) -> bool:
-    """Pick the scene, find it on the rights holder's channel, fetch, write, publish."""
+    """Find what is viral, let the editor pick, fetch the clip, write the breakdown, publish."""
     from . import pipeline   # local: pipeline imports this module
 
     used = parse_used(state.note(site.key, USED_NOTE))
     slot_log = carousels.parse_log(state.note(site.key, NOTE))
     tried = fleet_used(state)
-    trending, news = subjects(site, settings, state)
+    clips = candidates(site, settings, state)
+    if not clips:
+        log.info("[%s] no viral scene clips on rights holders' channels right now", site.key)
+        return False
     found = None
     for _ in range(ATTEMPTS):
-        choice = pick(rewriter, site, trending, news, tried)
+        choice = pick(rewriter, site, clips, tried)
         if choice is None:
-            log.info("[%s] the model offered no scene", site.key)
+            log.info("[%s] the editor found no scene worth breaking down among %d clips", site.key, len(clips))
             break
+        clip = clips[choice.index - 1]
+        clips = [c for c in clips if c is not clip]
         label = f"{choice.film}: {choice.scene}"
         if any(choice.film.lower() in u.lower() for u in used + tried):
             tried.append(label)
-            continue
-        clip = youtube.find_scene(choice.film, choice.query, choice.studio, choice.year, timeout=settings.request_timeout, scene=choice.scene)
-        if clip is None:
-            log.info("[%s] no rights-holder upload for %r; trying another", site.key, label)
-            tried.append(f"{label} (no upload on the rights holder's channel)")
             continue
         if not state.claim(clip["url"], site.key, f"Scene: {label}"):
             tried.append(label)
@@ -213,7 +218,7 @@ def publish_daily(site: Site, settings: Settings, state: State, rewriter: Rewrit
         log.warning("[%s] no scene this slot: nothing usable", site.key)
         return False
     choice, clip = found
-    log.info("[%s] scene: %s (%s) -> %s [%s]", site.key, choice.film, choice.year, clip["url"], clip["channel"])
+    log.info("[%s] scene: %s (%s) -> %s [%s, %s views]", site.key, choice.film, choice.year, clip["url"], clip["channel"], _views(clip.get("views") or 0))
     try:
         post = write(rewriter, site, choice, clip)
     except Exception as exc:  # noqa: BLE001

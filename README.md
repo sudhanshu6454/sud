@@ -318,14 +318,15 @@ held to three hours (`news_hours: [9, 14, 20]` on the site; the other sites keep
 | 8, 12, 17 | **Deep dive**: "Did you know" trivia or "The breakdown" on one film, six to nine facts from its Wikipedia page, a different frame from the film on every slide, credited to Wikipedia (CC BY-SA) and TMDB | `deepdives.py` |
 | 10, 16 | **Watchlist** or **ranked list**: a theme and six to eight films, or an actor's or director's work ranked, one honest line each, posters from TMDB | `watchlists.py` |
 | 11, 19 | **Trailer**: this week's trailer, teaser or first look, the studio's own upload in the frame | `trailers.py` |
-| 13, 21 | **The scene**: an iconic or viral scene, song or monologue, only from the rights holder's own channel, fetched and posted as the article's video and the reel, credited | `scenes.py` |
+| 13, 21 | **The scene**: a clip already viral on YouTube (the most-viewed scene, song or monologue clips this month and all time, on rights holders' channels only, past `scene_min_views`), fetched and posted with the scene broken down beat by beat (the setup, the turn, the line, the performance, the craft, why it travels), as the article's video and the reel, credited | `scenes.py` |
 | 9, 14, 20 | **News**, written in the house shapes (the poster, unpopular opinion, what to watch this weekend) | `pipeline.py` |
 
 Subjects come from TMDB (what is trending this week, films turning 5, 10, 15... years this week:
 `tmdb.trending`, `tmdb.anniversaries`) and from the week's news; nothing is repeated across the fleet
-(`scenes_used`, `deepdives_used`, `watchlists_used`, `trailers_used`). A scene is used only when
-YouTube has it on the studio's, streamer's, label's or catalogue channel's own account
-(`youtube.find_scene`); a fan's or a reaction channel's upload never qualifies. Trivia is written from
+(`scenes_used`, `deepdives_used`, `watchlists_used`, `trailers_used`). Scenes start from YouTube itself
+(`youtube.viral_scenes`: the searches fans make, sorted by YouTube's own view count, this month then
+all time) and keep only clips on the studio's, streamer's, label's or catalogue channel's own account; a
+fan's or a reaction channel's upload never qualifies, nor a trailer, a review or a full film. Trivia is written from
 the page text alone, with the writer told so.
 
 ```bash

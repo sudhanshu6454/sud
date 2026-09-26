@@ -138,6 +138,7 @@ class Settings:
     # Scene features (sites with scenes: true): an iconic or viral scene, song or monologue, the rights holder's
     # own upload fetched (repost_ads) and posted as the article's video and the reel, credited
     scene_hours: list[int] = field(default_factory=lambda: [13, 21])
+    scene_min_views: int = 500_000     # a clip counts as viral from this many views
     # Trivia and breakdown carousels (sites with deepdives: true): one film, six to nine facts from its
     # Wikipedia page, one frame from the film per slide
     deepdive_hours: list[int] = field(default_factory=lambda: [8, 12, 17])
