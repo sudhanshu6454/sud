@@ -147,7 +147,8 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
                  use_source_image: bool | None = None, want_carousel: bool = False, want_reel: bool = False,
                  force_reel: bool = False, carousel_log: list[float] | None = None, reel_log: list[float] | None = None,
                  card_brief=None, force_story: bool = False, ad_clip: Path | None = None,
-                 ad_caption: str | None = None, slide_photos: dict[int, str] | None = None) -> bool:
+                 ad_caption: str | None = None, slide_photos: dict[int, str] | None = None,
+                 ad_clip_max_seconds: float | None = None) -> bool:
     """Everything after the words exist: cards, story frames, reel, carousel, WordPress, socials.
 
     `url` is the claimed source key in `state`; `image_url` and `credit` are the source photo and
@@ -247,7 +248,7 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
             outro = story_frames[-1] if story_frames else images.story_closing_frame(
                 post.image_headline or post.title, site, work_dir / site.slug / f"{stem}-story-end.jpg")
             reel_path = adclip.compose(ad_clip, frame, cards_by_shape["story"], outro,
-                                       work_dir / site.slug / f"{stem}-reel.mp4", max_seconds=settings.ad_clip_max_seconds)
+                                       work_dir / site.slug / f"{stem}-reel.mp4", max_seconds=ad_clip_max_seconds or settings.ad_clip_max_seconds)
             reel_from_clip = True
             log.info("[%s] ad reel: the film inside the frame, %.0fs cap, %d KB", site.key,
                      settings.ad_clip_max_seconds, reel_path.stat().st_size // 1024)

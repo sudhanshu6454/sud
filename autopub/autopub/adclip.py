@@ -176,6 +176,26 @@ def _compose(clip, frame, intro, outro, out_path, seconds, has_audio, size, fps,
 
 # ---- the article's video block ----------------------------------------------------------------------------
 
+def trim(clip: Path, out_path: Path, max_seconds: float) -> Path:
+    """The clip cut to its first `max_seconds`, re-encoded so the cut is exact and the file plays anywhere;
+    the clip itself when it is already short enough. The house rule for cinema clips: 30 seconds, trailers apart."""
+    info = probe(clip)
+    if info.get("duration") and float(info["duration"]) <= float(max_seconds) + 0.5:
+        return clip
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    cmd = [ffmpeg_exe(), "-y", "-loglevel", "error", "-threads", "2", "-i", str(clip), "-t", f"{float(max_seconds):.2f}",
+           "-c:v", "libx264", "-preset", "superfast", "-crf", "18", "-pix_fmt", "yuv420p", "-movflags", "+faststart"]
+    if info.get("audio"):
+        cmd += ["-c:a", "aac", "-b:a", "160k", "-af", f"afade=t=out:st={max(0.0, float(max_seconds) - 0.6):.2f}:d=0.6"]
+    else:
+        cmd += ["-an"]
+    cmd.append(str(out_path))
+    res = subprocess.run(cmd, capture_output=True, text=True)
+    if res.returncode != 0 or not out_path.exists():
+        raise RuntimeError(f"ffmpeg could not trim the clip: {res.stderr.strip()[-300:]}")
+    return out_path
+
+
 def video_block(media_id: int, video_url: str, caption: str, poster: str | None = None) -> str:
     """The block editor's own video markup for a self-hosted MP4, captioned with the credit."""
     poster_attr = f' poster="{poster}"' if poster else ""

@@ -85,6 +85,7 @@ def _run_scene(monkeypatch, settings, tmp_path, clips, picks):
     src_clip = tmp_path / "src.mp4"; src_clip.write_bytes(b"\x00" * 2000)
     monkeypatch.setattr(adclip, "fetch", lambda url, out_dir, **kw: (out_dir.mkdir(parents=True, exist_ok=True), Path(shutil.copy(src_clip, out_dir / "s1.mp4")))[1])
     monkeypatch.setattr(adclip, "compose", lambda clip_, frame, intro, outro, out, **kw: (shutil.copy(src_clip, out), out)[1])
+    monkeypatch.setattr(adclip, "trim", lambda clip_, out, max_seconds: clip_)     # the cut has its own test on a real film
     state = State(tmp_path / "s.db"); wp = FakeWP(); Recorder.seen.clear(); VideoRecorder.seen.clear()
     writer = SceneWriter(picks)
     report = pipeline.run_site(site, settings, state, rewriter=writer, wp=wp, publishers=[Recorder({}), VideoRecorder({})], work_dir=tmp_path / "img")
@@ -244,3 +245,29 @@ def test_config_gives_filmybuff_the_curated_day():
     assert [s.key for s in settings.sites if s.scenes or s.deepdives or s.news_hours is not None] == ["FILMYBUFF"]
     assert "Trivia" in site.categories and "Scenes" in site.categories
     assert any("ranked" in t for t in watchlists.THEMES)
+
+
+# ---- the house rule: a cinema clip is never posted longer than 30 seconds, trailers excepted --------------
+
+def test_a_scene_is_cut_to_thirty_seconds_before_it_is_posted_anywhere(monkeypatch, settings, tmp_path):
+    from autopub import video as vid
+    from tests.test_adclip import _synthetic
+    site = settings.site("FILMYBUFF")
+    settings.repost_ads = True
+    long_clip = _synthetic(tmp_path / "long.mp4", seconds=40.0)
+    monkeypatch.setattr(adclip, "fetch", lambda url, out_dir, **kw: (out_dir.mkdir(parents=True, exist_ok=True), Path(shutil.copy(long_clip, out_dir / "s1.mp4")))[1])
+    got = scenes.fetch_clip(site, settings, {"url": "https://www.youtube.com/watch?v=s1"}, tmp_path / "work")
+    assert got is not None and got.name.endswith("-30s.mp4")
+    assert float(vid.probe(got)["duration"]) <= 30.6
+    assert not (tmp_path / "work" / site.slug / "scenes" / "s1.mp4").exists(), "the full download is not kept"
+    short_clip = _synthetic(tmp_path / "short.mp4", seconds=10.0)
+    monkeypatch.setattr(adclip, "fetch", lambda url, out_dir, **kw: (out_dir.mkdir(parents=True, exist_ok=True), Path(shutil.copy(short_clip, out_dir / "s2.mp4")))[1])
+    got = scenes.fetch_clip(site, settings, {"url": "https://www.youtube.com/watch?v=s2"}, tmp_path / "work")
+    assert got is not None and got.name == "s2.mp4", "already short: untouched"
+
+
+def test_the_rule_is_a_setting_and_trailers_keep_theirs():
+    from autopub import config
+    settings = config.load(Path(__file__).resolve().parents[1] / "config" / "sites.yaml")
+    assert settings.scene_clip_max_seconds == 30
+    assert settings.ad_clip_max_seconds > settings.scene_clip_max_seconds, "trailers keep the ad-clip limit"

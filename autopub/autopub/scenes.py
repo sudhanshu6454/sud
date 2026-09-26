@@ -9,8 +9,9 @@ that list and names the film and the moment; the clip is fetched with yt-dlp (ad
 the page: the scene broken down beat by beat (the setup, the turn, the line, the performance, the
 craft, why it travels) with the clip as a self-hosted video and a link to the original, and the clip
 inside the site's frame as the reel on Instagram and the video on the Facebook Page, credited on the
-frame and in the caption. `repost_ads` is the switch; without it the scene runs as an embed with a
-narrated reel.
+frame and in the caption. The house rule: the clip is cut to `scene_clip_max_seconds` (30) before it is
+posted anywhere; trailers are the one exception. `repost_ads` is the switch; without it the scene runs
+as an embed with a narrated reel.
 
 `scenes_used` in site_notes lists every scene covered (film: scene); the upload's URL is the claim.
 """
@@ -178,11 +179,21 @@ def fetch_clip(site: Site, settings: Settings, clip: dict, work_dir: Path) -> Pa
     if not settings.repost_ads:
         return None
     try:
-        return adclip.fetch(clip["url"], work_dir / site.slug / "scenes", player_clients=settings.ad_clip_player_clients,
+        full = adclip.fetch(clip["url"], work_dir / site.slug / "scenes", player_clients=settings.ad_clip_player_clients,
                             cookies=settings.ad_clip_cookies or None)
     except Exception as exc:  # noqa: BLE001
         log.warning("[%s] could not fetch the scene (%s); embed and narrated reel instead", site.key, exc)
         return None
+    # the house rule: a cinema clip is never posted longer than scene_clip_max_seconds, on the page or as the reel
+    try:
+        short = adclip.trim(full, full.with_name(f"{full.stem}-{settings.scene_clip_max_seconds}s.mp4"), settings.scene_clip_max_seconds)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("[%s] could not cut the scene to %ds (%s); embed and narrated reel instead", site.key, settings.scene_clip_max_seconds, exc)
+        full.unlink(missing_ok=True)
+        return None
+    if short != full:
+        full.unlink(missing_ok=True)
+    return short
 
 
 def publish_daily(site: Site, settings: Settings, state: State, rewriter: Rewriter, wp, publishers, work_dir: Path,
@@ -230,7 +241,8 @@ def publish_daily(site: Site, settings: Settings, state: State, rewriter: Rewrit
         ok = pipeline.publish_post(site, settings, state, clip["url"], post, wp, publishers, work_dir, report,
                                    image_url=clip["thumbnail"], credit=f"{clip['channel']} on YouTube",
                                    use_source_image=True, force_reel=True, force_story=True,
-                                   ad_clip=video, ad_caption=credit if video else None)
+                                   ad_clip=video, ad_caption=credit if video else None,
+                                   ad_clip_max_seconds=settings.scene_clip_max_seconds)
     finally:
         if video is not None:
             video.unlink(missing_ok=True)

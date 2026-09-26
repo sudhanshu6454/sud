@@ -139,6 +139,9 @@ class Settings:
     # own upload fetched (repost_ads) and posted as the article's video and the reel, credited
     scene_hours: list[int] = field(default_factory=lambda: [13, 21])
     scene_min_views: int = 500_000     # a clip counts as viral from this many views
+    # THE HOUSE RULE FOR CINEMA CLIPS: a scene never runs longer than this anywhere it is posted (the
+    # article's video, the reel, the Facebook video); trailers are the one exception (ad_clip_max_seconds)
+    scene_clip_max_seconds: int = 30
     # Trivia and breakdown carousels (sites with deepdives: true): one film, six to nine facts from its
     # Wikipedia page, one frame from the film per slide
     deepdive_hours: list[int] = field(default_factory=lambda: [8, 12, 17])

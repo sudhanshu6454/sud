@@ -74,6 +74,7 @@ settings:
   # holder's own channel (needs repost_ads), as the article's video and the reel, credited
   scene_hours: [13, 21]
   scene_min_views: 500000       # a clip counts as viral from this many views on YouTube
+  scene_clip_max_seconds: 30    # THE RULE: a cinema clip is never posted longer than 30 seconds; trailers are the exception
   # Trivia and breakdown carousels (sites with deepdives: true): one film, six to nine facts from its
   # Wikipedia page, a frame from the film on every slide
   deepdive_hours: [8, 12, 17]
