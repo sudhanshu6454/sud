@@ -1,7 +1,7 @@
 """Posts already on a poster-style site get the clean featured image: the same still, no title baked in."""
 from PIL import Image
 
-from autopub import extract, poster, refresh
+from autopub import extract, poster, refresh, tmdb
 from autopub.state import State
 from tests.test_pipeline import FakeWP
 
@@ -10,6 +10,11 @@ class UpdatingWP(FakeWP):
     def __init__(self):
         super().__init__()
         self.updates = []
+
+    content = {}
+
+    def get_post(self, post_id):
+        return {"id": post_id, "content": {"rendered": self.content.get(post_id, "")}}
 
     def update_post(self, post_id, **fields):
         self.updates.append((post_id, fields))
@@ -39,6 +44,24 @@ def test_the_still_comes_from_the_article_the_upload_or_nowhere(monkeypatch, set
         raise RuntimeError("410")
     monkeypatch.setattr(extract, "extract", gone)
     assert refresh.source_still("https://bh.com/gone", site) is None
+
+
+def test_a_watchlist_gets_the_backdrop_of_its_first_film_and_a_scorecard_its_portrait(monkeypatch, settings, tmp_path):
+    site = settings.site("FILMYBUFF")
+    asked = []
+    monkeypatch.setattr(tmdb, "find", lambda title, year=None, timeout=15: (asked.append((title, year)), {"backdrop": "https://tmdb/lunchbox.jpg"} if title == "The Lunchbox" else {"backdrop": None})[1])
+    table = "<table><tr><td>1</td><td><strong>Ramen Western</strong> (2019)</td><td>Japanese</td></tr><tr><td>2</td><td><strong>The Lunchbox</strong> (2013)</td><td>Hindi</td></tr></table>"
+    assert refresh.still_in_post(table) == "https://tmdb/lunchbox.jpg"
+    assert asked == [("Ramen Western", "2019"), ("The Lunchbox", "2013")]
+    assert refresh.still_in_post('<figure><img src="https://site/portrait.jpg" alt="x"></figure>' + table) == "https://site/portrait.jpg"
+    assert refresh.still_in_post("<p>no pictures</p>") is None
+    # the refresh reads the post for our own claim urls, and only for those
+    state = _state(tmp_path, site)
+    monkeypatch.setattr(extract, "extract", lambda url, timeout=30: extract.Article(url=url, title="t", text="", sitename="BH", image="https://bh.com/still.jpg"))
+    monkeypatch.setattr(poster, "_backdrop", lambda url, size, **kw: (Image.new("RGB", size, (90, 40, 30)), []))
+    wp = UpdatingWP(); wp.content = {13: table}
+    done = dict(refresh.refresh(site, settings, state, wp, tmp_path / "img"))
+    assert done[13] == "https://tmdb/lunchbox.jpg" and done[11] == "https://bh.com/still.jpg"
 
 
 def test_every_published_post_gets_a_clean_still_and_failed_ones_are_left_alone(monkeypatch, settings, tmp_path):

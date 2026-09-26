@@ -1,17 +1,22 @@
 <?php get_header(); while ( have_posts() ) : the_post(); $c = fb_primary_cat(); $who = get_the_author(); ?>
 <main id="main">
 <article <?php post_class( 'story' ); ?>>
-	<section class="story__hero pick <?php echo has_post_thumbnail() ? '' : 'story__hero--flat'; ?>">
-		<div class="pick__bg"><?php if ( has_post_thumbnail() ) the_post_thumbnail( 'fb-hero' ); ?></div>
-		<div class="wrap pick__body">
-			<div class="pick__cert">
+	<section class="bill bill--story <?php echo has_post_thumbnail() ? '' : 'bill--flat'; ?>"><div class="wrap"><div class="bill__grid">
+		<div class="bill__copy">
+			<div class="bill__cert">
 				<?php if ( is_sticky() ) : ?><span class="cert cert--red"><?php esc_html_e( 'PICK', 'filmybuff' ); ?></span><?php endif; ?>
 				<?php if ( $c ) : ?><a class="cert" href="<?php echo esc_url( get_category_link( $c ) ); ?>"><?php echo esc_html( $c->name ); ?></a><?php endif; ?>
 			</div>
 			<h1><?php the_title(); ?></h1>
 			<?php if ( has_excerpt() ) : ?><p class="dek"><?php echo esc_html( get_the_excerpt() ); ?></p><?php endif; ?>
 		</div>
-	</section>
+		<?php if ( has_post_thumbnail() ) : ?>
+		<figure class="bill__still">
+			<span class="thumb"><?php the_post_thumbnail( 'fb-wide' ); ?></span>
+			<figcaption class="bill__cap"><span><?php echo $c ? esc_html( $c->name ) : esc_html__( 'Story', 'filmybuff' ); ?></span><span><?php echo esc_html( get_the_date( 'd M Y' ) ); ?></span></figcaption>
+		</figure>
+		<?php endif; ?>
+	</div></div></section>
 	<div class="stubrow"><div class="wrap">
 		<div class="stubrow__meta">
 			<span><?php esc_html_e( 'Screening', 'filmybuff' ); ?><b><?php echo esc_html( get_the_date() ); ?></b></span>

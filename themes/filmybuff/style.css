@@ -3,7 +3,7 @@ Theme Name: Filmybuff
 Theme URI: https://filmybuff.com
 Author: Filmybuff
 Description: A cinema-hall theme for filmybuff.com, built from the Filmy Buff brand kit: ink ground, paper type, signal red, Archivo set heavy. The front page is a bill: the type on the ink and the stills in their own frames, never one over the other. A lead story with the three next to it, fresh prints, a watchlist shelf of sleeves, the screens by section, a box-office board, trailers, streaming tickets, film-strip section edges, and articles set on a paper sheet.
-Version: 2.1.0
+Version: 2.1.1
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
@@ -132,6 +132,14 @@ button,input,textarea{font-family:var(--fb-font)}
 .also-row:hover h3{color:var(--fb-red-2)}
 .also-row .meta{display:block}
 .lockup--big{transform:scale(2.2)}
+/* the article's hero is the same bill: the title beside the still, never over it */
+.bill--story{padding:36px 0 40px;border-bottom:0}
+.bill--story .bill__grid{grid-template-rows:auto;align-items:center}
+.bill--story .bill__copy{padding-bottom:0}
+.bill--story .bill__still{grid-row:1;margin:0}
+.bill--story h1{font-size:clamp(28px,3.4vw,54px);max-width:22ch}
+.bill--flat .bill__grid{grid-template-columns:1fr}
+.bill--flat h1{max-width:26ch}
 
 /* ---- fresh prints: the latest six, still above, type below ---- */
 .prints{padding:44px 0 52px}
@@ -386,7 +394,7 @@ button,input,textarea{font-family:var(--fb-font)}
   .ott__grid,.wall__grid,.prints__grid{grid-template-columns:repeat(2,1fr)}
   .board__grid,.trailers__grid{grid-template-columns:1fr}
   .bill__grid{grid-template-columns:1fr;gap:28px}
-  .bill__still{grid-column:1;grid-row:1}
+  .bill__still,.bill--story .bill__still{grid-column:1;grid-row:1}
   .bill__copy{grid-row:2;padding-bottom:20px}
   .bill__also{grid-row:3}
   .site-footer__grid{grid-template-columns:1fr 1fr}
