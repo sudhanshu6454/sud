@@ -308,6 +308,18 @@ published, from the post's own title, section and standfirst and the still the s
 source article's photo, a trailer's YouTube thumbnail, the article's own image, or a TMDB backdrop for
 a watchlist's first film); `--dry-run` lists what it would touch and `--limit N` takes the newest N.
 
+### Image quality
+
+Every still is fetched as the largest copy its URL points to (`images.photo_upgrades`: the WordPress
+`-1200x630` suffix, `w=`/`h=`/`resize=` parameters, Cloudinary transforms and Times-style
+`,width-1070` path sizes are stripped and the original tried first; the fetch stops once it has a
+copy at least 1440 wide, and YouTube's sd/hq thumbnails are tried only when the maxres one is
+missing). TMDB is asked for original-size posters and backdrops. Each still is then enhanced once,
+at the size it is used (`images.enhance`: cleaned of blocks when it had to be blown up, sharpened,
+a touch of contrast and colour). Cards and posters are saved as JPEG 90 with 4:4:4 chroma so the
+type keeps a hard edge; reels and ad clips are encoded at CRF 18 with Lanczos scaling. The themes
+set WordPress's own JPEG quality to 92, so the poster sizes it generates stay clean too.
+
 ### Viral ad coverage
 
 Crazy4Marketing's beat names viral ads, brand films and stunts explicitly, has a **Viral Campaigns**

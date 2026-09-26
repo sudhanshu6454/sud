@@ -336,3 +336,55 @@ def test_a_headline_of_any_length_renders_promptly(site, tmp_path):
     images.render_card("A headline of quite absurd length " * 30, "Section", site,
                        tmp_path / "slow.jpg", "portrait")
     assert _time.monotonic() - started < 5.0
+
+
+# ---- image quality: the largest copy, enhanced, saved well ---------------------------------------------
+
+def test_larger_copies_of_a_photo_are_tried_before_the_url_itself():
+    wp = "https://site.com/wp-content/uploads/2026/09/still-1200x630.jpg"
+    assert images.photo_upgrades(wp) == ["https://site.com/wp-content/uploads/2026/09/still.jpg", wp]
+    cdn = "https://cdn.site.com/img/still.jpg?w=600&h=400&fit=crop&v=3"
+    assert images.photo_upgrades(cdn) == ["https://cdn.site.com/img/still.jpg?v=3", cdn]
+    cloud = "https://res.cloudinary.com/x/image/upload/w_600,h_400,c_fill/v1/still.jpg"
+    assert images.photo_upgrades(cloud)[0] == "https://res.cloudinary.com/x/image/upload/v1/still.jpg"
+    toi = "https://static.toiimg.com/thumb/msid-1,width-1070,height-580,imgsize-9,resizemode-75/1.jpg"
+    assert images.photo_upgrades(toi)[0] == "https://static.toiimg.com/thumb/msid-1/1.jpg"
+    plain = "https://site.com/still.jpg"
+    assert images.photo_upgrades(plain) == [plain] and images.photo_fallbacks(plain) == []
+    yt = "https://i.ytimg.com/vi/abc123/maxresdefault.jpg"
+    assert images.photo_fallbacks(yt) == ["https://i.ytimg.com/vi/abc123/sddefault.jpg", "https://i.ytimg.com/vi/abc123/hqdefault.jpg"]
+
+
+def test_the_fetch_keeps_the_largest_copy_and_falls_back_only_when_nothing_answers(monkeypatch):
+    served = {"https://s.com/a.jpg": Image.new("RGB", (2000, 1300)), "https://s.com/a-800x500.jpg": Image.new("RGB", (800, 500)),
+              "https://i.ytimg.com/vi/v1/hqdefault.jpg": Image.new("RGB", (480, 360))}
+    asked = []
+    monkeypatch.setattr(images, "_fetch_image", lambda url, timeout: (asked.append(url), served.get(url))[1])
+    got = images._download_photo("https://s.com/a-800x500.jpg", 5)
+    assert got.size == (2000, 1300) and asked == ["https://s.com/a.jpg"], "wide enough: the resized copy is never fetched"
+    asked.clear()
+    got = images._download_photo("https://i.ytimg.com/vi/v1/maxresdefault.jpg", 5)
+    assert got.size == (480, 360)
+    assert asked == ["https://i.ytimg.com/vi/v1/maxresdefault.jpg", "https://i.ytimg.com/vi/v1/sddefault.jpg", "https://i.ytimg.com/vi/v1/hqdefault.jpg"]
+
+
+def test_a_still_is_enhanced_at_the_size_it_is_used(tmp_path):
+    import numpy as np
+    soft = Image.new("RGB", (400, 300), (40, 60, 90))
+    images.ImageDraw.Draw(soft).rectangle([80, 60, 320, 240], fill=(210, 190, 150))
+    soft = soft.filter(images.ImageFilter.GaussianBlur(1.0))     # a soft edge, as a resized copy has
+    def detail(im):
+        a = np.asarray(im.convert("L"), dtype=float)
+        return float(np.abs(np.diff(a, axis=1)).max())
+    sharp = images.enhance(soft, 1.0)
+    assert sharp.size == soft.size and detail(sharp) > detail(soft) * 1.10, "the edge is harder"
+    blown = images.enhance(soft, 2.4)
+    assert blown.size == soft.size
+
+
+def test_cards_are_saved_at_high_quality_with_full_chroma(site, tmp_path):
+    from PIL import JpegImagePlugin
+    out = images.render_card("A headline", "Kicker", site, tmp_path / "q.jpg", "portrait")
+    with Image.open(out) as im:
+        assert JpegImagePlugin.get_sampling(im) == 0, "4:4:4 chroma keeps the type crisp"
+        assert im.info.get("progressive")

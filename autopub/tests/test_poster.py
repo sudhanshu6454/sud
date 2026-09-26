@@ -138,7 +138,7 @@ def test_tmdb_resolves_a_film_to_its_poster_and_backdrop(monkeypatch):
         return Resp()
     monkeypatch.setattr(tmdb.requests, "get", fake_get)
     hit = tmdb.find("Kapoor & Sons", 2016)
-    assert hit["poster"] == "https://image.tmdb.org/t/p/w780/p.jpg" and hit["backdrop"].endswith("/w1280/b.jpg") and hit["year"] == 2016
+    assert hit["poster"] == "https://image.tmdb.org/t/p/original/p.jpg" and hit["backdrop"].endswith("/original/b.jpg") and hit["year"] == 2016
     assert calls[0][0].endswith("/search/movie") and calls[0][1]["year"] == "2016" and calls[0][1]["api_key"] == "k"
 
 

@@ -46,6 +46,10 @@ function screenstat_setup() {
 }
 add_action( 'after_setup_theme', 'screenstat_setup' );
 
+/** Every resized copy WordPress makes (thumbnails, the poster sizes) is saved at high quality; the default 82 softens the type on a poster. */
+add_filter( 'jpeg_quality', function () { return 92; } );
+add_filter( 'wp_editor_set_quality', function () { return 92; } );
+
 /**
  * Cover images from the fleet's publisher are 1200x630 and carry a logo plate; keep the sizes
  * WordPress generates in that ratio so nothing is cropped away in the grids.

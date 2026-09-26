@@ -22,7 +22,9 @@ import time
 from pathlib import Path
 
 import requests
-from PIL import Image, ImageChops, ImageDraw, ImageFilter
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFilter
 
 try:  # face-aware cropping; the gradient/saliency path below works without it
     import cv2  # type: ignore
@@ -48,7 +50,9 @@ IG_FEED_HEIGHT = 1350   # 4:5 at 1080 wide: the tallest single image Instagram's
 # what `instagram_ratio` may say, and the width/height it means. None = post the 3:4 master whole.
 IG_RATIOS = {"3:4": None, "4:5": 0.8, "1:1": 1.0}
 PORTRAIT_BLEED = (SIZES["portrait"][1] - IG_FEED_HEIGHT) // 2   # the 45px band a 4:5 crop takes off each end
-JPEG_QUALITY = 82          # visually lossless for photos at these sizes, ~35% smaller than q88
+JPEG_QUALITY = 90          # high: the still stays clean after Instagram and WordPress recompress it
+JPEG_SUBSAMPLING = 0       # 4:4:4 chroma, so the type on a poster keeps a hard edge
+GOOD_WIDTH = 1440          # a still this wide needs no upscaling for the 3:4 master; the fetch stops looking once it has one
 MAX_BACKDROP_BYTES = 15 * 1024 * 1024
 
 
@@ -318,7 +322,73 @@ def _source_photo(url: str, timeout: int) -> tuple[Image.Image, list[Box]] | Non
     return got, faces
 
 
+# ---- the best copy of a still ----------------------------------------------------------------------------
+#
+# The URL a page gives for its photo is usually a resized copy: WordPress appends -1200x630 to the file
+# name, CDNs put the size in the query or the path. The original is one edit away, and a poster blown up
+# from a 600-pixel copy shows it. So every fetch tries the larger copies the URL points to first, keeps
+# the largest that answers, and stops as soon as it has one wide enough for the master.
+
+_SIZE_SUFFIX = re.compile(r"-\d{2,4}x\d{2,4}(?=\.(?:jpe?g|png|webp|gif)(?:$|[?#]))", re.I)
+_CLOUDINARY = re.compile(r"/upload/(?:[a-z]{1,3}_[^/,]+,?)+/")
+_PATH_SIZE = re.compile(r",(?:width|height|resizemode|imgsize)-\d+", re.I)
+_RESIZE_PARAMS = {"w", "h", "width", "height", "resize", "fit", "crop", "quality", "q", "size", "imwidth", "imheight", "dpr", "rect", "im"}
+_YT_MAXRES = re.compile(r"^(https?://i\.ytimg\.com/vi(?:_webp)?/[^/]+/)maxresdefault\.(jpg|webp)$")
+
+
+def photo_upgrades(url: str) -> list[str]:
+    """The URLs to try for a larger copy of the photo, best first; the URL itself is last."""
+    u = _SIZE_SUFFIX.sub("", url)
+    u = _CLOUDINARY.sub("/upload/", u)
+    u = _PATH_SIZE.sub("", u)
+    parts = urlsplit(u)
+    if parts.query:
+        pairs = parse_qsl(parts.query, keep_blank_values=True)
+        kept = [(k, v) for k, v in pairs if k.lower() not in _RESIZE_PARAMS]
+        if len(kept) != len(pairs):
+            u = urlunsplit(parts._replace(query=urlencode(kept)))
+    return [u, url] if u != url else [url]
+
+
+def photo_fallbacks(url: str) -> list[str]:
+    """Smaller copies worth trying only when nothing larger answers: YouTube serves a placeholder
+    when a video has no maxres thumbnail, so the sd and hq ones are the next best."""
+    m = _YT_MAXRES.match(url)
+    if not m:
+        return []
+    return [f"{m.group(1)}sddefault.{m.group(2)}", f"{m.group(1)}hqdefault.{m.group(2)}"]
+
+
+def enhance(img: Image.Image, scale: float = 1.0) -> Image.Image:
+    """The still made to look its best at the size it is used: cleaned of the blocks and ringing a small
+    source shows once blown up (`scale` is how much), then sharpened, with a touch of contrast and colour."""
+    if scale > 1.5:
+        img = img.filter(ImageFilter.GaussianBlur(min(1.5, 0.4 * scale)))
+    img = img.filter(ImageFilter.UnsharpMask(radius=1.4, percent=70 if scale > 1.2 else 45, threshold=2))
+    img = ImageEnhance.Contrast(img).enhance(1.03)
+    return ImageEnhance.Color(img).enhance(1.05)
+
+
 def _download_photo(url: str, timeout: int) -> Image.Image | None:
+    """The largest copy of the photo that answers, or None."""
+    best = None
+    for candidate in photo_upgrades(url):
+        img = _fetch_image(candidate, timeout)
+        if img is not None and (best is None or img.width * img.height > best.width * best.height):
+            best = img
+            if candidate != url:
+                log.info("larger copy of the photo: %sx%s from %s", img.width, img.height, candidate)
+        if best is not None and best.width >= GOOD_WIDTH:
+            break
+    if best is None:
+        for candidate in photo_fallbacks(url):
+            best = _fetch_image(candidate, timeout)
+            if best is not None:
+                break
+    return best
+
+
+def _fetch_image(url: str, timeout: int) -> Image.Image | None:
     try:
         resp = requests.get(url, timeout=timeout, headers={"User-Agent": USER_AGENT, "Accept": "image/*,*/*"}, stream=True)
         resp.raise_for_status()
@@ -348,6 +418,7 @@ def _backdrop(url: str, size: tuple[int, int], timeout: int = 20,
     img, faces = got
     focus = _union(faces) if faces else _salient_box(img)
     crop, focus_in_crop = _cover_fit(img, size, focus, clear_bottom)
+    crop = enhance(crop, max(size[0] / img.width, size[1] / img.height))
     return crop, (focus_in_crop if faces else None)
 
 
@@ -466,7 +537,7 @@ def _draw_kicker(draw: ImageDraw.ImageDraw, kicker: str, x: int, y: int, w: int,
 
 def _save(img: Image.Image, out_path: Path, quality: int = JPEG_QUALITY) -> Path:
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    img.convert("RGB").save(out_path, "JPEG", quality=quality, optimize=True, progressive=True)
+    img.convert("RGB").save(out_path, "JPEG", quality=quality, optimize=True, progressive=True, subsampling=JPEG_SUBSAMPLING)
     return out_path
 
 
@@ -817,7 +888,7 @@ def _render_portrait(headline: str, kicker: str, standfirst: str | None, site: S
             log.info("headline does not fit beside a photo; using the type card so it can be read whole")
 
     if on_photo:
-        img.paste(photo.filter(ImageFilter.UnsharpMask(radius=1.2, percent=45, threshold=3)), (0, 0))
+        img.paste(photo, (0, 0))
         photo_bottom = S(PHOTO_H)
         _shade_bottom(img.crop((0, photo_bottom - S(24), w, photo_bottom)), 0.0, 0.18)
         if credit:
@@ -1233,7 +1304,7 @@ def _render_poster(card: CardBrief, site: Site, out_path: Path, primary, accent,
     if faces and faces[1] < S(PORTRAIT_BLEED) + S(8):
         log.info("a face sits in the band the 4:5 crop removes; poster card skipped")
         return None
-    img = photo.filter(ImageFilter.UnsharpMask(radius=1.2, percent=40, threshold=3)).convert("RGB")
+    img = photo.convert("RGB")
     _shade_bottom(img, 0.30, 0.94)                 # the ground the type needs, fading in from a third down
     family, weight = site.brand.font, site.brand.heading_weight
     draw = ImageDraw.Draw(img, "RGBA")
@@ -1278,7 +1349,7 @@ def _render_scorecard(card: CardBrief, site: Site, out_path: Path, primary, acce
                 if faces and faces[1] < S(PORTRAIT_BLEED) + S(8):
                     photo = None
     if photo is not None:
-        img.paste(photo.filter(ImageFilter.UnsharpMask(radius=1.2, percent=45, threshold=3)), (0, 0))
+        img.paste(photo, (0, 0))
         photo_bottom = S(SCORE_PHOTO_H)
         band = img.crop((0, photo_bottom - S(160), w, photo_bottom))
         _shade_bottom(band, 0.0, 0.55)

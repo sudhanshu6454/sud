@@ -140,14 +140,14 @@ def _compose(clip, frame, intro, outro, out_path, seconds, has_audio, size, fps,
     win_y, win_h = int(round(images.AD_WINDOW_TOP * r)), int(round(images.AD_WINDOW_H * r))
     fade_at = max(0.0, seconds - FADE)
     afmt = "aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo"
-    still = f"scale={w}:{h},setsar=1,fps={fps},format=yuv420p"
+    still = f"scale={w}:{h}:flags=lanczos,setsar=1,fps={fps},format=yuv420p"
     parts = [
         f"[0:v]{still}[intro]",
         f"[3:v]{still}[outro]",
         f"[1:v]trim=0:{seconds:.3f},setpts=PTS-STARTPTS,fps={fps},"
-        f"scale={w}:{win_h}:force_original_aspect_ratio=decrease:force_divisible_by=2,setsar=1,"
+        f"scale={w}:{win_h}:force_original_aspect_ratio=decrease:force_divisible_by=2:flags=lanczos,setsar=1,"
         f"fade=t=out:st={fade_at:.3f}:d={FADE}[ad]",
-        f"[2:v]scale={w}:{h},setsar=1[fr]",
+        f"[2:v]scale={w}:{h}:flags=lanczos,setsar=1[fr]",
         f"[fr][ad]overlay=x=(main_w-overlay_w)/2:y={win_y}+({win_h}-overlay_h)/2:shortest=1,fps={fps},format=yuv420p[mid]",
         f"[4:a]asplit={2 if has_audio else 3}[s0][s1]" + ("" if has_audio else "[s2]"),
         f"[s0]atrim=0:{intro_hold},asetpts=PTS-STARTPTS,{afmt}[a0]",
@@ -163,7 +163,7 @@ def _compose(clip, frame, intro, outro, out_path, seconds, has_audio, size, fps,
            "-loop", "1", "-framerate", str(fps), "-t", f"{outro_hold}", "-i", str(outro),
            "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000",
            "-filter_complex", ";".join(parts), "-map", "[v]", "-map", "[a]",
-           "-c:v", "libx264", "-preset", preset, "-crf", "23", "-pix_fmt", "yuv420p",
+           "-c:v", "libx264", "-preset", preset, "-crf", "18", "-pix_fmt", "yuv420p",
            "-x264-params", "ref=1:rc-lookahead=8:bframes=0:threads=2", "-r", str(fps), "-movflags", "+faststart",
            "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2", str(out_path)]
     proc = subprocess.run(cmd, capture_output=True)

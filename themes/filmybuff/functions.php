@@ -29,6 +29,10 @@ function fb_setup() {
 }
 add_action( 'after_setup_theme', 'fb_setup' );
 
+/** Every resized copy WordPress makes (thumbnails, the poster sizes) is saved at high quality; the default 82 softens the type on a poster. */
+add_filter( 'jpeg_quality', function () { return 92; } );
+add_filter( 'wp_editor_set_quality', function () { return 92; } );
+
 function fb_scripts() {
 	wp_enqueue_style( 'fb-fonts', 'https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;700;800;900&display=swap', array(), null );
 	wp_enqueue_style( 'fb-style', get_stylesheet_uri(), array( 'fb-fonts' ), FB_VERSION );

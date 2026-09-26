@@ -16,7 +16,7 @@ log = logging.getLogger(__name__)
 
 API = "https://api.themoviedb.org/3"
 IMG = "https://image.tmdb.org/t/p"
-POSTER_SIZE, BACKDROP_SIZE = "w780", "w1280"
+POSTER_SIZE, BACKDROP_SIZE = "original", "original"   # the full-size files: a poster is blown up to 1440x1920
 CREDIT = "Film images from TMDB. This product uses the TMDB API but is not endorsed or certified by TMDB."
 
 
