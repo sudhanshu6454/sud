@@ -129,7 +129,8 @@ def subjects(site: Site, settings: Settings) -> tuple[list[str], list[str], list
     except Exception as exc:  # noqa: BLE001
         log.debug("tmdb anniversaries failed: %s", exc)
     try:
-        trending = [f"{t['title']} ({t['year'] or '?'}, {t['language']})" for t in tmdb.trending("movie", timeout=settings.request_timeout)]
+        trending = [f"{t['title']} ({t['year'] or '?'}, {t['language']}) - popular in India" for t in tmdb.popular_india(timeout=settings.request_timeout)]
+        trending += [f"{t['title']} ({t['year'] or '?'}, {t['language']})" for t in tmdb.trending("movie", timeout=settings.request_timeout)]
     except Exception as exc:  # noqa: BLE001
         log.debug("tmdb trending failed: %s", exc)
     try:

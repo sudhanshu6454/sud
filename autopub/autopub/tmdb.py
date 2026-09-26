@@ -84,6 +84,24 @@ def trending(kind: str = "movie", window: str = "week", timeout: int = 15, limit
     return out[:limit]
 
 
+INDIAN_LANGUAGES = ("hi", "ta", "te", "ml", "kn", "mr", "bn")
+
+
+def popular_india(days: int = 120, timeout: int = 15, limit: int = 12) -> list[dict]:
+    """The Indian-language films people are watching now: released in the last `days`, by TMDB popularity."""
+    import datetime as dt
+    since = (dt.date.today() - dt.timedelta(days=days)).isoformat()
+    data = _get("/discover/movie", {"region": "IN", "sort_by": "popularity.desc", "include_adult": "false",
+                                    "primary_release_date.gte": since, "with_original_language": "|".join(INDIAN_LANGUAGES)}, timeout) or {}
+    out = []
+    for hit in (data.get("results") or [])[:limit]:
+        date = hit.get("release_date") or ""
+        out.append({"id": hit.get("id"), "kind": "movie", "title": hit.get("title") or "", "year": int(date[:4]) if date[:4].isdigit() else None,
+                    "language": hit.get("original_language") or "", "popularity": float(hit.get("popularity") or 0),
+                    "backdrop": f"{IMG}/{BACKDROP_SIZE}{hit['backdrop_path']}" if hit.get("backdrop_path") else None})
+    return out
+
+
 ANNIVERSARIES = (5, 10, 15, 20, 25, 30, 40, 50)
 
 

@@ -24,6 +24,12 @@ FANCLIP = {"id": "s2", "title": "Gangs of Wasseypur best scene", "channel": "Bol
 
 def test_a_scene_comes_only_from_the_rights_holders_channel():
     assert youtube.choose_scene([FANCLIP, CLIP], "Gangs of Wasseypur", "Viacom18 Studios") is CLIP
+    # a catalogue channel's clip titled with the dialogue, and the film spelt the other way, is the scene
+    shem = {"id": "d1", "title": "Mere Paas Maa Hai | Deewaar | Amitabh Bachchan | Shashi Kapoor | Best Dialogue", "channel": "Shemaroo Movies", "seconds": 140, "views": 3000000}
+    fan = {"id": "d2", "title": "Deewar mere paas maa hai scene", "channel": "Bollywood Clips TV", "seconds": 140, "views": 9000000}
+    full = {"id": "d3", "title": "Deewaar Full Movie | Amitabh Bachchan", "channel": "Shemaroo Movies", "seconds": 9000, "views": 1}
+    assert youtube.choose_scene([fan, full, shem], "Deewar", "Shemaroo", "Deewar Mere Paas Maa Hai Amitabh Bachchan scene Shemaroo") is shem
+    assert youtube._names_film("Dilwaale Dulhania Le Jayenge | Palat scene", "Dilwale Dulhania Le Jayenge")
     assert youtube.choose_scene([FANCLIP], "Gangs of Wasseypur", "") is None, "a fan's upload never qualifies"
     long = {**CLIP, "seconds": 20 * 60}
     assert youtube.choose_scene([long], "Gangs of Wasseypur", "Viacom18 Studios") is None, "a full film is not a scene"
@@ -48,8 +54,9 @@ def _run_scene(monkeypatch, settings, tmp_path, clip, picks):
     settings.repost_ads = True
     site.news_hours = []
     monkeypatch.setattr(tmdb, "trending", lambda kind="movie", window="week", timeout=15, limit=12: [{"title": "War 3", "year": 2026, "language": "hi"}])
+    monkeypatch.setattr(tmdb, "popular_india", lambda days=120, timeout=15, limit=12: [])
     monkeypatch.setattr(src, "collect", lambda s, timeout=30: [])
-    monkeypatch.setattr(youtube, "find_scene", lambda film, query, studio="", year=None, timeout=20: dict(clip) if clip else None)
+    monkeypatch.setattr(youtube, "find_scene", lambda film, query, studio="", year=None, timeout=20, scene="": dict(clip) if clip else None)
     monkeypatch.setattr(tmdb, "film_still", lambda *a, **k: None)
     monkeypatch.setattr(pipeline.time, "sleep", lambda s: None)
     monkeypatch.setattr(pipeline, "narrator_for", lambda settings: None)
@@ -138,6 +145,7 @@ def test_the_deep_dive_is_written_from_the_page_and_posted_as_a_carousel(monkeyp
     site.news_hours = []
     monkeypatch.setattr(tmdb, "anniversaries", lambda today=None, days=7, timeout=15, per_year=3: [{"title": "Lagaan", "year": 2001, "language": "hi", "turns": 25}])
     monkeypatch.setattr(tmdb, "trending", lambda kind="movie", window="week", timeout=15, limit=12: [])
+    monkeypatch.setattr(tmdb, "popular_india", lambda days=120, timeout=15, limit=12: [])
     monkeypatch.setattr(src, "collect", lambda s, timeout=30: [])
     monkeypatch.setattr(wiki, "search", lambda q: ["Lagaan"])
     monkeypatch.setattr(wiki, "page_html", lambda title: ("Lagaan", PAGE_HTML))
@@ -175,9 +183,13 @@ def test_tmdb_trending_and_anniversaries(monkeypatch):
     got = tmdb.trending("movie")
     assert [g["title"] for g in got] == ["War 3"], "only the languages the site covers"
     assert got[0]["backdrop"].endswith("/original/w.jpg")
+    got = tmdb.popular_india(days=90)
+    assert got and got[0]["title"] == "Lagaan"
+    pop = [p for path, p in calls if path == "/discover/movie" and p.get("region") == "IN"]
+    assert pop and "hi|ta|te" in pop[0]["with_original_language"]
     anniv = tmdb.anniversaries(today=dt.date(2026, 6, 15))
     assert {a["turns"] for a in anniv} == set(tmdb.ANNIVERSARIES) and anniv[1]["title"] == "Lagaan"
-    disc = [p for path, p in calls if path == "/discover/movie"]
+    disc = [p for path, p in calls if path == "/discover/movie" and "region" not in p]
     assert disc[1]["primary_release_date.gte"] == "2016-06-15" and disc[1]["primary_release_date.lte"] == "2016-06-22"
 
 

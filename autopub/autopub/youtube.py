@@ -153,7 +153,11 @@ KNOWN_STUDIOS = ("yash raj films", "dharma productions", "t-series", "zee music 
                  "hbo max", "hbo", "apple tv", "peacock", "hulu", "amazon mgm studios", "mgm", "paramount plus", "disney plus",
                  "pixar", "dreamworks", "focus features", "searchlight pictures", "neon", "mubi", "sony pictures classics",
                  "legendary", "blumhouse", "annapurna pictures", "studiocanal", "bleecker street", "ifc films", "magnolia pictures",
-                 "aha video", "sun nxt", "manorama max", "hoichoi", "shemaroo", "ultra bollywood", "rajshri", "venus", "goldmines")
+                 "aha video", "sun nxt", "manorama max", "hoichoi", "shemaroo", "ultra bollywood", "rajshri", "venus", "goldmines",
+                 # the rights holders whose channels carry scenes and songs of the classics and the catalogue
+                 "yrf", "ultra", "eros", "viacom18", "reliance entertainment", "nh studioz", "b4u", "zee cinema", "zee classic",
+                 "sony max", "star gold", "colors cineplex", "&pictures", "moserbaer", "pen studios", "the criterion collection",
+                 "warner bros. entertainment", "paramount movies", "sony pictures entertainment", "lionsgate movies", "20th century")
 
 
 def is_official_trailer(video: dict, film: str, studio: str = "") -> bool:
@@ -180,30 +184,66 @@ def is_official_trailer(video: dict, film: str, studio: str = "") -> bool:
 
 SCENE_WORDS = ("scene", "song", "monologue", "dialogue", "climax", "clip", "moment", "sequence", "best of", "full song", "video song")
 MIN_SCENE_SECONDS, MAX_SCENE_SECONDS = 20, 8 * 60
+# a studio's channel also carries what is not the scene: its trailer, the making, the press round, the review
+NOT_A_SCENE = re.compile(r"\b(trailer|teaser|review|reaction|interview|making|behind the scenes|bts|press|podcast|full movie|full film|"
+                         r"promo|announcement|first look|explained|recap)\b", re.I)
 
 
-def choose_scene(results: list[dict], film: str, studio: str = "") -> dict | None:
-    """The upload most likely to be the scene itself: the film in the title with a scene word, a scene's
-    length, the rights holder's channel first (a fan's upload never qualifies), then the most watched."""
-    film_l = film.lower()
-    film_words = [w for w in re.findall(r"\w+", film_l) if len(w) > 2]
+def _collapse(text: str) -> str:
+    """Lowercase, letters and digits only, doubled letters folded: 'Deewaar' and 'Deewar' meet, 'Sholay' stays."""
+    out = []
+    for ch in re.sub(r"[^a-z0-9]", "", (text or "").lower()):
+        if not out or out[-1] != ch:
+            out.append(ch)
+    return "".join(out)
+
+
+def _names_film(title: str, film: str) -> bool:
+    """Whether the upload's title names the film, forgiving transliteration (Deewar/Deewaar, Dilwale/Dilwaale)."""
+    t = _collapse(title)
+    if _collapse(film) in t:
+        return True
+    words = [_collapse(w) for w in re.findall(r"\w+", film) if len(w) > 2]
+    return bool(words) and sum(1 for w in words if w in t) >= max(1, len(words) - 1)
+
+
+def choose_scene(results: list[dict], film: str, studio: str = "", query: str = "") -> dict | None:
+    """The upload most likely to be the scene itself: it names the film (or the scene the query names), it is
+    a scene's length (never a full film), and it sits on the rights holder's channel; a fan's upload never
+    qualifies. The most watched of those wins."""
+    film_l = _collapse(film)
+    asked = [_collapse(w) for w in re.findall(r"\w+", query) if len(w) > 3 and _collapse(w) not in film_l]
+
+    def names_scene(t: str) -> bool:
+        t = _collapse(t)
+        return bool(asked) and sum(1 for w in asked if w in t) >= max(2, int(len(asked) * 0.6))
 
     def fits(v):
-        t = (v.get("title") or "").lower()
-        named = film_l in t or (film_words and sum(1 for w in film_words if w in t) >= max(1, len(film_words) - 1))
-        return named and any(w in t for w in SCENE_WORDS) and v.get("seconds") and MIN_SCENE_SECONDS <= v["seconds"] <= MAX_SCENE_SECONDS
+        t = v.get("title") or ""
+        if NOT_A_SCENE.search(t):
+            return False
+        return (v.get("seconds") and MIN_SCENE_SECONDS <= v["seconds"] <= MAX_SCENE_SECONDS
+                and (_names_film(t, film) or names_scene(t)))
 
     good = [v for v in results if fits(v) and is_official_trailer(v, film, studio)]
     if not good:
         return None
-    return max(good, key=lambda v: (v.get("views") or 0))
+    return max(good, key=lambda v: (_names_film(v.get("title") or "", film), v.get("views") or 0))
 
 
-def find_scene(film: str, query: str, studio: str = "", year: int | str | None = None, timeout: int = 20) -> dict | None:
-    """The scene on YouTube, on the rights holder's own channel, or None. Returns id, title, channel, url, thumbnail, official=True."""
-    pick = choose_scene(search(query, timeout), film, studio)
-    if pick is None:
-        pick = choose_scene(search(f"{film} {year or ''} scene {studio}".strip(), timeout), film, studio)
+def find_scene(film: str, query: str, studio: str = "", year: int | str | None = None, timeout: int = 20,
+               scene: str = "") -> dict | None:
+    """The scene on YouTube, on the rights holder's own channel, or None: the editor's query first, then the film
+    with the scene's own words, then the film with the studio. Returns id, title, channel, url, thumbnail, official."""
+    tries = [query]
+    if scene:
+        tries.append(f"{film} {' '.join(scene.split()[:7])}")
+    tries.append(f"{film} {year or ''} scene {studio}".strip())
+    pick = None
+    for q in tries:
+        pick = choose_scene(search(q, timeout), film, studio, query)
+        if pick is not None:
+            break
     if pick is None:
         return None
     pick["official"] = True

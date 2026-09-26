@@ -461,7 +461,7 @@ def cmd_scene(settings, args) -> int:
             if choice is None:
                 print("  the model offered no scene"); rc = 1; continue
             print(f"  pick: {choice.film} ({choice.year}) {choice.kind}: {choice.scene}\n  why: {choice.hook}\n  query: {choice.query}")
-            clip = scenes.youtube.find_scene(choice.film, choice.query, choice.studio, choice.year)
+            clip = scenes.youtube.find_scene(choice.film, choice.query, choice.studio, choice.year, scene=choice.scene)
             print(f"  upload: {clip['url'] + '  ' + clip['title'][:60] + '  [' + clip['channel'] + ']' if clip else 'NOT FOUND on a rights holder channel'}")
             continue
         report = RunReport(site=site.key)

@@ -118,7 +118,8 @@ def subjects(site: Site, settings: Settings, state: State) -> tuple[list[str], l
     """What is trending on TMDB this week and what this week's news is about, as lines for the editor."""
     trending = []
     try:
-        trending = [f"{t['title']} ({t['year'] or '?'}, {t['language']})" for t in tmdb.trending("movie", timeout=settings.request_timeout)]
+        trending = [f"{t['title']} ({t['year'] or '?'}, {t['language']}) - popular in India" for t in tmdb.popular_india(timeout=settings.request_timeout)]
+        trending += [f"{t['title']} ({t['year'] or '?'}, {t['language']})" for t in tmdb.trending("movie", timeout=settings.request_timeout)]
         trending += [f"{t['title']} ({t['year'] or '?'}, {t['language']}, series)" for t in tmdb.trending("tv", timeout=settings.request_timeout)[:5]]
     except Exception as exc:  # noqa: BLE001
         log.debug("tmdb trending failed: %s", exc)
@@ -198,7 +199,7 @@ def publish_daily(site: Site, settings: Settings, state: State, rewriter: Rewrit
         if any(choice.film.lower() in u.lower() for u in used + tried):
             tried.append(label)
             continue
-        clip = youtube.find_scene(choice.film, choice.query, choice.studio, choice.year, timeout=settings.request_timeout)
+        clip = youtube.find_scene(choice.film, choice.query, choice.studio, choice.year, timeout=settings.request_timeout, scene=choice.scene)
         if clip is None:
             log.info("[%s] no rights-holder upload for %r; trying another", site.key, label)
             tried.append(f"{label} (no upload on the rights holder's channel)")
