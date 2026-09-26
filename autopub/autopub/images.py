@@ -1301,12 +1301,15 @@ def _render_poster(card: CardBrief, site: Site, out_path: Path, primary, accent,
     source = _source_photo(backdrop_url, 20)
     if not source or source[0].width < PHOTO_MIN[0] or source[0].height < PHOTO_MIN[1]:
         return None
-    got = _backdrop(backdrop_url, (w, h))
+    got = _backdrop(backdrop_url, (w, h), clear_bottom=0.42)     # the type takes the bottom of this card: faces stay above it
     if not got:
         return None
     photo, faces = got
     if faces and faces[1] < S(PORTRAIT_BLEED) + S(8):
         log.info("a face sits in the band the 4:5 crop removes; poster card skipped")
+        return None
+    if faces and faces[3] > h * (1 - 0.42):
+        log.info("a face sits where this card's type goes and the photo has no room to move it; poster card skipped")
         return None
     img = photo.convert("RGB")
     _shade_bottom(img, 0.30, 0.94)                 # the ground the type needs, fading in from a third down
@@ -1441,7 +1444,10 @@ def render_card(headline: str, kicker: str, site: Site, out_path: Path, variant:
         return _render_portrait(headline, kicker, standfirst, site, out_path, primary, accent, text_color,
                                 backdrop_url, credit, date_text, card=card)
 
-    got = _backdrop(backdrop_url, size, clear_bottom=(0.40 if variant == "square" else 0.0)) if backdrop_url else None
+    got = _backdrop(backdrop_url, size, clear_bottom=0.40) if backdrop_url else None     # the headline takes the bottom: faces stay above it
+    if got is not None and got[1] is not None and got[1][3] > h * 0.60:
+        log.info("a face sits where the headline goes and the photo has no room to move it; the type card stands in")
+        got = None
     if got is not None:
         photo, faces = got
         return _render_photo_cover(photo, headline, kicker, site, out_path, variant, primary, accent, margin, faces)

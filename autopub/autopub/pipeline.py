@@ -9,7 +9,7 @@ from pathlib import Path
 
 from slugify import slugify
 
-from . import adclip, cards, carousels, extract, followups, images, music, nostalgia, rank, scorecards, sources, speech, trailers, video, watchlists, tmdb
+from . import adclip, cards, carousels, extract, followups, images, music, nostalgia, poster, rank, scorecards, sources, speech, trailers, video, watchlists, tmdb
 from .config import Settings, Site
 from .rewrite import CuratedPost, Rewriter, RewriteSkipped, effective_model
 from .social import SocialPost, build_publishers, dispatch
@@ -167,8 +167,11 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
         # the poster's still is a frame from the film itself, never the source's press photo
         frame_hit = tmdb.film_still(post.film.title, post.film.year, settings.request_timeout)
         if frame_hit:
-            log.info("[%s] still from the film: %s (%s)", site.key, frame_hit["title"], frame_hit["year"] or "?")
-            image_url, credit, use_source_image = frame_hit["url"], frame_hit["credit"], True
+            chosen = poster.pick_frame(frame_hit.get("frames") or [frame_hit["url"]], settings.request_timeout) or frame_hit["url"]
+            log.info("[%s] still from the film: %s (%s), frame %d of %d", site.key, frame_hit["title"], frame_hit["year"] or "?",
+                     (frame_hit.get("frames") or [chosen]).index(chosen) + 1 if chosen in (frame_hit.get("frames") or []) else 1,
+                     len(frame_hit.get("frames") or [chosen]))
+            image_url, credit, use_source_image = chosen, frame_hit["credit"], True
         else:
             log.info("[%s] no still on TMDB for %r; the source's photo stays", site.key, post.film.title)
     history = cards.parse_history(state.note(site.key, "card_formats"))

@@ -320,6 +320,19 @@ watchlists already use the first film's backdrop. `refresh-featured` does the sa
 from a tag that is a film's exact title or a watchlist's table. The credit on the poster reads
 "Still: Film (Year), via TMDB".
 
+### House rule: type never sits on a face
+
+Every image the system makes, for the website and for every social channel, keeps its type off
+people's faces. The face detector runs on every photo once (`images._detect_faces`), and each
+renderer that sets type over a photograph honours the result its own way: the card sites' covers
+and the 4:5 poster card keep the faces above the type's band (`_cover_fit(clear_bottom=...)`) and,
+when the photo has no room to move them, stand the type-only card in; the Filmybuff poster keeps the
+faces below the title zone, sets the subject aside with the title beside it, or drops the title low
+(next section); a carousel slide moves its text to the clearer band; and when a film's frame is
+chosen from TMDB, the candidates are scored by how much room they leave for the type
+(`poster.room_for_type`, `poster.pick_frame`) and the clearest one wins. Tests in
+`tests/test_no_text_on_faces.py` pin each of these down.
+
 ### The poster's look, and where the title goes
 
 The poster family (`poster.py`) follows the reference grid's look: the still stays bright under a

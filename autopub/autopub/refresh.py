@@ -37,7 +37,7 @@ def film_frame(content: str, tags: list[str], timeout: int = 15) -> str | None:
             log.debug("tmdb lookup failed for %r: %s", tag, exc)
             hit = None
         if hit:
-            return hit["url"]
+            return poster.pick_frame(hit.get("frames") or [hit["url"]], timeout) or hit["url"]
     for title, year in _FILM.findall(content or "")[:4]:
         try:
             hit = tmdb.film_still(title, year or None, timeout)
@@ -45,7 +45,7 @@ def film_frame(content: str, tags: list[str], timeout: int = 15) -> str | None:
             log.debug("tmdb lookup failed for %r: %s", title, exc)
             hit = None
         if hit:
-            return hit["url"]
+            return poster.pick_frame(hit.get("frames") or [hit["url"]], timeout) or hit["url"]
     return None
 
 

@@ -96,8 +96,8 @@ def film_still(title: str, year: int | str | None = None, timeout: int = 15, exa
     if not url:
         return None
     when = f" ({hit['year']})" if hit.get("year") else ""
-    return {"url": url, "title": hit["title"], "year": hit.get("year"), "kind": hit["kind"], "id": hit.get("id"),
-            "credit": f"Still: {hit['title']}{when}, via TMDB"}
+    return {"url": url, "frames": [f["url"] for f in frames] or [url], "title": hit["title"], "year": hit.get("year"),
+            "kind": hit["kind"], "id": hit.get("id"), "credit": f"Still: {hit['title']}{when}, via TMDB"}
 
 
 def _norm(text: str) -> str:

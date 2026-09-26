@@ -25,7 +25,7 @@ from PIL import Image, ImageDraw, ImageEnhance, ImageFilter
 from . import images
 from .cards import CardBrief
 from .config import Site
-from .images import (CARD_SCALE, IG_RATIOS, SIZES, Box, _backdrop, _download_photo, _font, _load_logo, _save, _spell_out,
+from .images import (CARD_SCALE, IG_RATIOS, SIZES, Box, _backdrop, _cover_fit, _download_photo, _font, _load_logo, _save, _spell_out,
                      _wrap, hex_to_rgb, tidy)
 
 log = logging.getLogger(__name__)
@@ -373,7 +373,7 @@ def slide(heading: str, body: str, index: int, total: int, site: Site, out_path:
     On the still when the slide has one (a film's poster or backdrop), on the ink ground otherwise."""
     w, h = MASTER
     ink, accent, paper = hex_to_rgb(site.brand.primary), hex_to_rgb(site.brand.accent), hex_to_rgb(site.brand.text)
-    img, has_still, _faces = _ground(photo_url, MASTER, ink, accent)
+    img, has_still, faces = _ground(photo_url, MASTER, ink, accent)
     draw = ImageDraw.Draw(img, "RGBA")
     family = site.brand.font
     bleed = int(round(images.PORTRAIT_BLEED * CARD_SCALE))
@@ -384,18 +384,27 @@ def slide(heading: str, body: str, index: int, total: int, site: Site, out_path:
                     tuple(int(c * 0.85) for c in paper), w, track=0.22)
     nfont = _font(150, bold=True, family=family, weight=900)
     num = f"{index:02d}"
-    y = bleed + int(h * 0.15)
-    draw.text(((w - draw.textlength(num, font=nfont)) / 2, y), num, font=nfont, fill=accent)
-    y += int(nfont.size * 1.0)
     tfont, tlines, tline_h = _title_lines(draw, heading, family, column, 0.72)
-    y = _centred(draw, y, tlines, tfont, tline_h, paper, w)
-    y += int(h * 0.02)
     bfont = _font(38, bold=False, family=family, weight=450)
-    room = (h - bleed - int(h * 0.16) - y) // 54
+    mark_top = h - bleed - int(h * 0.055) - int(h * 0.045)
+    room = (mark_top - int(h * 0.04) - (bleed + int(h * 0.15) + int(nfont.size * 1.0) + len(tlines) * tline_h + int(h * 0.02))) // 54
     blines = _wrap(draw, _spell_out(tidy(body), family), bfont, int(column * 0.86))
     if len(blines) > room:
         blines = blines[:max(1, room)]
         blines[-1] = blines[-1].rstrip(",;:- ") + "…"
+    block_h = int(nfont.size * 1.0) + len(tlines) * tline_h + int(h * 0.02) + len(blines) * 54
+    block_w = max([draw.textlength(num, font=nfont)] + [draw.textlength(l, font=tfont) for l in tlines] + [draw.textlength(l, font=bfont) for l in blines])
+    # the block sits high, as the reference does, unless a face is there and the low band is clearer
+    high, low = bleed + int(h * 0.15), mark_top - int(h * 0.04) - block_h
+    boxes = {y0: (int((w - block_w) / 2), y0, int((w + block_w) / 2), y0 + block_h) for y0 in (high, low)}
+    y = high if (not has_still or _covered(faces, boxes[high]) < 0.02 or _covered(faces, boxes[low]) >= _covered(faces, boxes[high])) else low
+    if has_still:
+        _scrim(img, boxes[y])
+        draw = ImageDraw.Draw(img, "RGBA")
+    draw.text(((w - draw.textlength(num, font=nfont)) / 2, y), num, font=nfont, fill=accent)
+    y += int(nfont.size * 1.0)
+    y = _centred(draw, y, tlines, tfont, tline_h, paper, w)
+    y += int(h * 0.02)
     for line in blines:
         draw.text(((w - draw.textlength(line, font=bfont)) / 2, y), line, font=bfont, fill=tuple(int(c * 0.9) for c in paper))
         y += 54
@@ -458,6 +467,35 @@ def frame(kicker: str, title: str, credit: str, site: Site, out_path: Path) -> P
     out_path.parent.mkdir(parents=True, exist_ok=True)
     img.save(out_path, format="PNG", optimize=True)
     return out_path
+
+
+def room_for_type(url: str, timeout: int = 20) -> float:
+    """How much of the 3:4 master a still leaves clear of faces, 0-1, once cover-fitted: the frame the
+    poster should be built on is the one with the most room for its type. 0 when the still cannot be used."""
+    got = images._source_photo(url, timeout)
+    if got is None:
+        return 0.0
+    img, faces = got
+    if not faces:
+        return 1.0
+    _crop, box = _cover_fit(img, MASTER, images._union(faces))
+    if box is None:
+        return 1.0
+    l, t, r, b = (max(0, min(v, lim)) for v, lim in zip(box, (MASTER[0], MASTER[1], MASTER[0], MASTER[1])))
+    covered = (r - l) * (b - t) / (MASTER[0] * MASTER[1])
+    in_title_zone = _overlap((l, t, r, b), 0, int(MASTER[1] * TITLE_ZONE))
+    return max(0.0, 1.0 - covered - 0.3 * in_title_zone)
+
+
+def pick_frame(urls: list[str], timeout: int = 20, limit: int = 4) -> str | None:
+    """Of the film's candidate frames (best-voted first), the one that leaves the most room for the type;
+    the first one when they are close, so TMDB's own order still counts."""
+    best, best_room = None, -1.0
+    for url in [u for u in urls if u][:limit]:
+        room = room_for_type(url, timeout)
+        if best is None or room > best_room + 0.08:
+            best, best_room = url, room
+    return best
 
 
 def still_for(url: str | None, timeout: int = 20) -> bool:
