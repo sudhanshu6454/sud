@@ -4,7 +4,7 @@
  */
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'FB_VERSION', '1.0.0' );
+define( 'FB_VERSION', '2.0.0' );
 
 function fb_setup() {
 	load_theme_textdomain( 'filmybuff', get_template_directory() . '/languages' );
@@ -16,9 +16,9 @@ function fb_setup() {
 	add_theme_support( 'custom-logo', array( 'height' => 88, 'width' => 160, 'flex-width' => true, 'flex-height' => true ) );
 	add_theme_support( 'excerpt' );
 	add_post_type_support( 'page', 'excerpt' );
-	add_image_size( 'fb-lead', 1200, 800, true );
+	add_image_size( 'fb-hero', 1920, 1080, true );    // the full-bleed pick and the story hero
+	add_image_size( 'fb-poster', 600, 900, true );    // the poster shelf and the poster wall
 	add_image_size( 'fb-card', 720, 480, true );
-	add_image_size( 'fb-square', 600, 600, true );
 	add_image_size( 'fb-wide', 1600, 900, true );
 	register_nav_menus( array(
 		'primary'         => __( 'Primary (header sections)', 'filmybuff' ),
@@ -36,16 +36,6 @@ function fb_scripts() {
 	if ( is_singular() && comments_open() && get_option( 'thread_comments' ) ) wp_enqueue_script( 'comment-reply' );
 }
 add_action( 'wp_enqueue_scripts', 'fb_scripts' );
-
-function fb_widgets() {
-	register_sidebar( array(
-		'name' => __( 'Sidebar', 'filmybuff' ), 'id' => 'sidebar-1',
-		'description' => __( 'Beside Latest on the homepage and on archives (Trending, Follow and Newsletter are built in).', 'filmybuff' ),
-		'before_widget' => '<div id="%1$s" class="widget %2$s">', 'after_widget' => '</div>',
-		'before_title' => '<h3 class="widget-title">', 'after_title' => '</h3>',
-	) );
-}
-add_action( 'widgets_init', 'fb_widgets' );
 
 /** Excerpt: short, no [...] */
 add_filter( 'excerpt_length', function () { return 26; } );

@@ -1,11 +1,12 @@
+<div class="strip" aria-hidden="true"></div>
 <footer class="site-footer">
 	<div class="wrap">
 	<div class="site-footer__grid">
 		<div class="site-footer__brand">
-			<?php fb_lockup( 'lockup--lg lockup--light' ); ?>
+			<?php fb_lockup( 'lockup--xl' ); ?>
 			<p><?php echo esc_html( get_theme_mod( 'fb_footer_tagline', 'For people who love the movies. Bollywood, Hollywood and South cinema: releases, trailers, box office and what to watch tonight.' ) ); ?></p>
 		</div>
-		<?php foreach ( array( 'footer-sections' => __( 'Sections', 'filmybuff' ), 'footer-more' => __( 'More', 'filmybuff' ), 'footer-follow' => __( 'Follow', 'filmybuff' ) ) as $loc => $title ) : ?>
+		<?php foreach ( array( 'footer-sections' => __( 'Screens', 'filmybuff' ), 'footer-more' => __( 'The house', 'filmybuff' ), 'footer-follow' => __( 'Follow', 'filmybuff' ) ) as $loc => $title ) : ?>
 			<div class="widget"><h3 class="widget-title"><?php echo esc_html( $title ); ?></h3>
 			<?php if ( has_nav_menu( $loc ) ) { wp_nav_menu( array( 'theme_location' => $loc, 'container' => false, 'depth' => 1 ) ); }
 			elseif ( $loc === 'footer-sections' ) { echo '<ul>'; wp_list_categories( array( 'title_li' => '', 'number' => 6 ) ); echo '</ul>'; }
