@@ -217,3 +217,37 @@ def test_curated_post_accepts_story_frames_and_defaults_to_none():
     assert CuratedPost(**base).story_frames == []
     post = CuratedPost(**base, story_frames=[{"heading": "What happened", "body": "Facts."}, {"heading": "Why it matters", "body": "Stakes."}])
     assert [f.heading for f in post.story_frames] == ["What happened", "Why it matters"]
+
+
+def test_a_frame_meta_loses_gets_one_more_try_before_the_story_stops(monkeypatch):
+    """Meta sometimes answers media_publish with 'The requested resource does not exist' for a container
+    it made a moment ago; the same frame goes through on the second try."""
+    publishes = []
+
+    def post(url, data=None, timeout=None):
+        class R:
+            def json(self_inner):
+                if url.endswith("/media"):
+                    return {"id": f"c{len(publishes)}"}
+                publishes.append(data["creation_id"])
+                if len(publishes) == 2:      # the second frame's first try
+                    return {"error": {"code": 24, "error_subcode": 2207006, "message": "The requested resource does not exist"}}
+                return {"id": f"s{len(publishes)}"}
+        return R()
+
+    def get(url, params=None, timeout=None):
+        class R:
+            def json(self_inner):
+                return {"status_code": "FINISHED"}
+        return R()
+
+    slept = []
+    monkeypatch.setattr(st.requests, "post", post)
+    monkeypatch.setattr(st.requests, "get", get)
+    monkeypatch.setattr(st.time, "sleep", lambda s: slept.append(s))
+    pub = REGISTRY["instagram_story"]({"USER_ID": "17", "ACCESS_TOKEN": "t"})
+    res = pub.publish(_post(image_urls={"story": "https://cdn/story.jpg", "portrait": "https://cdn/p.jpg"},
+                            story_urls=["https://cdn/story.jpg", "https://cdn/f2.jpg", "https://cdn/f3.jpg"]))
+    assert res.ok and res.error is None, res.error
+    assert len(res.remote_id.split(",")) == 3, "all three frames went up"
+    assert len(publishes) == 4 and st.RETRY_PAUSE in slept, "one frame took two publishes, after a pause"
