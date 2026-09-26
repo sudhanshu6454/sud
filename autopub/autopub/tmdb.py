@@ -100,6 +100,31 @@ def film_still(title: str, year: int | str | None = None, timeout: int = 15, exa
             "kind": hit["kind"], "id": hit.get("id"), "credit": f"Still: {hit['title']}{when}, via TMDB"}
 
 
+MIN_PORTRAIT_WIDTH = 800
+
+
+def person_still(name: str, timeout: int = 15, exact: bool = False) -> dict | None:
+    """A portrait of the person from TMDB (its profile photos are tall and sharp, unlike a press photo): the
+    best-voted one wide enough for a poster. `exact` insists the match's name is the one asked for."""
+    if not key() or not name:
+        return None
+    data = _get("/search/person", {"query": name, "include_adult": "false"}, timeout)
+    results = (data or {}).get("results") or []
+    if not results:
+        return None
+    hit = results[0]
+    if exact and _norm(hit.get("name") or "") != _norm(name):
+        return None
+    shots = _get(f"/person/{hit['id']}/images", {}, timeout) or {}
+    good = [pr for pr in shots.get("profiles") or [] if pr.get("file_path") and int(pr.get("width") or 0) >= MIN_PORTRAIT_WIDTH]
+    good.sort(key=lambda pr: (float(pr.get("vote_average") or 0), int(pr.get("vote_count") or 0), int(pr.get("width") or 0)), reverse=True)
+    path = good[0]["file_path"] if good else hit.get("profile_path")
+    if not path:
+        return None
+    return {"url": f"{IMG}/original{path}", "name": hit.get("name") or name, "id": hit.get("id"),
+            "credit": f"Photo: {hit.get('name') or name}, via TMDB"}
+
+
 def _norm(text: str) -> str:
     import re
     return re.sub(r"[^a-z0-9]", "", (text or "").lower())

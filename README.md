@@ -358,6 +358,16 @@ a touch of contrast and colour). Cards and posters are saved as JPEG 90 with 4:4
 type keeps a hard edge; reels and ad clips are encoded at CRF 18 with Lanczos scaling. The themes
 set WordPress's own JPEG quality to 92, so the poster sizes it generates stay clean too.
 
+A still is only as sharp as its source, and a landscape frame cropped to 3:4 keeps under half of
+its pixels: a 720p thumbnail or a small press photo would have to be blown up nearly three times.
+So a still that would need more than `poster.LETTERBOX_ABOVE` (2x) to fill the poster is not cropped
+at all: it is set at its own shape, full width, between bands of its own blurred colour
+(`poster._letterbox`), and the whole still counts as the zone the type stays out of. A 1080p frame
+or larger still fills the frame edge to edge. For a story that names no film, a press photo that
+small gives way to the person's own portrait from TMDB (`tmdb.person_still`, tall and sharp), in
+the pipeline (from the writer's person mentions) and in `refresh-featured` (from a tag that is a
+person's exact name); a large press photo is kept.
+
 ### Viral ad coverage
 
 Crazy4Marketing's beat names viral ads, brand films and stunts explicitly, has a **Viral Campaigns**

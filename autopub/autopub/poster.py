@@ -25,7 +25,7 @@ from PIL import Image, ImageDraw, ImageEnhance, ImageFilter
 from . import images
 from .cards import CardBrief
 from .config import Site
-from .images import (CARD_SCALE, IG_RATIOS, SIZES, Box, _backdrop, _cover_fit, _download_photo, _font, _load_logo, _save, _spell_out,
+from .images import (CARD_SCALE, IG_RATIOS, SIZES, Box, _backdrop, _cover_fit, enhance, _download_photo, _font, _load_logo, _save, _spell_out,
                      _wrap, hex_to_rgb, tidy)
 
 log = logging.getLogger(__name__)
@@ -111,11 +111,47 @@ def _ink_ground(size: tuple[int, int], ink, accent) -> Image.Image:
 
 TITLE_ZONE = 0.44                   # the top fraction the handle, the title and the subline occupy: faces are kept out of it
 SUBJECT_X = 0.72                    # where the subject goes, as a fraction of the width, when the title needs the other side
+LETTERBOX_ABOVE = 2.0               # a still that would have to be blown up more than this to fill 3:4 is set at its own
+                                    # shape instead, full width, between bands of its own blurred colour: sharp beats full-bleed
+STILL_MAX_H = 0.56                  # the letterboxed still never takes more than this of the height (the type needs a band)
+MARK_ZONE = 0.17                    # the bottom fraction the mark and its margins keep
+
+
+def upscale_needed(photo_url: str | None, size: tuple[int, int] = MASTER, timeout: int = 20) -> float:
+    """How much the still would have to be blown up to fill `size` edge to edge; 0 when there is no still."""
+    got = images._source_photo(photo_url, timeout) if photo_url else None
+    if got is None:
+        return 0.0
+    img = got[0]
+    return max(size[0] / img.width, size[1] / img.height)
+
+
+def _letterbox(photo: Image.Image, size: tuple[int, int], ink) -> tuple[Image.Image, Box]:
+    """The still at its own shape, full width (or full band height), sharp, over a ground made of its own
+    colours blurred and darkened; returns the ground and the box the still occupies, which no type may enter."""
+    w, h = size
+    fw, fh = w, int(round(photo.height * w / photo.width))
+    if fh > int(h * STILL_MAX_H):
+        fh = int(h * STILL_MAX_H)
+        fw = int(round(photo.width * fh / photo.height))
+    still = enhance(photo.resize((fw, fh), Image.LANCZOS), max(fw / photo.width, 1.0))
+    ground = photo.resize((w, h), Image.LANCZOS).filter(ImageFilter.GaussianBlur(w // 10))
+    ground = Image.blend(ground, Image.new("RGB", (w, h), ink), 0.55)
+    x0, y0 = (w - fw) // 2, h - int(h * MARK_ZONE) - fh     # low, just above the mark: the band above it is the title's
+    ground.paste(still, (x0, y0))
+    return ground, (x0, y0, x0 + fw, y0 + fh)
 
 
 def _ground(photo_url: str | None, size: tuple[int, int], ink, accent) -> tuple[Image.Image, bool, Box | None]:
     """The graded still cover-fitted around its people (kept below the title zone when the still is tall
-    enough), or the ink ground. Also whether a still is there, and where its faces sit in it."""
+    enough), or, when the still is too small to fill the frame sharply, the still at its own shape between
+    bands of its own colour (then the whole still is the zone the type stays out of), or the ink ground.
+    Also whether a still is there, and where its faces (or the letterboxed still) sit in it."""
+    if photo_url and upscale_needed(photo_url, size) > LETTERBOX_ABOVE:
+        source = images._source_photo(photo_url, 20)
+        if source is not None:
+            img, box = _letterbox(source[0], size, ink)
+            return _grade(img), True, box
     if photo_url:
         got = _backdrop(photo_url, size, clear_bottom=0.0, clear_top=TITLE_ZONE)
         if got is not None and got[1] is not None and _overlap(got[1], 0, int(size[1] * TITLE_ZONE)) > 0.15:
@@ -301,6 +337,40 @@ def card(headline: str, kicker: str, site: Site, out_path: Path, variant: str = 
     mark_bottom = h - bleed - int(h * 0.055)
     tscale = 1.0 if variant == "portrait" else scale * 0.78
     high_y = handle_y + int(h * (0.08 if variant == "portrait" else 0.10))
+    if has_still and faces and faces[0] <= 0 and faces[2] >= w:
+        # a letterboxed still: the title fills the band above it, sized to fit, and never touches the still
+        band_top, band_bottom = handle_y + int(h * 0.06), faces[1] - int(h * 0.035)
+        for k in (1.0, 0.9, 0.8, 0.72, 0.64, 0.56):
+            tfont, tlines, tline_h = _title_lines(draw, title, family, column, tscale * k)
+            sub = _wrap(draw, subline, sfont, int(column * 0.8))[:2] if subline else []
+            sub_h = (int(h * 0.012) + len(sub) * int(sfont.size * 1.5)) if sub else 0
+            block_h = len(tlines) * tline_h + sub_h
+            if block_h <= band_bottom - band_top:
+                break
+        y = band_top + max(0, (band_bottom - band_top - block_h) // 2)
+        block_w = max([draw.textlength(l, font=tfont) for l in tlines] + [draw.textlength(l, font=sfont) for l in sub])
+        _scrim(img, (int((w - block_w) / 2), int(y), int((w + block_w) / 2), int(y + block_h)), strength=0.35)
+        draw = ImageDraw.Draw(img, "RGBA")
+        y = _aligned(draw, int(y), tlines, tfont, tline_h, CREAM, w, "centre", 0)
+        if sub:
+            sy = y + int(h * 0.012)
+            for i, line in enumerate(sub):
+                if strike and i == 0:
+                    _strike(draw, sy, line, strike, sfont, CREAM, accent, w, 0.12)
+                else:
+                    _tracked(draw, sy, line, sfont, tuple(int(c * 0.92) for c in CREAM), w, 0.12, "centre", 0)
+                sy += int(sfont.size * 1.5)
+        _mark(img, site, mark_bottom, mark_h, paper)
+        if swipe:
+            cfont = _font(int(20 * scale) if variant == "portrait" else int(16 * scale), bold=True, family=family, weight=700)
+            _swipe(draw, w - margin, mark_bottom - int(mark_h * 0.2), cfont, tuple(int(c * 0.8) for c in paper))
+        if variant == "portrait":
+            cfont = _font(18, bold=False, family=family)
+            left_note = credit[:60] if credit else (site.tagline or "")[:40]
+            if left_note:
+                draw.text((margin, mark_bottom - cfont.size - int(mark_h * 0.2)), left_note, font=cfont, fill=(*paper, 120))
+        return _save(img, out_path, quality=90)
+
     options, low = [], None
     gutter = int(w * 0.04)
     side_l = min(int(w * 0.56), (faces[0] - margin - gutter) if faces else int(w * 0.56))      # the room to the left of the subject

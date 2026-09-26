@@ -174,6 +174,14 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
             image_url, credit, use_source_image = chosen, frame_hit["credit"], True
         else:
             log.info("[%s] no still on TMDB for %r; the source's photo stays", site.key, post.film.title)
+    if site.brand.style == "poster" and not (image_url or "").startswith(tmdb.IMG):
+        # no film: a press photo too small to fill the poster gives way to the person's own portrait on TMDB
+        person = next((m.name for m in post.mentions if m.kind == "person" and m.name), None)
+        if person and (not image_url or poster.upscale_needed(image_url, timeout=settings.request_timeout) > poster.LETTERBOX_ABOVE):
+            shot = tmdb.person_still(person, settings.request_timeout)
+            if shot:
+                log.info("[%s] the source's photo is too small for the poster; %s's portrait from TMDB instead", site.key, shot["name"])
+                image_url, credit, use_source_image = shot["url"], shot["credit"], True
     history = cards.parse_history(state.note(site.key, "card_formats"))
     kind = card_brief.kind if card_brief is not None else cards.choose(history, post.card, photo=bool(use_source_image and image_url))
     kicker = post.image_kicker or post.category or site.category

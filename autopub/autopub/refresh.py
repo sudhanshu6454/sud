@@ -59,6 +59,21 @@ def still_in_post(content: str, timeout: int = 15, tags: list[str] | None = None
     return m.group(1) if m else None
 
 
+def person_portrait(tags: list[str], timeout: int = 15) -> str | None:
+    """A portrait from TMDB of a person a tag names exactly, for a story with no film and a small press photo."""
+    for tag in (tags or [])[:8]:
+        if len(tag) < 5 or " " not in tag.strip():
+            continue
+        try:
+            shot = tmdb.person_still(tag, timeout, exact=True)
+        except Exception as exc:  # noqa: BLE001
+            log.debug("tmdb person lookup failed for %r: %s", tag, exc)
+            shot = None
+        if shot:
+            return shot["url"]
+    return None
+
+
 def source_still(url: str, site: Site, timeout: int = 20, content: str = "", tags: list[str] | None = None) -> str | None:
     """Where the story's still comes from: a frame from the film it names first, then a trailer's or ad's
     YouTube thumbnail, the source article's own photo, or what the post itself carries. None when there
@@ -75,6 +90,10 @@ def source_still(url: str, site: Site, timeout: int = 20, content: str = "", tag
         except Exception as exc:  # noqa: BLE001 - a source that is gone gets the ground, not a crash
             log.warning("[%s] could not re-read %s: %s", site.key, url, exc)
             got = None
+        if got and poster.upscale_needed(got, timeout=timeout) > poster.LETTERBOX_ABOVE:
+            portrait = person_portrait(tags or [], timeout)
+            if portrait:
+                return portrait
         if got:
             return got
     m = _IMG.search(content or "")
