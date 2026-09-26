@@ -12,7 +12,7 @@
 		</div>
 		<?php if ( has_post_thumbnail() ) : ?>
 		<figure class="bill__still">
-			<span class="thumb"><?php the_post_thumbnail( 'fb-wide' ); ?></span>
+			<span class="thumb"><?php the_post_thumbnail( 'fb-poster-lg' ); ?></span>
 			<figcaption class="bill__cap"><span><?php echo $c ? esc_html( $c->name ) : esc_html__( 'Story', 'filmybuff' ); ?></span><span><?php echo esc_html( get_the_date( 'd M Y' ) ); ?></span></figcaption>
 		</figure>
 		<?php endif; ?>

@@ -11,15 +11,18 @@ uppercase tracked kickers. The lockup (a bordered box, FILMY over BUFF, the red 
 HTML/CSS exactly as the kit draws it; PNG exports for the site icon, social cards and the autopub
 share cards are in assets/img.
 
-The language is posters, not grids, and since 2.1 the front page is a bill: the type on the ink and
-the stills in their own frames, never one set over the other. A red marquee above the masthead; the
-lead story with its headline beside the still and the three next to it numbered beneath; "fresh
-prints", the latest six with the still above the type; a "what to watch" shelf of 2:3 sleeves with
-the title under the poster; the sections as numbered "screens"; a paper box office board with red
-digits; trailers with a play mark and the title beneath the frame; OTT arrivals as ticket stubs; a
-red stub band for follow and newsletter; film-strip sprocket edges between acts. Articles: the
-still as a hero, a paper "stub row" for date, running time, reviewer and share, the body on a paper
-sheet with a drop cap and ink pull quotes, then "also showing" posters. Archives are a poster wall.
+The language is posters. Since 2.2 every image on the site is the 3:4 poster autopub makes for the
+Instagram grid (the title on the still, the handle above, the lockup below) and every layout is built
+around that poster: the theme's own type sits on the ink beside or beneath it, never over it. A red
+marquee above the masthead; the lead story with its headline beside its poster and the three next to it
+numbered beneath; "fresh prints", the latest eight posters four across; a "what to watch" shelf of
+watchlist posters; the sections as numbered "screens"; a paper box office board with red digits;
+trailers as one poster with a play mark and a list beside it; OTT arrivals as ticket stubs; a red stub
+band for follow and newsletter; film-strip sprocket edges between acts. Articles: the poster beside the
+headline, a paper "stub row" for date, running time, reviewer and share, the body on a paper sheet with
+a drop cap and ink pull quotes, then "also showing" posters. Archives and search are poster walls and
+rows. The two image sizes are fb-poster (600x800) and fb-poster-lg (1200x1600); nothing is cropped to
+another shape.
 
 Homepage modules read the sections autopub files under: Bollywood, Hollywood, South Cinema (screens),
 Watchlists (shelf), Box Office (board), OTT Releases (stubs), Trailers (row). Slugs are editable under

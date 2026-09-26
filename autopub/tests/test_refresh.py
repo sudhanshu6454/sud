@@ -1,4 +1,4 @@
-"""Posts already on a poster-style site get the clean featured image: the same still, no title baked in."""
+"""Posts already on a poster-style site get the 3:4 poster as their featured image."""
 from PIL import Image
 
 from autopub import extract, poster, refresh, tmdb
@@ -14,7 +14,11 @@ class UpdatingWP(FakeWP):
     content = {}
 
     def get_post(self, post_id):
-        return {"id": post_id, "content": {"rendered": self.content.get(post_id, "")}}
+        return {"id": post_id, "content": {"rendered": self.content.get(post_id, "")}, "title": {"rendered": f"Post &#8216;{post_id}&#8217;"},
+                "excerpt": {"rendered": "<p>The standfirst, in one breath. [&hellip;]</p>"}, "categories": [1, 7]}
+
+    def get_category(self, term_id):
+        return {"id": term_id, "name": {1: "Uncategorized", 7: "Watchlists"}[term_id]}
 
     def update_post(self, post_id, **fields):
         self.updates.append((post_id, fields))
@@ -64,7 +68,7 @@ def test_a_watchlist_gets_the_backdrop_of_its_first_film_and_a_scorecard_its_por
     assert done[13] == "https://tmdb/lunchbox.jpg" and done[11] == "https://bh.com/still.jpg"
 
 
-def test_every_published_post_gets_a_clean_still_and_failed_ones_are_left_alone(monkeypatch, settings, tmp_path):
+def test_every_published_post_gets_its_poster_and_failed_ones_are_left_alone(monkeypatch, settings, tmp_path):
     site = settings.site("FILMYBUFF")
     state = _state(tmp_path, site)
     monkeypatch.setattr(extract, "extract", lambda url, timeout=30: extract.Article(url=url, title="t", text="", sitename="BH", image="https://bh.com/still.jpg"))
@@ -76,7 +80,7 @@ def test_every_published_post_gets_a_clean_still_and_failed_ones_are_left_alone(
     assert [pid for pid, _ in wp.updates] == [13, 12, 11]
     assert all(f == {"featured_media": i + 1} for i, (_, f) in enumerate(wp.updates))
     with Image.open(wp.media[0]) as im:
-        assert im.size == poster.FEATURED
+        assert im.size == poster.MASTER, "the website's image is the 3:4 poster"
 
 
 def test_dry_run_touches_nothing_and_limit_takes_the_newest(monkeypatch, settings, tmp_path):

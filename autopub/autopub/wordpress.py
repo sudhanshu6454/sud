@@ -61,6 +61,9 @@ class WordPress:
     def get_post(self, post_id: int) -> dict:
         return self._request("GET", f"posts/{post_id}")  # type: ignore[return-value]
 
+    def get_category(self, term_id: int) -> dict:
+        return self._request("GET", f"categories/{term_id}")  # type: ignore[return-value]
+
     def update_post(self, post_id: int, **fields) -> dict:
         """Change fields of an existing post (featured_media, status, content...)."""
         return self._request("POST", f"posts/{post_id}", json=fields)  # type: ignore[return-value]

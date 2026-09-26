@@ -1,7 +1,7 @@
 <?php
 /**
- * The front page as a bill: the type on the ink, the stills in their own frames, nothing set over
- * a photograph. Lead story, the three next to it, fresh prints, the watchlist shelf, the screens,
+ * The front page as a bill: every image is the 3:4 poster the grid carries, in its own frame, with the
+ * type on the ink beside or beneath it; nothing is ever set over a poster. Lead story, the three next to it, fresh prints, the watchlist shelf, the screens,
  * the box office board, trailers, streaming, then the stubs.
  */
 get_header();
@@ -28,7 +28,7 @@ elseif ( $lead->post_count < 4 ) {
 			</div>
 		</div>
 		<a class="bill__still <?php echo has_post_thumbnail() ? '' : 'bill__still--empty'; ?>" href="<?php the_permalink(); ?>">
-			<span class="thumb"><?php if ( has_post_thumbnail() ) the_post_thumbnail( 'fb-wide' ); else fb_lockup( 'lockup--big' ); ?></span>
+			<span class="thumb"><?php if ( has_post_thumbnail() ) the_post_thumbnail( 'fb-poster-lg' ); else fb_lockup( 'lockup--big' ); ?></span>
 			<span class="bill__cap"><span><?php echo $c ? esc_html( $c->name ) : esc_html__( 'Story', 'filmybuff' ); ?></span><span><?php echo esc_html( get_the_date( 'd M' ) ); ?></span></span>
 		</a>
 		<div class="bill__also">
@@ -44,7 +44,7 @@ elseif ( $lead->post_count < 4 ) {
 <?php endif; ?>
 <div class="strip" aria-hidden="true"></div>
 
-<?php $fresh = new WP_Query( array( 'posts_per_page' => 6, 'post__not_in' => $shown, 'ignore_sticky_posts' => 1, 'no_found_rows' => true ) ); if ( $fresh->have_posts() ) : ?>
+<?php $fresh = new WP_Query( array( 'posts_per_page' => 8, 'post__not_in' => $shown, 'ignore_sticky_posts' => 1, 'no_found_rows' => true ) ); if ( $fresh->have_posts() ) : ?>
 <section class="prints"><div class="wrap">
 	<div class="act"><h2><?php esc_html_e( 'Fresh prints', 'filmybuff' ); ?></h2><span class="act__line"></span><small class="meta"><?php printf( esc_html__( 'Updated %s', 'filmybuff' ), esc_html( wp_date( 'H:i T' ) ) ); ?></small></div>
 	<div class="prints__grid">
@@ -120,13 +120,13 @@ if ( $tq && $tq->have_posts() ) : ?>
 	<div class="trailers__grid">
 		<?php $i = 0; while ( $tq->have_posts() ) : $tq->the_post(); $i++; if ( $i === 1 ) : ?>
 		<a class="trailer" href="<?php the_permalink(); ?>">
-			<span class="thumb"><?php if ( has_post_thumbnail() ) the_post_thumbnail( 'fb-wide' ); ?><span class="trailer__play" aria-hidden="true"></span></span>
+			<span class="thumb"><?php if ( has_post_thumbnail() ) the_post_thumbnail( 'fb-poster-lg' ); ?><span class="trailer__play" aria-hidden="true"></span></span>
 			<span class="trailer__body"><span class="kicker"><?php echo esc_html( $tr->name ); ?> · <?php echo esc_html( get_the_date( 'd M' ) ); ?></span><h3><?php the_title(); ?></h3><p class="dek"><?php echo esc_html( get_the_excerpt() ); ?></p></span>
 		</a>
 		<div class="trailers__list">
 		<?php else : ?>
 			<a class="trailer-row" href="<?php the_permalink(); ?>">
-				<span class="thumb"><?php if ( has_post_thumbnail() ) the_post_thumbnail( 'fb-card' ); ?><span class="trailer__play trailer__play--sm" aria-hidden="true"></span></span>
+				<span class="thumb"><?php if ( has_post_thumbnail() ) the_post_thumbnail( 'fb-poster' ); ?><span class="trailer__play trailer__play--sm" aria-hidden="true"></span></span>
 				<span><h4><?php the_title(); ?></h4><span class="meta"><?php echo esc_html( human_time_diff( get_the_time( 'U' ) ) . ' ' . __( 'ago', 'filmybuff' ) ); ?></span></span>
 			</a>
 		<?php endif; endwhile; wp_reset_postdata(); ?>

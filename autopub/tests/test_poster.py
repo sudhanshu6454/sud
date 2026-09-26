@@ -66,7 +66,7 @@ def test_the_portrait_poster_is_the_master_with_clear_bleed_bands(buff, tmp_path
 def test_every_shape_renders_with_and_without_a_still(buff, tmp_path):
     got = images.render_set("Why the second weekend decides a film's fate", "Box Office", buff, tmp_path, "a", backdrop_url=STILL)
     assert set(got) == {"landscape", "square", "portrait"}
-    for shape, size in (("landscape", poster.FEATURED), ("square", (1080, 1080)), ("portrait", poster.MASTER)):
+    for shape, size in (("landscape", poster.MASTER), ("square", (1080, 1080)), ("portrait", poster.MASTER)):
         with Image.open(got[shape]) as im:
             assert im.size == size
     bare = images.render_set("Why the second weekend decides a film's fate", "Box Office", buff, tmp_path, "b", backdrop_url=None)
@@ -75,17 +75,13 @@ def test_every_shape_renders_with_and_without_a_still(buff, tmp_path):
         assert max(abs(a - b) for a, b in zip(im.getpixel((20, im.height // 2)), ink)) < 30, "no still: the ink ground"
 
 
-def test_the_websites_featured_image_is_the_clean_still_with_no_title_on_it(buff, tmp_path):
-    """The theme sets the title over the featured image and crops it into 2:3 posters; a title baked
-    into it doubled up and got sliced. The landscape shape is therefore the still alone."""
-    clean = images.render_card("A title that must not appear", "Bollywood", buff, tmp_path / "f.jpg", "landscape", backdrop_url=STILL)
-    bare = poster.featured(buff, tmp_path / "bare.jpg", None)
-    with Image.open(clean) as im:
-        assert im.size == poster.FEATURED
-        # paper-coloured type would leave near-white pixels; the graded still has none
-        assert sum(1 for px in im.resize((160, 120)).getdata() if min(px) > 225) == 0
-    with Image.open(bare) as im:
-        assert im.size == poster.FEATURED
+def test_the_websites_featured_image_is_the_poster_itself(buff, tmp_path):
+    """The site carries the same 3:4 poster the grid does; the theme sets its type beside it, not over it."""
+    web = images.render_card("Why the second weekend decides a film's fate", "Bollywood", buff, tmp_path / "web.jpg", "landscape", backdrop_url=STILL)
+    grid = images.render_card("Why the second weekend decides a film's fate", "Bollywood", buff, tmp_path / "grid.jpg", "portrait", backdrop_url=STILL)
+    with Image.open(web) as a, Image.open(grid) as b:
+        assert a.size == b.size == poster.MASTER
+        assert a.tobytes() == b.tobytes()
 
 
 def test_the_poster_uses_the_still_not_a_panel(buff, tmp_path):

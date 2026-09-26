@@ -301,11 +301,12 @@ docker compose run --rm autopub python -m autopub cards --site FILMYBUFF --image
 docker compose run --rm autopub python -m autopub refresh-featured --site FILMYBUFF                # older posts: the clean still as the featured image
 ```
 
-The website's featured image on a poster-style site is the clean still with no type on it: the
-theme sets the title over the hero and crops posters out of it, so a title baked in would double up
-and be sliced. `refresh-featured` re-renders it for the posts published before that rule (from the
-article's own photo, a trailer's YouTube thumbnail, or the ink ground with the lockup); `--dry-run`
-lists what it would touch and `--limit N` takes the newest N.
+On a poster-style site the website carries the same 3:4 poster the grid does: the featured image is
+the portrait master, and the theme (themes/filmybuff) is built around it, with its own type beside or
+beneath the poster and never over it. `refresh-featured` re-renders the poster for the posts already
+published, from the post's own title, section and standfirst and the still the story came from (the
+source article's photo, a trailer's YouTube thumbnail, the article's own image, or a TMDB backdrop for
+a watchlist's first film); `--dry-run` lists what it would touch and `--limit N` takes the newest N.
 
 ### Viral ad coverage
 

@@ -17,10 +17,9 @@ function fb_setup() {
 	add_theme_support( 'custom-logo', array( 'height' => 88, 'width' => 160, 'flex-width' => true, 'flex-height' => true ) );
 	add_theme_support( 'excerpt' );
 	add_post_type_support( 'page', 'excerpt' );
-	add_image_size( 'fb-hero', 1920, 1080, true );    // the full-bleed pick and the story hero
-	add_image_size( 'fb-poster', 600, 900, true );    // the poster shelf and the poster wall
-	add_image_size( 'fb-card', 720, 480, true );
-	add_image_size( 'fb-wide', 1600, 900, true );
+	// every image on the site is the 3:4 poster autopub makes for the grid; two sizes of it, no other crop
+	add_image_size( 'fb-poster', 600, 800, true );      // shelves, walls, prints, rows
+	add_image_size( 'fb-poster-lg', 1200, 1600, true ); // the bill on the front page and the article
 	register_nav_menus( array(
 		'primary'         => __( 'Primary (header sections)', 'filmybuff' ),
 		'footer-sections' => __( 'Footer: Sections', 'filmybuff' ),
@@ -78,7 +77,7 @@ function fb_format_views( $n ) {
 /** Open Graph: the featured image, else the brand's default card */
 function fb_og() {
 	if ( defined( 'WPSEO_VERSION' ) ) return;   // Yoast writes its own
-	$img = is_singular() && has_post_thumbnail() ? get_the_post_thumbnail_url( null, 'fb-wide' ) : get_template_directory_uri() . '/assets/img/og-default.jpg';
+	$img = is_singular() && has_post_thumbnail() ? get_the_post_thumbnail_url( null, 'fb-poster-lg' ) : get_template_directory_uri() . '/assets/img/og-default.jpg';
 	echo '<meta property="og:image" content="' . esc_url( $img ) . '">' . "\n";
 	echo '<meta name="twitter:card" content="summary_large_image">' . "\n";
 }

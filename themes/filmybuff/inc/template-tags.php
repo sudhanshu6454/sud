@@ -6,20 +6,13 @@ function fb_lockup( $class = '' ) {
 	echo '<span class="lockup ' . esc_attr( $class ) . '" aria-hidden="true"><span>FILMY</span><span>BUFF<i></i></span></span>';
 }
 
-/** A poster card (2:3): the still, a screen number, the section, the title over the gradient. */
-function fb_poster( $n = 0 ) { $c = fb_primary_cat(); ?>
-	<a class="poster <?php echo has_post_thumbnail() ? '' : 'poster--empty'; ?>" href="<?php the_permalink(); ?>">
-		<?php if ( has_post_thumbnail() ) the_post_thumbnail( 'fb-poster' ); ?>
-		<?php if ( $n ) : ?><span class="poster__n"><?php echo esc_html( str_pad( $n, 2, '0', STR_PAD_LEFT ) ); ?></span><?php endif; ?>
-		<?php if ( $c ) : ?><span class="poster__cat"><?php echo esc_html( $c->name ); ?></span><?php endif; ?>
-		<span class="poster__body"><h3><?php the_title(); ?></h3><span class="meta"><?php echo esc_html( human_time_diff( get_the_time( 'U' ) ) . ' ' . __( 'ago', 'filmybuff' ) ); ?> · <?php echo esc_html( fb_reading_time() ); ?></span></span>
-	</a>
-<?php }
+/** A poster: the 3:4 art in its frame, the section and title set beneath it, never over it. */
+function fb_poster( $n = 0 ) { fb_sleeve( $n, true ); }
 
-/** A fresh print: the still in its own frame, the section, the title and the standfirst under it. */
+/** A fresh print: the poster in its own frame, the section, the title and the standfirst under it. */
 function fb_print() { $c = fb_primary_cat(); ?>
 	<article <?php post_class( 'print' ); ?>>
-		<a class="thumb thumb--cover" href="<?php the_permalink(); ?>"><?php if ( has_post_thumbnail() ) the_post_thumbnail( 'fb-card' ); ?></a>
+		<a class="thumb thumb--poster <?php echo has_post_thumbnail() ? '' : 'thumb--empty'; ?>" href="<?php the_permalink(); ?>"><?php if ( has_post_thumbnail() ) the_post_thumbnail( 'fb-poster' ); ?></a>
 		<div class="print__body">
 			<?php if ( $c ) : ?><a class="kicker" href="<?php echo esc_url( get_category_link( $c ) ); ?>"><?php echo esc_html( $c->name ); ?></a><?php endif; ?>
 			<h3><a href="<?php the_permalink(); ?>"><?php the_title(); ?></a></h3>
@@ -29,16 +22,17 @@ function fb_print() { $c = fb_primary_cat(); ?>
 	</article>
 <?php }
 
-/** A sleeve: a 2:3 poster with the title set beneath it, never over it. */
-function fb_sleeve( $n = 0 ) { ?>
+/** A sleeve: the 3:4 poster with the title set beneath it, never over it; `$section` adds the kicker. */
+function fb_sleeve( $n = 0, $section = false ) { $c = $section ? fb_primary_cat() : null; ?>
 	<a class="sleeve" href="<?php the_permalink(); ?>">
 		<span class="sleeve__art <?php echo has_post_thumbnail() ? '' : 'sleeve__art--empty'; ?>"><?php if ( has_post_thumbnail() ) the_post_thumbnail( 'fb-poster' ); ?><?php if ( $n ) : ?><span class="poster__n"><?php echo esc_html( str_pad( $n, 2, '0', STR_PAD_LEFT ) ); ?></span><?php endif; ?></span>
+		<?php if ( $c ) : ?><span class="kicker"><?php echo esc_html( $c->name ); ?></span><?php endif; ?>
 		<h3><?php the_title(); ?></h3>
 		<span class="meta"><?php echo esc_html( get_the_date( 'd M' ) ); ?> · <?php echo esc_html( fb_reading_time() ); ?></span>
 	</a>
 <?php }
 
-/** A row of the screening log: the day large, the story, the still. */
+/** A row of the screening log: the day large, the story, the poster. */
 function fb_log_row() { $c = fb_primary_cat(); ?>
 	<article <?php post_class( 'log__row' ); ?>>
 		<time datetime="<?php echo esc_attr( get_the_date( 'c' ) ); ?>"><b><?php echo esc_html( get_the_date( 'd' ) ); ?></b><?php echo esc_html( get_the_date( 'M Y' ) ); ?></time>
@@ -47,7 +41,7 @@ function fb_log_row() { $c = fb_primary_cat(); ?>
 			<h3><a href="<?php the_permalink(); ?>"><?php the_title(); ?></a></h3>
 			<p class="dek"><?php echo esc_html( get_the_excerpt() ); ?></p>
 		</div>
-		<a class="thumb" href="<?php the_permalink(); ?>"><?php if ( has_post_thumbnail() ) the_post_thumbnail( 'fb-card' ); ?></a>
+		<a class="thumb thumb--poster" href="<?php the_permalink(); ?>"><?php if ( has_post_thumbnail() ) the_post_thumbnail( 'fb-poster' ); ?></a>
 	</article>
 <?php }
 
