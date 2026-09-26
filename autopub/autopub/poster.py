@@ -195,10 +195,32 @@ def _texts(card: CardBrief | None, headline: str, kicker: str, standfirst: str |
     return card.headline or headline, k, strike
 
 
+FEATURED = (1600, 1200)     # the website's featured image: 4:3, so the theme's 16:9 hero and 2:3 posters both crop well
+
+
+def featured(site: Site, out_path: Path, backdrop_url: str | None = None) -> Path:
+    """The website's image: the still itself, lightly graded, with no type on it. The theme sets the
+    title over it and crops it into posters, so a title baked in would double up and be sliced."""
+    ink, accent = hex_to_rgb(site.brand.primary), hex_to_rgb(site.brand.accent)
+    got = _backdrop(backdrop_url, FEATURED, clear_bottom=0.0) if backdrop_url else None
+    if got is None:
+        img = _ink_ground(FEATURED, ink, accent)
+        _mark(img, site, int(FEATURED[1] * 0.62), int(FEATURED[1] * 0.2), hex_to_rgb(site.brand.text))
+        return _save(img, out_path, quality=90)
+    img = got[0].convert("RGB")
+    r, g, b = img.split()
+    img = Image.merge("RGB", (r.point(lambda v: min(255, int(v * 0.94) + 8)), g.point(lambda v: min(255, int(v * 0.94) + 3)),
+                              b.point(lambda v: max(0, int(v * 0.94) - 6))))
+    return _save(img, out_path, quality=90)
+
+
 def card(headline: str, kicker: str, site: Site, out_path: Path, variant: str = "portrait",
          backdrop_url: str | None = None, standfirst: str | None = None, credit: str | None = None,
          card: CardBrief | None = None, swipe: bool = False) -> Path:
-    """One poster at the size `variant` names (landscape, square, portrait); the portrait is the 3:4 master."""
+    """One poster at the size `variant` names (square, portrait); the portrait is the 3:4 master. The
+    landscape shape is the website's featured image and carries no type (see `featured`)."""
+    if variant == "landscape":
+        return featured(site, out_path, backdrop_url)
     size = MASTER if variant == "portrait" else SIZES[variant]
     w, h = size
     scale = w / MASTER[0] if variant == "portrait" else (w / 1080)
