@@ -9,7 +9,7 @@ from pathlib import Path
 
 from slugify import slugify
 
-from . import adclip, cards, carousels, extract, followups, images, music, nostalgia, poster, rank, scorecards, sources, speech, trailers, video, watchlists, tmdb
+from . import adclip, cards, carousels, deepdives, extract, followups, images, music, nostalgia, poster, rank, scenes, scorecards, sources, speech, trailers, video, watchlists, tmdb
 from .config import Settings, Site
 from .rewrite import CuratedPost, Rewriter, RewriteSkipped, effective_model
 from .social import SocialPost, build_publishers, dispatch
@@ -471,6 +471,15 @@ def _by_relevance(site: Site, settings: Settings, fresh: list[sources.Candidate]
     return [s.candidate for s in keep]
 
 
+def _local_hour(tz: str) -> int:
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    try:
+        return datetime.now(ZoneInfo(tz)).hour
+    except Exception:  # noqa: BLE001 - an unknown zone name must not stop the run
+        return datetime.now().hour
+
+
 def run_site(site: Site, settings: Settings, state: State, rewriter: Rewriter | None = None,
              wp: WordPress | None = None, publishers=None, work_dir: Path | None = None,
              limit: int | None = None) -> RunReport:
@@ -499,13 +508,18 @@ def run_site(site: Site, settings: Settings, state: State, rewriter: Rewriter | 
         log.info("[%s] last post %.0f min ago; waiting for the %d min gap", site.key, (time.time() - last) / 60, gap / 60)
         return report
 
-    candidates = sources.collect(site, timeout=settings.request_timeout)
-    report.candidates = len(candidates)
-    fresh = [c for c in candidates if not state.is_used(c.url, site.key)]
-    if not fresh:
-        log.info("[%s] nothing new", site.key)
+    # a curated site runs its news post only at its news hours; the formats below keep their own slots
+    if site.news_hours is not None and _local_hour(settings.timezone) not in site.news_hours:
+        log.info("[%s] no news at %02d:00 (news hours %s); the day's formats only", site.key, _local_hour(settings.timezone), site.news_hours)
+        fresh = []
     else:
-        fresh = _by_relevance(site, settings, fresh)
+        candidates = sources.collect(site, timeout=settings.request_timeout)
+        report.candidates = len(candidates)
+        fresh = [c for c in candidates if not state.is_used(c.url, site.key)]
+        if not fresh:
+            log.info("[%s] nothing new", site.key)
+        else:
+            fresh = _by_relevance(site, settings, fresh)
 
     if fresh:
         ready()
@@ -552,6 +566,20 @@ def run_site(site: Site, settings: Settings, state: State, rewriter: Rewriter | 
             watchlists.publish_daily(site, settings, state, rewriter, wp, publishers, work_dir, report)
         except Exception as exc:  # noqa: BLE001
             log.exception("[%s] watchlist failed: %s", site.key, exc)
+    # Filmybuff's scenes: an iconic or viral scene from the rights holder's channel, in the frame
+    if site.scenes and scenes.due(settings, state, site):
+        try:
+            ready()
+            scenes.publish_daily(site, settings, state, rewriter, wp, publishers, work_dir, report)
+        except Exception as exc:  # noqa: BLE001
+            log.exception("[%s] scene failed: %s", site.key, exc)
+    # Filmybuff's deep dives: trivia or a breakdown on one film, facts from Wikipedia, frames from TMDB
+    if site.deepdives and deepdives.due(settings, state, site):
+        try:
+            ready()
+            deepdives.publish_daily(site, settings, state, rewriter, wp, publishers, work_dir, report)
+        except Exception as exc:  # noqa: BLE001
+            log.exception("[%s] deep dive failed: %s", site.key, exc)
     log.info(report.summary())
     return report
 

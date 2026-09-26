@@ -50,6 +50,9 @@ class Site:
     scorecards: bool = False    # actor scorecards from Wikipedia figures, at each settings.scorecard_hours
     watchlists: bool = False    # curated watchlists (a theme, eight films, one line each) at settings.watchlist_hours
     trailers: bool = False      # trailer features: the official upload fetched and posted in the site's frame, at settings.trailer_hours
+    scenes: bool = False        # scene features: an iconic or viral scene, the rights holder's own upload, in the frame, at settings.scene_hours
+    deepdives: bool = False     # trivia and breakdown carousels on one film, facts from Wikipedia, frames from TMDB, at settings.deepdive_hours
+    news_hours: list[int] | None = None   # hours (in settings.timezone) at which the news post may run; None = every cycle
     formats: list[str] = field(default_factory=list)   # the site's house post shapes, told to the writer (see sites.yaml)
 
     @property
@@ -132,6 +135,12 @@ class Settings:
     # story about a specific trailer, teaser or first look, fetches the studio's own upload (repost_ads must
     # be on) and posts it as the article's video and the reel, credited. [] switches them off.
     trailer_hours: list[int] = field(default_factory=lambda: [11, 19])
+    # Scene features (sites with scenes: true): an iconic or viral scene, song or monologue, the rights holder's
+    # own upload fetched (repost_ads) and posted as the article's video and the reel, credited
+    scene_hours: list[int] = field(default_factory=lambda: [13, 21])
+    # Trivia and breakdown carousels (sites with deepdives: true): one film, six to nine facts from its
+    # Wikipedia page, one frame from the film per slide
+    deepdive_hours: list[int] = field(default_factory=lambda: [8, 12, 17])
     # Instagram allows 100 API publishes per account a day and every story frame counts as one, so a
     # story sequence goes out for every Nth news article (1 = every article). Throwbacks and
     # scorecards always get theirs.
@@ -181,5 +190,10 @@ def load(path: str | os.PathLike | None = None) -> Settings:
     settings.scorecard_hours = sorted({int(h) % 24 for h in (settings.scorecard_hours or [])})
     settings.watchlist_hours = sorted({int(h) % 24 for h in (settings.watchlist_hours or [])})
     settings.trailer_hours = sorted({int(h) % 24 for h in (settings.trailer_hours or [])})
+    settings.scene_hours = sorted({int(h) % 24 for h in (settings.scene_hours or [])})
+    settings.deepdive_hours = sorted({int(h) % 24 for h in (settings.deepdive_hours or [])})
+    for site in settings.sites:
+        if site.news_hours is not None:
+            site.news_hours = sorted({int(h) % 24 for h in site.news_hours})
     settings.ad_hours = sorted({int(h) % 24 for h in (settings.ad_hours or [])})
     return settings

@@ -52,6 +52,12 @@ THEMES = [
     "War films that are about people", "Films about families at a wedding", "Films to watch when you cannot sleep",
     "Bollywood films of the 90s that hold up", "South Indian films every Hindi viewer should start with",
     "Hollywood films every Bollywood fan should see",
+    # ranked lists: the same shape, the order is the ranking and the 'why' says why it sits there
+    "Irrfan Khan's best performances, ranked", "Shah Rukh Khan's best performances, ranked", "Every Anurag Kashyap film, ranked",
+    "Vijay Sethupathi's best performances, ranked", "Fahadh Faasil's best performances, ranked", "Every Mani Ratnam film, ranked",
+    "Tabu's best performances, ranked", "Every Christopher Nolan film, ranked", "Nawazuddin Siddiqui's best performances, ranked",
+    "Alia Bhatt's best performances, ranked", "Every Vishal Bhardwaj film, ranked", "Every Sanjay Leela Bhansali film, ranked",
+    "Kamal Haasan's best performances, ranked", "Every Rajkumar Hirani film, ranked", "Konkona Sen Sharma's best performances, ranked",
 ]
 
 
@@ -99,7 +105,8 @@ Rules:
   southern language) with world cinema unless the theme is explicitly about one; lean Indian.
 - Nothing released in the last three months; nothing you are unsure exists.
 - Every 'why' is one honest first-person line a friend would say, no spoilers, no hype.
-- Order the list for reading, not ranking: open strong, close with the one people will save.
+- Order the list for reading, not ranking: open strong, close with the one people will save. When the theme says
+  "ranked", the order IS the ranking, best last, and each 'why' says why it sits where it does.
 
 HOUSE SEEDS:
 {seeds}

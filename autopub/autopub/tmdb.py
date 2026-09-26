@@ -66,6 +66,50 @@ def find(title: str, year: int | str | None = None, timeout: int = 15) -> dict |
     }
 
 
+LANGUAGES = ("hi", "ta", "te", "ml", "kn", "mr", "bn", "en", "ko", "ja")   # the languages the site covers, for discovery
+
+
+def trending(kind: str = "movie", window: str = "week", timeout: int = 15, limit: int = 12) -> list[dict]:
+    """What TMDB says people are looking at this week: title, year, id, kind, language, backdrop."""
+    data = _get(f"/trending/{kind}/{window}", {}, timeout) or {}
+    out = []
+    for hit in data.get("results") or []:
+        if (hit.get("original_language") or "") not in LANGUAGES:
+            continue
+        date = hit.get("release_date") or hit.get("first_air_date") or ""
+        out.append({"id": hit.get("id"), "kind": kind, "title": hit.get("title") or hit.get("name") or "",
+                    "year": int(date[:4]) if date[:4].isdigit() else None, "language": hit.get("original_language") or "",
+                    "backdrop": f"{IMG}/{BACKDROP_SIZE}{hit['backdrop_path']}" if hit.get("backdrop_path") else None,
+                    "popularity": float(hit.get("popularity") or 0)})
+    return out[:limit]
+
+
+ANNIVERSARIES = (5, 10, 15, 20, 25, 30, 40, 50)
+
+
+def anniversaries(today=None, days: int = 7, timeout: int = 15, per_year: int = 3) -> list[dict]:
+    """Films released this week a round number of years ago, most popular first within each year:
+    title, year, id, turns (the anniversary), language, backdrop."""
+    import datetime as dt
+    today = today or dt.date.today()
+    out = []
+    for back in ANNIVERSARIES:
+        try:
+            start = today.replace(year=today.year - back)
+        except ValueError:                       # 29 February
+            start = today.replace(year=today.year - back, day=28)
+        end = start + dt.timedelta(days=days)
+        data = _get("/discover/movie", {"primary_release_date.gte": start.isoformat(), "primary_release_date.lte": end.isoformat(),
+                                        "sort_by": "popularity.desc", "include_adult": "false", "vote_count.gte": 50,
+                                        "with_original_language": "|".join(LANGUAGES)}, timeout) or {}
+        for hit in (data.get("results") or [])[:per_year]:
+            date = hit.get("release_date") or ""
+            out.append({"id": hit.get("id"), "kind": "movie", "title": hit.get("title") or "", "year": int(date[:4]) if date[:4].isdigit() else None,
+                        "turns": back, "language": hit.get("original_language") or "",
+                        "backdrop": f"{IMG}/{BACKDROP_SIZE}{hit['backdrop_path']}" if hit.get("backdrop_path") else None})
+    return out
+
+
 MIN_STILL_WIDTH = 1280
 
 

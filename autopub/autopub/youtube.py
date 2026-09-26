@@ -178,6 +178,40 @@ def is_official_trailer(video: dict, film: str, studio: str = "") -> bool:
     return looks_like_studio and not fan and "official" in (video.get("title") or "").lower()
 
 
+SCENE_WORDS = ("scene", "song", "monologue", "dialogue", "climax", "clip", "moment", "sequence", "best of", "full song", "video song")
+MIN_SCENE_SECONDS, MAX_SCENE_SECONDS = 20, 8 * 60
+
+
+def choose_scene(results: list[dict], film: str, studio: str = "") -> dict | None:
+    """The upload most likely to be the scene itself: the film in the title with a scene word, a scene's
+    length, the rights holder's channel first (a fan's upload never qualifies), then the most watched."""
+    film_l = film.lower()
+    film_words = [w for w in re.findall(r"\w+", film_l) if len(w) > 2]
+
+    def fits(v):
+        t = (v.get("title") or "").lower()
+        named = film_l in t or (film_words and sum(1 for w in film_words if w in t) >= max(1, len(film_words) - 1))
+        return named and any(w in t for w in SCENE_WORDS) and v.get("seconds") and MIN_SCENE_SECONDS <= v["seconds"] <= MAX_SCENE_SECONDS
+
+    good = [v for v in results if fits(v) and is_official_trailer(v, film, studio)]
+    if not good:
+        return None
+    return max(good, key=lambda v: (v.get("views") or 0))
+
+
+def find_scene(film: str, query: str, studio: str = "", year: int | str | None = None, timeout: int = 20) -> dict | None:
+    """The scene on YouTube, on the rights holder's own channel, or None. Returns id, title, channel, url, thumbnail, official=True."""
+    pick = choose_scene(search(query, timeout), film, studio)
+    if pick is None:
+        pick = choose_scene(search(f"{film} {year or ''} scene {studio}".strip(), timeout), film, studio)
+    if pick is None:
+        return None
+    pick["official"] = True
+    pick["url"] = f"https://www.youtube.com/watch?v={pick['id']}"
+    pick["thumbnail"] = f"https://i.ytimg.com/vi/{pick['id']}/maxresdefault.jpg"
+    return pick
+
+
 def find_trailer(film: str, studio: str = "", year: int | str | None = None, timeout: int = 20) -> dict | None:
     """The trailer on YouTube, or None. Returns id, title, channel, url, thumbnail, and `official`."""
     query = " ".join(p for p in (film, "official trailer", str(year) if year else "") if p)

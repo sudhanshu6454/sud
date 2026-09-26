@@ -308,6 +308,32 @@ published, from the post's own title, section and standfirst and the still the s
 source article's photo, a trailer's YouTube thumbnail, the article's own image, or a TMDB backdrop for
 a watchlist's first film); `--dry-run` lists what it would touch and `--limit N` takes the newest N.
 
+### Filmybuff's curated day
+
+filmybuff.com is a curated cinema account, not a wire, so its day is the formats and the news post is
+held to three hours (`news_hours: [9, 14, 20]` on the site; the other sites keep every cycle):
+
+| Hour (IST) | Format | Module |
+|---|---|---|
+| 8, 12, 17 | **Deep dive**: "Did you know" trivia or "The breakdown" on one film, six to nine facts from its Wikipedia page, a different frame from the film on every slide, credited to Wikipedia (CC BY-SA) and TMDB | `deepdives.py` |
+| 10, 16 | **Watchlist** or **ranked list**: a theme and six to eight films, or an actor's or director's work ranked, one honest line each, posters from TMDB | `watchlists.py` |
+| 11, 19 | **Trailer**: this week's trailer, teaser or first look, the studio's own upload in the frame | `trailers.py` |
+| 13, 21 | **The scene**: an iconic or viral scene, song or monologue, only from the rights holder's own channel, fetched and posted as the article's video and the reel, credited | `scenes.py` |
+| 9, 14, 20 | **News**, written in the house shapes (the poster, unpopular opinion, what to watch this weekend) | `pipeline.py` |
+
+Subjects come from TMDB (what is trending this week, films turning 5, 10, 15... years this week:
+`tmdb.trending`, `tmdb.anniversaries`) and from the week's news; nothing is repeated across the fleet
+(`scenes_used`, `deepdives_used`, `watchlists_used`, `trailers_used`). A scene is used only when
+YouTube has it on the studio's, streamer's, label's or catalogue channel's own account
+(`youtube.find_scene`); a fan's or a reaction channel's upload never qualifies. Trivia is written from
+the page text alone, with the writer told so.
+
+```bash
+docker compose run --rm autopub python -m autopub scene --site FILMYBUFF --dry-run      # the pick and the upload, nothing published
+docker compose run --rm autopub python -m autopub deepdive --site FILMYBUFF --dry-run   # the film, the shape and the page
+docker compose run --rm autopub python -m autopub deepdive --site FILMYBUFF             # publish one now
+```
+
 ### Filmybuff's stills come from the film
 
 On a poster-style site the writer names the one film or series a story is about (`film` in the

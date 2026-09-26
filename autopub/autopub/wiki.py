@@ -294,3 +294,58 @@ def lead_image(title: str) -> dict | None:
             "height": int(original.get("height") or 0), "artist": meta.get("Artist", "").strip()[:60] or "Wikimedia Commons",
             "license": licence, "license_url": meta.get("LicenseUrl", ""),
             "page": f"https://commons.wikimedia.org/wiki/File:{name}"}
+
+
+# ---- a film's page, by section ------------------------------------------------------------------------
+
+@dataclass
+class FilmPage:
+    title: str
+    url: str
+    lead: str
+    sections: dict[str, str]
+
+    @property
+    def text(self) -> str:
+        parts = [f"LEAD:\n{self.lead}"] + [f"{name.upper()}:\n{body}" for name, body in self.sections.items()]
+        return "\n\n".join(parts)
+
+
+WANTED_SECTIONS = ("plot", "production", "development", "pre-production", "casting", "filming", "post-production", "music",
+                   "soundtrack", "themes", "release", "marketing", "reception", "box office", "critical response", "accolades",
+                   "awards", "legacy", "controversy", "controversies", "sequel", "home media", "visual effects", "cinematography")
+_HEADING = re.compile(r"<h([2-4])[^>]*>(.*?)</h\1>", re.S)
+
+
+def film_page(film: str, year: int | str | None = None, cap: int = 2600) -> FilmPage | None:
+    """The film's English Wikipedia page split into the sections trivia comes from, each capped, or None."""
+    want = re.sub(r"[^a-z0-9]", "", film.lower())
+    queries = [f"{film} ({year} film)", f"{film} {year} film", f"{film} film"] if year else [f"{film} film", film]
+    got = None
+    for q in queries:
+        for title in search(q)[:4]:
+            if want and want in re.sub(r"[^a-z0-9]", "", title.lower()):
+                got = page_html(title)
+                if got:
+                    break
+        if got:
+            break
+    if not got:
+        return None
+    title, html = got
+    html = re.sub(r"<table.*?</table>", " ", html, flags=re.S)             # infoboxes and cast tables are not prose
+    html = re.sub(r"<div class=\"(?:reflist|navbox|hatnote)[^>]*>.*?</div>", " ", html, flags=re.S)
+    pieces = _HEADING.split(html)
+    lead = _text(pieces[0])[:1800]
+    sections: dict[str, str] = {}
+    for i in range(1, len(pieces) - 2, 3):
+        name = _text(pieces[i + 1]).split("[")[0].strip()
+        body = _text(pieces[i + 2])
+        low = name.lower()
+        if any(low.startswith(w) or w in low for w in WANTED_SECTIONS) and len(body) > 120:
+            sections[name] = body[:cap]
+        if sum(len(v) for v in sections.values()) > 9000:
+            break
+    if not lead and not sections:
+        return None
+    return FilmPage(title=title, url=f"https://en.wikipedia.org/wiki/{title.replace(' ', '_')}", lead=lead, sections=sections)

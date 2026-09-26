@@ -10,7 +10,7 @@ import time
 
 from pathlib import Path
 
-from . import adclip, cards, carousels, config, images, nostalgia, rank, refresh, scorecards, sources, trailers, video, watchlists
+from . import adclip, cards, carousels, config, deepdives, images, nostalgia, rank, refresh, scenes, scorecards, sources, trailers, video, watchlists
 from .pipeline import make_wordpress, run_all
 from .rewrite import effective_model
 from .social import build_publishers
@@ -440,6 +440,72 @@ def cmd_trailer(settings, args) -> int:
     return rc
 
 
+def cmd_scene(settings, args) -> int:
+    """Publish a scene feature now, or --dry-run to see the pick and the upload it would fetch."""
+    from .pipeline import RunReport
+    from .rewrite import Rewriter
+    state = State(settings.data_dir / "autopub.db", settings.dedupe_across_sites)
+    rewriter = Rewriter(model=effective_model(settings.llm_model), effort=settings.llm_effort)
+    rc = 0
+    for site in settings.sites:
+        if args.site and site.key != args.site.upper():
+            continue
+        if not site.scenes and not args.site:
+            continue
+        used = scenes.parse_used(state.note(site.key, scenes.USED_NOTE))
+        print(f"\n[{site.key}] {site.domain}: {len(used)} scenes so far")
+        if args.dry_run:
+            trending, news = scenes.subjects(site, settings, state)
+            print(f"  trending: {', '.join(trending[:6]) or 'unknown'}")
+            choice = scenes.pick(rewriter, site, trending, news, scenes.fleet_used(state) or used)
+            if choice is None:
+                print("  the model offered no scene"); rc = 1; continue
+            print(f"  pick: {choice.film} ({choice.year}) {choice.kind}: {choice.scene}\n  why: {choice.hook}\n  query: {choice.query}")
+            clip = scenes.youtube.find_scene(choice.film, choice.query, choice.studio, choice.year)
+            print(f"  upload: {clip['url'] + '  ' + clip['title'][:60] + '  [' + clip['channel'] + ']' if clip else 'NOT FOUND on a rights holder channel'}")
+            continue
+        report = RunReport(site=site.key)
+        ok = scenes.publish_daily(site, settings, state, rewriter, make_wordpress(site), build_publishers(site), settings.data_dir / "images", report)
+        print(f"  {'published' if ok else 'nothing published'}: {report.summary()}")
+        for link in report.published:
+            print("  ->", link)
+        rc = rc or (0 if ok else 1)
+    return rc
+
+
+def cmd_deepdive(settings, args) -> int:
+    """Publish a trivia or breakdown carousel now, or --dry-run to see the pick and the page it would use."""
+    from .pipeline import RunReport
+    from .rewrite import Rewriter
+    state = State(settings.data_dir / "autopub.db", settings.dedupe_across_sites)
+    rewriter = Rewriter(model=effective_model(settings.llm_model), effort=settings.llm_effort)
+    rc = 0
+    for site in settings.sites:
+        if args.site and site.key != args.site.upper():
+            continue
+        if not site.deepdives and not args.site:
+            continue
+        used = deepdives.parse_used(state.note(site.key, deepdives.USED_NOTE))
+        print(f"\n[{site.key}] {site.domain}: {len(used)} deep dives so far")
+        if args.dry_run:
+            anniv, trending, news = deepdives.subjects(site, settings)
+            print(f"  anniversaries: {', '.join(anniv[:6]) or 'unknown'}")
+            choice = deepdives.pick(rewriter, site, anniv, trending, news, deepdives.fleet_used(state) or used)
+            if choice is None:
+                print("  the model offered no film"); rc = 1; continue
+            print(f"  pick: {choice.film} ({choice.year}) {choice.kind}: {choice.angle}\n  why: {choice.why}")
+            page = deepdives.wiki.film_page(choice.film, choice.year)
+            print(f"  page: {page.url + '  ' + str(len(page.text)) + ' chars, sections: ' + ', '.join(page.sections) if page else 'NOT FOUND'}")
+            continue
+        report = RunReport(site=site.key)
+        ok = deepdives.publish_daily(site, settings, state, rewriter, make_wordpress(site), build_publishers(site), settings.data_dir / "images", report)
+        print(f"  {'published' if ok else 'nothing published'}: {report.summary()}")
+        for link in report.published:
+            print("  ->", link)
+        rc = rc or (0 if ok else 1)
+    return rc
+
+
 def cmd_adclip(settings, args) -> int:
     """Fetch an ad film (or take --file) and render it inside the site's reel frame, to be eyeballed
     before repost_ads goes live. Publishes nothing."""
@@ -570,6 +636,10 @@ def main(argv=None) -> int:
     wl = sub.add_parser("watchlist", help="publish a curated watchlist now, or --dry-run to see the list")
     wl.add_argument("--site"); wl.add_argument("--theme", help="the theme to use instead of letting the model choose")
     wl.add_argument("--dry-run", action="store_true")
+    sc_ = sub.add_parser("scene", help="publish a scene feature now (the rights holder's upload, in the frame), or --dry-run")
+    sc_.add_argument("--site"); sc_.add_argument("--dry-run", action="store_true")
+    dd = sub.add_parser("deepdive", help="publish a trivia or breakdown carousel on one film now, or --dry-run")
+    dd.add_argument("--site"); dd.add_argument("--dry-run", action="store_true")
     ac = sub.add_parser("adclip", help="fetch an ad film and render it inside the site's reel frame, for a look (posts nothing)")
     ac.add_argument("--site", required=True); ac.add_argument("--url", help="the YouTube link of the brand's own upload")
     ac.add_argument("--file", help="an MP4 already on disk, instead of --url"); ac.add_argument("--out", help="directory to write into")
@@ -586,7 +656,7 @@ def main(argv=None) -> int:
     commands = {"serve": cmd_serve, "run": cmd_run, "check": cmd_check, "sources": cmd_sources,
                 "status": cmd_status, "cards": cmd_cards, "instagram-probe": cmd_instagram_probe,
                 "nostalgia": cmd_nostalgia, "scorecard": cmd_scorecard, "adclip": cmd_adclip, "watchlist": cmd_watchlist, "trailer": cmd_trailer,
-                "refresh-featured": cmd_refresh_featured}
+                "refresh-featured": cmd_refresh_featured, "scene": cmd_scene, "deepdive": cmd_deepdive}
     return commands[args.cmd](settings, args)
 
 
