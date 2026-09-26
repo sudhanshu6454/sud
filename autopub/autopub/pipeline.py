@@ -9,7 +9,7 @@ from pathlib import Path
 
 from slugify import slugify
 
-from . import adclip, cards, carousels, extract, followups, images, music, nostalgia, rank, scorecards, sources, speech, trailers, video, watchlists
+from . import adclip, cards, carousels, extract, followups, images, music, nostalgia, rank, scorecards, sources, speech, trailers, video, watchlists, tmdb
 from .config import Settings, Site
 from .rewrite import CuratedPost, Rewriter, RewriteSkipped, effective_model
 from .social import SocialPost, build_publishers, dispatch
@@ -163,6 +163,14 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
     stem = slugify(post.slug or post.title)[:60] or f"post-{int(time.time())}"
     if use_source_image is None:
         use_source_image = site.use_source_image
+    if site.brand.style == "poster" and post.film and not (image_url or "").startswith(tmdb.IMG):
+        # the poster's still is a frame from the film itself, never the source's press photo
+        frame_hit = tmdb.film_still(post.film.title, post.film.year, settings.request_timeout)
+        if frame_hit:
+            log.info("[%s] still from the film: %s (%s)", site.key, frame_hit["title"], frame_hit["year"] or "?")
+            image_url, credit, use_source_image = frame_hit["url"], frame_hit["credit"], True
+        else:
+            log.info("[%s] no still on TMDB for %r; the source's photo stays", site.key, post.film.title)
     history = cards.parse_history(state.note(site.key, "card_formats"))
     kind = card_brief.kind if card_brief is not None else cards.choose(history, post.card, photo=bool(use_source_image and image_url))
     kicker = post.image_kicker or post.category or site.category

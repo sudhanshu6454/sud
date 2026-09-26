@@ -87,6 +87,11 @@ class Debate(BaseModel):
     options: list[str] = Field(default_factory=list)
 
 
+class Film(BaseModel):
+    title: str = Field(max_length=120)
+    year: int | None = None
+
+
 class CuratedPost(BaseModel):
     title: str = Field(max_length=120)
     category: str = ""
@@ -107,6 +112,7 @@ class CuratedPost(BaseModel):
     debate: Debate | None = None        # the arguable question, when the story genuinely raises one
     hot_take: str | None = Field(default=None, max_length=150)     # throwback features only: one bold, arguable line
     mood: str | None = None             # upbeat | calm | serious | nostalgic: sets the reel's music bed
+    film: Film | None = None            # poster sites: the one film or series the story is about; the poster's still is a frame from it
 
 
 OUTPUT_SCHEMA: dict[str, Any] = {
@@ -255,7 +261,19 @@ def schema_for(site: Site, carousel: bool = False) -> dict[str, Any]:
     if carousel:
         schema["properties"]["carousel_slides"] = deepcopy(CAROUSEL_SCHEMA)
         schema["required"] = [*schema["required"], "carousel_slides"]
+    if site.brand.style == "poster":
+        schema["properties"]["film"] = deepcopy(FILM_SCHEMA)
     return schema
+
+
+FILM_SCHEMA: dict[str, Any] = {
+    "type": "object", "additionalProperties": False, "required": ["title"],
+    "description": ("The ONE film or series this story is about, when there is one: the poster's still will be a frame from it. "
+                    "Give the title exactly as released (no quotes, no 'trailer'), and the year of release when known. "
+                    "Leave out when the story is about a person, a studio or the industry rather than one title."),
+    "properties": {"title": {"type": "string", "description": "The title as released"},
+                   "year": {"type": "integer", "description": "Year of release (or of the first season)"}},
+}
 
 
 class RewriteSkipped(Exception):

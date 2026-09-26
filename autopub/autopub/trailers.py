@@ -25,7 +25,7 @@ from pydantic import BaseModel, Field
 
 from . import adclip, carousels, extract, sources, youtube
 from .config import Settings, Site
-from .rewrite import JSON_CONTRACT, CuratedPost, Rewriter, schema_for
+from .rewrite import Film, JSON_CONTRACT, CuratedPost, Rewriter, schema_for
 from .state import State
 
 log = logging.getLogger(__name__)
@@ -229,6 +229,8 @@ def publish_daily(site: Site, settings: Settings, state: State, rewriter: Rewrit
         state.release(film["url"], site.key)
         state.release(article.url, site.key)
         raise RuntimeError(f"trailer feature could not be written: {exc}") from exc
+    if post.film is None:
+        post.film = Film(title=choice.film, year=choice.year)     # the poster's still is a frame from the film, not the thumbnail
     clip = fetch_film(site, settings, film, choice, work_dir)
     credit = f"{choice.film} ({choice.year}): the {choice.kind}. Video: {film['channel']} on YouTube. Shown for review."
     try:

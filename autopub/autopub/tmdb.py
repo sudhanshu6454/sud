@@ -64,3 +64,42 @@ def find(title: str, year: int | str | None = None, timeout: int = 15) -> dict |
         "backdrop": f"{IMG}/{BACKDROP_SIZE}{hit['backdrop_path']}" if hit.get("backdrop_path") else None,
         "overview": (hit.get("overview") or "")[:300],
     }
+
+
+MIN_STILL_WIDTH = 1280
+
+
+def stills(kind: str, tmdb_id: int, timeout: int = 15) -> list[dict]:
+    """The film's backdrops (frames from it, mostly without text), best first: the ones with no language
+    (no title art burned in) ahead of the rest, then by TMDB's own vote, wide enough to fill a poster."""
+    data = _get(f"/{kind}/{tmdb_id}/images", {"include_image_language": "null,en"}, timeout) or {}
+    out = []
+    for b in data.get("backdrops") or []:
+        if not b.get("file_path") or int(b.get("width") or 0) < MIN_STILL_WIDTH:
+            continue
+        out.append({"url": f"{IMG}/{BACKDROP_SIZE}{b['file_path']}", "textless": not b.get("iso_639_1"),
+                    "vote": float(b.get("vote_average") or 0), "votes": int(b.get("vote_count") or 0), "width": int(b["width"])})
+    return sorted(out, key=lambda b: (b["textless"], b["vote"], b["votes"], b["width"]), reverse=True)
+
+
+def film_still(title: str, year: int | str | None = None, timeout: int = 15, exact: bool = False) -> dict | None:
+    """An original frame from the film for the poster: the best textless backdrop, else the film's own
+    backdrop. `exact` insists the match's title is the one asked for (for lookups from a tag rather than
+    the model). Returns url, title, year, kind, id and a credit line; None when TMDB has nothing."""
+    hit = find(title, year, timeout)
+    if not hit:
+        return None
+    if exact and _norm(hit["title"]) != _norm(title):
+        return None
+    frames = stills(hit["kind"], hit["id"], timeout) if hit.get("id") else []
+    url = frames[0]["url"] if frames else hit.get("backdrop")
+    if not url:
+        return None
+    when = f" ({hit['year']})" if hit.get("year") else ""
+    return {"url": url, "title": hit["title"], "year": hit.get("year"), "kind": hit["kind"], "id": hit.get("id"),
+            "credit": f"Still: {hit['title']}{when}, via TMDB"}
+
+
+def _norm(text: str) -> str:
+    import re
+    return re.sub(r"[^a-z0-9]", "", (text or "").lower())

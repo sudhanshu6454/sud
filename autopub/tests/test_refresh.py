@@ -13,7 +13,7 @@ class UpdatingWP(FakeWP):
 
     content = {}
 
-    def get_post(self, post_id):
+    def get_post(self, post_id, embed_terms=False):
         return {"id": post_id, "content": {"rendered": self.content.get(post_id, "")}, "title": {"rendered": f"Post &#8216;{post_id}&#8217;"},
                 "excerpt": {"rendered": "<p>The standfirst, in one breath. [&hellip;]</p>"}, "categories": [1, 7]}
 
@@ -53,11 +53,12 @@ def test_the_still_comes_from_the_article_the_upload_or_nowhere(monkeypatch, set
 def test_a_watchlist_gets_the_backdrop_of_its_first_film_and_a_scorecard_its_portrait(monkeypatch, settings, tmp_path):
     site = settings.site("FILMYBUFF")
     asked = []
-    monkeypatch.setattr(tmdb, "find", lambda title, year=None, timeout=15: (asked.append((title, year)), {"backdrop": "https://tmdb/lunchbox.jpg"} if title == "The Lunchbox" else {"backdrop": None})[1])
+    monkeypatch.setattr(tmdb, "film_still", lambda title, year=None, timeout=15, exact=False: (asked.append((title, year)), {"url": "https://tmdb/lunchbox.jpg", "title": title, "year": year, "kind": "movie", "id": 1, "credit": "c"} if title == "The Lunchbox" else None)[1])
     table = "<table><tr><td>1</td><td><strong>Ramen Western</strong> (2019)</td><td>Japanese</td></tr><tr><td>2</td><td><strong>The Lunchbox</strong> (2013)</td><td>Hindi</td></tr></table>"
     assert refresh.still_in_post(table) == "https://tmdb/lunchbox.jpg"
     assert asked == [("Ramen Western", "2019"), ("The Lunchbox", "2013")]
-    assert refresh.still_in_post('<figure><img src="https://site/portrait.jpg" alt="x"></figure>' + table) == "https://site/portrait.jpg"
+    assert refresh.still_in_post('<figure><img src="https://site/portrait.jpg" alt="x"></figure>') == "https://site/portrait.jpg", "no film named: the article's own image"
+    assert refresh.still_in_post('<figure><img src="https://site/portrait.jpg" alt="x"></figure>' + table) == "https://tmdb/lunchbox.jpg", "a film named beats the image"
     assert refresh.still_in_post("<p>no pictures</p>") is None
     # the refresh reads the post for our own claim urls, and only for those
     state = _state(tmp_path, site)

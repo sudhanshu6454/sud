@@ -58,8 +58,10 @@ class WordPress:
         log.info("uploaded media %s -> id=%s url=%s", path.name, media_id, media.get("source_url"))  # type: ignore[union-attr]
         return media  # type: ignore[return-value]
 
-    def get_post(self, post_id: int) -> dict:
-        return self._request("GET", f"posts/{post_id}")  # type: ignore[return-value]
+    def get_post(self, post_id: int, embed_terms: bool = False) -> dict:
+        """The post; with `embed_terms`, its categories and tags come along under _embedded['wp:term']."""
+        params = {"_embed": "wp:term"} if embed_terms else {}
+        return self._request("GET", f"posts/{post_id}", params=params)  # type: ignore[return-value]
 
     def get_category(self, term_id: int) -> dict:
         return self._request("GET", f"categories/{term_id}")  # type: ignore[return-value]

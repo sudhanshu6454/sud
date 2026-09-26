@@ -25,26 +25,47 @@ _IMG = re.compile(r"<img[^>]+src=[\"']([^\"']+)[\"']", re.I)
 _FILM = re.compile(r"<td><strong>([^<]+)</strong>(?:\s*\((\d{4})\))?</td>")
 
 
-def still_in_post(content: str, timeout: int = 15) -> str | None:
-    """A still from the article itself: the first image it carries (a scorecard's portrait), else the
-    backdrop TMDB has for the first film in a watchlist's table."""
-    m = _IMG.search(content or "")
-    if m:
-        return m.group(1)
+def film_frame(content: str, tags: list[str], timeout: int = 15) -> str | None:
+    """An original frame from the film the post is about, from TMDB: a tag that is a film's exact title
+    (the writer tags the film), else the first film in a watchlist's table. None when no film is named."""
+    for tag in (tags or [])[:8]:
+        if len(tag) < 3:
+            continue
+        try:
+            hit = tmdb.film_still(tag, None, timeout, exact=True)
+        except Exception as exc:  # noqa: BLE001
+            log.debug("tmdb lookup failed for %r: %s", tag, exc)
+            hit = None
+        if hit:
+            return hit["url"]
     for title, year in _FILM.findall(content or "")[:4]:
         try:
-            hit = tmdb.find(title, year or None, timeout)
+            hit = tmdb.film_still(title, year or None, timeout)
         except Exception as exc:  # noqa: BLE001
             log.debug("tmdb lookup failed for %r: %s", title, exc)
             hit = None
-        if hit and hit.get("backdrop"):
-            return hit["backdrop"]
+        if hit:
+            return hit["url"]
     return None
 
 
-def source_still(url: str, site: Site, timeout: int = 20, content: str = "") -> str | None:
-    """Where the story's still comes from: a trailer's or ad's YouTube thumbnail, the source article's
-    own photo, or what the post itself carries. None when there is nothing to fetch."""
+def still_in_post(content: str, timeout: int = 15, tags: list[str] | None = None) -> str | None:
+    """A still from the post itself: a frame from the film it names (tags, or a watchlist's table), else
+    the first image the article carries (a scorecard's portrait)."""
+    got = film_frame(content, tags or [], timeout)
+    if got:
+        return got
+    m = _IMG.search(content or "")
+    return m.group(1) if m else None
+
+
+def source_still(url: str, site: Site, timeout: int = 20, content: str = "", tags: list[str] | None = None) -> str | None:
+    """Where the story's still comes from: a frame from the film it names first, then a trailer's or ad's
+    YouTube thumbnail, the source article's own photo, or what the post itself carries. None when there
+    is nothing to fetch."""
+    frame = film_frame(content, tags or [], timeout)
+    if frame:
+        return frame
     m = _YT.search(url or "")
     if m:
         return f"https://i.ytimg.com/vi/{m.group(1)}/maxresdefault.jpg"
@@ -56,7 +77,8 @@ def source_still(url: str, site: Site, timeout: int = 20, content: str = "") -> 
             got = None
         if got:
             return got
-    return still_in_post(content, timeout)
+    m = _IMG.search(content or "")
+    return m.group(1) if m else None
 
 
 def _text(rendered: str) -> str:
@@ -76,22 +98,25 @@ def refresh(site: Site, settings: Settings, state: State, wp, work_dir: Path, *,
     sections: dict[int, str] = {}
     for row in rows:
         post_id, url, title = int(row["wp_post_id"]), row["url"], row["title"] or ""
-        content, standfirst, kicker = "", "", site.category
+        content, standfirst, kicker, tags = "", "", site.category, []
         if wp is not None:
             try:
-                post = wp.get_post(post_id)
+                post = wp.get_post(post_id, embed_terms=True)
                 content = (post.get("content") or {}).get("rendered") or ""
                 title = _text((post.get("title") or {}).get("rendered") or "") or title
                 standfirst = _text((post.get("excerpt") or {}).get("rendered") or "")
-                for cid in post.get("categories") or []:
-                    if cid not in sections:
-                        sections[cid] = (wp.get_category(cid) or {}).get("name") or ""
-                    if sections[cid] and sections[cid].lower() != "uncategorized":
-                        kicker = sections[cid]
-                        break
+                embedded = [t for group in (post.get("_embedded") or {}).get("wp:term") or [] for t in group]
+                tags = [t.get("name") or "" for t in embedded if t.get("taxonomy") == "post_tag"]
+                names = [t.get("name") or "" for t in embedded if t.get("taxonomy") == "category"]
+                if not names:
+                    for cid in post.get("categories") or []:
+                        if cid not in sections:
+                            sections[cid] = (wp.get_category(cid) or {}).get("name") or ""
+                        names.append(sections[cid])
+                kicker = next((n for n in names if n and n.lower() != "uncategorized"), kicker)
             except Exception as exc:  # noqa: BLE001 - the post may be gone; the state's title is the fallback
                 log.warning("[%s] could not read post %s: %s", site.key, post_id, exc)
-        still = source_still(url, site, settings.request_timeout, content)
+        still = source_still(url, site, settings.request_timeout, content, tags)
         label = still or "ground"
         if dry_run:
             done.append((post_id, label))

@@ -308,6 +308,18 @@ published, from the post's own title, section and standfirst and the still the s
 source article's photo, a trailer's YouTube thumbnail, the article's own image, or a TMDB backdrop for
 a watchlist's first film); `--dry-run` lists what it would touch and `--limit N` takes the newest N.
 
+### Filmybuff's stills come from the film
+
+On a poster-style site the writer names the one film or series a story is about (`film` in the
+schema, only there), and the poster's still is an original frame from it: `tmdb.film_still` takes
+the film's best textless backdrop from TMDB (no title art burned in, wide enough for the poster),
+falling back to the film's own backdrop. The source's press photo is used only when the story is
+about a person, a studio or the industry rather than one title, or when TMDB has nothing. Trailer
+features name their film the same way, so the poster is a frame rather than the YouTube thumbnail;
+watchlists already use the first film's backdrop. `refresh-featured` does the same for older posts,
+from a tag that is a film's exact title or a watchlist's table. The credit on the poster reads
+"Still: Film (Year), via TMDB".
+
 ### Image quality
 
 Every still is fetched as the largest copy its URL points to (`images.photo_upgrades`: the WordPress
