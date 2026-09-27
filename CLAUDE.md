@@ -42,3 +42,15 @@ OpenSEO runs beside the fleet (`openseo` service, loopback and internal network 
 autopub asks it for target keywords before every news article and can track rankings
 (`python -m autopub seo ...`). Its UI is reached over `ssh -L 3001:127.0.0.1:3001 root@SERVER`; the
 repo's `.mcp.json` points Claude Code at it through that tunnel. Never expose port 3001 publicly.
+
+## Google Search Console
+
+Google Search Console (GSC) MCP server (`mcp-search-console`) integrated for SEO analysis. Use it to:
+- Track which queries bring visitors to filmybuff.com and other sites
+- Monitor indexing status of published pages
+- Analyze click-through rates (CTR) and impressions
+- Compare performance between time periods
+- Inspect URLs for indexing issues
+
+First auth: Call `get_capabilities` to trigger OAuth browser flow. Uses your Google account.
+Then ask Claude to analyze search queries, top pages, indexing status, etc. over any date range.

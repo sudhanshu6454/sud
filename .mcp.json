@@ -3,6 +3,15 @@
     "openseo": {
       "type": "http",
       "url": "http://localhost:3001/mcp"
+    },
+    "gsc": {
+      "command": "uvx",
+      "args": ["mcp-search-console"],
+      "env": {
+        "GSC_CREDENTIALS_PATH": "",
+        "GSC_OAUTH_CLIENT_SECRETS_FILE": "",
+        "GSC_DATA_STATE": "all"
+      }
     }
   }
 }
