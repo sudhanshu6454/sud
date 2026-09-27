@@ -355,7 +355,7 @@ class Rewriter:
         self.last_usage = response.usage
         return result
 
-    def rewrite(self, site: Site, article: Article, carousel: bool = False) -> CuratedPost:
+    def rewrite(self, site: Site, article: Article, carousel: bool = False, keywords: list[dict] | None = None) -> CuratedPost:
         schema = schema_for(site, carousel)
         # Appended after .format() so the schema's own braces are never read as format placeholders.
         system = SYSTEM_PROMPT.format(
@@ -363,13 +363,15 @@ class Rewriter:
             niche=site.niche, audience=site.audience, tone=site.tone,
             sections=", ".join(site.categories or [site.category]),
         ) + house_formats(site) + (CAROUSEL_PROMPT if carousel else "") + JSON_CONTRACT.format(schema=json.dumps(schema))
+        from . import seo
         user = (
             f"SOURCE_URL: {article.url}\n"
             f"SOURCE_NAME: {article.sitename or article.url.split('/')[2]}\n"
             f"SOURCE_TITLE: {article.title}\n"
             f"SOURCE_DATE: {article.date or 'unknown'}\n"
             f"SITE_HASHTAGS (use some in instagram/twitter captions): {' '.join('#' + h for h in site.hashtags)}\n\n"
-            f"SOURCE_TEXT:\n{article.text}"
+            + seo.brief(keywords or [])
+            + f"SOURCE_TEXT:\n{article.text}"
         )
         post = self.ask(system, user, schema, CuratedPost.model_validate)
         post.tags = [t.strip() for t in post.tags if t and t.strip()][:8]

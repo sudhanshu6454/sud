@@ -32,7 +32,7 @@ class FakeRewriter:
             return self.picks.pop(0)
         return self.post
 
-    def rewrite(self, site, article, carousel=False):
+    def rewrite(self, site, article, carousel=False, keywords=None):
         raise AssertionError("the throwback never goes through the news rewriter")
 
 

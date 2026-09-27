@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import os
 import random
@@ -10,7 +11,7 @@ import time
 
 from pathlib import Path
 
-from . import adclip, cards, carousels, config, deepdives, images, nostalgia, rank, refresh, scenes, scorecards, sources, trailers, video, watchlists
+from . import adclip, cards, carousels, config, deepdives, images, nostalgia, rank, refresh, scenes, scorecards, seo, sources, trailers, video, watchlists
 from .pipeline import make_wordpress, run_all
 from .rewrite import effective_model
 from .social import build_publishers
@@ -508,6 +509,45 @@ def cmd_deepdive(settings, args) -> int:
     return rc
 
 
+def cmd_seo(settings, args) -> int:
+    """OpenSEO: whoami, setup (a project per site), research --site --seed, track --site (rank tracking), report --site."""
+    if not seo.enabled():
+        print("OPENSEO_URL is not set (in the fleet it is http://openseo:3001/mcp); nothing to talk to"); return 1
+    client = seo.Client(timeout=120)
+    sites = [s for s in settings.sites if not args.site or s.key == args.site.upper()]
+    if args.action == "whoami":
+        who = client.call("whoami")
+        print(f"  {who.get('userEmail')}  mode={who.get('mode')}  credits={who.get('creditsRemaining')}")
+        print(f"  tools: {', '.join(client.tools())}")
+        return 0
+    if args.action == "setup":
+        for site in sites:
+            print(f"  [{site.key}] {site.domain}: project {seo.project_for(client, site.name, site.domain)}")
+        return 0
+    if args.action == "research":
+        if not args.site:
+            print("--site is needed"); return 1
+        site = sites[0]
+        seed = args.seed or seo.seed_from(args.title or "")
+        if not seed:
+            print("--seed or --title is needed"); return 1
+        rows = seo.research(client, seo.project_for(client, site.name, site.domain), [seed])
+        print(f"  [{site.key}] {len(rows)} keywords for {seed!r}; the targets:")
+        for r in seo.targets(rows):
+            print(f"    {r['keyword']}  {int(r['volume'] or 0)}/mo  KD {r['difficulty'] if r['difficulty'] is not None else '-'}  {r['intent']}")
+        return 0
+    if args.action in ("track", "report"):
+        if not args.site:
+            print("--site is needed"); return 1
+        site = sites[0]
+        pid = seo.project_for(client, site.name, site.domain)
+        keywords = [k.strip() for k in (args.keywords or "").split(",") if k.strip()]
+        got = seo.track(client, pid, site.domain, keywords, run=args.action == "track")
+        print(f"  [{site.key}] tracker: {json.dumps(got, indent=1)[:3000]}")
+        return 0
+    return 1
+
+
 def cmd_adclip(settings, args) -> int:
     """Fetch an ad film (or take --file) and render it inside the site's reel frame, to be eyeballed
     before repost_ads goes live. Publishes nothing."""
@@ -642,6 +682,9 @@ def main(argv=None) -> int:
     sc_.add_argument("--site"); sc_.add_argument("--dry-run", action="store_true")
     dd = sub.add_parser("deepdive", help="publish a trivia or breakdown carousel on one film now, or --dry-run")
     dd.add_argument("--site"); dd.add_argument("--dry-run", action="store_true")
+    se = sub.add_parser("seo", help="OpenSEO: whoami | setup | research --site X --seed '...' | track --site X --keywords 'a,b' | report --site X")
+    se.add_argument("action", choices=["whoami", "setup", "research", "track", "report"]); se.add_argument("--site"); se.add_argument("--seed")
+    se.add_argument("--title", help="a story title to turn into a seed"); se.add_argument("--keywords", help="comma-separated keywords to track")
     ac = sub.add_parser("adclip", help="fetch an ad film and render it inside the site's reel frame, for a look (posts nothing)")
     ac.add_argument("--site", required=True); ac.add_argument("--url", help="the YouTube link of the brand's own upload")
     ac.add_argument("--file", help="an MP4 already on disk, instead of --url"); ac.add_argument("--out", help="directory to write into")
@@ -658,7 +701,7 @@ def main(argv=None) -> int:
     commands = {"serve": cmd_serve, "run": cmd_run, "check": cmd_check, "sources": cmd_sources,
                 "status": cmd_status, "cards": cmd_cards, "instagram-probe": cmd_instagram_probe,
                 "nostalgia": cmd_nostalgia, "scorecard": cmd_scorecard, "adclip": cmd_adclip, "watchlist": cmd_watchlist, "trailer": cmd_trailer,
-                "refresh-featured": cmd_refresh_featured, "scene": cmd_scene, "deepdive": cmd_deepdive}
+                "refresh-featured": cmd_refresh_featured, "scene": cmd_scene, "deepdive": cmd_deepdive, "seo": cmd_seo}
     return commands[args.cmd](settings, args)
 
 

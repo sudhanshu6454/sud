@@ -39,7 +39,7 @@ class HookRewriter:
     def __init__(self, **extra):
         self.extra = extra
 
-    def rewrite(self, site, article, carousel=False):
+    def rewrite(self, site, article, carousel=False, keywords=None):
         return CuratedPost(
             title=f"Curated: {article.title}", category="Campaigns", slug=article.title.lower(), excerpt="e" * 120,
             body_html="<p>x</p>", tags=["a"], image_headline="Kantar: price is no longer the first filter", image_kicker="Pricing",

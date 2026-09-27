@@ -127,6 +127,7 @@ def build(sites: list[dict]) -> dict:
             "AUTOPUB_WP_INTERNAL": "true",
             "AUTOPUB_CONFIG": "/app/config/sites.yaml",
             "AUTOPUB_DATA_DIR": "/data",
+            "OPENSEO_URL": "${OPENSEO_URL:-http://openseo:3001/mcp}",
             "TZ": "${TZ:-Asia/Kolkata}",
         },
         "volumes": ["autopub_data:/data", "./autopub/config:/app/config:ro"],
@@ -137,6 +138,31 @@ def build(sites: list[dict]) -> dict:
         "cap_drop": ["ALL"],
         "security_opt": ["no-new-privileges:true"],
     }
+
+    # OpenSEO (github.com/every-app/open-seo): search data for the writer and rank tracking, self-hosted.
+    # Docker mode runs with app auth off, so it is bound to the server's loopback only (reach the UI over
+    # an SSH tunnel) and to the internal network, where autopub calls its MCP server at openseo:3001/mcp.
+    services["openseo"] = {
+        "image": "${OPEN_SEO_IMAGE:-ghcr.io/every-app/open-seo:latest}",
+        "container_name": "openseo",
+        "restart": "unless-stopped",
+        "env_file": [{"path": ".env", "required": False}],
+        "environment": {
+            "CLOUDFLARE_INCLUDE_PROCESS_ENV": "true",
+            "PORT": "3001",
+            "AUTH_MODE": "local_noauth",
+            "ALLOWED_HOST": "${OPENSEO_ALLOWED_HOST:-}",
+            "DATAFORSEO_API_KEY": "${DATAFORSEO_API_KEY:-}",
+            "OPENROUTER_API_KEY": "${OPENROUTER_API_KEY:-}",
+            "OPENSEO_TELEMETRY_DISABLED": "${OPENSEO_TELEMETRY_DISABLED:-1}",
+            "VITE_SHOW_DEVTOOLS": "false",
+            "TZ": "${TZ:-Asia/Kolkata}",
+        },
+        "ports": ["127.0.0.1:3001:3001"],
+        "volumes": ["openseo_data:/app/.wrangler"],
+        "networks": ["internal", "web"],
+    }
+    volumes["openseo_data"] = {}
 
     services["pulse_worker"] = {
         "build": "./pulse-worker",

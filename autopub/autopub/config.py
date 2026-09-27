@@ -142,6 +142,9 @@ class Settings:
     # THE HOUSE RULE FOR CINEMA CLIPS: a scene never runs longer than this anywhere it is posted (the
     # article's video, the reel, the Facebook video); trailers are the one exception (ad_clip_max_seconds)
     scene_clip_max_seconds: int = 30
+    # OpenSEO: research the story's keywords before each news article is written (one seed per article,
+    # DataForSEO credits) and hand the best to the writer; needs OPENSEO_URL in the environment
+    seo_keywords: bool = True
     # Trivia and breakdown carousels (sites with deepdives: true): one film, six to nine facts from its
     # Wikipedia page, one frame from the film per slide
     deepdive_hours: list[int] = field(default_factory=lambda: [8, 12, 17])

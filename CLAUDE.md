@@ -35,3 +35,10 @@ Secrets are entered through hidden prompts, never printed. Commands given to the
 lines with no placeholders; the server has no `make`, no node, no `dig`. Rebuild with
 `cd /opt/marketing-fleet && git fetch origin && git merge --ff-only origin/claude/wordpress-multisite-auto-publish-o2zlsd && docker compose up -d --build --remove-orphans`
 and ship themes with `./infra/wp/deploy-themes.sh`.
+
+## OpenSEO
+
+OpenSEO runs beside the fleet (`openseo` service, loopback and internal network only, no app auth).
+autopub asks it for target keywords before every news article and can track rankings
+(`python -m autopub seo ...`). Its UI is reached over `ssh -L 3001:127.0.0.1:3001 root@SERVER`; the
+repo's `.mcp.json` points Claude Code at it through that tunnel. Never expose port 3001 publicly.

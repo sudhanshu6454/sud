@@ -9,7 +9,7 @@ from pathlib import Path
 
 from slugify import slugify
 
-from . import adclip, cards, carousels, deepdives, extract, followups, images, music, nostalgia, poster, rank, scenes, scorecards, sources, speech, trailers, video, watchlists, tmdb
+from . import adclip, cards, carousels, deepdives, extract, followups, images, music, nostalgia, poster, rank, scenes, scorecards, seo, sources, speech, trailers, video, watchlists, tmdb
 from .config import Settings, Site
 from .rewrite import CuratedPost, Rewriter, RewriteSkipped, effective_model
 from .social import SocialPost, build_publishers, dispatch
@@ -102,8 +102,9 @@ def publish_one(site: Site, settings: Settings, state: State, cand: sources.Cand
     reel_log = carousels.parse_log(state.note(site.key, REEL_NOTE))
     want_reel = (any(p.wants_video for p in publishers)
                  and carousels.due(time.time(), reel_log, settings.reel_hours, settings.timezone))
+    keywords = seo.keywords_for_story(site.name, site.domain, article.title, timeout=settings.request_timeout) if settings.seo_keywords else []
     try:
-        post: CuratedPost = rewriter.rewrite(site, article, carousel=want_carousel)
+        post: CuratedPost = rewriter.rewrite(site, article, carousel=want_carousel, keywords=keywords)
     except RewriteSkipped as exc:
         state.mark_skipped(url, site.key, str(exc))
         report.skipped += 1

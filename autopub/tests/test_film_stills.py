@@ -49,7 +49,7 @@ def test_a_filmybuff_story_that_names_a_film_is_postered_on_a_frame_from_it(monk
     monkeypatch.setattr(tmdb, "film_still", lambda title, year=None, timeout=15, exact=False: (looked.append((title, year)), {"url": "https://image.tmdb.org/t/p/original/frame.jpg", "title": "War 3", "year": 2026, "kind": "movie", "id": 7, "credit": "Still: War 3 (2026), via TMDB"})[1])
 
     class Writer:
-        def rewrite(self, site, article, carousel=False):
+        def rewrite(self, site, article, carousel=False, keywords=None):
             p = _post(); p.film = Film(title="War 3", year=2026); p.category = "Bollywood"
             return p
 
@@ -71,7 +71,7 @@ def test_a_story_about_a_person_keeps_the_sources_photo(monkeypatch, settings, t
     monkeypatch.setattr(tmdb, "film_still", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no film, no lookup")))
 
     class Writer:
-        def rewrite(self, site, article, carousel=False):
+        def rewrite(self, site, article, carousel=False, keywords=None):
             p = _post(); p.category = "Bollywood"; return p
 
     state = State(tmp_path / "s.db"); wp = FakeWP(); Recorder.seen.clear()

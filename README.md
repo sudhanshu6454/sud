@@ -308,6 +308,35 @@ published, from the post's own title, section and standfirst and the still the s
 source article's photo, a trailer's YouTube thumbnail, the article's own image, or a TMDB backdrop for
 a watchlist's first film); `--dry-run` lists what it would touch and `--limit N` takes the newest N.
 
+### OpenSEO: search data for the writer, rank tracking for the fleet
+
+[OpenSEO](https://github.com/every-app/open-seo) (an open-source Semrush/Ahrefs alternative) runs
+beside the fleet as the `openseo` service, self-hosted in its Docker mode. That mode has app auth off,
+so the service is bound to the server's loopback only (the UI is reached over an SSH tunnel) and to the
+internal network, where autopub calls its MCP server at `http://openseo:3001/mcp`. It needs a
+DataForSEO key in `.env` (`DATAFORSEO_API_KEY`, the "Base64" credentials from app.dataforseo.com;
+pay-as-you-go, a $50 minimum top-up).
+
+What the fleet does with it (`autopub/seo.py`):
+
+- **Before every news article** the story's own title is researched as a seed (`research_keywords`,
+  one seed per article, ~30-100 credits) and the keywords people actually search for, with volume and
+  difficulty, go to the writer as TARGET KEYWORDS for the title, slug, excerpt and first paragraph.
+  Keywords above difficulty 60 or with no searches are left out. Without `OPENSEO_URL`, or when the
+  service is down, the article is written as before. `seo_keywords: false` in settings switches it off.
+- **A project per site** on OpenSEO, keyed by domain, market India (`python -m autopub seo setup`).
+- **Rank tracking** on demand: `seo track --site FILMYBUFF --keywords "a,b"` creates the site's tracker,
+  adds the keywords and checks the rankings now; `seo report --site FILMYBUFF` reads it back.
+
+```bash
+ssh -L 3001:127.0.0.1:3001 root@SERVER                                            # then open http://localhost:3001
+docker compose run --rm autopub python -m autopub seo whoami                       # the connection and the tools
+docker compose run --rm autopub python -m autopub seo research --site FILMYBUFF --seed "war 3 box office"
+```
+
+`.mcp.json` at the repo root points Claude Code on your machine at the same MCP server through the
+tunnel, so the OpenSEO skills (`npx skills add every-app/open-seo`) work against your own data.
+
 ### Filmybuff's curated day
 
 filmybuff.com is a curated cinema account, not a wire, so its day is the formats and the news post is

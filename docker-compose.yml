@@ -439,6 +439,7 @@ services:
       AUTOPUB_WP_INTERNAL: 'true'
       AUTOPUB_CONFIG: /app/config/sites.yaml
       AUTOPUB_DATA_DIR: /data
+      OPENSEO_URL: ${OPENSEO_URL:-http://openseo:3001/mcp}
       TZ: ${TZ:-Asia/Kolkata}
     volumes:
     - autopub_data:/data
@@ -456,6 +457,30 @@ services:
     - ALL
     security_opt:
     - no-new-privileges:true
+  openseo:
+    image: ${OPEN_SEO_IMAGE:-ghcr.io/every-app/open-seo:latest}
+    container_name: openseo
+    restart: unless-stopped
+    env_file:
+    - path: .env
+      required: false
+    environment:
+      CLOUDFLARE_INCLUDE_PROCESS_ENV: 'true'
+      PORT: '3001'
+      AUTH_MODE: local_noauth
+      ALLOWED_HOST: ${OPENSEO_ALLOWED_HOST:-}
+      DATAFORSEO_API_KEY: ${DATAFORSEO_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENSEO_TELEMETRY_DISABLED: ${OPENSEO_TELEMETRY_DISABLED:-1}
+      VITE_SHOW_DEVTOOLS: 'false'
+      TZ: ${TZ:-Asia/Kolkata}
+    ports:
+    - 127.0.0.1:3001:3001
+    volumes:
+    - openseo_data:/app/.wrangler
+    networks:
+    - internal
+    - web
   pulse_worker:
     build: ./pulse-worker
     container_name: pulse_worker
@@ -489,4 +514,5 @@ volumes:
   wp_junkies_data: {}
   wp_screenstat_data: {}
   wp_filmybuff_data: {}
+  openseo_data: {}
   pulse_worker_data: {}

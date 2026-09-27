@@ -70,7 +70,7 @@ def _run_person_story(monkeypatch, settings, tmp_path, press_size):
     monkeypatch.setattr(tmdb, "person_still", lambda name, timeout=15, exact=False: {"url": "https://image.tmdb.org/t/p/original/best.jpg", "name": name, "id": 5, "credit": f"Photo: {name}, via TMDB"})
 
     class Writer:
-        def rewrite(self, site, article, carousel=False):
+        def rewrite(self, site, article, carousel=False, keywords=None):
             p = _post(); p.category = "Bollywood"; p.mentions = [Mention(name="Akshay Kumar", kind="person")]
             return p
 

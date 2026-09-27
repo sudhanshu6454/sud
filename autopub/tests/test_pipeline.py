@@ -10,7 +10,7 @@ from autopub.state import State
 
 
 class FakeRewriter:
-    def rewrite(self, site, article, carousel=False):
+    def rewrite(self, site, article, carousel=False, keywords=None):
         return CuratedPost(
             title=f"Curated: {article.title}", category="Campaigns", slug="curated-story", excerpt="e" * 120,
             body_html="<p>x</p>", tags=["a", "b", "c", "d"], image_headline="Curated story", image_kicker="News",
@@ -116,7 +116,7 @@ def test_run_aborts_after_consecutive_rewrite_failures(monkeypatch, settings, si
 
     class Broken:
         calls = 0
-        def rewrite(self, site, article, carousel=False):
+        def rewrite(self, site, article, carousel=False, keywords=None):
             Broken.calls += 1
             raise RuntimeError("Anthropic API error 400")
 

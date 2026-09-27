@@ -124,7 +124,7 @@ def test_facebook_posts_the_file_url_as_a_page_video_with_the_link(monkeypatch):
 # ---- the pipeline -------------------------------------------------------------------------------
 
 class StoryRewriter:
-    def rewrite(self, site, article, carousel=False):
+    def rewrite(self, site, article, carousel=False, keywords=None):
         return CuratedPost(
             title=f"Curated: {article.title}", category="Campaigns", slug=article.title.lower(), excerpt="e" * 120,
             body_html="<p>x</p>", tags=["a"], image_headline="Curated story", image_kicker="News",
