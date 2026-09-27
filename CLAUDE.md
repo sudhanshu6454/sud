@@ -59,3 +59,16 @@ Use it to:
 First auth: Call `get_capabilities` to trigger OAuth browser flow. Uses your Google account.
 See SEO_INTEGRATION.md for the complete setup guide and usage examples for all five sites.
 
+
+## GEO Optimizer
+
+GEO Optimizer (Generative Engine Optimization) MCP server ensures all published content is visible 
+and citable by AI answer engines: ChatGPT, Perplexity, Gemini, Claude, Google AI Overviews. Use it to:
+- Audit sites for AI visibility (0-100 score)
+- Generate and validate llms.txt, schema markup, robots.txt rules
+- Check if AI engines actually cite your content
+- Compare AI readiness across all five sites
+- Identify and fix content citability issues
+
+Run `geo_audit` on each domain after publishing to verify AI visibility. Fix recommendations are 
+auto-generated (llms.txt, JSON-LD schema, bot access rules). See GEO_OPTIMIZER.md for examples.

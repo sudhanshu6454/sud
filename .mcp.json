@@ -12,6 +12,10 @@
         "GSC_OAUTH_CLIENT_SECRETS_FILE": "",
         "GSC_DATA_STATE": "all"
       }
+    },
+    "geo": {
+      "command": "uvx",
+      "args": ["geo-optimizer-skill[mcp]", "geo-mcp"]
     }
   }
 }
