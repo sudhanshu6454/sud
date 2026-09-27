@@ -22,7 +22,9 @@ import time
 from pathlib import Path
 
 import requests
-from PIL import Image, ImageChops, ImageDraw, ImageFilter
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFilter
 
 try:  # face-aware cropping; the gradient/saliency path below works without it
     import cv2  # type: ignore
@@ -48,7 +50,9 @@ IG_FEED_HEIGHT = 1350   # 4:5 at 1080 wide: the tallest single image Instagram's
 # what `instagram_ratio` may say, and the width/height it means. None = post the 3:4 master whole.
 IG_RATIOS = {"3:4": None, "4:5": 0.8, "1:1": 1.0}
 PORTRAIT_BLEED = (SIZES["portrait"][1] - IG_FEED_HEIGHT) // 2   # the 45px band a 4:5 crop takes off each end
-JPEG_QUALITY = 82          # visually lossless for photos at these sizes, ~35% smaller than q88
+JPEG_QUALITY = 90          # high: the still stays clean after Instagram and WordPress recompress it
+JPEG_SUBSAMPLING = 0       # 4:4:4 chroma, so the type on a poster keeps a hard edge
+GOOD_WIDTH = 1440          # a still this wide needs no upscaling for the 3:4 master; the fetch stops looking once it has one
 MAX_BACKDROP_BYTES = 15 * 1024 * 1024
 
 
@@ -269,11 +273,12 @@ def _salient_box(img: Image.Image) -> Box:
 
 
 def _cover_fit(img: Image.Image, size: tuple[int, int], focus: Box | None = None,
-               clear_bottom: float = 0.0) -> tuple[Image.Image, Box | None]:
+               clear_bottom: float = 0.0, clear_top: float = 0.0, focus_x: float | None = None) -> tuple[Image.Image, Box | None]:
     """Scale to cover `size`, then choose the crop window around `focus` (faces, else the salient region).
 
     The window is placed so the whole focus box fits with breathing room above it, and, when
-    `clear_bottom` is set, so the box stays out of the bottom fraction that text will cover.
+    `clear_bottom` or `clear_top` is set, so the box stays out of that fraction of the frame, which
+    text will cover, as far as the source's own height allows.
     Returns the crop and the focus box translated into crop coordinates (None if no focus).
     """
     w, h = size
@@ -285,14 +290,17 @@ def _cover_fit(img: Image.Image, size: tuple[int, int], focus: Box | None = None
         return img.crop((left, top, left + w, top + h)), None
     fl, ft, fr, fb = (int(v * scale) for v in focus)
     fcx, fcy = (fl + fr) / 2, (ft + fb) / 2
-    # start centred on the focus, then pull the window so the box is inside it with margins
-    left = fcx - w / 2
+    # start centred on the focus (or with it at `focus_x` of the width, to leave the other side for type),
+    # then pull the window so the box is inside it with margins
+    left = fcx - w * (focus_x if focus_x is not None else 0.5)
     top = fcy - h * (0.42 if clear_bottom else 0.5)           # sit faces a little above centre
     pad_x, pad_top = w * 0.06, h * 0.10
     left = min(left, fl - pad_x); left = max(left, fr + pad_x - w)
     top = min(top, ft - pad_top)
     bottom_limit = h * (1 - clear_bottom) if clear_bottom else h
     top = max(top, fb - bottom_limit)                          # keep the box above the text zone
+    if clear_top:
+        top = min(top, ft - h * clear_top)                     # and below the title zone, when there is room
     left = max(0, min(left, rw - w)); top = max(0, min(top, rh - h))
     left, top = int(left), int(top)
     crop = img.crop((left, top, left + w, top + h))
@@ -318,7 +326,73 @@ def _source_photo(url: str, timeout: int) -> tuple[Image.Image, list[Box]] | Non
     return got, faces
 
 
+# ---- the best copy of a still ----------------------------------------------------------------------------
+#
+# The URL a page gives for its photo is usually a resized copy: WordPress appends -1200x630 to the file
+# name, CDNs put the size in the query or the path. The original is one edit away, and a poster blown up
+# from a 600-pixel copy shows it. So every fetch tries the larger copies the URL points to first, keeps
+# the largest that answers, and stops as soon as it has one wide enough for the master.
+
+_SIZE_SUFFIX = re.compile(r"-\d{2,4}x\d{2,4}(?=\.(?:jpe?g|png|webp|gif)(?:$|[?#]))", re.I)
+_CLOUDINARY = re.compile(r"/upload/(?:[a-z]{1,3}_[^/,]+,?)+/")
+_PATH_SIZE = re.compile(r",(?:width|height|resizemode|imgsize)-\d+", re.I)
+_RESIZE_PARAMS = {"w", "h", "width", "height", "resize", "fit", "crop", "quality", "q", "size", "imwidth", "imheight", "dpr", "rect", "im"}
+_YT_MAXRES = re.compile(r"^(https?://i\.ytimg\.com/vi(?:_webp)?/[^/]+/)maxresdefault\.(jpg|webp)$")
+
+
+def photo_upgrades(url: str) -> list[str]:
+    """The URLs to try for a larger copy of the photo, best first; the URL itself is last."""
+    u = _SIZE_SUFFIX.sub("", url)
+    u = _CLOUDINARY.sub("/upload/", u)
+    u = _PATH_SIZE.sub("", u)
+    parts = urlsplit(u)
+    if parts.query:
+        pairs = parse_qsl(parts.query, keep_blank_values=True)
+        kept = [(k, v) for k, v in pairs if k.lower() not in _RESIZE_PARAMS]
+        if len(kept) != len(pairs):
+            u = urlunsplit(parts._replace(query=urlencode(kept)))
+    return [u, url] if u != url else [url]
+
+
+def photo_fallbacks(url: str) -> list[str]:
+    """Smaller copies worth trying only when nothing larger answers: YouTube serves a placeholder
+    when a video has no maxres thumbnail, so the sd and hq ones are the next best."""
+    m = _YT_MAXRES.match(url)
+    if not m:
+        return []
+    return [f"{m.group(1)}sddefault.{m.group(2)}", f"{m.group(1)}hqdefault.{m.group(2)}"]
+
+
+def enhance(img: Image.Image, scale: float = 1.0) -> Image.Image:
+    """The still made to look its best at the size it is used: cleaned of the blocks and ringing a small
+    source shows once blown up (`scale` is how much), then sharpened, with a touch of contrast and colour."""
+    if scale > 1.5:
+        img = img.filter(ImageFilter.GaussianBlur(min(1.5, 0.4 * scale)))
+    img = img.filter(ImageFilter.UnsharpMask(radius=1.4, percent=70 if scale > 1.2 else 45, threshold=2))
+    img = ImageEnhance.Contrast(img).enhance(1.03)
+    return ImageEnhance.Color(img).enhance(1.05)
+
+
 def _download_photo(url: str, timeout: int) -> Image.Image | None:
+    """The largest copy of the photo that answers, or None."""
+    best = None
+    for candidate in photo_upgrades(url):
+        img = _fetch_image(candidate, timeout)
+        if img is not None and (best is None or img.width * img.height > best.width * best.height):
+            best = img
+            if candidate != url:
+                log.info("larger copy of the photo: %sx%s from %s", img.width, img.height, candidate)
+        if best is not None and best.width >= GOOD_WIDTH:
+            break
+    if best is None:
+        for candidate in photo_fallbacks(url):
+            best = _fetch_image(candidate, timeout)
+            if best is not None:
+                break
+    return best
+
+
+def _fetch_image(url: str, timeout: int) -> Image.Image | None:
     try:
         resp = requests.get(url, timeout=timeout, headers={"User-Agent": USER_AGENT, "Accept": "image/*,*/*"}, stream=True)
         resp.raise_for_status()
@@ -339,15 +413,16 @@ def _download_photo(url: str, timeout: int) -> Image.Image | None:
     return img
 
 
-def _backdrop(url: str, size: tuple[int, int], timeout: int = 20,
-              clear_bottom: float = 0.0) -> tuple[Image.Image, Box | None] | None:
+def _backdrop(url: str, size: tuple[int, int], timeout: int = 20, clear_bottom: float = 0.0, clear_top: float = 0.0,
+              focus_x: float | None = None) -> tuple[Image.Image, Box | None] | None:
     """The article's own photo, cover-fitted around its people. None when it cannot be used."""
     got = _source_photo(url, timeout)
     if got is None:
         return None
     img, faces = got
     focus = _union(faces) if faces else _salient_box(img)
-    crop, focus_in_crop = _cover_fit(img, size, focus, clear_bottom)
+    crop, focus_in_crop = _cover_fit(img, size, focus, clear_bottom, clear_top, focus_x)
+    crop = enhance(crop, max(size[0] / img.width, size[1] / img.height))
     return crop, (focus_in_crop if faces else None)
 
 
@@ -466,7 +541,7 @@ def _draw_kicker(draw: ImageDraw.ImageDraw, kicker: str, x: int, y: int, w: int,
 
 def _save(img: Image.Image, out_path: Path, quality: int = JPEG_QUALITY) -> Path:
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    img.convert("RGB").save(out_path, "JPEG", quality=quality, optimize=True, progressive=True)
+    img.convert("RGB").save(out_path, "JPEG", quality=quality, optimize=True, progressive=True, subsampling=JPEG_SUBSAMPLING)
     return out_path
 
 
@@ -817,7 +892,7 @@ def _render_portrait(headline: str, kicker: str, standfirst: str | None, site: S
             log.info("headline does not fit beside a photo; using the type card so it can be read whole")
 
     if on_photo:
-        img.paste(photo.filter(ImageFilter.UnsharpMask(radius=1.2, percent=45, threshold=3)), (0, 0))
+        img.paste(photo, (0, 0))
         photo_bottom = S(PHOTO_H)
         _shade_bottom(img.crop((0, photo_bottom - S(24), w, photo_bottom)), 0.0, 0.18)
         if credit:
@@ -1226,14 +1301,17 @@ def _render_poster(card: CardBrief, site: Site, out_path: Path, primary, accent,
     source = _source_photo(backdrop_url, 20)
     if not source or source[0].width < PHOTO_MIN[0] or source[0].height < PHOTO_MIN[1]:
         return None
-    got = _backdrop(backdrop_url, (w, h))
+    got = _backdrop(backdrop_url, (w, h), clear_bottom=0.42)     # the type takes the bottom of this card: faces stay above it
     if not got:
         return None
     photo, faces = got
     if faces and faces[1] < S(PORTRAIT_BLEED) + S(8):
         log.info("a face sits in the band the 4:5 crop removes; poster card skipped")
         return None
-    img = photo.filter(ImageFilter.UnsharpMask(radius=1.2, percent=40, threshold=3)).convert("RGB")
+    if faces and faces[3] > h * (1 - 0.42):
+        log.info("a face sits where this card's type goes and the photo has no room to move it; poster card skipped")
+        return None
+    img = photo.convert("RGB")
     _shade_bottom(img, 0.30, 0.94)                 # the ground the type needs, fading in from a third down
     family, weight = site.brand.font, site.brand.heading_weight
     draw = ImageDraw.Draw(img, "RGBA")
@@ -1278,7 +1356,7 @@ def _render_scorecard(card: CardBrief, site: Site, out_path: Path, primary, acce
                 if faces and faces[1] < S(PORTRAIT_BLEED) + S(8):
                     photo = None
     if photo is not None:
-        img.paste(photo.filter(ImageFilter.UnsharpMask(radius=1.2, percent=45, threshold=3)), (0, 0))
+        img.paste(photo, (0, 0))
         photo_bottom = S(SCORE_PHOTO_H)
         band = img.crop((0, photo_bottom - S(160), w, photo_bottom))
         _shade_bottom(band, 0.0, 0.55)
@@ -1358,12 +1436,18 @@ def render_card(headline: str, kicker: str, site: Site, out_path: Path, variant:
     kicker = (kicker or "").strip()
     if len(kicker) < 3:
         kicker = site.category
+    if site.brand.style == "poster":
+        from . import poster    # the poster family draws every shape its own way
+        return poster.card(headline, kicker, site, out_path, variant, backdrop_url, standfirst, credit, card=card)
 
     if variant == "portrait":
         return _render_portrait(headline, kicker, standfirst, site, out_path, primary, accent, text_color,
                                 backdrop_url, credit, date_text, card=card)
 
-    got = _backdrop(backdrop_url, size, clear_bottom=(0.40 if variant == "square" else 0.0)) if backdrop_url else None
+    got = _backdrop(backdrop_url, size, clear_bottom=0.40) if backdrop_url else None     # the headline takes the bottom: faces stay above it
+    if got is not None and got[1] is not None and got[1][3] > h * 0.60:
+        log.info("a face sits where the headline goes and the photo has no room to move it; the type card stands in")
+        got = None
     if got is not None:
         photo, faces = got
         return _render_photo_cover(photo, headline, kicker, site, out_path, variant, primary, accent, margin, faces)
@@ -1583,6 +1667,47 @@ def story_closing_frame(headline: str, site: Site, out_path: Path) -> Path:
     return _save(img, out_path, quality=90)
 
 
+# ---- the ad reel's frame -----------------------------------------------------------------------
+# The film plays inside a window of the story canvas; the frame around it is the story ground with
+# the kicker and hook above and the credit line and footer below. The window is full width and tall
+# enough for a 16:9 film with room to spare, so a square or vertical cut fits too, centred.
+AD_WINDOW_TOP, AD_WINDOW_H = 860, 1100     # in STORY_SIZE pixels; adclip.compose scales them to the reel
+
+
+def ad_frame(kicker: str, hook: str, credit: str, site: Site, out_path: Path) -> Path:
+    """The still the film is composed onto: kicker, the hook set large above the window, the
+    credit line under it, the site's footer. Saved as PNG so the type stays crisp under ffmpeg."""
+    if site.brand.style == "poster":
+        from . import poster
+        return poster.frame(kicker, hook, credit, site, out_path)
+    img, primary, accent, text = _story_canvas(site)
+    w, h = img.size
+    S = lambda v: int(round(v * CARD_SCALE))
+    family, weight = site.brand.font, site.brand.heading_weight
+    draw = ImageDraw.Draw(img, "RGBA")
+    x, column = S(72), w - S(72) * 2
+    top = STORY_SAFE + 20 + S(RAIL_H) + S(64)
+    _card_kicker(img, (kicker or "Ad").upper()[:24], site, accent, x, top, S)
+    y = top + S(KICKER_SIZE) + S(20) * 2 + S(40)
+    room = AD_WINDOW_TOP - S(40) - y
+    hfont, hlines, line_h = _headline_block(draw, _spell_out(tidy(hook), family), family, column,
+                                            [(40, 60, 68, 2), (70, 50, 58, 3), (10 ** 6, 44, 52, 3)], weight=weight)
+    for line in hlines[:max(1, room // line_h)]:
+        draw.text((x, y), line, font=hfont, fill=text)
+        y += line_h
+    # a hairline above the window: the film sits on the ground, the frame does not box it in
+    draw.rectangle([x, AD_WINDOW_TOP - S(14), x + S(96), AD_WINDOW_TOP - S(14) + S(6)], fill=accent)
+    cfont = _font(S(26), bold=False, family=family)
+    cy = AD_WINDOW_TOP + AD_WINDOW_H + S(28)
+    for line in _wrap(draw, credit, cfont, column)[:2]:
+        draw.text((x, cy), line, font=cfont, fill=tuple(int(c * 0.7) for c in text))
+        cy += S(36)
+    _story_footer(img, site, text)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    img.save(out_path, format="PNG", optimize=True)
+    return out_path
+
+
 # ---- carousel slides ---------------------------------------------------------------------------
 # Drawn on the same 3:4 master canvas as the cards and trimmed to the same 4:5 as the cover, so the
 # rail, the kicker chip and the footer sit in exactly the same place on every slide of a swipe.
@@ -1635,9 +1760,13 @@ def _short_kicker(kicker: str | None, limit: int = 15) -> str:
 
 
 def carousel_text_slide(heading: str, body: str, index: int, total: int, site: Site, out_path: Path,
-                        kicker: str | None = None) -> Path:
+                        kicker: str | None = None, photo_url: str | None = None) -> Path:
     """One content slide: kicker with its place in the sequence, a bold heading, an accent rule and
-    the body in reading type. Together the slides are the article for a viewer who never taps out."""
+    the body in reading type. Together the slides are the article for a viewer who never taps out.
+    `photo_url` is a still for the slide, used by the poster family only."""
+    if site.brand.style == "poster":
+        from . import poster
+        return poster.slide(heading, body, index, total, site, out_path, kicker=kicker, photo_url=photo_url)
     img, primary, accent, text, S = _slide_canvas(site)
     family, weight = site.brand.font, site.brand.heading_weight
     draw = ImageDraw.Draw(img, "RGBA")
@@ -1674,6 +1803,9 @@ def carousel_text_slide(heading: str, body: str, index: int, total: int, site: S
 
 def carousel_closing_slide(headline: str, site: Site, out_path: Path) -> Path:
     """The last slide: the title as a reminder, the site large in the accent, and the way there."""
+    if site.brand.style == "poster":
+        from . import poster
+        return poster.closing(headline, site, out_path)
     img, primary, accent, text, S = _slide_canvas(site)
     family, weight = site.brand.font, site.brand.heading_weight
     draw = ImageDraw.Draw(img, "RGBA")

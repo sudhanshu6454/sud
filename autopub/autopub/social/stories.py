@@ -17,6 +17,14 @@ from .instagram import GRAPH, POLL_SECONDS, POLL_TIMEOUT, _error
 log = logging.getLogger(__name__)
 
 STORY_BUDGET = 150      # seconds: a story is a bonus, so it gets a shorter wall clock than the feed post
+RETRY_PAUSE = 8          # seconds before a frame's second try
+TRANSIENT = ("does not exist", "2207006", "temporar", "try again", "unknown error", "unexpected", "timed out", "timeout")
+
+
+def _transient(message: str) -> bool:
+    """Meta's passing failures, worth one more try; anything else is the frame's own fault."""
+    m = message.lower()
+    return any(t in m for t in TRANSIENT)
 FEED_RESERVE = 6        # publishes kept back for the feed posts of the next few hours
 
 
@@ -100,7 +108,7 @@ class InstagramStoryPublisher(Publisher):
         ids, problems = [], []
         for i, url in enumerate(frames, 1):
             try:
-                ids.append(self._post_frame(uid, token, url, deadline))
+                ids.append(self._post_frame_twice(uid, token, url, deadline))
             except RuntimeError as exc:
                 problems.append(f"frame {i}: {exc}")
                 if i == 1:
@@ -110,6 +118,19 @@ class InstagramStoryPublisher(Publisher):
         # stories have no permalink the API will give back; the account's story tray is the place to look
         return PublishResult(self.platform, True, remote_id=",".join(ids), url=None,
                              error="; ".join(problems) or None)
+
+
+    def _post_frame_twice(self, uid: str, token: str, url: str, deadline: float) -> str:
+        """One frame, with one more try after a moment: Meta sometimes loses a container it just made
+        ("The requested resource does not exist", 24/2207006), and the next attempt goes through."""
+        try:
+            return self._post_frame(uid, token, url, deadline)
+        except RuntimeError as exc:
+            if not _transient(str(exc)) or time.monotonic() + RETRY_PAUSE > deadline:
+                raise      # a bad image or a policy refusal does not get better with waiting
+            log.info("[instagram_story] frame failed (%s); trying once more", exc)
+            time.sleep(RETRY_PAUSE)
+            return self._post_frame(uid, token, url, deadline)
 
 
 class FacebookStoryPublisher(Publisher):

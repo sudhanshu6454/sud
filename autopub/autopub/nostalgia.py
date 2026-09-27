@@ -8,11 +8,13 @@ Five slots a day (settings.ad_hours, on sites with `nostalgia: true`) alternate 
 - nostalgic: an iconic campaign at least a few years old that the site has not covered, Indian and
   international in turn; the model names it, YouTube must have the film under the brand's name.
 
-Either way the film is embedded (never downloaded or re-hosted: it plays with its own sound in
-YouTube's player, the rights stay where they are) and the model writes an original feature around
-it in the site's own format: the psychology of the ad on Marketing Mentalist, a campaign breakdown
-on Crazy4Marketing, an ad-watch report on Marketing Junkies. The feature then takes the same road
-as the news: cards, story, a narrated reel, WordPress, every social.
+Either way the model writes an original feature around the film in the site's own format: the
+psychology of the ad on Marketing Mentalist, a campaign breakdown on Crazy4Marketing, an ad-watch
+report on Marketing Junkies. The film is embedded from YouTube (it plays with its own sound in
+YouTube's player, the rights stay where they are) and the feature takes the same road as the news:
+cards, story, a narrated reel, WordPress, every social. With `repost_ads` on, the brand's own upload
+is fetched instead (adclip.py): the article carries the film as a self-hosted video and the reel is
+the film inside the site's frame, with its own sound, credited on the frame and in the caption.
 
 `nostalgia_used` in site_notes lists every campaign covered; the film's URL is the claim, so two
 sites never run the same ad, and a current pick also claims its source article so the hourly news
@@ -29,7 +31,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from . import carousels, extract, followups, sources, youtube
+from . import adclip, carousels, extract, followups, sources, youtube
 from .config import Settings, Site
 from .rewrite import JSON_CONTRACT, CuratedPost, Rewriter, schema_for
 from .state import State
@@ -315,7 +317,7 @@ def write(rewriter: Rewriter, site: Site, choice: Pick, film: dict | None, kind:
     post.mood = post.mood or ("nostalgic" if kind == "nostalgic" else "upbeat")
     if film:
         caption = f"{choice.brand}: {choice.campaign}" + (f" ({choice.year})" if choice.year and kind == "nostalgic" else "") + f". Video: {film['channel']} on YouTube."
-        post.body_html = embed_block(film["url"], caption) + post.body_html
+        post.body_html = adclip.slot(embed_block(film["url"], caption)) + post.body_html
         post.body_html += (f'<p><em>Watch the original: <a href="{film["url"]}" rel="nofollow noopener" target="_blank">'
                            f'{choice.brand} on YouTube</a></em></p>')
     if source is not None:
@@ -387,6 +389,22 @@ def _find_current(rewriter, site, settings, state, used, tried):
     return None
 
 
+def fetch_film(site: Site, settings: Settings, film: dict, choice: Pick, work_dir: Path) -> Path | None:
+    """The film itself, when `repost_ads` is on and the upload is the brand's own; None (the embed
+    and the narrated reel as before) when it is off, the upload is someone else's, or YouTube refuses."""
+    if not settings.repost_ads:
+        return None
+    if not film.get("official"):
+        log.info("[%s] %s is not %s's own upload; embed only", site.key, film["url"], choice.brand)
+        return None
+    try:
+        return adclip.fetch(film["url"], work_dir / site.slug / "ads", player_clients=settings.ad_clip_player_clients,
+                            cookies=settings.ad_clip_cookies or None)
+    except Exception as exc:  # noqa: BLE001 - the feature still goes out, with the embed and a narrated reel
+        log.warning("[%s] could not fetch the film (%s); embed and narrated reel instead", site.key, exc)
+        return None
+
+
 def publish_daily(site: Site, settings: Settings, state: State, rewriter: Rewriter, wp, publishers,
                   work_dir: Path, report, kind: str | None = None) -> bool:
     """Pick, find the film, claim it, write, publish. Returns True when the feature went out."""
@@ -415,9 +433,16 @@ def publish_daily(site: Site, settings: Settings, state: State, rewriter: Rewrit
         if article is not None:
             state.release(article.url, site.key)
         raise RuntimeError(f"ad feature could not be written: {exc}") from exc
-    ok = pipeline.publish_post(site, settings, state, url, post, wp, publishers, work_dir, report,
-                               image_url=film["thumbnail"], credit=f"{film['channel']} on YouTube",
-                               use_source_image=True, force_reel=True, force_story=True)
+    clip = fetch_film(site, settings, film, choice, work_dir)
+    ad_caption = f"Ad: {choice.brand}, {choice.campaign}. Video: {film['channel']} on YouTube. Shown for review."
+    try:
+        ok = pipeline.publish_post(site, settings, state, url, post, wp, publishers, work_dir, report,
+                                   image_url=film["thumbnail"], credit=f"{film['channel']} on YouTube",
+                                   use_source_image=True, force_reel=True, force_story=True,
+                                   ad_clip=clip, ad_caption=ad_caption if clip else None)
+    finally:
+        if clip is not None:
+            clip.unlink(missing_ok=True)      # the film is not kept once it is up
     if ok:
         state.set_note(site.key, USED_NOTE, dump_used(used + [key_of(choice)]))
         state.set_note(site.key, NOTE, carousels.dump_log(slot_log + [time.time()]))

@@ -68,7 +68,7 @@ def _view(big: Image.Image, size: tuple[int, int], zoom: float) -> Image.Image:
     cw, ch = int(round(big.width / zoom)), int(round(big.height / zoom))
     cw, ch = min(cw, big.width), min(ch, big.height)
     x, y = (big.width - cw) // 2, (big.height - ch) // 2
-    return big.crop((x, y, x + cw, y + ch)).resize((w, h), Image.BILINEAR)
+    return big.crop((x, y, x + cw, y + ch)).resize((w, h), Image.BICUBIC)
 
 
 def _progress(frame: Image.Image, index: int, total: int, fraction: float, accent, ink) -> None:
@@ -115,7 +115,7 @@ def _encode(frames, out_path: Path, durations, accent, ink, size, fps, dissolve,
     sound = ["-i", str(audio)] if audio else ["-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000"]
     cmd = [ffmpeg_exe(), "-y", "-loglevel", "error", "-threads", "2",
            "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{w}x{h}", "-r", str(fps), "-i", "-",
-           *sound, "-shortest", "-c:v", "libx264", "-preset", preset, "-crf", "23", "-pix_fmt", "yuv420p",
+           *sound, "-shortest", "-c:v", "libx264", "-preset", preset, "-crf", "18", "-pix_fmt", "yuv420p",
            "-x264-params", "ref=1:rc-lookahead=8:bframes=0:threads=2", "-r", str(fps), "-movflags", "+faststart",
            "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2", str(out_path)]
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)

@@ -35,7 +35,7 @@ API = "https://api.linkedin.com/rest"
 VERSION = "202409"
 SCOPES = "w_organization_social r_organization_social rw_organization_admin"
 REDIRECT = "https://crazy4marketing.com/bio/"     # any page we serve; the code arrives in its query string
-SITES = ("MENTALIST", "CRAZY", "JUNKIES", "SCREENSTAT")
+SITES = ("MENTALIST", "CRAZY", "JUNKIES", "SCREENSTAT", "FILMYBUFF")
 
 
 # ---- .env -------------------------------------------------------------------------------------

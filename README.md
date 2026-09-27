@@ -10,6 +10,7 @@ accounts with a generated share image. No human in the loop after setup.
 | crazy4marketing.com   | `CRAZY`     | Digital / performance marketing, growth, AI in marketing |
 | marketingjunkies.in   | `JUNKIES`   | Marketing, media, martech industry news |
 | screenstat.in         | `SCREENSTAT`| Streaming, TV, film and box-office news and data |
+| filmybuff.com         | `FILMYBUFF` | Movies for the fans: Bollywood, Hollywood, South cinema, OTT, trailers, box office |
 
 Domains are at GoDaddy, hosting is on Linode. Everything is defined in `autopub/config/sites.yaml`.
 
@@ -234,8 +235,20 @@ this week's ads and two classics:
   international in turn; the model names it and YouTube must have the film under the brand's name,
   so a misremembered campaign is dropped, not written. A hot take follows two hours later.
 
-The film is **embedded** with WordPress's own YouTube block, so it plays with its original sound in
-YouTube's player and nothing is downloaded or re-hosted. Each site writes in its own format:
+The film is **embedded** with WordPress's own YouTube block by default, so it plays with its original
+sound in YouTube's player and nothing is downloaded or re-hosted. With `repost_ads: true` (the
+fleet's setting) the film itself goes out instead: `autopub/adclip.py` fetches the brand's **own**
+upload with yt-dlp (never a fan's), the article carries it as a self-hosted video block with the
+credit as its caption, and the reel is the film inside the site's frame (kicker, hook, credit line,
+footer) between the story cover and the closing frame, with its own sound, cut at
+`ad_clip_max_seconds` (120). The rights in the film stay with the brand and Instagram's rights
+matching may mute or remove such a reel; when the download is refused the embed and a narrated
+reel go out as before. YouTube hides its streams behind a JavaScript challenge, so yt-dlp is
+installed with its `[default,deno]` extras (the solver and a JS runtime); with those the embedded
+player client is served the film from a server address without a sign-in wall, so it is asked
+first (`ad_clip_player_clients`). If YouTube still refuses, export a `cookies.txt` from a
+signed-in browser and copy it to `/data/youtube-cookies.txt` in the container (`ad_clip_cookies`).
+Each site writes in its own format:
 **The psychology of the ad** on Marketing Mentalist (the behavioural levers the film pulls), a
 **Campaign breakdown** on Crazy4Marketing (hook, structure, why it spread, steal this), and **Ad
 watch** on Marketing Junkies (brand, agency, response, category context). Filed under **Throwback**
@@ -246,7 +259,170 @@ every social. A film's URL is the dedupe key, so two sites never run the same ad
 ```bash
 docker compose run --rm autopub python -m autopub nostalgia --dry-run --kind current     # the pick and the film, nothing published
 docker compose run --rm autopub python -m autopub nostalgia --site CRAZY --kind nostalgic  # publish one now
+docker compose run --rm autopub python -m autopub adclip --site CRAZY --url https://www.youtube.com/watch?v=VIDEO_ID --brand "The brand"  # fetch a film and render it in the frame, posts nothing
 ```
+
+### Filmybuff's Instagram: posters and watchlists
+
+filmybuff.com's share images are a different family from the news cards (`brand.style: poster` in
+sites.yaml, drawn by `autopub/poster.py`): the film still runs full bleed, graded dark and warm,
+with the handle small at the top, the title centred and set uppercase in Archivo 900, one tracked
+subline under it, and the lockup at the bottom; a carousel cover says "swipe". Without a usable
+still the same type sits on the ink ground. Slides carry the number in red, the heading uppercase
+and the line under it, on the film's own poster when there is one; the closing slide is the lockup.
+An "Unpopular opinion" kicker is set with its UN struck through in red. The writer is told the
+site's house shapes (`formats` in sites.yaml: the watchlist, best performances, unpopular opinion,
+what to watch this weekend, the poster), so titles read like a fan's, not a wire's.
+
+Twice a day (`settings.watchlist_hours`, 10:00 and 16:00) the site publishes a **watchlist**
+(`autopub/watchlists.py`): the model picks a theme from the house seeds ("Films to watch in your
+20s", "Horror on OTT that is actually scary") or its own in that spirit, never one the fleet has
+run, and names six to eight real films with year, language, where to stream and one honest
+first-person line each. The article opens with the list as a table, then a section per film; the
+carousel is the cover, one slide per film, the closing. With `TMDB_API_KEY` in `.env` (free, from
+themoviedb.org) the slides sit on each film's poster and the cover on a backdrop, with TMDB
+credited in the article and caption; without it the slides are typographic.
+
+Twice more a day (`settings.trailer_hours`, 11:00 and 19:00) the site runs a **trailer feature**
+(`autopub/trailers.py`): from the week's stories in its own feeds about a specific trailer, teaser,
+first look or song, the model picks one; the upload is found on YouTube and, when it is the
+studio's or the film's own channel (a fan's stays an embed), fetched with yt-dlp and published as
+the article's self-hosted video and as the reel inside Filmybuff's poster frame on Instagram and
+the Facebook Page, with the credit ("War 3 (2026): the trailer. Video: Yash Raj Films on YouTube.
+Shown for review.") on the frame, in the article and in the caption. `repost_ads` is the switch,
+as for the ad films.
+
+```bash
+docker compose run --rm autopub python -m autopub trailer --site FILMYBUFF --dry-run              # the pick and the upload, nothing published
+docker compose run --rm autopub python -m autopub trailer --site FILMYBUFF                        # publish one now
+docker compose run --rm autopub python -m autopub watchlist --site FILMYBUFF --dry-run            # the list, nothing published
+docker compose run --rm autopub python -m autopub watchlist --site FILMYBUFF --theme "Films about Mumbai"
+docker compose run --rm autopub python -m autopub cards --site FILMYBUFF --image https://... --headline "Films to watch in your 20s"
+docker compose run --rm autopub python -m autopub refresh-featured --site FILMYBUFF                # older posts: the clean still as the featured image
+```
+
+On a poster-style site the website carries the same 3:4 poster the grid does: the featured image is
+the portrait master, and the theme (themes/filmybuff) is built around it, with its own type beside or
+beneath the poster and never over it. `refresh-featured` re-renders the poster for the posts already
+published, from the post's own title, section and standfirst and the still the story came from (the
+source article's photo, a trailer's YouTube thumbnail, the article's own image, or a TMDB backdrop for
+a watchlist's first film); `--dry-run` lists what it would touch and `--limit N` takes the newest N.
+
+### OpenSEO: search data for the writer, rank tracking for the fleet
+
+[OpenSEO](https://github.com/every-app/open-seo) (an open-source Semrush/Ahrefs alternative) runs
+beside the fleet as the `openseo` service, self-hosted in its Docker mode. That mode has app auth off,
+so the service is bound to the server's loopback only (the UI is reached over an SSH tunnel) and to the
+internal network, where autopub calls its MCP server at `http://openseo:3001/mcp`. It needs a
+DataForSEO key in `.env` (`DATAFORSEO_API_KEY`, the "Base64" credentials from app.dataforseo.com;
+pay-as-you-go, a $50 minimum top-up).
+
+What the fleet does with it (`autopub/seo.py`):
+
+- **Before every news article** the story's own title is researched as a seed (`research_keywords`,
+  one seed per article, ~30-100 credits) and the keywords people actually search for, with volume and
+  difficulty, go to the writer as TARGET KEYWORDS for the title, slug, excerpt and first paragraph.
+  Keywords above difficulty 60 or with no searches are left out. Without `OPENSEO_URL`, or when the
+  service is down, the article is written as before. `seo_keywords: false` in settings switches it off.
+- **A project per site** on OpenSEO, keyed by domain, market India (`python -m autopub seo setup`).
+- **Rank tracking** on demand: `seo track --site FILMYBUFF --keywords "a,b"` creates the site's tracker,
+  adds the keywords and checks the rankings now; `seo report --site FILMYBUFF` reads it back.
+
+```bash
+ssh -L 3001:127.0.0.1:3001 root@SERVER                                            # then open http://localhost:3001
+docker compose run --rm autopub python -m autopub seo whoami                       # the connection and the tools
+docker compose run --rm autopub python -m autopub seo research --site FILMYBUFF --seed "war 3 box office"
+```
+
+`.mcp.json` at the repo root points Claude Code on your machine at the same MCP server through the
+tunnel, so the OpenSEO skills (`npx skills add every-app/open-seo`) work against your own data.
+
+### Filmybuff's curated day
+
+filmybuff.com is a curated cinema account, not a wire, so its day is the formats and the news post is
+held to three hours (`news_hours: [9, 14, 20]` on the site; the other sites keep every cycle):
+
+| Hour (IST) | Format | Module |
+|---|---|---|
+| 8, 12, 17 | **Deep dive**: "Did you know" trivia or "The breakdown" on one film, six to nine facts from its Wikipedia page, a different frame from the film on every slide, credited to Wikipedia (CC BY-SA) and TMDB | `deepdives.py` |
+| 10, 16 | **Watchlist** or **ranked list**: a theme and six to eight films, or an actor's or director's work ranked, one honest line each, posters from TMDB | `watchlists.py` |
+| 11, 19 | **Trailer**: this week's trailer, teaser or first look, the studio's own upload in the frame | `trailers.py` |
+| 13, 21 | **The scene**: a clip already viral on YouTube (the most-viewed scene, song or monologue clips this month and all time, on rights holders' channels only, past `scene_min_views`), fetched and posted with the scene broken down beat by beat (the setup, the turn, the line, the performance, the craft, why it travels), as the article's video and the reel, credited | `scenes.py` |
+| 9, 14, 20 | **News**, written in the house shapes (the poster, unpopular opinion, what to watch this weekend) | `pipeline.py` |
+
+Subjects come from TMDB (what is trending this week, films turning 5, 10, 15... years this week:
+`tmdb.trending`, `tmdb.anniversaries`) and from the week's news; nothing is repeated across the fleet
+(`scenes_used`, `deepdives_used`, `watchlists_used`, `trailers_used`). Scenes start from YouTube itself
+(`youtube.viral_scenes`: the searches fans make, sorted by YouTube's own view count, this month then
+all time) and keep only clips on the studio's, streamer's, label's or catalogue channel's own account; a
+fan's or a reaction channel's upload never qualifies, nor a trailer, a review or a full film. Trivia is written from
+the page text alone, with the writer told so.
+
+```bash
+docker compose run --rm autopub python -m autopub scene --site FILMYBUFF --dry-run      # the pick and the upload, nothing published
+docker compose run --rm autopub python -m autopub deepdive --site FILMYBUFF --dry-run   # the film, the shape and the page
+docker compose run --rm autopub python -m autopub deepdive --site FILMYBUFF             # publish one now
+```
+
+### Filmybuff's stills come from the film
+
+On a poster-style site the writer names the one film or series a story is about (`film` in the
+schema, only there), and the poster's still is an original frame from it: `tmdb.film_still` takes
+the film's best textless backdrop from TMDB (no title art burned in, wide enough for the poster),
+falling back to the film's own backdrop. The source's press photo is used only when the story is
+about a person, a studio or the industry rather than one title, or when TMDB has nothing. Trailer
+features name their film the same way, so the poster is a frame rather than the YouTube thumbnail;
+watchlists already use the first film's backdrop. `refresh-featured` does the same for older posts,
+from a tag that is a film's exact title or a watchlist's table. The credit on the poster reads
+"Still: Film (Year), via TMDB".
+
+### House rule: type never sits on a face
+
+Every image the system makes, for the website and for every social channel, keeps its type off
+people's faces. The face detector runs on every photo once (`images._detect_faces`), and each
+renderer that sets type over a photograph honours the result its own way: the card sites' covers
+and the 4:5 poster card keep the faces above the type's band (`_cover_fit(clear_bottom=...)`) and,
+when the photo has no room to move them, stand the type-only card in; the Filmybuff poster keeps the
+faces below the title zone, sets the subject aside with the title beside it, or drops the title low
+(next section); a carousel slide moves its text to the clearer band; and when a film's frame is
+chosen from TMDB, the candidates are scored by how much room they leave for the type
+(`poster.room_for_type`, `poster.pick_frame`) and the clearest one wins. Tests in
+`tests/test_no_text_on_faces.py` pin each of these down.
+
+### The poster's look, and where the title goes
+
+The poster family (`poster.py`) follows the reference grid's look: the still stays bright under a
+print grade (blacks lifted to a fade, highlights rolled towards cream, a little less colour, a gentle
+vignette, fine grain), the title is set in cream rather than paper white, and a soft elliptical shadow
+sits behind the type instead of a darkened frame. The title goes where the frame is clear, in this
+order: centred high (the default); when a face would sit under it and the still is tall enough, the
+crop keeps the faces below the title zone (`images._cover_fit(clear_top=...)`); when the frame is wide
+with no height to spare, the crop sets the subject to one side (`SUBJECT_X`) and the title is ranged
+on the other, beside it; failing all that, the title goes low, above the lockup. Every placement is
+scored by how much of the faces it would cover, and the first clear one wins. The handle stays at
+the top, the mark at the bottom, and the still's credit (or the site's tagline) bottom-left.
+
+### Image quality
+
+Every still is fetched as the largest copy its URL points to (`images.photo_upgrades`: the WordPress
+`-1200x630` suffix, `w=`/`h=`/`resize=` parameters, Cloudinary transforms and Times-style
+`,width-1070` path sizes are stripped and the original tried first; the fetch stops once it has a
+copy at least 1440 wide, and YouTube's sd/hq thumbnails are tried only when the maxres one is
+missing). TMDB is asked for original-size posters and backdrops. Each still is then enhanced once,
+at the size it is used (`images.enhance`: cleaned of blocks when it had to be blown up, sharpened,
+a touch of contrast and colour). Cards and posters are saved as JPEG 90 with 4:4:4 chroma so the
+type keeps a hard edge; reels and ad clips are encoded at CRF 18 with Lanczos scaling. The themes
+set WordPress's own JPEG quality to 92, so the poster sizes it generates stay clean too.
+
+A still is only as sharp as its source, and a landscape frame cropped to 3:4 keeps under half of
+its pixels: a 720p thumbnail or a small press photo would have to be blown up nearly three times.
+So a still that would need more than `poster.LETTERBOX_ABOVE` (2x) to fill the poster is not cropped
+at all: it is set at its own shape, full width, between bands of its own blurred colour
+(`poster._letterbox`), and the whole still counts as the zone the type stays out of. A 1080p frame
+or larger still fills the frame edge to edge. For a story that names no film, a press photo that
+small gives way to the person's own portrait from TMDB (`tmdb.person_still`, tall and sharp), in
+the pipeline (from the writer's person mentions) and in `refresh-featured` (from a tag that is a
+person's exact name); a large press photo is kept.
 
 ### Viral ad coverage
 

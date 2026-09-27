@@ -39,6 +39,15 @@ PLATFORM_LIMITS = {
 }
 
 
+def house_formats(site: Site) -> str:
+    """The site's own post shapes, when sites.yaml names them: the writer picks the one the story fits."""
+    if not site.formats:
+        return ""
+    return ("\nHOUSE FORMATS. This site writes in a few recognisable shapes; choose the one this story genuinely fits and "
+            "let it shape the title, the hook, the story frames and the carousel:\n"
+            + "".join(f"- {f}\n" for f in site.formats))
+
+
 class Captions(BaseModel):
     twitter: str
     facebook: str
@@ -78,6 +87,11 @@ class Debate(BaseModel):
     options: list[str] = Field(default_factory=list)
 
 
+class Film(BaseModel):
+    title: str = Field(max_length=120)
+    year: int | None = None
+
+
 class CuratedPost(BaseModel):
     title: str = Field(max_length=120)
     category: str = ""
@@ -98,6 +112,7 @@ class CuratedPost(BaseModel):
     debate: Debate | None = None        # the arguable question, when the story genuinely raises one
     hot_take: str | None = Field(default=None, max_length=150)     # throwback features only: one bold, arguable line
     mood: str | None = None             # upbeat | calm | serious | nostalgic: sets the reel's music bed
+    film: Film | None = None            # poster sites: the one film or series the story is about; the poster's still is a frame from it
 
 
 OUTPUT_SCHEMA: dict[str, Any] = {
@@ -246,7 +261,19 @@ def schema_for(site: Site, carousel: bool = False) -> dict[str, Any]:
     if carousel:
         schema["properties"]["carousel_slides"] = deepcopy(CAROUSEL_SCHEMA)
         schema["required"] = [*schema["required"], "carousel_slides"]
+    if site.brand.style == "poster":
+        schema["properties"]["film"] = deepcopy(FILM_SCHEMA)
     return schema
+
+
+FILM_SCHEMA: dict[str, Any] = {
+    "type": "object", "additionalProperties": False, "required": ["title"],
+    "description": ("The ONE film or series this story is about, when there is one: the poster's still will be a frame from it. "
+                    "Give the title exactly as released (no quotes, no 'trailer'), and the year of release when known. "
+                    "Leave out when the story is about a person, a studio or the industry rather than one title."),
+    "properties": {"title": {"type": "string", "description": "The title as released"},
+                   "year": {"type": "integer", "description": "Year of release (or of the first season)"}},
+}
 
 
 class RewriteSkipped(Exception):
@@ -328,21 +355,23 @@ class Rewriter:
         self.last_usage = response.usage
         return result
 
-    def rewrite(self, site: Site, article: Article, carousel: bool = False) -> CuratedPost:
+    def rewrite(self, site: Site, article: Article, carousel: bool = False, keywords: list[dict] | None = None) -> CuratedPost:
         schema = schema_for(site, carousel)
         # Appended after .format() so the schema's own braces are never read as format placeholders.
         system = SYSTEM_PROMPT.format(
             name=site.name, domain=site.domain, tagline=site.tagline,
             niche=site.niche, audience=site.audience, tone=site.tone,
             sections=", ".join(site.categories or [site.category]),
-        ) + (CAROUSEL_PROMPT if carousel else "") + JSON_CONTRACT.format(schema=json.dumps(schema))
+        ) + house_formats(site) + (CAROUSEL_PROMPT if carousel else "") + JSON_CONTRACT.format(schema=json.dumps(schema))
+        from . import seo
         user = (
             f"SOURCE_URL: {article.url}\n"
             f"SOURCE_NAME: {article.sitename or article.url.split('/')[2]}\n"
             f"SOURCE_TITLE: {article.title}\n"
             f"SOURCE_DATE: {article.date or 'unknown'}\n"
             f"SITE_HASHTAGS (use some in instagram/twitter captions): {' '.join('#' + h for h in site.hashtags)}\n\n"
-            f"SOURCE_TEXT:\n{article.text}"
+            + seo.brief(keywords or [])
+            + f"SOURCE_TEXT:\n{article.text}"
         )
         post = self.ask(system, user, schema, CuratedPost.model_validate)
         post.tags = [t.strip() for t in post.tags if t and t.strip()][:8]

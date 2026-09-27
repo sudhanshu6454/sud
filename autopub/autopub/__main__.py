@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import os
 import random
@@ -10,7 +11,7 @@ import time
 
 from pathlib import Path
 
-from . import cards, carousels, config, images, nostalgia, rank, scorecards, sources, video
+from . import adclip, cards, carousels, config, deepdives, images, nostalgia, rank, refresh, scenes, scorecards, seo, sources, trailers, video, watchlists
 from .pipeline import make_wordpress, run_all
 from .rewrite import effective_model
 from .social import build_publishers
@@ -103,10 +104,31 @@ def cmd_check(settings, args) -> int:
     if settings.scorecard_hours:
         on = [s.key for s in settings.sites if s.scorecards]
         print(f"scorecards: at or after {', '.join(f'{h:02d}:00' for h in settings.scorecard_hours)} {settings.timezone} on {on or 'no site'}")
+    if settings.trailer_hours:
+        on = [s.key for s in settings.sites if s.trailers]
+        print(f"trailers: at or after {', '.join(f'{h:02d}:00' for h in settings.trailer_hours)} {settings.timezone} on {on or 'no site'}"
+              + ("" if settings.repost_ads else "; repost_ads is off, so trailers stay embeds"))
+    if settings.watchlist_hours:
+        on = [s.key for s in settings.sites if s.watchlists]
+        print(f"watchlists: at or after {', '.join(f'{h:02d}:00' for h in settings.watchlist_hours)} {settings.timezone} on {on or 'no site'}; "
+              f"film stills {'from TMDB' if os.environ.get('TMDB_API_KEY') else 'off (set TMDB_API_KEY for posters on the slides)'}")
     if settings.ad_hours:
         on = [s.key for s in settings.sites if s.nostalgia]
         print(f"ad features: viral now / throwback in turn at or after {', '.join(f'{h:02d}:00' for h in settings.ad_hours)} "
               f"{settings.timezone} on {on or 'no site'}")
+        if settings.repost_ads:
+            try:
+                import yt_dlp
+                fetcher = f"yt-dlp {yt_dlp.version.__version__}"
+            except ImportError:
+                ok = False
+                fetcher = "yt-dlp MISSING (pip install yt-dlp)"
+            cookies = settings.ad_clip_cookies
+            print(f"ad films: fetched and reposted inside the frame, {settings.ad_clip_max_seconds}s cap, "
+                  f"clients {'+'.join(settings.ad_clip_player_clients)}, {fetcher}, cookies "
+                  f"{(cookies + (' (ok)' if Path(cookies).exists() else ' MISSING')) if cookies else 'none'}")
+        else:
+            print("ad films: embedded from YouTube (repost_ads is off)")
     for site in settings.sites:
         print(f"\n[{site.key}] {site.domain} -> {site.wp_base_url()}")
         try:
@@ -255,8 +277,8 @@ def cmd_cards(settings, args) -> int:
             with _Image.open(path) as im:
                 w, h = im.size
             print(f"   {shape:<9} {w}x{h}  ratio {w / h:.3f}  {path.stat().st_size // 1024:>4} KB  {path}")
-        if cards.get("portrait"):
-            feed = images.instagram_asset(cards["portrait"], ratio=settings.instagram_ratio,
+        if rendered.get("portrait"):
+            feed = images.instagram_asset(rendered["portrait"], ratio=settings.instagram_ratio,
                                           out_path=out_dir / f"{site.slug}-instagram.jpg")
             from PIL import Image as _Image
             with _Image.open(feed) as im:
@@ -350,6 +372,225 @@ def cmd_nostalgia(settings, args) -> int:
     return rc
 
 
+def cmd_watchlist(settings, args) -> int:
+    """Publish a watchlist now (--theme picks the theme, else the model does), or --dry-run to see the list."""
+    from .pipeline import RunReport
+    from .rewrite import Rewriter
+    state = State(settings.data_dir / "autopub.db", settings.dedupe_across_sites)
+    rewriter = Rewriter(model=effective_model(settings.llm_model), effort=settings.llm_effort)
+    rc = 0
+    for site in settings.sites:
+        if args.site and site.key != args.site.upper():
+            continue
+        if not site.watchlists and not args.site:
+            continue
+        used = watchlists.parse_used(state.note(site.key, watchlists.USED_NOTE))
+        print(f"\n[{site.key}] {site.domain}: {len(used)} watchlists so far")
+        if args.dry_run:
+            try:
+                wl = watchlists.pick(rewriter, site, watchlists.fleet_used(state) or used, seeds=[args.theme] if args.theme else None)
+            except RuntimeError as exc:
+                print(f"  pick failed: {exc}"); rc = 1; continue
+            photos, cover, found = watchlists.stills(wl, settings.request_timeout)
+            print(f"  {wl.theme}  ·  {wl.subline}\n  {wl.intro}\n  stills: {found}/{len(wl.entries)}" + ("" if os.environ.get("TMDB_API_KEY") else " (no TMDB key)"))
+            for i, e in enumerate(wl.entries, 1):
+                print(f"  {i:02d}. {e.title} ({e.year}, {e.language}{', ' + e.where if e.where else ''}): {e.why}")
+            continue
+        report = RunReport(site=site.key)
+        ok = watchlists.publish_daily(site, settings, state, rewriter, make_wordpress(site), build_publishers(site),
+                                      settings.data_dir / "images", report, theme=args.theme)
+        print(f"  {'published' if ok else 'nothing published'}: {report.summary()}")
+        for link in report.published:
+            print("  ->", link)
+        rc = rc or (0 if ok else 1)
+    return rc
+
+
+def cmd_trailer(settings, args) -> int:
+    """Publish a trailer feature now, or --dry-run to see the pick and the upload it would fetch."""
+    from .pipeline import RunReport
+    from .rewrite import Rewriter
+    state = State(settings.data_dir / "autopub.db", settings.dedupe_across_sites)
+    rewriter = Rewriter(model=effective_model(settings.llm_model), effort=settings.llm_effort)
+    rc = 0
+    for site in settings.sites:
+        if args.site and site.key != args.site.upper():
+            continue
+        if not site.trailers and not args.site:
+            continue
+        used = trailers.parse_used(state.note(site.key, trailers.USED_NOTE))
+        print(f"\n[{site.key}] {site.domain}: {len(used)} trailers so far")
+        cands = trailers.candidates(site, settings, state)
+        print(f"  {len(cands)} trailer stories this week")
+        if args.dry_run:
+            choice = trailers.pick(rewriter, site, cands, trailers.fleet_used(state) or used)
+            if choice is None:
+                print("  the model found no story about a specific trailer"); rc = 1; continue
+            print(f"  story: {cands[choice.index - 1].title[:80]}  {cands[choice.index - 1].url}")
+            film = trailers.youtube.find_trailer(choice.film, choice.studio, choice.year)
+            print(f"  pick: {choice.film} ({choice.year or 'year?'}) by {choice.studio or 'studio?'}: {choice.hook}")
+            print(f"  upload: {film['url'] + '  ' + film['title'][:60] + '  [' + film['channel'] + ']' + ('  official' if film.get('official') else '  NOT the studio: would stay an embed') if film else 'NOT FOUND'}")
+            continue
+        report = RunReport(site=site.key)
+        ok = trailers.publish_daily(site, settings, state, rewriter, make_wordpress(site), build_publishers(site),
+                                    settings.data_dir / "images", report)
+        print(f"  {'published' if ok else 'nothing published'}: {report.summary()}")
+        for link in report.published:
+            print("  ->", link)
+        rc = rc or (0 if ok else 1)
+    return rc
+
+
+def cmd_scene(settings, args) -> int:
+    """Publish a scene feature now, or --dry-run to see the pick and the upload it would fetch."""
+    from .pipeline import RunReport
+    from .rewrite import Rewriter
+    state = State(settings.data_dir / "autopub.db", settings.dedupe_across_sites)
+    rewriter = Rewriter(model=effective_model(settings.llm_model), effort=settings.llm_effort)
+    rc = 0
+    for site in settings.sites:
+        if args.site and site.key != args.site.upper():
+            continue
+        if not site.scenes and not args.site:
+            continue
+        used = scenes.parse_used(state.note(site.key, scenes.USED_NOTE))
+        print(f"\n[{site.key}] {site.domain}: {len(used)} scenes so far")
+        clips = scenes.candidates(site, settings, state)
+        print(f"  {len(clips)} viral scene clips on rights holders' channels (>= {settings.scene_min_views:,} views)")
+        if args.dry_run:
+            for line in scenes.listing(clips[:12]).splitlines():
+                print("   ", line)
+            choice = scenes.pick(rewriter, site, clips, scenes.fleet_used(state) or used)
+            if choice is None:
+                print("  the editor found no scene worth breaking down"); rc = 1; continue
+            clip = clips[choice.index - 1]
+            print(f"  pick: {choice.film} ({choice.year}) {choice.kind}: {choice.scene}\n  why: {choice.hook}")
+            print(f"  clip: {clip['url']}  {clip['title'][:60]}  [{clip['channel']}, {scenes._views(clip.get('views') or 0)} views]")
+            continue
+        report = RunReport(site=site.key)
+        ok = scenes.publish_daily(site, settings, state, rewriter, make_wordpress(site), build_publishers(site), settings.data_dir / "images", report)
+        print(f"  {'published' if ok else 'nothing published'}: {report.summary()}")
+        for link in report.published:
+            print("  ->", link)
+        rc = rc or (0 if ok else 1)
+    return rc
+
+
+def cmd_deepdive(settings, args) -> int:
+    """Publish a trivia or breakdown carousel now, or --dry-run to see the pick and the page it would use."""
+    from .pipeline import RunReport
+    from .rewrite import Rewriter
+    state = State(settings.data_dir / "autopub.db", settings.dedupe_across_sites)
+    rewriter = Rewriter(model=effective_model(settings.llm_model), effort=settings.llm_effort)
+    rc = 0
+    for site in settings.sites:
+        if args.site and site.key != args.site.upper():
+            continue
+        if not site.deepdives and not args.site:
+            continue
+        used = deepdives.parse_used(state.note(site.key, deepdives.USED_NOTE))
+        print(f"\n[{site.key}] {site.domain}: {len(used)} deep dives so far")
+        if args.dry_run:
+            anniv, trending, news = deepdives.subjects(site, settings)
+            print(f"  anniversaries: {', '.join(anniv[:6]) or 'unknown'}")
+            choice = deepdives.pick(rewriter, site, anniv, trending, news, deepdives.fleet_used(state) or used)
+            if choice is None:
+                print("  the model offered no film"); rc = 1; continue
+            print(f"  pick: {choice.film} ({choice.year}) {choice.kind}: {choice.angle}\n  why: {choice.why}")
+            page = deepdives.wiki.film_page(choice.film, choice.year)
+            print(f"  page: {page.url + '  ' + str(len(page.text)) + ' chars, sections: ' + ', '.join(page.sections) if page else 'NOT FOUND'}")
+            continue
+        report = RunReport(site=site.key)
+        ok = deepdives.publish_daily(site, settings, state, rewriter, make_wordpress(site), build_publishers(site), settings.data_dir / "images", report)
+        print(f"  {'published' if ok else 'nothing published'}: {report.summary()}")
+        for link in report.published:
+            print("  ->", link)
+        rc = rc or (0 if ok else 1)
+    return rc
+
+
+def cmd_seo(settings, args) -> int:
+    """OpenSEO: whoami, setup (a project per site), research --site --seed, track --site (rank tracking), report --site."""
+    if not seo.enabled():
+        print("OPENSEO_URL is not set (in the fleet it is http://openseo:3001/mcp); nothing to talk to"); return 1
+    client = seo.Client(timeout=120)
+    sites = [s for s in settings.sites if not args.site or s.key == args.site.upper()]
+    if args.action == "whoami":
+        who = client.call("whoami")
+        print(f"  {who.get('userEmail')}  mode={who.get('mode')}  credits={who.get('creditsRemaining')}")
+        print(f"  tools: {', '.join(client.tools())}")
+        return 0
+    if args.action == "setup":
+        for site in sites:
+            print(f"  [{site.key}] {site.domain}: project {seo.project_for(client, site.name, site.domain)}")
+        return 0
+    if args.action == "research":
+        if not args.site:
+            print("--site is needed"); return 1
+        site = sites[0]
+        seed = args.seed or seo.seed_from(args.title or "")
+        if not seed:
+            print("--seed or --title is needed"); return 1
+        rows = seo.research(client, seo.project_for(client, site.name, site.domain), [seed])
+        print(f"  [{site.key}] {len(rows)} keywords for {seed!r}; the targets:")
+        for r in seo.targets(rows):
+            print(f"    {r['keyword']}  {int(r['volume'] or 0)}/mo  KD {r['difficulty'] if r['difficulty'] is not None else '-'}  {r['intent']}")
+        return 0
+    if args.action in ("track", "report"):
+        if not args.site:
+            print("--site is needed"); return 1
+        site = sites[0]
+        pid = seo.project_for(client, site.name, site.domain)
+        keywords = [k.strip() for k in (args.keywords or "").split(",") if k.strip()]
+        got = seo.track(client, pid, site.domain, keywords, run=args.action == "track")
+        print(f"  [{site.key}] tracker: {json.dumps(got, indent=1)[:3000]}")
+        return 0
+    return 1
+
+
+def cmd_adclip(settings, args) -> int:
+    """Fetch an ad film (or take --file) and render it inside the site's reel frame, to be eyeballed
+    before repost_ads goes live. Publishes nothing."""
+    site = settings.site(args.site.upper())
+    out_dir = Path(args.out) if args.out else settings.data_dir / "preview"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    if args.file:
+        clip = Path(args.file)
+    elif args.url:
+        print(f"fetching {args.url} with yt-dlp ({'+'.join(settings.ad_clip_player_clients)}) ...")
+        try:
+            clip = adclip.fetch(args.url, out_dir / "ads", player_clients=settings.ad_clip_player_clients,
+                                cookies=settings.ad_clip_cookies or None)
+        except RuntimeError as exc:
+            print(f"FAILED: {exc}")
+            return 1
+    else:
+        print("give --url (a YouTube link) or --file (an MP4 already on disk)")
+        return 2
+    info = video.probe(clip)
+    print(f"film: {clip} {info.get('width')}x{info.get('height')} {info.get('duration', 0):.0f}s "
+          f"{'with' if info.get('audio') else 'NO'} sound")
+    brand = args.brand or "The brand"
+    hook = args.hook or f"Why everyone is sharing {brand}'s new ad"
+    kicker = args.kicker or "Viral now"
+    credit = f"Ad: {brand}. Video: {brand} on YouTube. Shown for review."
+    stem = "adclip-preview"
+    card = images.render_card(hook, kicker, site, out_dir / f"{stem}-portrait.jpg", variant="portrait",
+                              standfirst=f"{brand}: the film, the psychology, the takeaways")
+    intro = images.story_asset(card, site, out_dir / f"{stem}-story.jpg")
+    outro = images.story_closing_frame(hook, site, out_dir / f"{stem}-story-end.jpg")
+    frame = images.ad_frame(kicker, hook, credit, site, out_dir / f"{stem}-frame.png")
+    print("composing the reel ...")
+    t0 = time.monotonic()
+    reel = adclip.compose(clip, frame, intro, outro, out_dir / f"{stem}-{site.slug}.mp4",
+                          max_seconds=settings.ad_clip_max_seconds)
+    got = video.probe(reel)
+    print(f"reel: {reel} {got.get('width')}x{got.get('height')} {got.get('duration', 0):.0f}s, "
+          f"{reel.stat().st_size // 1024} KB, {time.monotonic() - t0:.0f}s to render")
+    print(f"frame: {frame}")
+    return 0
+
+
 def cmd_scorecard(settings, args) -> int:
     """Publish an actor scorecard now (--actor picks one, else the model does), or --dry-run to see the figures."""
     from .pipeline import RunReport
@@ -378,6 +619,25 @@ def cmd_scorecard(settings, args) -> int:
     for link in report.published:
         print("  ->", link)
     return 0 if ok else 1
+
+
+def cmd_refresh_featured(settings, args) -> int:
+    """Give the posts already on a poster-style site the clean featured image (no title baked in)."""
+    state = State(settings.data_dir / "autopub.db", settings.dedupe_across_sites)
+    rc = 0
+    for site in settings.sites:
+        if args.site and site.key != args.site.upper():
+            continue
+        if site.brand.style != "poster" and not args.site:
+            continue
+        print(f"\n[{site.key}] {site.domain}: {len(state.published(site.key))} published posts" + (" (dry run)" if args.dry_run else ""))
+        wp = None if args.dry_run else make_wordpress(site)
+        done = refresh.refresh(site, settings, state, wp, settings.data_dir / "images", limit=args.limit, dry_run=args.dry_run)
+        for post_id, still in done:
+            print(f"  post {post_id}: {still}")
+        print(f"  {len(done)} featured image(s) {'would be' if args.dry_run else ''}replaced".replace("  replaced", " replaced"))
+        rc = rc or (0 if done or args.dry_run else 1)
+    return rc
 
 
 def cmd_status(settings, args) -> int:
@@ -413,16 +673,35 @@ def main(argv=None) -> int:
     n = sub.add_parser("nostalgia", help="publish an ad feature now: this week's viral ad or a classic (or --dry-run to see the pick)")
     n.add_argument("--site"); n.add_argument("--dry-run", action="store_true", help="pick and look up the film, publish nothing")
     n.add_argument("--kind", choices=["current", "nostalgic"], help="which kind; default: the kind the current slot would post")
+    tr = sub.add_parser("trailer", help="publish a trailer feature now (the studio's upload, in the frame), or --dry-run")
+    tr.add_argument("--site"); tr.add_argument("--dry-run", action="store_true")
+    wl = sub.add_parser("watchlist", help="publish a curated watchlist now, or --dry-run to see the list")
+    wl.add_argument("--site"); wl.add_argument("--theme", help="the theme to use instead of letting the model choose")
+    wl.add_argument("--dry-run", action="store_true")
+    sc_ = sub.add_parser("scene", help="publish a scene feature now (the rights holder's upload, in the frame), or --dry-run")
+    sc_.add_argument("--site"); sc_.add_argument("--dry-run", action="store_true")
+    dd = sub.add_parser("deepdive", help="publish a trivia or breakdown carousel on one film now, or --dry-run")
+    dd.add_argument("--site"); dd.add_argument("--dry-run", action="store_true")
+    se = sub.add_parser("seo", help="OpenSEO: whoami | setup | research --site X --seed '...' | track --site X --keywords 'a,b' | report --site X")
+    se.add_argument("action", choices=["whoami", "setup", "research", "track", "report"]); se.add_argument("--site"); se.add_argument("--seed")
+    se.add_argument("--title", help="a story title to turn into a seed"); se.add_argument("--keywords", help="comma-separated keywords to track")
+    ac = sub.add_parser("adclip", help="fetch an ad film and render it inside the site's reel frame, for a look (posts nothing)")
+    ac.add_argument("--site", required=True); ac.add_argument("--url", help="the YouTube link of the brand's own upload")
+    ac.add_argument("--file", help="an MP4 already on disk, instead of --url"); ac.add_argument("--out", help="directory to write into")
+    ac.add_argument("--brand"); ac.add_argument("--hook", help="the line set above the film"); ac.add_argument("--kicker")
     sc = sub.add_parser("scorecard", help="publish an actor scorecard now, or --dry-run to see the figures")
     sc.add_argument("--site"); sc.add_argument("--actor", help="the actor's English Wikipedia page title")
     sc.add_argument("--dry-run", action="store_true")
+    rf = sub.add_parser("refresh-featured", help="re-render the featured image of posts already published on a poster-style site, with no title baked in")
+    rf.add_argument("--site"); rf.add_argument("--limit", type=int, help="only the newest N posts"); rf.add_argument("--dry-run", action="store_true")
     ip = sub.add_parser("instagram-probe", help="ask Instagram whether it accepts a taller card yet (posts nothing)")
     ip.add_argument("--site"); ip.add_argument("--ratio", help="3:4 (default), 4:5 or 1:1"); ip.add_argument("--out")
     args = p.parse_args(argv)
     settings = config.load(args.config)
     commands = {"serve": cmd_serve, "run": cmd_run, "check": cmd_check, "sources": cmd_sources,
                 "status": cmd_status, "cards": cmd_cards, "instagram-probe": cmd_instagram_probe,
-                "nostalgia": cmd_nostalgia, "scorecard": cmd_scorecard}
+                "nostalgia": cmd_nostalgia, "scorecard": cmd_scorecard, "adclip": cmd_adclip, "watchlist": cmd_watchlist, "trailer": cmd_trailer,
+                "refresh-featured": cmd_refresh_featured, "scene": cmd_scene, "deepdive": cmd_deepdive, "seo": cmd_seo}
     return commands[args.cmd](settings, args)
 
 

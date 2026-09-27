@@ -23,6 +23,7 @@ ICONS = {
     "MENTALIST": ("marketing-mentalist", "themes/marketing-mentalist/assets/img/mark.png",    "#0a0908", 0.72, "#f7f5ef"),
     "CRAZY":     ("crazy4marketing",     "themes/crazy4marketing/assets/symbol_dark.png",     "#0a0a0a", 0.86, None),
     "SCREENSTAT": (None,                 "themes/screenstat/assets/images/site-icon.png",    None,      1.0,  None),
+    "FILMYBUFF": ("filmybuff",           "themes/filmybuff/assets/img/site-icon.png",        None,      1.0,  None),
 }
 
 # Sites without a designed logo get a typographic one, generated here: a wordmark PNG for the cover

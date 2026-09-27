@@ -46,6 +46,10 @@ function mm_setup(): void {
 }
 add_action( 'after_setup_theme', 'mm_setup' );
 
+/** Every resized copy WordPress makes (thumbnails, the poster sizes) is saved at high quality; the default 82 softens the type on a poster. */
+add_filter( 'jpeg_quality', function () { return 92; } );
+add_filter( 'wp_editor_set_quality', function () { return 92; } );
+
 function mm_assets(): void {
 	wp_enqueue_style( 'marketing-mentalist', get_stylesheet_uri(), array(), MM_VERSION );
 	wp_enqueue_script( 'mm-carousel', MM_URI . '/assets/js/carousel.js', array(), MM_VERSION, array( 'strategy' => 'defer' ) );

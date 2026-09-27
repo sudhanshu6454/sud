@@ -12,6 +12,7 @@ declare -A LOCAL_THEMES=(
   [MENTALIST]="marketing-mentalist"
   [CRAZY]="crazy4marketing"
   [SCREENSTAT]="screenstat"
+  [FILMYBUFF]="filmybuff"
 )
 
 WANT="${1:-}"

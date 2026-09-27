@@ -20,6 +20,8 @@ class Brand:
     font: str | None = None  # typeface for the share cards: a file stem in autopub/fonts (e.g. "Inter")
     heading_weight: int = 700   # the weight that site's own headings use, so the cards match it
     rail: str = "solid"         # the card's section rule: solid | double | inset | bars
+    style: str = "cards"        # the share-image family: "cards" (the news card formats) or "poster" (a film still
+                                # with a centred uppercase title, the handle above, the mark below: autopub/poster.py)
 
 
 @dataclass
@@ -46,6 +48,12 @@ class Site:
     socials: list[str] = field(default_factory=list)
     nostalgia: bool = False     # ad features (this week's viral ad, a classic revisited) at settings.ad_hours
     scorecards: bool = False    # actor scorecards from Wikipedia figures, at each settings.scorecard_hours
+    watchlists: bool = False    # curated watchlists (a theme, eight films, one line each) at settings.watchlist_hours
+    trailers: bool = False      # trailer features: the official upload fetched and posted in the site's frame, at settings.trailer_hours
+    scenes: bool = False        # scene features: an iconic or viral scene, the rights holder's own upload, in the frame, at settings.scene_hours
+    deepdives: bool = False     # trivia and breakdown carousels on one film, facts from Wikipedia, frames from TMDB, at settings.deepdive_hours
+    news_hours: list[int] | None = None   # hours (in settings.timezone) at which the news post may run; None = every cycle
+    formats: list[str] = field(default_factory=list)   # the site's house post shapes, told to the writer (see sites.yaml)
 
     @property
     def public_url(self) -> str:
@@ -106,12 +114,40 @@ class Settings:
     # Ad features on sites with `nostalgia: true`: the first cycle at or after each hour publishes one,
     # this week's viral ad and a classic revisited in turn (current first). [] switches them off.
     ad_hours: list[int] = field(default_factory=lambda: [9, 12, 15, 18, 21])
+    # The film itself rather than a narrated review: the brand's own upload is fetched with yt-dlp,
+    # the article gets it as a self-hosted video, Instagram and Facebook get it inside the site's
+    # reel frame with its own sound, cut at ad_clip_max_seconds. The rights stay with the brand:
+    # reposting is the operator's decision, so this is off unless sites.yaml says otherwise.
+    repost_ads: bool = False
+    ad_clip_max_seconds: int = 120
+    ad_clip_player_clients: list[str] = field(default_factory=lambda: ["web_embedded", "web"])   # yt-dlp clients, in order
+    ad_clip_cookies: str = ""        # a Netscape cookies.txt for YouTube, when it insists on a signed-in browser
     # One 'Steal this' card a day (the first article at or after this hour that offers a reusable tactic)
     # and one debate story a day (the first that raises an arguable question), each posted as a follow-up
     # `followup_delay_minutes` after the article. The throwback's hot take follows the same way. None = off.
     # Actor scorecards (sites with scorecards: true): the first cycle at or after each of these hours
     # publishes one actor's career in numbers, figures from Wikipedia. [] switches them off.
     scorecard_hours: list[int] = field(default_factory=lambda: [8, 11, 14, 17, 20])
+    # Watchlists (sites with watchlists: true): the first cycle at or after each hour publishes one
+    # curated list as an article and a poster carousel. [] switches them off.
+    watchlist_hours: list[int] = field(default_factory=lambda: [10, 16])
+    # Trailer features (sites with trailers: true): the first cycle at or after each hour takes this week's
+    # story about a specific trailer, teaser or first look, fetches the studio's own upload (repost_ads must
+    # be on) and posts it as the article's video and the reel, credited. [] switches them off.
+    trailer_hours: list[int] = field(default_factory=lambda: [11, 19])
+    # Scene features (sites with scenes: true): an iconic or viral scene, song or monologue, the rights holder's
+    # own upload fetched (repost_ads) and posted as the article's video and the reel, credited
+    scene_hours: list[int] = field(default_factory=lambda: [13, 21])
+    scene_min_views: int = 500_000     # a clip counts as viral from this many views
+    # THE HOUSE RULE FOR CINEMA CLIPS: a scene never runs longer than this anywhere it is posted (the
+    # article's video, the reel, the Facebook video); trailers are the one exception (ad_clip_max_seconds)
+    scene_clip_max_seconds: int = 30
+    # OpenSEO: research the story's keywords before each news article is written (one seed per article,
+    # DataForSEO credits) and hand the best to the writer; needs OPENSEO_URL in the environment
+    seo_keywords: bool = True
+    # Trivia and breakdown carousels (sites with deepdives: true): one film, six to nine facts from its
+    # Wikipedia page, one frame from the film per slide
+    deepdive_hours: list[int] = field(default_factory=lambda: [8, 12, 17])
     # Instagram allows 100 API publishes per account a day and every story frame counts as one, so a
     # story sequence goes out for every Nth news article (1 = every article). Throwbacks and
     # scorecards always get theirs.
@@ -159,5 +195,12 @@ def load(path: str | os.PathLike | None = None) -> Settings:
     settings.carousel_hours = sorted({int(h) % 24 for h in (settings.carousel_hours or [])})
     settings.reel_hours = sorted({int(h) % 24 for h in (settings.reel_hours or [])})
     settings.scorecard_hours = sorted({int(h) % 24 for h in (settings.scorecard_hours or [])})
+    settings.watchlist_hours = sorted({int(h) % 24 for h in (settings.watchlist_hours or [])})
+    settings.trailer_hours = sorted({int(h) % 24 for h in (settings.trailer_hours or [])})
+    settings.scene_hours = sorted({int(h) % 24 for h in (settings.scene_hours or [])})
+    settings.deepdive_hours = sorted({int(h) % 24 for h in (settings.deepdive_hours or [])})
+    for site in settings.sites:
+        if site.news_hours is not None:
+            site.news_hours = sorted({int(h) % 24 for h in site.news_hours})
     settings.ad_hours = sorted({int(h) % 24 for h in (settings.ad_hours or [])})
     return settings

@@ -266,7 +266,7 @@ class SlideRewriter:
     """Answers with slides only when asked for them, as the real one does."""
     asked: list[bool] = []
 
-    def rewrite(self, site, article, carousel=False):
+    def rewrite(self, site, article, carousel=False, keywords=None):
         SlideRewriter.asked.append(carousel)
         return CuratedPost(
             title=f"Curated: {article.title}", category="Campaigns", slug=article.title.lower(), excerpt="e" * 120,

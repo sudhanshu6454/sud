@@ -9,7 +9,7 @@ from pathlib import Path
 
 from slugify import slugify
 
-from . import cards, carousels, extract, followups, images, music, nostalgia, rank, scorecards, sources, speech, video
+from . import adclip, cards, carousels, deepdives, extract, followups, images, music, nostalgia, poster, rank, scenes, scorecards, seo, sources, speech, trailers, video, watchlists, tmdb
 from .config import Settings, Site
 from .rewrite import CuratedPost, Rewriter, RewriteSkipped, effective_model
 from .social import SocialPost, build_publishers, dispatch
@@ -102,8 +102,9 @@ def publish_one(site: Site, settings: Settings, state: State, cand: sources.Cand
     reel_log = carousels.parse_log(state.note(site.key, REEL_NOTE))
     want_reel = (any(p.wants_video for p in publishers)
                  and carousels.due(time.time(), reel_log, settings.reel_hours, settings.timezone))
+    keywords = seo.keywords_for_story(site.name, site.domain, article.title, timeout=settings.request_timeout) if settings.seo_keywords else []
     try:
-        post: CuratedPost = rewriter.rewrite(site, article, carousel=want_carousel)
+        post: CuratedPost = rewriter.rewrite(site, article, carousel=want_carousel, keywords=keywords)
     except RewriteSkipped as exc:
         state.mark_skipped(url, site.key, str(exc))
         report.skipped += 1
@@ -146,11 +147,16 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
                  publishers, work_dir: Path, report: RunReport, *, image_url: str | None = None, credit: str | None = None,
                  use_source_image: bool | None = None, want_carousel: bool = False, want_reel: bool = False,
                  force_reel: bool = False, carousel_log: list[float] | None = None, reel_log: list[float] | None = None,
-                 card_brief=None, force_story: bool = False) -> bool:
+                 card_brief=None, force_story: bool = False, ad_clip: Path | None = None,
+                 ad_caption: str | None = None, slide_photos: dict[int, str] | None = None,
+                 ad_clip_max_seconds: float | None = None) -> bool:
     """Everything after the words exist: cards, story frames, reel, carousel, WordPress, socials.
 
     `url` is the claimed source key in `state`; `image_url` and `credit` are the source photo and
-    who it belongs to. Shared by the hourly news post and the daily throwback feature."""
+    who it belongs to. Shared by the hourly news post and the daily throwback feature. `ad_clip`
+    is the ad film itself (adclip.fetch): it becomes the reel, inside the site's frame, instead of
+    the narrated one, and the article's video slot, with `ad_caption` as the credit. `slide_photos`
+    maps a carousel slide's 1-based index to a still for it (the poster family draws it)."""
     carousel_log = carousel_log if carousel_log is not None else carousels.parse_log(state.note(site.key, carousels.NOTE))
     reel_log = reel_log if reel_log is not None else carousels.parse_log(state.note(site.key, REEL_NOTE))
     # 3. images. The Instagram card takes one of a small family of formats, chosen from what the
@@ -159,6 +165,25 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
     stem = slugify(post.slug or post.title)[:60] or f"post-{int(time.time())}"
     if use_source_image is None:
         use_source_image = site.use_source_image
+    if site.brand.style == "poster" and post.film and not (image_url or "").startswith(tmdb.IMG):
+        # the poster's still is a frame from the film itself, never the source's press photo
+        frame_hit = tmdb.film_still(post.film.title, post.film.year, settings.request_timeout)
+        if frame_hit:
+            chosen = poster.pick_frame(frame_hit.get("frames") or [frame_hit["url"]], settings.request_timeout) or frame_hit["url"]
+            log.info("[%s] still from the film: %s (%s), frame %d of %d", site.key, frame_hit["title"], frame_hit["year"] or "?",
+                     (frame_hit.get("frames") or [chosen]).index(chosen) + 1 if chosen in (frame_hit.get("frames") or []) else 1,
+                     len(frame_hit.get("frames") or [chosen]))
+            image_url, credit, use_source_image = chosen, frame_hit["credit"], True
+        else:
+            log.info("[%s] no still on TMDB for %r; the source's photo stays", site.key, post.film.title)
+    if site.brand.style == "poster" and not (image_url or "").startswith(tmdb.IMG):
+        # no film: a press photo too small to fill the poster gives way to the person's own portrait on TMDB
+        person = next((m.name for m in post.mentions if m.kind == "person" and m.name), None)
+        if person and (not image_url or poster.upscale_needed(image_url, timeout=settings.request_timeout) > poster.LETTERBOX_ABOVE):
+            shot = tmdb.person_still(person, settings.request_timeout)
+            if shot:
+                log.info("[%s] the source's photo is too small for the poster; %s's portrait from TMDB instead", site.key, shot["name"])
+                image_url, credit, use_source_image = shot["url"], shot["credit"], True
     history = cards.parse_history(state.note(site.key, "card_formats"))
     kind = card_brief.kind if card_brief is not None else cards.choose(history, post.card, photo=bool(use_source_image and image_url))
     kicker = post.image_kicker or post.category or site.category
@@ -212,9 +237,26 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
         except Exception as exc:  # noqa: BLE001 - fall back to the master; the publisher walks shapes anyway
             log.warning("[%s] could not derive the Instagram asset: %s", site.key, exc)
 
-    # 3b'. the reel: the story frames as a short video, when this article is the slot's reel
+    # 3b'. the reel. With the ad film in hand it is the film inside the site's frame, its own sound,
+    # between the story cover and the closing frame; otherwise the story frames as a narrated video,
+    # when this article is the slot's reel
     reel_path: Path | None = None
-    if (want_reel or force_reel) and cards_by_shape.get("story") and story_frames:
+    reel_from_clip = False
+    if ad_clip is not None and (want_reel or force_reel) and cards_by_shape.get("story"):
+        try:
+            frame = images.ad_frame(kicker, card_headline, ad_caption or credit or "", site,
+                                    work_dir / site.slug / f"{stem}-ad-frame.png")
+            outro = story_frames[-1] if story_frames else images.story_closing_frame(
+                post.image_headline or post.title, site, work_dir / site.slug / f"{stem}-story-end.jpg")
+            reel_path = adclip.compose(ad_clip, frame, cards_by_shape["story"], outro,
+                                       work_dir / site.slug / f"{stem}-reel.mp4", max_seconds=ad_clip_max_seconds or settings.ad_clip_max_seconds)
+            reel_from_clip = True
+            log.info("[%s] ad reel: the film inside the frame, %.0fs cap, %d KB", site.key,
+                     settings.ad_clip_max_seconds, reel_path.stat().st_size // 1024)
+        except Exception as exc:  # noqa: BLE001 - the narrated reel below stands in
+            log.warning("[%s] could not compose the ad reel (%s); falling back to the narrated one", site.key, exc)
+            reel_path = None
+    if reel_path is None and (want_reel or force_reel) and cards_by_shape.get("story") and story_frames:
         try:
             frames = [cards_by_shape["story"], *story_frames]
             spoken = _story_texts(post)
@@ -265,7 +307,8 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
                 for i, (heading, body) in enumerate(slides, 1):
                     carousel_slides.append(images.carousel_text_slide(heading, body, i, len(slides), site,
                                                                       work_dir / site.slug / f"{stem}-slide-{i}.jpg",
-                                                                      kicker=post.image_kicker or post.category))
+                                                                      kicker=post.image_kicker or post.category,
+                                                                      photo_url=(slide_photos or {}).get(i)))
                 carousel_slides.append(images.carousel_closing_slide(post.image_headline or post.title, site,
                                                                      work_dir / site.slug / f"{stem}-slide-end.jpg"))
                 log.info("[%s] carousel: cover + %d slides + closing", site.key, len(slides))
@@ -304,6 +347,18 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
                 reel_media = wp.upload_media(reel_path, f"{post.title} (reel)", alt_text=post.image_headline)
             except WordPressError as exc:
                 log.warning("[%s] reel upload failed: %s", site.key, exc)
+        # the article's video: the film itself, self-hosted, in the slot the writer left for it;
+        # if the upload fails the YouTube embed the slot carries stays
+        clip_block: str | None = None
+        if ad_clip is not None and adclip.SLOT_OPEN in post.body_html:
+            try:
+                clip_media = wp.upload_media(ad_clip, f"{post.title} (ad film)", alt_text=post.image_headline,
+                                             caption=ad_caption or "")
+                clip_block = adclip.video_block(clip_media["id"], clip_media["source_url"], ad_caption or credit or "",
+                                                poster=(landscape_media or {}).get("source_url"))
+            except WordPressError as exc:
+                log.warning("[%s] ad film upload failed: %s; the embed stays", site.key, exc)
+        post.body_html = adclip.place_video(post.body_html, clip_block)
         story_media: list[dict] = []
         if "story" in hosted and media_by_shape.get("story"):
             for i, frame in enumerate(story_frames, 1):
@@ -350,11 +405,13 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
                      len(post.mentions))
         except Exception as exc:  # noqa: BLE001 - tags are a bonus; the post must not depend on them
             log.warning("[%s] mention verification failed: %s", site.key, exc)
+    # the film's reel says whose film it is, on the frame and in the caption
+    credit_line = f"\n\n{ad_caption}" if reel_from_clip and ad_caption else ""
     social = SocialPost(
         title=post.title, link=link,
         captions={
-            "twitter": post.captions.twitter, "facebook": _hooked(post.caption_hook, post.captions.facebook),
-            "instagram": _hooked(post.caption_hook, post.captions.instagram), "linkedin": post.captions.linkedin,
+            "twitter": post.captions.twitter, "facebook": _hooked(post.caption_hook, post.captions.facebook) + credit_line,
+            "instagram": _hooked(post.caption_hook, post.captions.instagram) + credit_line, "linkedin": post.captions.linkedin,
             "pinterest": post.captions.pinterest, "telegram": post.captions.telegram,
             "threads": post.captions.threads,
         },
@@ -416,6 +473,15 @@ def _by_relevance(site: Site, settings: Settings, fresh: list[sources.Candidate]
     return [s.candidate for s in keep]
 
 
+def _local_hour(tz: str) -> int:
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    try:
+        return datetime.now(ZoneInfo(tz)).hour
+    except Exception:  # noqa: BLE001 - an unknown zone name must not stop the run
+        return datetime.now().hour
+
+
 def run_site(site: Site, settings: Settings, state: State, rewriter: Rewriter | None = None,
              wp: WordPress | None = None, publishers=None, work_dir: Path | None = None,
              limit: int | None = None) -> RunReport:
@@ -444,13 +510,18 @@ def run_site(site: Site, settings: Settings, state: State, rewriter: Rewriter | 
         log.info("[%s] last post %.0f min ago; waiting for the %d min gap", site.key, (time.time() - last) / 60, gap / 60)
         return report
 
-    candidates = sources.collect(site, timeout=settings.request_timeout)
-    report.candidates = len(candidates)
-    fresh = [c for c in candidates if not state.is_used(c.url, site.key)]
-    if not fresh:
-        log.info("[%s] nothing new", site.key)
+    # a curated site runs its news post only at its news hours; the formats below keep their own slots
+    if site.news_hours is not None and _local_hour(settings.timezone) not in site.news_hours:
+        log.info("[%s] no news at %02d:00 (news hours %s); the day's formats only", site.key, _local_hour(settings.timezone), site.news_hours)
+        fresh = []
     else:
-        fresh = _by_relevance(site, settings, fresh)
+        candidates = sources.collect(site, timeout=settings.request_timeout)
+        report.candidates = len(candidates)
+        fresh = [c for c in candidates if not state.is_used(c.url, site.key)]
+        if not fresh:
+            log.info("[%s] nothing new", site.key)
+        else:
+            fresh = _by_relevance(site, settings, fresh)
 
     if fresh:
         ready()
@@ -483,6 +554,34 @@ def run_site(site: Site, settings: Settings, state: State, rewriter: Rewriter | 
             scorecards.publish_daily(site, settings, state, rewriter, wp, publishers, work_dir, report)
         except Exception as exc:  # noqa: BLE001
             log.exception("[%s] scorecard failed: %s", site.key, exc)
+    # Filmybuff's trailers: the studio's own upload, in the frame, as the article's video and the reel
+    if site.trailers and trailers.due(settings, state, site):
+        try:
+            ready()
+            trailers.publish_daily(site, settings, state, rewriter, wp, publishers, work_dir, report)
+        except Exception as exc:  # noqa: BLE001
+            log.exception("[%s] trailer failed: %s", site.key, exc)
+    # Filmybuff's watchlists: a theme, eight films, a poster carousel, on top of the news
+    if site.watchlists and watchlists.due(settings, state, site):
+        try:
+            ready()
+            watchlists.publish_daily(site, settings, state, rewriter, wp, publishers, work_dir, report)
+        except Exception as exc:  # noqa: BLE001
+            log.exception("[%s] watchlist failed: %s", site.key, exc)
+    # Filmybuff's scenes: an iconic or viral scene from the rights holder's channel, in the frame
+    if site.scenes and scenes.due(settings, state, site):
+        try:
+            ready()
+            scenes.publish_daily(site, settings, state, rewriter, wp, publishers, work_dir, report)
+        except Exception as exc:  # noqa: BLE001
+            log.exception("[%s] scene failed: %s", site.key, exc)
+    # Filmybuff's deep dives: trivia or a breakdown on one film, facts from Wikipedia, frames from TMDB
+    if site.deepdives and deepdives.due(settings, state, site):
+        try:
+            ready()
+            deepdives.publish_daily(site, settings, state, rewriter, wp, publishers, work_dir, report)
+        except Exception as exc:  # noqa: BLE001
+            log.exception("[%s] deep dive failed: %s", site.key, exc)
     log.info(report.summary())
     return report
 

@@ -23,6 +23,7 @@ declare -A LOCAL_THEMES=(
   [MENTALIST]="marketing-mentalist"
   [CRAZY]="crazy4marketing"
   [SCREENSTAT]="screenstat"
+  [FILMYBUFF]="filmybuff"
 )
 
 # Per-site header logo (PNG in the repo) set as the WordPress custom logo; block themes draw it
@@ -43,6 +44,7 @@ declare -A LOCAL_PLUGINS=(
   [CRAZY]="fleet-linkinbio"
   [JUNKIES]="fleet-linkinbio"
   [SCREENSTAT]="screenstat-pulse fleet-linkinbio"
+  [FILMYBUFF]="fleet-linkinbio"
 )
 
 upsert_env() {  # upsert_env KEY VALUE
