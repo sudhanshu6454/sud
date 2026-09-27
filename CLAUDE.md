@@ -40,17 +40,22 @@ and ship themes with `./infra/wp/deploy-themes.sh`.
 
 OpenSEO runs beside the fleet (`openseo` service, loopback and internal network only, no app auth).
 autopub asks it for target keywords before every news article and can track rankings
-(`python -m autopub seo ...`). Its UI is reached over `ssh -L 3001:127.0.0.1:3001 root@SERVER`; the
-repo's `.mcp.json` points Claude Code at it through that tunnel. Never expose port 3001 publicly.
+(`python -m autopub seo ...`). Works for all five sites. Its UI is reached over 
+`ssh -L 3001:127.0.0.1:3001 root@SERVER`; the repo's `.mcp.json` points Claude Code at it 
+through that tunnel. Never expose port 3001 publicly.
 
 ## Google Search Console
 
-Google Search Console (GSC) MCP server (`mcp-search-console`) integrated for SEO analysis. Use it to:
-- Track which queries bring visitors to filmybuff.com and other sites
+Google Search Console (GSC) MCP server (`mcp-search-console`) integrated for SEO analysis across
+all five sites: Filmybuff, Crazy4Marketing, ScreenStat, Marketing Mentalist, Marketing Junkies.
+Use it to:
+- Track which queries bring visitors to each site
 - Monitor indexing status of published pages
 - Analyze click-through rates (CTR) and impressions
-- Compare performance between time periods
+- Compare performance between time periods and sites
 - Inspect URLs for indexing issues
+- Identify new keyword opportunities
 
 First auth: Call `get_capabilities` to trigger OAuth browser flow. Uses your Google account.
-Then ask Claude to analyze search queries, top pages, indexing status, etc. over any date range.
+See SEO_INTEGRATION.md for the complete setup guide and usage examples for all five sites.
+
