@@ -15,7 +15,7 @@
     },
     "geo": {
       "command": "uvx",
-      "args": ["geo-optimizer-skill[mcp]", "geo-mcp"]
+      "args": ["--from", "geo-optimizer-skill[mcp]", "--with", "mcp<2", "geo-mcp"]
     }
   }
 }
