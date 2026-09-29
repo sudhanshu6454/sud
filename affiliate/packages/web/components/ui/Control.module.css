@@ -1,0 +1,118 @@
+/* Input / Select / Textarea — drawn in the mocks with a 2px ink border on the
+   ground colour, 12px padding, 14px text (2a, 3a, 3b, 3c, 1e). */
+
+.control {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-3);
+  border: 2px solid var(--color-text);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text);
+  caret-color: var(--color-accent);
+  font: inherit;
+  font-size: 14px;
+  transition: border-color 120ms ease-out;
+}
+
+.control:focus {
+  border-color: var(--color-accent);
+}
+
+.control:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 0;
+}
+
+/* Search / filter inputs in page headers (1d, 3c, 3f): 10px 12px. */
+.compact {
+  padding: 10px var(--space-3);
+}
+
+.invalid,
+.invalid:focus {
+  border-color: var(--color-accent);
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.textarea {
+  min-height: 96px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+/* Native select without the platform arrow; a small ink chevron instead. */
+.select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 36px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--color-text) 50%),
+    linear-gradient(135deg, var(--color-text) 50%, transparent 50%);
+  background-position: calc(100% - 19px) 50%, calc(100% - 14px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  cursor: pointer;
+}
+
+/* Checkbox — the consent row in 3a: 16px dot, 2px ink border, accent fill
+   when checked (the handover draws it with its round .radio .dot). */
+.check {
+  position: relative;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 14px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.checkInput {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  pointer-events: none;
+}
+
+.dot {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  border: 2px solid var(--color-text);
+  border-radius: 50%;
+  background: transparent;
+  transition: background-color 120ms ease-out;
+}
+
+.check:hover .dot {
+  border-color: var(--color-accent);
+}
+
+.checkInput:checked + .dot {
+  background: var(--color-accent);
+  border-color: var(--color-text);
+}
+
+.checkInput:focus-visible + .dot {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.checkInput:disabled + .dot,
+.checkInput:disabled ~ .checkLabel {
+  opacity: 0.45;
+}
+
+.check:has(.checkInput:disabled) {
+  cursor: not-allowed;
+}
+
+.checkInvalid .dot {
+  border-color: var(--color-accent);
+}

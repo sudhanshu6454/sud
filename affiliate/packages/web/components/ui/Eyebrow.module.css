@@ -1,0 +1,25 @@
+/* Eyebrow / section label: 12px uppercase, 0.1em (section labels) or 0.12em
+   (page and marketing eyebrows), neutral-700 or accent-700. */
+
+.eyebrow {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.55;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-neutral-700);
+  margin: 0;
+  font-family: var(--font-body);
+}
+
+.wide {
+  letter-spacing: 0.12em;
+}
+
+.accent {
+  color: var(--color-accent-700);
+}
+
+.inherit {
+  color: inherit;
+}

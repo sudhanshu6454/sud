@@ -1,0 +1,205 @@
+/* App shell — 1c: 220px sidebar (logo row over a 2px rule, 14px items with a
+   4px left border, account footer over a 2px rule) + main. Phone layout
+   (≤760px, 1e / 3f): top bar (wordmark + 32px account box) and a bottom tab
+   bar (2px ink top rule, 11px labels, ≥44px tall). */
+
+.shell {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.skip {
+  position: absolute;
+  left: var(--space-2);
+  top: -100px;
+  z-index: 50;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-text);
+  color: var(--color-bg);
+  font-size: 14px;
+}
+
+.skip:focus-visible,
+.skip:focus {
+  top: var(--space-2);
+  color: var(--color-bg);
+}
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  border-right: 2px solid var(--color-divider);
+  overflow-y: auto;
+}
+
+.logoRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 20px var(--space-6);
+  border-bottom: 2px solid var(--color-divider);
+  color: inherit;
+  text-decoration: none;
+}
+
+.logoRow:hover {
+  color: inherit;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  font-size: 14px;
+}
+
+.item {
+  text-decoration: none;
+  padding: 14px var(--space-6);
+  border-left: 4px solid transparent;
+  color: var(--color-text);
+  transition: background-color 120ms ease-out, color 120ms ease-out;
+}
+
+.item:hover {
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-text) 4%, transparent);
+}
+
+.active,
+.active:hover {
+  background: var(--color-accent-100);
+  color: var(--color-accent-700);
+  border-left-color: var(--color-accent);
+  font-weight: 600;
+}
+
+.footer {
+  margin-top: auto;
+  padding: 20px var(--space-6);
+  border-top: 2px solid var(--color-divider);
+  font-size: 13px;
+}
+
+.accountName {
+  font-weight: 600;
+}
+
+.accountMeta {
+  color: var(--color-neutral-700);
+}
+
+/* TEST demo account (decision: every screen with demo data shows the badge). */
+.footer .footerBadge {
+  margin: var(--space-2) 0 0;
+}
+
+.main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.main:focus {
+  outline: none;
+}
+
+.topbar,
+.tabbar,
+.mobileSwitcher {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .shell {
+    display: block;
+    padding-bottom: calc(48px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .sidebar {
+    display: none;
+  }
+
+  .topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-4) 20px;
+    border-bottom: 2px solid var(--color-divider);
+  }
+
+  .topbarLogo {
+    display: flex;
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .topbarLogo:hover {
+    color: inherit;
+  }
+
+  .avatar {
+    display: block;
+    width: 32px;
+    height: 32px;
+    background: var(--color-neutral-300);
+  }
+
+  .mobileSwitcher {
+    display: block;
+    border-bottom: 2px solid var(--color-divider);
+  }
+
+  /* The switcher's own rule sits above the badge row, so drop it here. */
+  .mobileSwitcher > :first-child {
+    border-bottom: 0;
+  }
+
+  /* Lined up with the switcher summary's 24px inset. */
+  .mobileBadgeRow {
+    padding: 0 var(--space-6) var(--space-3);
+  }
+
+  .mobileBadgeRow .mobileBadge {
+    margin: 0;
+  }
+
+  .tabbar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+    display: grid;
+    grid-template-columns: repeat(var(--tab-count, 4), minmax(0, 1fr));
+    border-top: 2px solid var(--color-text);
+    background: var(--color-bg);
+    font-size: 11px;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .tab {
+    display: block;
+    min-height: 44px;
+    padding: 14px var(--space-3);
+    text-align: left;
+    text-decoration: none;
+    color: var(--color-text);
+  }
+
+  .tab:hover {
+    color: var(--color-accent-700);
+  }
+
+  .tabActive,
+  .tabActive:hover {
+    font-weight: 700;
+    color: var(--color-accent-700);
+  }
+}

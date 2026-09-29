@@ -66,3 +66,196 @@ export function stockLabel(stock: Stock): string {
       return stock.replace(/_/g, ' ');
   }
 }
+
+/* ------------------------------------------------------------------------
+ * Afflino display formats (design handover 1b–3f).
+ *
+ * Rules inferred from the mocks and reproduced exactly:
+ * - Rupee amounts use Indian digit grouping (lakh / crore): ₹1,84,320,
+ *   ₹25,00,000, ₹2,52,360.
+ * - Counts (clicks, sign-ups, creators, installs) use western thousands
+ *   grouping: 312,880 and 271,040 — never 3,12,880. Below 1,00,000 both
+ *   groupings agree (84,210; 18,406), so the mocks only disambiguate there.
+ * - Compact rupees: ≥ ₹1 crore → "₹4.8Cr", ≥ ₹1 lakh → "₹18.4L", one
+ *   decimal, a trailing ".0" dropped ("₹25L"); below a lakh the full amount
+ *   (₹74,160).
+ * - Compact counts: K / M / B with one decimal, trailing ".0" dropped
+ *   (420K, 1.2M, 9.8M).
+ * - Compact figures TRUNCATE to one decimal, they do not round: the mock
+ *   shows 312,880 clicks as "312.8K" (rounding would give 312.9K). So a
+ *   compact figure never overstates reach or money.
+ * - Paise are shown only where the design shows them (EPC "₹6.10",
+ *   "₹3.00"): formatINRFromMinor(minor, { paise: true }).
+ * - Percentages take the decimals the context shows: "1.31%" (CR),
+ *   "1.9%" (sub-ID CR), "61%" (platform share), "+22%" (signed delta).
+ * - Negative amounts put the sign before the symbol: "-₹500".
+ * ---------------------------------------------------------------------- */
+
+/** "184320" → "1,84,320" (last three digits, then pairs). */
+function groupIndian(digits: string): string {
+  if (digits.length <= 3) return digits;
+  const last3 = digits.slice(-3);
+  const rest = digits.slice(0, -3);
+  return `${rest.replace(/\B(?=(\d{2})+(?!\d))/g, ',')},${last3}`;
+}
+
+/** "312880" → "312,880". */
+function groupWestern(digits: string): string {
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+const DASH = '—';
+
+/** Whole rupees with Indian grouping: 184320 → "₹1,84,320" (rounded to the rupee). */
+export function formatINRWhole(rupees: number): string {
+  if (!Number.isFinite(rupees)) return DASH;
+  const r = Math.round(Math.abs(rupees));
+  const sign = rupees < 0 && r !== 0 ? '-' : '';
+  return `${sign}₹${groupIndian(String(r))}`;
+}
+
+/**
+ * Minor units (paise) to rupees with Indian grouping. Default: rounded to
+ * the rupee (18000 → "₹180"); { paise: true } keeps two decimals
+ * (610 → "₹6.10", 300 → "₹3.00").
+ */
+export function formatINRFromMinor(minor: number, opts: { paise?: boolean } = {}): string {
+  if (!Number.isFinite(minor)) return DASH;
+  const abs = Math.round(Math.abs(minor));
+  if (opts.paise) {
+    const sign = minor < 0 && abs !== 0 ? '-' : '';
+    const rupees = Math.floor(abs / 100);
+    const paise = abs % 100;
+    return `${sign}₹${groupIndian(String(rupees))}.${String(paise).padStart(2, '0')}`;
+  }
+  const rupees = Math.round(abs / 100);
+  const sign = minor < 0 && rupees !== 0 ? '-' : '';
+  return `${sign}₹${groupIndian(String(rupees))}`;
+}
+
+/** Tenths → "18.4" / "25" (whole part grouped the Indian way). */
+function tenthsLabel(tenths: number): string {
+  const whole = Math.trunc(tenths / 10);
+  const decimal = tenths % 10;
+  return decimal === 0 ? groupIndian(String(whole)) : `${groupIndian(String(whole))}.${decimal}`;
+}
+
+/**
+ * Compact rupees for KPIs: 48000000 → "₹4.8Cr", 1840000 → "₹18.4L",
+ * 2500000 → "₹25L", 74160 → "₹74,160". Truncates to one decimal.
+ */
+export function formatINRCompact(rupees: number): string {
+  if (!Number.isFinite(rupees)) return DASH;
+  return formatINRCompactFromMinor(Math.round(rupees * 100));
+}
+
+/** formatINRCompact from minor units (paise): 184000000 → "₹18.4L". */
+export function formatINRCompactFromMinor(minor: number): string {
+  if (!Number.isFinite(minor)) return DASH;
+  const abs = Math.round(Math.abs(minor));
+  const CRORE = 1_000_000_000; // ₹1,00,00,000 in paise
+  const LAKH = 10_000_000; // ₹1,00,000 in paise
+  let body: string;
+  if (abs >= CRORE) body = `${tenthsLabel(Math.trunc((abs * 10) / CRORE))}Cr`;
+  else if (abs >= LAKH) body = `${tenthsLabel(Math.trunc((abs * 10) / LAKH))}L`;
+  else return formatINRFromMinor(minor);
+  return `${minor < 0 ? '-' : ''}₹${body}`;
+}
+
+/** Counts with western thousands grouping: 312880 → "312,880" (rounded to an integer). */
+export function formatCount(n: number): string {
+  if (!Number.isFinite(n)) return DASH;
+  const r = Math.round(Math.abs(n));
+  return `${n < 0 && r !== 0 ? '-' : ''}${groupWestern(String(r))}`;
+}
+
+/**
+ * Compact counts: 312880 → "312.8K", 1200000 → "1.2M", 420000 → "420K",
+ * 9800000 → "9.8M"; below 1,000 the plain count. Truncates to one decimal.
+ */
+export function formatCountCompact(n: number): string {
+  if (!Number.isFinite(n)) return DASH;
+  const abs = Math.round(Math.abs(n));
+  const sign = n < 0 && abs !== 0 ? '-' : '';
+  const units: Array<[number, string]> = [
+    [1_000_000_000, 'B'],
+    [1_000_000, 'M'],
+    [1_000, 'K'],
+  ];
+  for (const [size, suffix] of units) {
+    if (abs >= size) {
+      const tenths = Math.trunc((abs * 10) / size);
+      const whole = Math.trunc(tenths / 10);
+      const decimal = tenths % 10;
+      return `${sign}${decimal === 0 ? groupWestern(String(whole)) : `${whole}.${decimal}`}${suffix}`;
+    }
+  }
+  return `${sign}${abs}`;
+}
+
+/**
+ * A percentage value (already ×100): formatPct(1.312, { decimals: 2 }) →
+ * "1.31%", formatPct(22, { signed: true }) → "+22%".
+ */
+export function formatPct(percent: number, opts: { decimals?: number; signed?: boolean } = {}): string {
+  if (!Number.isFinite(percent)) return DASH;
+  const { decimals = 0, signed = false } = opts;
+  const body = Math.abs(percent).toFixed(decimals);
+  const isZero = Number(body) === 0;
+  const sign = percent < 0 && !isZero ? '-' : signed && percent > 0 && !isZero ? '+' : '';
+  return `${sign}${body}%`;
+}
+
+/** numerator / denominator as a percentage: formatRate(4106, 312880, 2) → "1.31%"; "—" when the denominator is 0. */
+export function formatRate(numerator: number, denominator: number, decimals = 2): string {
+  if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator === 0) return DASH;
+  return formatPct((numerator / denominator) * 100, { decimals });
+}
+
+/** An offer's payout: flat (minor units) or a percentage of the sale. */
+export type OfferPayout =
+  | { type: 'flat'; amountMinor: number; per: string }
+  | { type: 'percent'; percent: number; per: string };
+
+/** "₹180 / sign-up", "12% / sale". */
+export function formatPayout(payout: OfferPayout): string {
+  return payout.type === 'flat'
+    ? `${formatINRFromMinor(payout.amountMinor)} / ${payout.per}`
+    : `${formatPct(payout.percent)} / ${payout.per}`;
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/** Calendar date parts; a Date or timestamp is read in India time (Asia/Kolkata). */
+function calendarParts(date: string | Date): { y: number; m: number; d: number } | null {
+  if (typeof date === 'string') {
+    const plain = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+    if (plain) return { y: Number(plain[1]), m: Number(plain[2]), d: Number(plain[3]) };
+  }
+  const value = typeof date === 'string' ? new Date(date) : date;
+  if (Number.isNaN(value.getTime())) return null;
+  const iso = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(value);
+  const [y, m, d] = iso.split('-').map(Number);
+  return y && m && d ? { y, m, d } : null;
+}
+
+/**
+ * "26 Sep" / "05 Sep" (pad, as in the 2c payouts table) / "Sat 3 Oct"
+ * (weekday, as in the 1c next-payout line). A 'YYYY-MM-DD' string is a
+ * calendar date; anything else is read in India time.
+ */
+export function formatDayMonth(date: string | Date, opts: { pad?: boolean; weekday?: boolean } = {}): string {
+  const parts = calendarParts(date);
+  if (!parts) return DASH;
+  const day = opts.pad ? String(parts.d).padStart(2, '0') : String(parts.d);
+  const label = `${day} ${MONTHS[parts.m - 1]}`;
+  if (!opts.weekday) return label;
+  const weekday = WEEKDAYS[new Date(Date.UTC(parts.y, parts.m - 1, parts.d)).getUTCDay()];
+  return `${weekday} ${label}`;
+}

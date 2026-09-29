@@ -1,0 +1,27 @@
+/* Page-level message: accent-100 field, 14px accent-800 text, under a 2px rule. */
+
+.banner {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-8);
+  background: var(--color-accent-100);
+  color: var(--color-accent-800);
+  font-size: 14px;
+  border-bottom: 2px solid var(--color-divider);
+}
+
+.neutral {
+  background: var(--color-neutral-100);
+  color: var(--color-neutral-800);
+}
+
+.title {
+  font-weight: 600;
+}
+
+@media (max-width: 760px) {
+  .banner {
+    padding: var(--space-3) 20px;
+  }
+}

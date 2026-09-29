@@ -31,3 +31,7 @@ docs
 scripts
 docker-compose.yml
 docker-compose.prod.yml
+
+# A dev server may run with NEXT_DIST_DIR=.next-dev next to a build in .next.
+.next-dev
+**/.next-dev

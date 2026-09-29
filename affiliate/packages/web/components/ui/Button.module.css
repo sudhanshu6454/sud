@@ -1,0 +1,120 @@
+/* Button — ported from the handover (.btn, .btn-primary/-secondary/-ghost,
+   .btn-block) and the sizes drawn in the mocks. */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  text-decoration: none;
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 14px;
+  line-height: 1.2;
+  color: var(--color-text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  padding: var(--space-2) calc(var(--space-3) * 1.2);
+  white-space: nowrap;
+  transition: background-color 120ms ease-out, color 120ms ease-out, border-color 120ms ease-out;
+}
+
+.btn:disabled,
+.btn[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* sizes: xs = table-row action (2e "Review", 2b "Approve"); sm = list-row
+   action (2d "Connect"/"Disconnect"); md = default. */
+.xs {
+  padding: 6px var(--space-3);
+  font-size: 13px;
+}
+
+.sm {
+  padding: var(--space-2) 14px;
+  font-size: 13px;
+}
+
+/* variants */
+.primary,
+.primary:hover {
+  background: var(--color-accent);
+  color: var(--color-bg);
+}
+.primary:hover:not(:disabled):not([aria-disabled='true']) {
+  background: var(--color-accent-600);
+}
+.primary:active:not(:disabled):not([aria-disabled='true']) {
+  background: var(--color-accent-700);
+}
+
+.secondary,
+.secondary:hover {
+  border-color: var(--color-divider);
+  color: var(--color-text);
+}
+.secondary:hover:not(:disabled):not([aria-disabled='true']) {
+  background: color-mix(in srgb, var(--color-text) 7%, transparent);
+}
+.secondary:active:not(:disabled):not([aria-disabled='true']) {
+  background: color-mix(in srgb, var(--color-text) 14%, transparent);
+}
+
+.ghost,
+.ghost:hover {
+  color: var(--color-accent);
+}
+.ghost.md {
+  padding-inline: var(--space-1);
+}
+.ghost:hover:not(:disabled):not([aria-disabled='true']) {
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+}
+.ghost:active:not(:disabled):not([aria-disabled='true']) {
+  background: color-mix(in srgb, var(--color-accent) 18%, transparent);
+}
+
+/* Ground-coloured button on a full accent "poster" field (1b close). */
+.inverse,
+.inverse:hover {
+  background: var(--color-bg);
+  border-color: var(--color-bg);
+  color: var(--color-text);
+}
+.inverse:hover:not(:disabled):not([aria-disabled='true']) {
+  background: var(--color-accent-100);
+  border-color: var(--color-accent-100);
+}
+.inverse:active:not(:disabled):not([aria-disabled='true']) {
+  background: var(--color-accent-200);
+  border-color: var(--color-accent-200);
+}
+.inverse:focus-visible {
+  outline-color: var(--color-bg);
+}
+
+/* Full width, label flush left (.btn-block). */
+.block {
+  width: 100%;
+  margin-top: var(--space-2);
+  justify-content: flex-start;
+  text-align: left;
+}
+
+/* Same, without the 8px top margin the handover's .btn-block carries. */
+.flush {
+  margin-top: 0;
+}
+
+/* Mobile hit area: at least 44px tall. */
+.touch {
+  min-height: 44px;
+}
+
+.label {
+  display: inline;
+}

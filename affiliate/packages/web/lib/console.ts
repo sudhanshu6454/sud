@@ -143,8 +143,8 @@ function seed(): ConsoleLook[] {
   return [
     {
       id: 'look-1',
-      title: 'Airport street style',
-      sourcePage: 'Candid Frames',
+      title: 'Demo airport street style',
+      sourcePage: 'Demo Candid Frames',
       category: 'Fashion',
       state: 'product_review',
       checks: {},
@@ -157,8 +157,8 @@ function seed(): ConsoleLook[] {
     },
     {
       id: 'look-2',
-      title: 'Red-carpet evening look',
-      sourcePage: 'Star Sightings',
+      title: 'Demo red-carpet evening look',
+      sourcePage: 'Demo Star Sightings',
       category: 'Accessories',
       state: 'draft',
       checks: {
@@ -174,8 +174,8 @@ function seed(): ConsoleLook[] {
     },
     {
       id: 'look-3',
-      title: 'Monsoon city stroll',
-      sourcePage: 'Candid Frames',
+      title: 'Demo monsoon city stroll',
+      sourcePage: 'Demo Candid Frames',
       category: 'Footwear',
       state: 'commercial_review',
       checks: {},
@@ -193,8 +193,8 @@ function seed(): ConsoleLook[] {
     },
     {
       id: 'look-4',
-      title: 'Fashion week front row',
-      sourcePage: 'Style Diaries',
+      title: 'Demo fashion week front row',
+      sourcePage: 'Demo Style Diaries',
       category: 'Fashion',
       state: 'paused',
       resumeState: 'ready',

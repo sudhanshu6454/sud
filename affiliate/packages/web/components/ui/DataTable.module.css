@@ -1,0 +1,78 @@
+/* Data table — as rendered in 1c / 2b / 2c / 2e / 3c / 3d / 3e: header 11px
+   uppercase 0.08em, 600, 60% ink, 10px 0 padding over a 2px divider rule;
+   rows 12px 0 padding with a 1px divider rule and a 4% ink hover. Cells have
+   no horizontal padding; the columns share the width. */
+
+.wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--color-text) 60%, transparent);
+  padding: 10px 0;
+  border-bottom: 2px solid var(--color-divider);
+  white-space: nowrap;
+}
+
+/* 2e's review queue: 12px header padding. */
+.headLoose .th {
+  padding: var(--space-3) 0;
+}
+
+.td {
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-divider);
+  vertical-align: middle;
+}
+
+.table tbody tr {
+  transition: background-color 120ms ease-out;
+}
+
+.table tbody tr:hover {
+  background: color-mix(in srgb, var(--color-text) 4%, transparent);
+}
+
+.right {
+  text-align: right;
+}
+
+/* Cell tones used in the mocks. */
+.strong {
+  font-weight: 600;
+}
+
+.muted {
+  color: var(--color-neutral-700);
+}
+
+.body {
+  color: var(--color-neutral-800);
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.empty {
+  padding: var(--space-6) 0;
+  font-size: 14px;
+  color: var(--color-neutral-700);
+  border-bottom: 1px solid var(--color-divider);
+}

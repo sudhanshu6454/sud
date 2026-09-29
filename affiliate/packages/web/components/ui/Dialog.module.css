@@ -1,0 +1,51 @@
+/* Dialog — the handover's .dialog-backdrop / .dialog: centred 440px panel on
+   a 50% neutral-900 backdrop, surface fill, large shadow, 0 radius. */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: color-mix(in srgb, var(--color-neutral-900) 50%, transparent);
+}
+
+.dialog {
+  width: min(440px, 100%);
+  max-height: calc(100vh - 2 * var(--space-4));
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.wide {
+  width: min(640px, 100%);
+}
+
+.title {
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 20px;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+  margin: 0;
+}
+
+.body {
+  font-size: 14px;
+  opacity: 0.85;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}

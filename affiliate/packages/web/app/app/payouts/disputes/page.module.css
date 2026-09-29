@@ -1,0 +1,67 @@
+/* Disputes (was /portal/disputes). */
+
+.badge {
+  margin-bottom: 0;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 560px;
+}
+
+.ok,
+.hint,
+.error {
+  margin: 0;
+  font-size: 13px;
+}
+
+.ok {
+  color: var(--color-accent-700);
+}
+
+.hint {
+  color: var(--color-neutral-700);
+}
+
+.error {
+  color: var(--color-accent-700);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 2px solid var(--color-divider);
+  max-width: 880px;
+}
+
+.card {
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-divider);
+  font-size: 14px;
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.kind {
+  font-size: 13px;
+  color: var(--color-neutral-700);
+}
+
+.subject {
+  margin: var(--space-1) 0 0;
+  color: var(--color-neutral-800);
+}
+
+.meta {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--color-neutral-700);
+}

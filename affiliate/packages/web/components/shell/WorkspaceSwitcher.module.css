@@ -1,0 +1,72 @@
+/* Workspace switcher for the sidebar slot (3e: an agency moves into a brand
+   client's workspace). A native <details> disclosure. */
+
+.switcher {
+  font-size: 13px;
+  border-bottom: 2px solid var(--color-divider);
+}
+
+.summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 0 var(--space-2);
+  padding: var(--space-4) var(--space-6);
+  cursor: pointer;
+  list-style: none;
+}
+
+.summary::-webkit-details-marker {
+  display: none;
+}
+
+.summary:hover {
+  background: color-mix(in srgb, var(--color-text) 4%, transparent);
+}
+
+.label {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-neutral-700);
+}
+
+.current {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toggle {
+  color: var(--color-accent);
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+}
+
+.switcher[open] .toggle {
+  color: var(--color-accent-700);
+}
+
+.list {
+  list-style: none;
+  padding: 0 0 var(--space-2);
+  margin: 0;
+}
+
+.option {
+  display: block;
+  padding: var(--space-2) var(--space-6);
+  text-decoration: none;
+  color: var(--color-text);
+}
+
+.option:hover {
+  background: color-mix(in srgb, var(--color-text) 4%, transparent);
+}
+
+.optionMeta {
+  display: block;
+  color: var(--color-neutral-700);
+}

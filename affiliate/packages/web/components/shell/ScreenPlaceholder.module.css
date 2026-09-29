@@ -1,0 +1,19 @@
+.body {
+  padding: var(--space-6) var(--space-8);
+  font-size: 14px;
+  color: var(--color-neutral-700);
+}
+
+.body p {
+  margin: 0 0 var(--space-2);
+}
+
+@media (max-width: 760px) {
+  .body {
+    padding: var(--space-4) 20px;
+  }
+}
+
+.badge {
+  margin-bottom: 0;
+}

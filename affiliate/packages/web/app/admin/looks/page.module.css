@@ -1,0 +1,126 @@
+/* Looks pipeline board (admin, no artboard): one column per state, split by
+   2px rules; cards split by 1px rules. Scrolls sideways below 1400px. */
+
+.badge {
+  margin-bottom: 0;
+}
+
+.board {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 250px;
+  overflow-x: auto;
+  border-top: 2px solid var(--color-divider);
+  border-bottom: 2px solid var(--color-divider);
+}
+
+@media (min-width: 1400px) {
+  .board {
+    grid-auto-columns: minmax(0, 1fr);
+  }
+}
+
+.column {
+  min-width: 0;
+  padding: var(--space-4);
+  border-right: 2px solid var(--color-divider);
+}
+
+.column:first-child {
+  padding-left: 0;
+}
+
+.column:last-child {
+  border-right: 0;
+}
+
+.columnTitle {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+  font-size: 12px;
+}
+
+.count {
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 14px;
+}
+
+.cards {
+  display: flex;
+  flex-direction: column;
+}
+
+.card {
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--color-divider);
+  font-size: 14px;
+}
+
+.cardTitle {
+  display: block;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.cardTitle:hover {
+  text-decoration: underline;
+}
+
+.cardMeta {
+  margin: 2px 0 var(--space-2);
+  font-size: 13px;
+  color: var(--color-neutral-700);
+}
+
+.note {
+  margin: 0 0 var(--space-2);
+  padding: 6px var(--space-2);
+  font-size: 13px;
+  color: var(--color-accent-800);
+  background: var(--color-accent-100);
+}
+
+.gates {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding-top: var(--space-2);
+}
+
+.gatesTitle {
+  margin-bottom: 2px;
+}
+
+.gate {
+  font-size: 13px;
+}
+
+.cardActions {
+  margin-top: var(--space-2);
+}
+
+/* Ghost buttons sit flush left with the card text (labels are flush left). */
+.cardActions > button {
+  margin-left: calc(-1 * var(--space-3));
+}
+
+/* The Dialog body is 85% opacity for copy; form fields stay fully opaque. */
+.formDialog > div[id] {
+  opacity: 1;
+}
+
+.dialogFields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.dialogHint {
+  margin: 0;
+  color: var(--color-neutral-700);
+}

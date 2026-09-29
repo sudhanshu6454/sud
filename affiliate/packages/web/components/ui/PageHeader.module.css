@@ -1,0 +1,64 @@
+/* Page header — 1c / 1d / 2b / 3b / 3e: eyebrow over a 28px 800 title,
+   actions on the right, 20px 32px padding over a 2px rule. */
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-4);
+  padding: 20px var(--space-8);
+  border-bottom: 2px solid var(--color-divider);
+}
+
+.plain {
+  border-bottom: 0;
+}
+
+.heading {
+  min-width: 0;
+}
+
+.title {
+  margin: var(--space-1) 0 0;
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 28px;
+  line-height: 1.12;
+  letter-spacing: -0.03em;
+}
+
+.noEyebrow {
+  margin-top: 0;
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.description {
+  margin: var(--space-2) 0 0;
+  font-size: 14px;
+  color: var(--color-neutral-700);
+  max-width: 640px;
+}
+
+@media (max-width: 760px) {
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: var(--space-4) 20px;
+    gap: var(--space-3);
+  }
+
+  .title {
+    font-size: 24px;
+  }
+
+  .actions {
+    justify-content: flex-start;
+  }
+}

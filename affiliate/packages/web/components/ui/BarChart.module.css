@@ -1,0 +1,28 @@
+/* Bar chart — 1c "Daily earnings": flex row of bars, 6px gap, 180px tall,
+   2px ink baseline; ink bars with the current period in accent; 12px
+   neutral-700 axis labels spread under the baseline. */
+
+.chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  border-bottom: 2px solid var(--color-text);
+}
+
+.bar {
+  flex: 1;
+  min-width: 0;
+  background: var(--color-text);
+}
+
+.current {
+  background: var(--color-accent);
+}
+
+.axis {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--color-neutral-700);
+  margin-top: var(--space-2);
+}

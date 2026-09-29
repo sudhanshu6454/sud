@@ -11,7 +11,10 @@
  * - statement ledger + disputes           -> no API endpoint yet (DEMO_LEDGER, DEMO_DISPUTES)
  * - operator console suspense queue       -> DEMO_SUSPENSE_ITEMS (fallback when API unreachable)
  *
- * All amounts are in paise (INR minor units).
+ * All amounts are in paise (INR minor units). Every proper noun is
+ * "Demo …" (platform invariant 11): the HEAD copy of this file named real
+ * merchants as programmes; they were renamed when the pages came back
+ * (2026-09-29).
  */
 import type { EarningsResponse } from './api';
 import { DEMO_PUBLISHER_ID } from './api';
@@ -49,8 +52,8 @@ export const DEMO_CONVERSIONS: DemoConversion[] = [
   {
     id: 'c-1042',
     date: '2026-09-21',
-    placement: 'Candid Frames / Instagram',
-    product: 'Aurelia Court Classic White Sneakers',
+    placement: 'Demo Candid Frames / Instagram',
+    product: 'Demo Aurelia Court Classic White Sneakers',
     order_minor: 499900,
     commission_minor: 34993,
     status: 'pending',
@@ -58,8 +61,8 @@ export const DEMO_CONVERSIONS: DemoConversion[] = [
   {
     id: 'c-1039',
     date: '2026-09-20',
-    placement: 'Candid Frames / Instagram',
-    product: 'Kaya Oversized Wool-Blend Blazer',
+    placement: 'Demo Candid Frames / Instagram',
+    product: 'Demo Kaya Oversized Wool-Blend Blazer',
     order_minor: 899900,
     commission_minor: 62993,
     status: 'approved',
@@ -67,8 +70,8 @@ export const DEMO_CONVERSIONS: DemoConversion[] = [
   {
     id: 'c-1036',
     date: '2026-09-19',
-    placement: 'Star Sightings / YouTube',
-    product: 'Isha Champagne Silk Slip Dress',
+    placement: 'Demo Star Sightings / YouTube',
+    product: 'Demo Isha Champagne Silk Slip Dress',
     order_minor: 659900,
     commission_minor: 46193,
     status: 'approved',
@@ -76,8 +79,8 @@ export const DEMO_CONVERSIONS: DemoConversion[] = [
   {
     id: 'c-1031',
     date: '2026-09-18',
-    placement: 'Candid Frames / Instagram',
-    product: 'Zaveri & Co. 18K Gold-Plated Hoop Earrings',
+    placement: 'Demo Candid Frames / Instagram',
+    product: 'Demo Zaveri 18K Gold-Plated Hoop Earrings',
     order_minor: 129900,
     commission_minor: 9093,
     status: 'reversed',
@@ -85,8 +88,8 @@ export const DEMO_CONVERSIONS: DemoConversion[] = [
   {
     id: 'c-1027',
     date: '2026-09-17',
-    placement: 'Style Diaries / Website',
-    product: 'Verde Milano Suede Loafers',
+    placement: 'Demo Style Diaries / Website',
+    product: 'Demo Verde Milano Suede Loafers',
     order_minor: 349900,
     commission_minor: 24493,
     status: 'approved',
@@ -102,20 +105,20 @@ export interface DemoOption {
 }
 
 export const DEMO_PROPERTIES: DemoOption[] = [
-  { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', label: 'Candid Frames', programme: '', property: 'Candid Frames', placement: '' },
-  { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', label: 'Star Sightings', programme: '', property: 'Star Sightings', placement: '' },
-  { id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', label: 'Style Diaries', programme: '', property: 'Style Diaries', placement: '' },
+  { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', label: 'Demo Candid Frames', programme: '', property: 'Demo Candid Frames', placement: '' },
+  { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', label: 'Demo Star Sightings', programme: '', property: 'Demo Star Sightings', placement: '' },
+  { id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', label: 'Demo Style Diaries', programme: '', property: 'Demo Style Diaries', placement: '' },
 ];
 
 export const DEMO_PROGRAMMES: DemoOption[] = [
-  { id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', label: 'Flipkart Fashion Fest', programme: 'Flipkart Fashion Fest', property: '', placement: '' },
-  { id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', label: 'Myntra End-of-Reason Sale', programme: 'Myntra End-of-Reason Sale', property: '', placement: '' },
-  { id: 'ffffffff-ffff-4fff-8fff-ffffffffffff', label: 'Ajio Luxe Edit', programme: 'Ajio Luxe Edit', property: '', placement: '' },
+  { id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', label: 'Demo Fashion Fest', programme: 'Demo Fashion Fest', property: '', placement: '' },
+  { id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', label: 'Demo End-of-Season Sale', programme: 'Demo End-of-Season Sale', property: '', placement: '' },
+  { id: 'ffffffff-ffff-4fff-8fff-ffffffffffff', label: 'Demo Luxe Edit', programme: 'Demo Luxe Edit', property: '', placement: '' },
 ];
 
 export const DEMO_OFFERS: DemoOption[] = [
-  { id: '11111111-2222-4333-8444-555555555555', label: 'Flat 7% on footwear', programme: '', property: '', placement: '' },
-  { id: '66666666-7777-4888-8999-000000000000', label: 'Up to 40% off ethnic wear', programme: '', property: '', placement: '' },
+  { id: '11111111-2222-4333-8444-555555555555', label: 'Demo offer: flat 7% on footwear', programme: '', property: '', placement: '' },
+  { id: '66666666-7777-4888-8999-000000000000', label: 'Demo offer: up to 40% off ethnic wear', programme: '', property: '', placement: '' },
 ];
 
 export const DEMO_PLACEMENTS: DemoOption[] = [
@@ -139,28 +142,28 @@ export interface DemoLedgerEntry {
 export const DEMO_LEDGER: DemoLedgerEntry[] = [
   {
     id: 'L-2081', date: '2026-09-21', kind: 'conversion',
-    programme: 'Flipkart Fashion Fest', property: 'Candid Frames', placement: 'Instagram bio link',
-    label: 'c-1042 · Aurelia sneakers', currency: 'INR', amount_minor: 34993,
+    programme: 'Demo Fashion Fest', property: 'Demo Candid Frames', placement: 'Instagram bio link',
+    label: 'c-1042 · Demo Aurelia sneakers', currency: 'INR', amount_minor: 34993,
   },
   {
     id: 'L-2079', date: '2026-09-20', kind: 'conversion',
-    programme: 'Ajio Luxe Edit', property: 'Candid Frames', placement: 'Instagram bio link',
-    label: 'c-1039 · Kaya blazer', currency: 'INR', amount_minor: 62993,
+    programme: 'Demo Luxe Edit', property: 'Demo Candid Frames', placement: 'Instagram bio link',
+    label: 'c-1039 · Demo Kaya blazer', currency: 'INR', amount_minor: 62993,
   },
   {
     id: 'L-2076', date: '2026-09-19', kind: 'conversion',
-    programme: 'Myntra End-of-Reason Sale', property: 'Star Sightings', placement: 'YouTube description',
-    label: 'c-1036 · Isha slip dress', currency: 'INR', amount_minor: 46193,
+    programme: 'Demo End-of-Season Sale', property: 'Demo Star Sightings', placement: 'YouTube description',
+    label: 'c-1036 · Demo Isha slip dress', currency: 'INR', amount_minor: 46193,
   },
   {
     id: 'L-2075', date: '2026-09-18', kind: 'adjustment',
-    programme: 'Myntra End-of-Reason Sale', property: 'Candid Frames', placement: 'Instagram bio link',
+    programme: 'Demo End-of-Season Sale', property: 'Demo Candid Frames', placement: 'Instagram bio link',
     label: 'Reversal · c-1031 returned by customer', currency: 'INR', amount_minor: -9093,
   },
   {
     id: 'L-2072', date: '2026-09-17', kind: 'conversion',
-    programme: 'Flipkart Fashion Fest', property: 'Style Diaries', placement: 'Website sidebar',
-    label: 'c-1027 · Verde loafers', currency: 'INR', amount_minor: 24493,
+    programme: 'Demo Fashion Fest', property: 'Demo Style Diaries', placement: 'Website sidebar',
+    label: 'c-1027 · Demo Verde loafers', currency: 'INR', amount_minor: 24493,
   },
 ];
 

@@ -132,3 +132,98 @@
 - **The proxy makes the API reachable from the public shop host.** That is no wider than
   `AFFILIATE_API_HOST` already is, but it means the API's own auth (the JWT stub) is the only
   gate on both hosts.
+
+## Afflino foundation (2026-09-29)
+
+29. **Rebuilt to the Afflino handover.** Tokens, base rules and component
+    classes come from the handover's `styles.css`; values are ported from the
+    rendered artboards, which win where the handover README's prose differs:
+    table header rule is the 2px *divider* colour (sampled #9f9d9d on the
+    mocks), not ink; header text is 11px uppercase 0.08em 600 at 60% ink;
+    cells have no horizontal padding; links are ink with an accent-700 hover
+    (the reference page overrides styles.css's accent link colour); the
+    consent checkbox is the round 16px dot the mock draws.
+30. **Archivo is self-hosted** (`app/fonts`, SIL OFL 1.1) through
+    `next/font/local`, as two faces (latin, latin-ext) because next/font/local
+    cannot give each file its own `unicode-range`; `--font-archivo` joins
+    them (ext first so ₹ never falls back to a metric-adjusted local Arial).
+    Replaces assumption 7 (system font stack). "→" is in neither subset and
+    falls back to the system face, exactly as in the mocks.
+31. **Demo proper nouns are renamed** "Demo …" one-for-one (the handover's
+    mock names include real companies and plausible real channels); the
+    numbers are as designed. The mapping is in `lib/demo/afflino.ts`'s module
+    header; `test/format.test.ts` asserts no original name survives.
+32. **Claims and prices are placeholders** in one module, `lib/site-copy.ts`
+    (400M reach, ₹0 upfront, T+7, ₹24,999/month, 15% / 8% fees, TDS 1% under
+    194-O, 7-day validation, ₹500 minimum withdrawal) — to be confirmed by the
+    business before launch. The creator disclosure line there is a draft
+    pending counsel (docs/action-tracker.md, ASCI rows), not a compliant
+    disclosure.
+33. **Tracking is unchanged.** The design's first-party attribution cookie and
+    readable `/r/{handle}/{offer}?s=` links are not implemented; the platform
+    redirect stays `/r/{32-hex token}` with no cookies (counsel-gated).
+34. **One app, one breakpoint.** The mobile artboards are the phone layout of
+    the same PWA: ≤760px the sidebar becomes a top bar (wordmark + 32px account
+    box → settings) and a fixed bottom tab bar; the marketing chrome collapses
+    its links into a menu below 900px. The sidebar is sticky at 100vh (the
+    artboards simply end at their content).
+35. **Agency navigation** is Workspace (`/agency`), Brand clients
+    (`/agency#clients`), Roster (`/agency#roster`), plus a workspace switcher
+    into `/brand?workspace=<client id>`. *Superseded in part by 39.*
+36. **Formatting rules** (lib/format.ts): rupees in Indian grouping, counts in
+    western grouping (the mocks print 312,880 clicks but ₹1,84,320), compact
+    figures truncate to one decimal (312,880 → "312.8K" as drawn), paise only
+    where drawn (EPC). The handover's "Fri 3 Oct" payout is a Saturday in
+    2026; the demo stores the date (2026-10-03) and a formatter renders the
+    weekday from it.
+37. **Select shows a chevron** (the mocks draw selects as plain boxes); a
+    native select without any affordance reads as a text input.
+38. **Dev gallery** `/dev/ui` renders every primitive; it returns 404 when
+    `NODE_ENV=production`, so it is only visible on a dev server
+    (`NEXT_DIST_DIR=.next-dev next dev`).
+
+## Foundation review fixes (2026-09-29)
+
+39. **Agency ↔ brand workspace.** `/brand?workspace=<client id>` is read by
+    `app/brand/BrandShell.tsx`: the shell shows that client as the account
+    and a workspace switcher (the agency's other clients, "Back to agency"),
+    and every brand nav / tab / logo / settings link carries the parameter
+    (`navInWorkspace()` / `withWorkspace()`, `components/shell/areas.ts`;
+    nav matching ignores `?query`). An unknown id falls back to the brand's
+    own shell. In-page links inside `/brand` must use `withWorkspace()` or
+    the agency drops out of the workspace. The agency has no settings screen
+    (route map), so its phone account box is shown, not linked
+    (`AppShell` `settingsHref` is optional).
+40. **Demo accounts are labelled in the shell.** `ShellAccount.demo` renders
+    `<DemoBadge variant="mock" />` in the sidebar footer, adds "(demo
+    account)" to the phone account box's name, and puts the badge under the
+    phone workspace switcher (which prints demo names). All three area
+    layouts pass it until sign-in is wired.
+41. **The portal / console pages are back** at their new routes (links,
+    disputes, statements, suspense, looks pipeline, match review) with the
+    HEAD logic unchanged and the chrome replaced by the Afflino primitives;
+    they have no artboard. Their demo data (`lib/portal-demo.ts`,
+    `lib/console.ts` seed) named real merchants as programmes (Flipkart,
+    Myntra, Ajio) and carried unlabelled invented names; every proper noun is
+    now "Demo …" and `test/format.test.ts` guards it. Browsers that already
+    stored the old console seed (`paparazzi_console_looks`) keep their stored
+    titles until that key is cleared. `GET /v1/publisher/earnings` (the old
+    `/portal` dashboard) is not wired until the 1c overview is built. One
+    behaviour change: link minting treats the proxy's `502
+    UPSTREAM_UNAVAILABLE` like `NETWORK_UNREACHABLE` (the labelled, untracked
+    `redirect.demo.invalid` demo link); behind the same-origin `/api` proxy
+    the HEAD branch could never fire.
+42. **No cookie claims in demo copy.** The design's "30-day cookie" / "7-day
+    cookie" offer lines are dropped (see 33); screens must not print
+    "Cookie 30 days" either.
+43. **The demo mobile number is impossible**, `+91 00000 00000` (the design's
+    "+91 98450 12345" is a dialable number in a live series); `validateMobile`
+    rejects it, and the validator's own error copy carries no example number.
+44. **Global disabled rule covers native controls only** (`button`, `input`,
+    `select`, `textarea` `:disabled`); components that use `aria-disabled`
+    on other elements style it themselves (Button's inert link, the shop's
+    "Link not available yet" CTA, which is no longer dimmed a second time).
+45. **Field around a group** renders its label as a `<span id>` referenced by
+    the group's `aria-labelledby` (auto-detected for a direct Segmented /
+    SelectableCardGroup child via their static `fieldGroup` flag, or
+    `<Field group>`); a `<label for>` would point at an id nothing carries.

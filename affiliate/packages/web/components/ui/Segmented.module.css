@@ -1,0 +1,69 @@
+/* Segmented control — as drawn: 2px ink border, 13px options, 1px divider
+   between options, selected option filled ink with ground text. */
+
+.seg {
+  display: inline-flex;
+  border: 2px solid var(--color-text);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+/* Form-field width (1e, 3a, 3b): full width, equal options. */
+.block {
+  display: flex;
+  width: 100%;
+}
+
+.opt {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: var(--space-2) 14px;
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 120ms ease-out, color 120ms ease-out;
+}
+
+.block .opt {
+  flex: 1;
+  padding: 10px var(--space-3);
+}
+
+.opt + .opt {
+  border-left: 1px solid var(--color-divider);
+}
+
+.opt:hover {
+  background: color-mix(in srgb, var(--color-text) 7%, transparent);
+}
+
+.selected,
+.selected:hover {
+  background: var(--color-text);
+  color: var(--color-bg);
+}
+
+.opt:has(input:focus-visible) {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.disabled:hover {
+  background: transparent;
+}
+
+.input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  margin: 0;
+  pointer-events: none;
+}

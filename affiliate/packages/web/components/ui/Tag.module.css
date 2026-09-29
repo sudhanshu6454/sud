@@ -1,0 +1,58 @@
+/* Tag — .tag / .tag-accent / .tag-neutral / .tag-outline from the handover,
+   plus ink (a selected toggle drawn in ink). 11px, 0.02em, 3px 10px, nowrap. */
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  padding: 3px 10px;
+  border-radius: calc(var(--radius-md) * 0.75);
+  white-space: nowrap;
+}
+
+.accent {
+  background: var(--color-accent-100);
+  color: var(--color-accent-800);
+}
+
+.neutral {
+  background: var(--color-neutral-100);
+  color: var(--color-neutral-800);
+}
+
+.outline {
+  border: 1px solid var(--color-accent);
+  color: var(--color-accent);
+}
+
+.ink {
+  background: var(--color-text);
+  color: var(--color-bg);
+}
+
+/* TagButton: a filter / toggle tag. Same box as the tag; button chrome reset. */
+.button {
+  font-family: inherit;
+  line-height: inherit;
+  border: 0;
+  cursor: pointer;
+  transition: background-color 120ms ease-out, color 120ms ease-out;
+}
+
+.button.outline {
+  border: 1px solid var(--color-accent);
+  background: transparent;
+}
+
+.button.outline:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+}
+
+.button.neutral:hover:not(:disabled) {
+  background: var(--color-neutral-200);
+}
+
+.button.accent:hover:not(:disabled) {
+  background: var(--color-accent-200);
+}

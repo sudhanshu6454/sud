@@ -1,0 +1,66 @@
+/* Statements (was /portal/statements). */
+
+.badge {
+  margin-bottom: 0;
+}
+
+.filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-3) var(--space-4);
+  max-width: 880px;
+}
+
+.table th:not(:last-child),
+.table td:not(:last-child) {
+  padding-right: var(--space-4);
+}
+
+.cell {
+  vertical-align: top;
+}
+
+.entryLabel {
+  display: block;
+  font-weight: 600;
+}
+
+.entryMeta {
+  display: block;
+  font-size: 13px;
+  color: var(--color-neutral-700);
+}
+
+.negative {
+  color: var(--color-accent-700);
+}
+
+.disputes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 2px solid var(--color-divider);
+}
+
+.dispute {
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-divider);
+  font-size: 14px;
+}
+
+.disputeHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.disputeText {
+  margin: var(--space-1) 0 0;
+  color: var(--color-neutral-800);
+}
+
+.disputeMeta {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--color-neutral-700);
+}

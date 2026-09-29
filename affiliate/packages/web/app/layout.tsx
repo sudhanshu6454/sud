@@ -1,77 +1,85 @@
 import type { Metadata, Viewport } from 'next';
-import Link from 'next/link';
+import localFont from 'next/font/local';
 import './globals.css';
 import { siteName } from '../lib/site';
-import styles from './layout.module.css';
+
+/*
+ * Archivo (SIL OFL 1.1, app/fonts/OFL.txt), self-hosted: no request to Google
+ * Fonts from the browser. Each file is the variable wght axis (100–900), so
+ * the 400/600/700/800 weights the design uses all come from one file.
+ * Two faces because next/font/local cannot give each src its own
+ * unicode-range: latin (A–Z, punctuation) and latin-ext (which carries ₹,
+ * U+20B9). globals.css joins them as --font-archivo, ext first: the ranges
+ * are disjoint, so order only matters for the latin face's metric-adjusted
+ * local fallback, which must come after the real ₹ glyph, never before it.
+ */
+const archivoLatin = localFont({
+  src: './fonts/archivo-latin-wght-normal.woff2',
+  weight: '100 900',
+  style: 'normal',
+  display: 'swap',
+  variable: '--font-archivo-latin',
+  declarations: [
+    {
+      prop: 'unicode-range',
+      value:
+        'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD',
+    },
+  ],
+});
+
+const archivoLatinExt = localFont({
+  src: './fonts/archivo-latin-ext-wght-normal.woff2',
+  weight: '100 900',
+  style: 'normal',
+  display: 'swap',
+  variable: '--font-archivo-ext',
+  adjustFontFallback: false,
+  declarations: [
+    {
+      prop: 'unicode-range',
+      value:
+        'U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF',
+    },
+  ],
+});
 
 // Every route renders on demand so NEXT_PUBLIC_SITE_NAME (and the catalogue
 // env) are read from the server's runtime environment, never baked at build.
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  title: siteName(),
-  description: 'Shop the looks — exact matches and similar styles, with tracked links to the merchant.',
+  title: {
+    default: siteName(),
+    template: `%s · ${siteName()}`,
+  },
+  description: 'An India-first affiliate network for brands, creators, publishers and agencies.',
+  applicationName: siteName(),
   appleWebApp: {
     capable: true,
     title: siteName(),
-    statusBarStyle: 'black-translucent',
+    statusBarStyle: 'default',
   },
+  formatDetection: { telephone: false },
 };
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#111111',
+  viewportFit: 'cover',
+  // --color-bg; a meta tag cannot read a CSS variable.
+  themeColor: '#F3F2F2',
 };
 
+/**
+ * Root layout: document, font variables and metadata only. Each area brings
+ * its own chrome — (marketing) and (shop) the marketing nav and footer, /app,
+ * /brand and /agency the sidebar shell, /admin the admin bar.
+ */
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const name = siteName();
   return (
-    <html lang="en">
-      <body>
-        <header className={styles.header}>
-          <Link href="/" className={styles.brand}>
-            {name}
-          </Link>
-          <div className={styles.headerRight}>
-            {/*
-              Locale toggle — STUBBED (visual only).
-              Does not change language yet; EN/हिं i18n is later work.
-            */}
-            <div
-              className={styles.localeToggle}
-              role="group"
-              aria-label="Language (stub)"
-              title="Language switch is a stub — EN/हिं i18n not wired yet"
-            >
-              <button type="button" className={styles.localeActive} aria-pressed="true">
-                EN
-              </button>
-              <button type="button" aria-pressed="false">
-                हिं
-              </button>
-            </div>
-            <nav className={styles.nav} aria-label="Sections">
-              <Link href="/portal" className={styles.navLink}>
-                Portal
-              </Link>
-              <Link href="/console" className={styles.navLink}>
-                Console
-              </Link>
-              <Link href="/saved" className={styles.navLink}>
-                Saved
-              </Link>
-            </nav>
-          </div>
-        </header>
-        <main className={styles.main}>{children}</main>
-        <footer className={styles.footer}>
-          <p className={styles.disclosureLine}>
-            Affiliate disclosure: we may earn a commission when you shop via these links, at no extra cost to you.
-          </p>
-          <p className={styles.finePrint}>© 2026 {name}</p>
-        </footer>
-      </body>
+    <html lang="en-IN" className={`${archivoLatin.variable} ${archivoLatinExt.variable}`}>
+      <body>{children}</body>
     </html>
   );
 }

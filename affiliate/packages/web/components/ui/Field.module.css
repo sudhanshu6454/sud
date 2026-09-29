@@ -1,0 +1,39 @@
+/* Field: eyebrow label above, control, then hint or error (2a / 3a / 3b / 3c). */
+
+.field {
+  display: block;
+  min-width: 0;
+}
+
+.label {
+  display: block;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-neutral-700);
+  margin-bottom: 6px;
+}
+
+.hint,
+.error {
+  font-size: 12px;
+  margin: 6px 0 0;
+}
+
+.hint {
+  color: var(--color-neutral-700);
+}
+
+/* "Verified · DEMO PRIYA NAIR" in 3a. */
+.hintAccent {
+  color: var(--color-accent-700);
+}
+
+.error {
+  color: var(--color-accent-700);
+}
+
+.optional {
+  text-transform: none;
+  letter-spacing: 0;
+}

@@ -1,4 +1,81 @@
-/* Minimal reset + mobile-first base styles (360px baseline) */
+/*
+ * Afflino — "Modernist" design tokens and base element rules.
+ *
+ * The :root block is the design system's token sheet (design handover,
+ * _ds/modernist/styles.css) copied verbatim, with two changes: the font
+ * stacks point at the self-hosted Archivo (next/font/local in app/layout.tsx
+ * sets --font-archivo) and --font-mono is added. Components read these
+ * tokens; never hard-code a colour, spacing step, radius or shadow they carry.
+ */
+
+:root {
+  --color-bg: #f3f2f2;
+  --color-surface: #eae9e9;
+  --color-text: #201e1d;
+  --color-accent: #ec3013;
+  --color-accent-2: #e15b47;
+  --color-divider: color-mix(in srgb, #201e1d 40%, transparent);
+
+  /* Tonal ramps — generated in OKLCH on one shared lightness scale, so the
+     same step of any role matches the others in visual value. */
+  --color-neutral-100: #f8f4f4;
+  --color-neutral-200: #eae7e7;
+  --color-neutral-300: #d7d3d3;
+  --color-neutral-400: #bab6b6;
+  --color-neutral-500: #9b9797;
+  --color-neutral-600: #7d7979;
+  --color-neutral-700: #605d5d;
+  --color-neutral-800: #444141;
+  --color-neutral-900: #2d2b2b;
+
+  --color-accent-100: #fff2ef;
+  --color-accent-200: #ffe0d9;
+  --color-accent-300: #ffc4b8;
+  --color-accent-400: #ff9783;
+  --color-accent-500: #ff563c;
+  --color-accent-600: #dd2b0f;
+  --color-accent-700: #ae1800;
+  --color-accent-800: #7c1405;
+  --color-accent-900: #4d170e;
+
+  --color-accent-2-100: #fff2ef;
+  --color-accent-2-200: #ffe0da;
+  --color-accent-2-300: #ffc4b9;
+  --color-accent-2-400: #ff9784;
+  --color-accent-2-500: #ef6853;
+  --color-accent-2-600: #c94b39;
+  --color-accent-2-700: #9e3526;
+  --color-accent-2-800: #71261b;
+  --color-accent-2-900: #471d16;
+
+  /* Self-hosted Archivo from next/font/local (app/layout.tsx puts both
+     variables on <html>): the latin-ext face (it carries ₹ U+20B9), then the
+     latin face and its metric-adjusted fallback. */
+  --font-archivo: var(--font-archivo-ext), var(--font-archivo-latin);
+  --font-heading: var(--font-archivo), system-ui, sans-serif;
+  --font-heading-weight: 800;
+  --font-body: var(--font-archivo), system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --space-1: 4.0px;
+  --space-2: 8.0px;
+  --space-3: 12.0px;
+  --space-4: 16.0px;
+  --space-6: 24.0px;
+  --space-8: 32.0px;
+
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+
+  /* Elevation — derived from the ground: soft ink-tinted shadows on a
+     light theme, a hairline edge + ambient darkness on a dark one. */
+  --shadow-sm: 0 1px 2px color-mix(in srgb, #2d2b2b 14%, transparent);
+  --shadow-md: 0 3px 10px color-mix(in srgb, #2d2b2b 16%, transparent);
+  --shadow-lg: 0 12px 32px color-mix(in srgb, #2d2b2b 22%, transparent);
+}
+
+/* ---------- reset ---------- */
 
 *,
 *::before,
@@ -12,16 +89,60 @@
 
 html {
   -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
+input,
+button,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+/* ---------- base element rules (styles.css) ---------- */
+
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
-    Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji';
-  font-size: 16px;
-  line-height: 1.5;
-  color: #1a1a1a;
-  background: #ffffff;
-  -webkit-font-smoothing: antialiased;
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.55;
+  font-weight: 400;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  line-height: 1.12;
+  letter-spacing: -0.015em;
+  margin: 0 0 var(--space-2);
+}
+h1 { font-size: 42px; }
+h2 { font-size: 32px; }
+h3 { font-size: 25px; }
+h4 { font-size: 20px; }
+h5 { font-size: 16px; }
+h6 { font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; }
+
+p {
+  margin: 0 0 var(--space-3);
+}
+
+/* Links are ink with an accent-700 hover, as rendered in the handover mocks
+   (the reference page overrides styles.css's accent link colour). */
+a {
+  color: var(--color-text);
+  text-underline-offset: 3px;
+}
+a:hover {
+  color: var(--color-accent-700);
 }
 
 img,
@@ -30,29 +151,67 @@ svg {
   max-width: 100%;
 }
 
-input,
-button,
-select,
-textarea {
-  font: inherit;
+figure {
+  margin: 0;
 }
 
-a {
-  color: #0b5fff;
+figcaption {
+  font-size: 11px;
+  margin-top: var(--space-1);
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
 }
 
-h1 {
-  font-size: 1.5rem;
-  line-height: 1.25;
-  letter-spacing: -0.01em;
+table {
+  border-collapse: collapse;
 }
 
-h2 {
-  font-size: 1.15rem;
-  line-height: 1.3;
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
 }
 
 ::selection {
-  background: #111111;
-  color: #ffffff;
+  background: color-mix(in srgb, var(--color-accent) 30%, transparent);
+}
+
+/* Native form controls only. Components that use aria-disabled on a
+   non-control (Button's inert link, the shop's "Link not available yet")
+   own that look in their modules, so this rule never stacks on theirs. */
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Photographs render in grayscale (design rule). */
+.grayscale {
+  filter: grayscale(1) contrast(1.08);
+}
+
+/* Visually hidden but available to assistive technology. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }

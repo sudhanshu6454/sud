@@ -1,0 +1,12 @@
+/* Loading placeholder: a neutral-200 block at the size of what it stands in
+   for. No spinners, no motion. */
+
+.skeleton {
+  display: block;
+  background: var(--color-neutral-200);
+}
+
+.inline {
+  display: inline-block;
+  vertical-align: middle;
+}
