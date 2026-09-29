@@ -93,7 +93,13 @@ main() {
   info() { printf '   %s\n' "$*"; }
   warn() { printf '   WARNING: %s\n' "$*" >&2; }
   die()  { printf '\nSTOPPED: %s\n' "$*" >&2; exit 1; }
-  trap 'rc=$?; printf "\nSTOPPED: install.sh failed at line %s (exit %s). Nothing secret was printed; re-running is safe.\n" "$LINENO" "$rc" >&2; exit "$rc"' ERR
+  # shellcheck disable=SC2329 # called by the ERR trap below
+  on_error() {
+    local rc="$1" line="$2"
+    printf '\nSTOPPED: install.sh failed at line %s (exit %s). Nothing secret was printed; re-running is safe.\n' "$line" "$rc" >&2
+    exit "$rc"
+  }
+  trap 'on_error "$?" "$LINENO"' ERR
   have() { command -v "$1" >/dev/null 2>&1; }
   is_on() { case "${1:-}" in 1|yes|true|on) return 0 ;; *) return 1 ;; esac; }
   has_systemd() { [ -d /run/systemd/system ] && have systemctl; }
@@ -408,6 +414,7 @@ net.core.wmem_max = 7500000'; then
     fi
   fi
   [ -f "$APP/.env.prod.example" ] || die "$APP/.env.prod.example not found; the checkout is incomplete."
+  APP="$(cd "$APP" && pwd -P)"
   stop_after code
 
   # ================================================================ 4. environment
@@ -466,9 +473,17 @@ net.core.wmem_max = 7500000'; then
   # Any other contract key preset in the environment.
   for k in "${contract_keys[@]}"; do
     # (handled above, or read by scripts/backup.sh on a backup host, not by compose)
-    case " POSTGRES_PASSWORD JWT_SECRET STUB_WEBHOOK_SECRET IP_HASH_KEY SITE_HOST SITE_INDEXING ACME_EMAIL BACKUP_DIR PAPARAZZI_ALLOW_PROD PAPARAZZI_RESTORE_DB " in *" $k "*) continue ;; esac
+    case "$k" in POSTGRES_PASSWORD|JWT_SECRET|STUB_WEBHOOK_SECRET|IP_HASH_KEY|SITE_HOST|SITE_INDEXING|ACME_EMAIL|BACKUP_DIR|PAPARAZZI_ALLOW_PROD|PAPARAZZI_RESTORE_DB) continue ;; esac
     if [ -n "${!k+x}" ] && ! env_has "$k"; then append_key "$k" "${!k}" "preset"; fi
   done
+
+  # A value in the environment never replaces one already in the file.
+  local ignored=()
+  for k in "${contract_keys[@]}"; do
+    case "$k" in BACKUP_DIR|PAPARAZZI_ALLOW_PROD|PAPARAZZI_RESTORE_DB) continue ;; esac
+    if [ -n "${!k+x}" ] && env_has "$k"; then ignored+=("$k"); fi
+  done
+  [ "${#ignored[@]}" -eq 0 ] || info "kept the file's ${ignored[*]} (the value set in this shell was ignored; edit $ENV_FILE to change one)"
 
   if [ -n "$new_lines" ]; then
     local tmp
@@ -533,7 +548,12 @@ net.core.wmem_max = 7500000'; then
   # variable exported in this shell would otherwise win over it.
   local unset_args=() key
   for key in "${contract_keys[@]}" COMPOSE_FILE COMPOSE_PROJECT_NAME COMPOSE_PROFILES EDGE_ADDRESS EDGE_BIND; do unset_args+=(-u "$key"); done
-  dc() { env "${unset_args[@]}" docker compose --project-directory "$APP" -p "$PROJECT" --env-file "$ENV_FILE" "${files[@]}" "$@"; }
+  # BUILDX_NO_DEFAULT_ATTESTATIONS: without it every build writes a new
+  # provenance attestation, so an unchanged image gets a new id on Docker's
+  # containerd image store and compose would recreate every service on each
+  # run; with it, an unchanged checkout rebuilds to the same image ids and
+  # the re-run changes nothing.
+  dc() { env "${unset_args[@]}" BUILDX_NO_DEFAULT_ATTESTATIONS=1 docker compose --project-directory "$APP" -p "$PROJECT" --env-file "$ENV_FILE" "${files[@]}" "$@"; }
 
   dc config -q
 
@@ -548,15 +568,17 @@ net.core.wmem_max = 7500000'; then
   info "building the images and starting the stack (the first build takes several minutes)"
   dc up -d --build --remove-orphans
 
-  # The edge reads its Caddyfile from a bind mount: restart it when the
-  # checkout's copy differs from what the running edge has.
-  local edge_id want have_sum
+  # Caddy reads its Caddyfile once, at start: restart the edge when the
+  # checkout's copy changed after the running edge started (a git update
+  # writes a new file, which a running container's bind mount does not even
+  # see; an edit in place is seen but not loaded).
+  local edge_id edge_started file_changed
   edge_id="$(dc ps -q edge)"
   if [ -n "$edge_id" ]; then
-    want="$(sha256sum "$APP/docker/Caddyfile" | awk '{print $1}')"
-    have_sum="$(docker exec "$edge_id" sha256sum /etc/caddy/Caddyfile 2>/dev/null | awk '{print $1}' || true)"
-    if [ "$want" != "$have_sum" ]; then
-      info "the Caddyfile changed: restarting the edge"
+    edge_started="$(date -d "$(docker inspect -f '{{.State.StartedAt}}' "$edge_id")" +%s 2>/dev/null || echo 0)"
+    file_changed="$(stat -c %Y "$APP/docker/Caddyfile")"
+    if [ "$file_changed" -ge "$edge_started" ]; then
+      info "the Caddyfile changed after the edge started: restarting the edge"
       dc restart edge >/dev/null
     fi
   fi
@@ -624,11 +646,12 @@ net.core.wmem_max = 7500000'; then
   ip4="$(public_ipv4)"; ip6="$(public_ipv6)"
   info "this server: IPv4 ${ip4:-none found}, IPv6 ${ip6:-none found} (from the interfaces)"
 
-  local name got4 got6 a_ok=1 aaaa_ok=1 verdict
+  local name got4 got6 a_ok=1 aaaa_ok=1 verdict apex4=""
   for name in "$SITE_HOST_V" "www.$SITE_HOST_V"; do
     got4="$(getent ahostsv4 "$name" 2>/dev/null | awk '{print $1}' | sort -u | tr '\n' ' ' || true)"
     got6="$(getent ahostsv6 "$name" 2>/dev/null | awk '{print $1}' | grep -v '^::ffff:' | sort -u | tr '\n' ' ' || true)"
     got4="${got4% }"; got6="${got6% }"
+    [ "$name" = "$SITE_HOST_V" ] && apex4="$got4"
     verdict="A points here"
     if [ -z "$ip4" ] || [ "$got4" != "$ip4" ]; then verdict="A NOT this server yet"; a_ok=""; fi
     if [ -n "$ip6" ]; then
@@ -642,7 +665,7 @@ net.core.wmem_max = 7500000'; then
     printf '\n   Set these records at GoDaddy (My Products → %s → DNS → DNS Records):\n' "$SITE_HOST_V"
     if [ -n "$ip4" ]; then
       printf '     A      @     %-40s edit the A record for @ and delete every other A record for @\n' "$ip4"
-      printf '                  %-40s (on 2026-09-29: GoDaddy'"'"'s 3.33.130.190 and 15.197.148.33)\n' ""
+      [ -n "$apex4" ] && printf '                  %-40s (now: %s)\n' "" "$apex4"
     else
       printf '     A      @     (no public IPv4 address found on this server: use the one Linode Cloud Manager shows)\n'
     fi

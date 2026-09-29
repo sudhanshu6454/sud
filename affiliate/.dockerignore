@@ -29,6 +29,7 @@ packages/*/test
 # Not needed inside any image.
 docs
 scripts
+deploy
 docker-compose.yml
 docker-compose.prod.yml
 docker-compose.single-host.yml
