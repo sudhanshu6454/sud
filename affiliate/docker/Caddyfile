@@ -36,9 +36,12 @@
 # default; asserted end to end in docker/README.md and by the Linode
 # installer's rehearsal). X-Real-IP is overwritten with the same address and
 # Forwarded is removed, so no header a shopper sends can choose the address
-# the redirect hashes into clicks.context.ip_hash (api and redirect run with
-# TRUST_PROXY=loopback,uniquelocal: they trust this proxy, which reaches them
-# from the compose network's private gateway, and nothing else).
+# the redirect hashes into clicks.context.ip_hash. api and redirect run with
+# TRUST_PROXY=loopback,uniquelocal: they trust X-Forwarded-For from loopback
+# and any private-range peer. The only such peers are the stack's own
+# containers and Docker's proxy for the 127.0.0.1-published ports, which is
+# how this host-networked edge (and any process on the server itself)
+# reaches them; nothing outside the server can connect to those ports.
 #
 # Admin API: off. With host networking it would listen on the server's
 # localhost:2019; nothing here reloads Caddy at run time (a changed Caddyfile
@@ -46,11 +49,16 @@
 #
 # Logs: no access log is configured (Caddy writes none unless asked), and the
 # default log — startup, certificates, errors — drops the client address and
-# the request headers from every entry. Security headers: HSTS (one year, no
+# the request headers from every entry. Security headers (the
+# security_headers snippet), on every response of the site, the edge's own
+# errors included (a 502 while an upstream is down or restarting, the 413
+# for an oversized body: handle_errors below): HSTS (one year, no
 # includeSubDomains, no preload), nosniff, Referrer-Policy
 # strict-origin-when-cross-origin, X-Frame-Options DENY, no Server, Via or
-# X-Powered-By header. No Content-Security-Policy yet (docs/threat-model.md,
-# open item).
+# X-Powered-By header. The one exception is Caddy's own HTTP → HTTPS 308 on
+# port 80 (automatic HTTPS, outside this site block), which carries
+# `Server: Caddy` and no HSTS (browsers ignore HSTS over plain HTTP). No
+# Content-Security-Policy yet (docs/threat-model.md, open item).
 {
 	email "{$ACME_EMAIL}"
 	admin off
@@ -81,9 +89,7 @@
 	header_up -Forwarded
 }
 
-{$EDGE_ADDRESS} {
-	{$EDGE_BIND}
-
+(security_headers) {
 	header {
 		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options "nosniff"
@@ -92,6 +98,19 @@
 		-Server
 		-Via
 		-X-Powered-By
+	}
+}
+
+{$EDGE_ADDRESS} {
+	{$EDGE_BIND}
+
+	import security_headers
+
+	# The edge's own errors (an upstream down: 502; a body over 4 MB: 413):
+	# the same headers, a short plain-text body, the error's status.
+	handle_errors {
+		import security_headers
+		respond "{err.status_code} {err.status_text}"
 	}
 
 	@www host www.{$SITE_HOST}

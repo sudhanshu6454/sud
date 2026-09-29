@@ -1,8 +1,9 @@
 # Single-host override for docker-compose.prod.yml: Postgres 16 and Redis 7
 # run on the same machine as the services, as the pilot on the owner's Linode
-# does. Always used together with the production file:
+# does. Always used together with the production file; on the Linode, from
+# /opt/afflino/affiliate (deploy/linode/install.sh runs the equivalent):
 #
-#   docker compose -f docker-compose.prod.yml -f docker-compose.single-host.yml up -d --build
+#   docker compose --env-file /etc/afflino/afflino.env -f docker-compose.prod.yml -f docker-compose.single-host.yml up -d --build
 #
 # Adds `postgres` (postgres:16-alpine) and `redis` (redis:7-alpine, append-only
 # file on), each with a named volume and a healthcheck and NO published port:

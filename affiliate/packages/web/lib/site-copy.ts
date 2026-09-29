@@ -1,17 +1,21 @@
 /**
  * Afflino marketing claims, prices, fees and policy figures — ONE place.
  *
- * PLACEHOLDERS. Every figure below comes from the design handover, whose
- * README says the numbers, fee percentages, the TDS rate and the validation
- * windows are placeholders. They MUST be confirmed by the business (and, for
- * TDS, by the tax adviser) before launch. Import them from here; never
- * restate them in a page.
+ * CONFIRMED BY THE OWNER on 2026-09-29 ("figures are confirmed, keep them"):
+ * every figure below (audience reach, upfront cost, payout cycle, plan
+ * prices and network fees, TDS rate and section, validation windows, minimum
+ * withdrawal, default agency share) came from the design handover as a
+ * placeholder and is now the owner's confirmed figure. The one exception is
+ * CREATOR_DISCLOSURE_LINE at the bottom, which is wording, not a figure, and
+ * still waits for counsel. test/site-copy.test.ts pins the confirmed values,
+ * so a change is deliberate. Import them from here; never restate them in a
+ * page.
  */
 
 /**
  * The one-line description of the site: the root <meta name="description">,
  * og:description / twitter:description (lib/seo.ts) and the PWA manifest.
- * Not a figure, so not a placeholder — but it is marketing copy, so it lives here.
+ * Not a figure, but it is marketing copy, so it lives here.
  */
 export const SITE_DESCRIPTION = 'An India-first affiliate network for brands, creators, publishers and agencies.';
 
@@ -51,7 +55,7 @@ export const PRICING = {
   },
 } as const;
 
-/** TDS on creator payouts, as drawn in 2c ("TDS 1% (194-O) deducted"). Placeholder pending tax advice. */
+/** TDS on creator payouts, as drawn in 2c ("TDS 1% (194-O) deducted"). Confirmed by the owner, 2026-09-29. */
 export const TDS = {
   ratePct: 1,
   section: '194-O',

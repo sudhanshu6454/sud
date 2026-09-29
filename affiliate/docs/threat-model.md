@@ -104,10 +104,14 @@ Boundaries, in order of exposure:
   DPDP consent obligations is for counsel to determine.
   **Client address (2026-09-29).** Which address is hashed is decided by
   `TRUST_PROXY` (unset = trust nothing; `packages/shared/src/trust-proxy.ts`):
-  docker-compose.prod.yml sets `loopback,uniquelocal`, so only the edge (and
-  the web's /api proxy) on the compose network may set X-Forwarded-For, and
-  the edge overwrites any client-supplied X-Forwarded-For / X-Real-IP /
-  Forwarded with the address it saw (`docker/Caddyfile`). A shopper therefore
+  docker-compose.prod.yml sets `loopback,uniquelocal`: api and redirect
+  trust X-Forwarded-For from loopback and any private-range peer. The only
+  such peers are the stack's own containers (the web's /api proxy) and
+  Docker's proxy for the 127.0.0.1-published ports, which is how the
+  host-networked edge — and any process on the server itself — reaches
+  them; nothing outside the server can connect to those ports. The edge
+  overwrites any client-supplied X-Forwarded-For / X-Real-IP / Forwarded
+  with the address it saw (`docker/Caddyfile`). A shopper therefore
   cannot choose their `ip_hash` (tested: `packages/redirect/test/client-ip.test.ts`;
   end to end through the edge in `docker/README.md`). The hash is keyed with
   `IP_HASH_KEY` when set: an unsalted SHA-256 of an IPv4 address is reversible
@@ -126,8 +130,12 @@ Boundaries, in order of exposure:
 - **Elevation (E)** — n/a (no privileges on this path). The pause kill
   switch (`POST /v1/programmes/:id/pause`, `network_admin` only,
   `routes/programmes.ts`) flips eligibility and invalidates `route:{token}`
-  cache entries; redirect treats `programme_status != 'active'` as
-  ineligible. Tested end-to-end (`phase3.test.ts` "programme kill switch").
+  cache entries after the commit, and again 2 s later (a redirect whose DB
+  read was in flight at the commit can re-cache the old status; the second
+  delete clears it; a read-to-SET gap over 2 s or an api restart in that
+  window remains, bounded by the 300 s TTL — packages/api/ASSUMPTIONS.md);
+  redirect treats `programme_status != 'active'` as ineligible. Tested
+  end-to-end (`phase3.test.ts` "programme kill switch").
 
 ### 3b. API auth & tenant isolation (`middleware.ts`, `db.ts`)
 

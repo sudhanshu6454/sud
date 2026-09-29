@@ -10,8 +10,9 @@
 # Fields (all required, nothing else allowed):
 #   key       unique, 1-40 of [a-z0-9-]; used in the placement key network-<key>-<channel>
 #   name      unique display name, at most 80 characters; the demo look is titled "Demo look — <name>"
-#   platform  instagram | youtube | snapchat | telegram | web
-#   account   the handle (instagram, youtube, snapchat, telegram) or the bare hostname (web)
+#   platform  instagram | facebook | youtube | snapchat | telegram | web
+#   account   the handle (instagram, youtube, snapchat, telegram), the page's handle or
+#             numeric page ID (facebook), or the bare hostname (web)
 #   url       https URL of the property; for web its host must equal the account
 #
 # A url outside the reserved example names is seeded with a warning on stderr.
@@ -21,6 +22,11 @@ properties:
     platform: instagram
     account: demo.afflino
     url: https://instagram.example.com/demo.afflino
+  - key: demo-fb
+    name: Demo Facebook
+    platform: facebook
+    account: demo.afflino
+    url: https://facebook.example.com/demo.afflino
   - key: demo-yt
     name: Demo YouTube
     platform: youtube

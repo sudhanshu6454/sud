@@ -179,7 +179,7 @@ the one known driver difference.
 19. **Standalone since 2026-09-29: the seed became `db/seed-network.ts`.**
     History, not instructions. The seed no longer reads another repository's site list; it
     reads a network file (`db/network.example.yaml` by default, `--network` / `NETWORK_FILE`
-    for the operator's own) of `key`, `name`, `platform` (instagram | youtube | snapchat |
+    for the operator's own) of `key`, `name`, `platform` (instagram | facebook | youtube | snapchat |
     telegram | web), `account` and `url`, and §11–13 and §15–16 above now describe it. Its
     safety properties are unchanged and were re-verified on fresh Postgres 16 databases the
     same day: two runs gave identical row counts and byte-identical JSON, the seven operator
@@ -190,7 +190,7 @@ the one known driver difference.
     a role an operator changed (§15) shows as changed instead of repeating the role the seed
     asked for. Under `NODE_ENV=production` the seed refuses the example network file as well
     as `--with-demo-programme` (`cliRefusal`): a production re-run that lost `NETWORK_FILE`
-    fails instead of seeding the five TEST properties into the real organisation as approved
+    fails instead of seeding the six TEST properties into the real organisation as approved
     and `owner_operated`. `--with-demo-programme` without `WEB_HOST` prints on stderr that no
     shop placement (so no `web_placement_id`) is created (`cliNotices`).
 21. **`restore.sh` passes its target to `pg_restore` with `-d`.** It used to hand `pg_restore`

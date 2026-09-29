@@ -14,6 +14,7 @@ import {
   DEFAULT_NETWORK_FILE,
   NETWORK_PLATFORMS,
   cliNotices,
+  warningLines,
   cliRefusal,
   PLATFORM_CHANNEL,
   SHOP_PLACEMENT_KEY,
@@ -48,7 +49,7 @@ const tmp = mkdtempSync(path.join(tmpdir(), 'seed-network-test-'));
 afterAll(() => rmSync(tmp, { recursive: true, force: true }));
 
 describe('db/network.example.yaml (the default network file)', () => {
-  it('parses to five TEST properties, one per platform, with no warnings', async () => {
+  it('parses to six TEST properties, one per platform, with no warnings', async () => {
     const { properties, warnings } = await loadNetworkFile(DEFAULT_NETWORK_FILE);
     expect(warnings).toEqual([]);
     expect(properties.map((p) => p.platform).sort()).toEqual([...NETWORK_PLATFORMS].sort());
@@ -67,10 +68,22 @@ describe('db/network.example.yaml (the default network file)', () => {
 });
 
 describe('networkFromYaml — rejected files', () => {
-  it('rejects a platform outside instagram | youtube | snapchat | telegram | web', () => {
-    expect(() => networkFromYaml(file(ig({ platform: 'facebook' })))).toThrow(
-      /properties\[0\]\.platform 'facebook' is not one of instagram \| youtube \| snapchat \| telegram \| web/,
+  it('rejects a platform outside instagram | facebook | youtube | snapchat | telegram | web', () => {
+    expect(() => networkFromYaml(file(ig({ platform: 'tiktok' })))).toThrow(
+      /properties\[0\]\.platform 'tiktok' is not one of instagram \| facebook \| youtube \| snapchat \| telegram \| web/,
     );
+  });
+
+  it('accepts a Facebook page by its numeric page ID (real accounts warn, still seeded)', () => {
+    const { properties, warnings } = networkFromYaml(
+      file(ig({ key: 'fb-596165523816494', name: 'Page (Facebook)', platform: 'facebook', account: '596165523816494', url: 'https://www.facebook.com/596165523816494' })),
+    );
+    expect(properties).toEqual([
+      { key: 'fb-596165523816494', name: 'Page (Facebook)', platform: 'facebook', account: '596165523816494', url: 'https://www.facebook.com/596165523816494' },
+    ]);
+    expect(placementKeyFor('fb-596165523816494', 'facebook')).toBe('network-fb-596165523816494-facebook_post');
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatch(/www\.facebook\.com' is not a reserved example name/);
   });
 
   it('rejects a duplicate key', () => {
@@ -271,5 +284,18 @@ describe('CLI guards', () => {
     ]);
     expect(cliNotices(args({ withDemoProgramme: true }))).toEqual([]);
     expect(cliNotices(args({ webHost: null }))).toEqual([]);
+  });
+
+  it('prints a few warnings in full and summarises a long run of them', () => {
+    const few = ['a', 'b'];
+    expect(warningLines(few)).toEqual(['seed-network: warning: a', 'seed-network: warning: b']);
+    const many = Array.from({ length: 404 }, (_, i) => `w${i}`);
+    expect(warningLines(many)).toEqual([
+      'seed-network: warning: w0',
+      'seed-network: warning: w1',
+      'seed-network: warning: w2',
+      'seed-network: warning: … and 401 more like these (404 in all; expected for a network file of real accounts)',
+    ]);
+    expect(warningLines(many.slice(0, 5))).toHaveLength(5);
   });
 });

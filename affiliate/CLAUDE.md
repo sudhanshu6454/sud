@@ -14,8 +14,8 @@ Everything here runs from this directory; nothing outside it is needed.
 ## Verified state (2026-09-29)
 
 - `pnpm typecheck` clean on all 5 packages (`packages/*`)
-- **660/660 tests green across 35 test files** (`./node_modules/.bin/vitest run`:
-  api 124, redirect 10, shared 15, workers 15, web 496)
+- **671/671 tests green across 36 test files** (`./node_modules/.bin/vitest run`:
+  api 128, redirect 10, shared 15, workers 15, web 503)
 - Demo: **51/51 assertions** on pg-mem (`tsx scripts/demo-money-loop.ts`) **and
   51/51 on a real PostgreSQL 16.13** (`DEMO_TARGET=postgres`, scratch database
   `paparazzi_demo_<8 hex>` created and dropped, no shims) — link → click →
@@ -29,6 +29,13 @@ Everything here runs from this directory; nothing outside it is needed.
   the network seed is idempotent (identical row counts and byte-identical JSON on
   a second run), keeps operator status changes, and refuses (rolling back) to take
   over another organisation's property or placement
+- The owner's real in-house network (the Meta list of 2026-09-28: 322 Facebook
+  pages, 82 Instagram accounts; the file is not in this repository, it goes to
+  the server as `/etc/afflino/network.yaml`) seeds with `NODE_ENV=production`
+  through the documented compose line (`docs/runbooks/deploy.md`, "The
+  in-house network"): 404 approved properties plus the shop's own, identical
+  output on a second run, rehearsed on scratch Postgres 16 and on the
+  installer's stack in test mode
 - `pnpm install --frozen-lockfile` passes (pnpm 9.12.0 locally, in CI and in the
   images)
 - `pnpm --filter @paparazzi/web build` OK (all routes dynamic, standalone output);
@@ -43,7 +50,8 @@ Everything here runs from this directory; nothing outside it is needed.
   TEST network looks live → `mint-links.mjs` mints → the look page carries the
   tracked link → `GET /r/{token}` → 302 with `subid`, no `set-cookie` → one
   `clicks` row → workers log `click.observed` (`docker/README.md`, smoke test,
-  re-run 2026-09-29 with the network seed and again through the edge)
+  re-run 2026-09-29 with the network seed, again through the edge, and again
+  after the review fixes with the 413 and upstream-down 502 probes)
 - **Production deploy shape for afflino.com** (2026-09-29): the edge
   (`caddy:2-alpine` + `docker/Caddyfile`) is the only public listener;
   `docker-compose.prod.yml` + `docker-compose.single-host.yml` (Postgres 16 +
@@ -54,21 +62,41 @@ Everything here runs from this directory; nothing outside it is needed.
   path + query, HTTP → 308, `/r/<token>` 302 with `subid` and no cookie, a
   spoofed X-Forwarded-For leaving `ip_hash` = HMAC(`IP_HASH_KEY`, the address
   the edge saw), the kill switch's atomicity on real Postgres, teardown clean
-  (README.md "Deploying afflino.com", `docs/runbooks/deploy.md` §1R).
-  **Nothing has been deployed to the owner's Linode or to afflino.com.**
+  (README.md "Deploying afflino.com", `docs/runbooks/deploy.md` §1R). The
+  edge's own errors (502 with an upstream down, 413, `CONNECT`) carry the
+  security headers and no `Server` (`handle_errors`; over HTTP and HTTPS);
+  only Caddy's port-80 → HTTPS 308 says `Server: Caddy`.
+  **afflino.com is live** on the owner's Linode, 172.105.52.150 (the owner's
+  word, 2026-09-29): DNS at GoDaddy points `A @` there, the owner ran the
+  installer, and at 17:20 UTC the site answered over HTTPS with Let's
+  Encrypt certificates for afflino.com and www (checked from outside
+  against f7046bd; later commits reach it when the owner re-runs the line).
 - **The Linode installer** (2026-09-29, `deploy/linode/`): `install.sh`
   (one line, `bash <(curl -fsSL https://raw.githubusercontent.com/sudhanshu6454/sud/refs/heads/claude/nifty-pasteur-flrulw/affiliate/deploy/linode/install.sh)`,
-  install = update: preflight, system, sparse checkout `/opt/afflino`,
-  `/etc/afflino/afflino.env` 0600 with generated secrets, compose up,
-  health, DNS status, daily backup timer), `backup.sh` / `restore.sh`
-  (pg_dump / psql inside the postgres container; restore check with the
-  ledger-balance check), `godaddy-dns.sh` (optional, `A @` + `AAAA @`).
-  ShellCheck clean; rehearsed in the sandbox with its test-only settings
-  (first run creates the file and a healthy stack, a second run changes
-  nothing: same env-file hash, container and image ids), the system step
-  and the guards in an `ubuntu:24.04` container, the code step against the
-  public repository, `godaddy-dns.sh` against a local API stand-in
-  (`deploy/linode/README.md` "What was checked"). The edge now uses **host
+  install = update: preflight (root, the OS, a server of its own: refuses
+  other Docker compose projects and held ports), system, sparse checkout
+  `/opt/afflino` (the release before kept as the git tag
+  `afflino-previous`, the rollback point of `docs/runbooks/deploy.md` §3;
+  the rest of the run re-executes the checkout's own `install.sh`, because
+  the curl'd copy can lag a push by 5 minutes), `/etc/afflino/afflino.env`
+  0600 with generated secrets, `compose build` → the migrations on their
+  own (a failure recreates nothing) → `up -d`, health, DNS status, daily
+  backup timer), `backup.sh` / `restore.sh` (pg_dump / psql inside the
+  postgres container; restore check with the ledger-balance check;
+  `--replace-live` clears the redirect's `route:*` cache), `godaddy-dns.sh`
+  (optional, `A @` + `AAAA @`; a personal access token → `Bearer`, or key +
+  secret → `sso-key`, at two hidden prompts). ShellCheck 0.11.0 / 0.9.0
+  clean; rehearsed in the sandbox with its test-only settings, last after
+  the review fixes (first run through `bash <(…)` on a pty: the file
+  created, a healthy stack; a second run changes nothing: same env-file
+  hash and mtime, container and image ids; `/r/` 302 without a cookie, a
+  spoofed X-Forwarded-For leaving `ip_hash` = HMAC(key, 127.0.0.1), www
+  301, headers, both `SITE_INDEXING` states, the 502 / 413 probes; a
+  failing migrate stops with every container untouched; the guard; the
+  re-exec and the tag against the public repository; `--replace-live`
+  clearing a cached route; `godaddy-dns.sh` against a local API stand-in),
+  the system step and the guards in an `ubuntu:24.04` container earlier
+  (`deploy/linode/README.md` "What was checked"). The edge uses **host
   networking** (sees real IPv4 and IPv6 client addresses, so afflino.com
   gets an AAAA record; `docker/ASSUMPTIONS.md` item 19). Not run on the
   real Linode; no real certificate, GoDaddy API call or IPv6 test.
@@ -84,7 +112,7 @@ not at the repo root, so the scripts that need it are given with the api package
 copy.
 
 ```bash
-./node_modules/.bin/vitest run                                        # tests (660)
+./node_modules/.bin/vitest run                                        # tests (669)
 pnpm typecheck                                                        # 5 packages
 ./packages/api/node_modules/.bin/tsx scripts/demo-money-loop.ts       # demo on pg-mem (51 assertions)
 DATABASE_URL=postgresql://paparazzi:changeme@127.0.0.1:5432/paparazzi DEMO_TARGET=postgres ./packages/api/node_modules/.bin/tsx scripts/demo-money-loop.ts   # same demo on real Postgres (scratch DB, dropped)
@@ -96,7 +124,22 @@ DATABASE_URL=postgresql://paparazzi:changeme@127.0.0.1:5432/paparazzi ./packages
 WEB_HOST=shop.example.com DATABASE_URL=postgresql://paparazzi:changeme@127.0.0.1:5432/paparazzi ./packages/api/node_modules/.bin/tsx db/seed-network.ts --with-demo-programme   # in-house network (example file) + shop property + TEST programme
 pnpm --filter @paparazzi/web build                                    # Next standalone build
 node scripts/load/redirect-soak.js --smoke                            # load smoke (needs a real deployment for meaning)
+JWT_SECRET=ci STUB_WEBHOOK_SECRET=ci POSTGRES_PASSWORD=ci docker compose -f docker-compose.prod.yml -f docker-compose.single-host.yml config -q   # compose check (as CI)
+shellcheck deploy/linode/*.sh                                         # the Linode scripts (CI; not installed in this sandbox)
 ```
+
+The owner's one line, as root on the Linode (install and every update;
+the rest of the procedure: `docs/runbooks/deploy.md`):
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/sudhanshu6454/sud/refs/heads/claude/nifty-pasteur-flrulw/affiliate/deploy/linode/install.sh)
+```
+
+Rehearse it off the Linode only with its test-only settings
+(`AFFLINO_SKIP_SYSTEM=1 AFFLINO_SKIP_GIT=1 AFFLINO_EDGE_TEST=1`, a
+throwaway `AFFLINO_PROJECT`, scratch `AFFLINO_ENV_FILE` /
+`AFFLINO_BACKUP_DIR`; in this sandbox an `AFFLINO_EXTRA_COMPOSE_FILE`
+with `NODE_IMAGE: local/node22-alpine-ca` build args), then `down -v`.
 
 Notes: `pnpm demo`, `pnpm demo:pg`, `pnpm seed`, `pnpm seed:network` call the api
 package's `tsx` (`./packages/api/node_modules/.bin/tsx`); the root has none.
@@ -130,7 +173,9 @@ runs and the docker smoke test.
   `POST /v1/links`. Tests: `test/catalogue.test.ts`.
 - `packages/redirect` — standalone `GET /r/{token}` click service. Persists click
   records binding `click_id → placement`; sets **no cookies**; Redis route cache
-  (600 s on mint, 300 s on rebuild); fail-open (302 without `subid` if the click
+  (600 s on mint, 300 s on rebuild; the kill switch deletes a programme's
+  entries after its commit and again 2 s later, `routes/programmes.ts`);
+  fail-open (302 without `subid` if the click
   cannot be persisted). The client address is `req.ip` under `TRUST_PROXY`
   (`packages/shared/src/trust-proxy.ts`; unset = trust nothing; production
   compose `loopback,uniquelocal`, behind the edge that overwrites
@@ -160,18 +205,21 @@ runs and the docker smoke test.
   the API could not be reached, and any answer it gave (401 / 403 / 404 /
   400 / 5xx) is a Banner naming it (`lib/api.ts` `fallbackNotice`). Old `/portal/*` and
   `/console/*` URLs 307 to their new routes. Marketing figures, prices,
-  fees, TDS, the validation window, the minimum withdrawal and the #ad line
-  are placeholders in `lib/site-copy.ts`. **Web contract:** `API_BASE` (server runtime; default `http://localhost:3000`),
+  fees, TDS, the validation window and the minimum withdrawal in
+  `lib/site-copy.ts` are the owner's, **confirmed 2026-09-29** and pinned by
+  `test/site-copy.test.ts`; the #ad line's wording still waits for counsel.
+  The look / item pages of demo and TEST-labelled looks are always
+  `noindex, nofollow` (`shopDetailMetadata`). **Web contract:** `API_BASE` (server runtime; default `http://localhost:3000`),
   `WEB_API_TOKEN` (server-only bearer for a read-only `publisher_analyst`; never
   `NEXT_PUBLIC_`, never sent to the browser, missing → TEST demo data with a
   badge), `WEB_PLACEMENT_ID` (uuid appended as `placement_id` so items carry
   their links), `NEXT_PUBLIC_API_BASE` (browser, build-time; default `/api`),
   `NEXT_PUBLIC_SITE_NAME` (runtime), `SITE_URL` (runtime; default
   `https://afflino.com`: metadataBase, canonical, og:url, robots.txt, sitemap),
-  `SITE_INDEXING` (runtime; exactly `on` opens robots.txt + the sitemap,
-  anything else — the default — is pre-launch: `Disallow: /`, an empty sitemap,
-  noindex on every page, because the public copy is placeholder; web
-  ASSUMPTIONS.md items 74–77). `/api/[...path]` is a per-request proxy to
+  `SITE_INDEXING` (runtime; exactly `on` opens robots.txt + the sitemap of
+  `/`, `/shop` and the live non-TEST looks; anything else — the default —
+  keeps search engines out: `Disallow: /`, an empty sitemap, noindex on
+  every page, until the owner turns it on; web ASSUMPTIONS.md items 74–78). `/api/[...path]` is a per-request proxy to
   `API_BASE` (not a `rewrites()` entry — those are frozen at build). Every
   catalogue fetch is `revalidate: 60`; pages are `force-dynamic`. The merchant CTA
   is `<a href="{link.url}" rel="sponsored nofollow noopener">` or a visibly
@@ -180,12 +228,15 @@ runs and the docker smoke test.
   `db/migrate.mjs` records files in `schema_migrations` (`--status`,
   `--baseline`); `db/seed.ts` (demo graph), `db/seed-network.ts` (the in-house
   publisher network from a network file — `--network` / `NETWORK_FILE`, default
-  `db/network.example.yaml`; `WEB_HOST` adds the shop's own property;
+  `db/network.example.yaml` (six TEST properties); platforms instagram |
+  facebook (by page ID or handle) | youtube | snapchat | telegram | web;
+  `WEB_HOST` adds the shop's own property;
   `--with-demo-programme` adds the TEST programme, one look per property and the
   placements; under `NODE_ENV=production` the seed refuses both the flag and the
   example network file).
 - `docker/` — five Dockerfiles that build and boot, and `docker/Caddyfile` for
-  the edge (`docker/README.md`, `docker/ASSUMPTIONS.md`).
+  the edge (the `security_headers` snippet on every response and in
+  `handle_errors`; `docker/README.md`, `docker/ASSUMPTIONS.md`).
   `docker-compose.prod.yml` (project `afflino`: edge, api, redirect, workers,
   web, migrate; only the edge listens publicly — host networking, reaching
   redirect and web on 127.0.0.1:3001 / 3002 — the rest on 127.0.0.1) +
@@ -195,8 +246,13 @@ runs and the docker smoke test.
   127.0.0.1:8088 (`docker-compose.yml` is dev Postgres + Redis only). The
   owner chose Linode on 2026-09-29 (`docs/infrastructure-recommendation.md`);
   the env contract is `.env.prod.example`, the procedure
-  `docs/runbooks/deploy.md`, the one-command install / update
-  `deploy/linode/install.sh` (`deploy/linode/README.md`).
+  `docs/runbooks/deploy.md` (rollback §3 = `git checkout afflino-previous`
+  + `up -d --build`), the one-command install / update
+  `deploy/linode/install.sh` (`deploy/linode/README.md`). api and redirect
+  trust X-Forwarded-For from loopback and private-range peers
+  (`TRUST_PROXY=loopback,uniquelocal`): only the stack's own containers
+  and Docker's proxy for the 127.0.0.1 ports, through which the
+  host-networked edge reaches them.
 - `docs/openapi.yaml` — OpenAPI 3.1 spec; `packages/api/test/openapi.test.ts`
   asserts the spec matches the registered routes in both directions. Keep in sync.
 

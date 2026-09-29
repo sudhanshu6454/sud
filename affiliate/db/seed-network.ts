@@ -15,8 +15,8 @@
  *   properties:
  *     - key: demo-ig                 # [a-z0-9-], unique; used in placement keys
  *       name: Demo Instagram         # unique, at most 80 characters; the demo look's title and source_page
- *       platform: instagram          # instagram | youtube | snapchat | telegram | web
- *       account: demo.afflino        # handle (social) or bare hostname (web)
+ *       platform: instagram          # instagram | facebook | youtube | snapchat | telegram | web
+ *       account: demo.afflino        # handle (social; a Facebook page's numeric ID works too) or bare hostname (web)
  *       url: https://instagram.example.com/demo.afflino   # https; for web its host is the account
  *
  * `db/network.example.yaml` is the default and is TEST data only (reserved
@@ -70,12 +70,13 @@ export type NetworkQuery = (
   params?: unknown[],
 ) => Promise<{ rows: Array<Record<string, unknown>> }>;
 
-export const NETWORK_PLATFORMS = ['instagram', 'youtube', 'snapchat', 'telegram', 'web'] as const;
+export const NETWORK_PLATFORMS = ['instagram', 'facebook', 'youtube', 'snapchat', 'telegram', 'web'] as const;
 export type NetworkPlatform = (typeof NETWORK_PLATFORMS)[number];
 
 /** `placements.channel` of a network property's placement, per platform. */
 export const PLATFORM_CHANNEL: Readonly<Record<NetworkPlatform, string>> = {
   instagram: 'instagram_bio',
+  facebook: 'facebook_post',
   youtube: 'youtube_description',
   snapchat: 'snapchat_profile',
   telegram: 'telegram_post',
@@ -283,7 +284,7 @@ function isPlatform(v: string): v is NetworkPlatform {
  * other than `properties`, a field other than key / name / platform / account / url, a missing
  * or empty field, a key outside [a-z0-9-] (1–40 chars, no leading/trailing hyphen), a name
  * longer than 80 characters, a platform
- * outside instagram | youtube | snapchat | telegram | web, a web account that is not a bare
+ * outside instagram | facebook | youtube | snapchat | telegram | web, a web account that is not a bare
  * hostname or a social handle outside [a-z0-9._-], a url that is not https (or carries
  * credentials), a web property whose url host differs from its account, and any duplicate key,
  * name (case-insensitive) or platform + account pair.
@@ -876,6 +877,21 @@ export function cliRefusal(args: NetworkCliArgs, env: NodeJS.ProcessEnv = proces
   return null;
 }
 
+/**
+ * The warning lines the CLI prints (exported for tests). A real network file
+ * warns once per account (every url is outside the reserved example names),
+ * so past `max` it prints the first three and one line with the rest's count.
+ */
+export function warningLines(warnings: readonly string[], max = 5): string[] {
+  const lines = warnings.map((w) => `seed-network: warning: ${w}`);
+  if (lines.length <= max) return lines;
+  const rest = lines.length - 3;
+  return [
+    ...lines.slice(0, 3),
+    `seed-network: warning: … and ${rest} more like these (${lines.length} in all; expected for a network file of real accounts)`,
+  ];
+}
+
 /** Notices printed to stderr before the seed runs (exported for tests). */
 export function cliNotices(args: NetworkCliArgs): string[] {
   const notices: string[] = [];
@@ -914,7 +930,7 @@ async function main(): Promise<void> {
       (args.webHost ? `, shop host ${args.webHost}` : '') +
       (args.withDemoProgramme ? ', with TEST demo programme' : ''),
   );
-  for (const w of network.warnings) console.error(`seed-network: warning: ${w}`);
+  for (const line of warningLines(network.warnings)) console.error(line);
   for (const n of cliNotices(args)) console.error(n);
 
   const require = createRequire(path.join(here, 'seed-network.ts'));

@@ -1,10 +1,10 @@
 # Pre-pilot checklist
 
 What is built and proven in this sandbox vs what still needs engineering or a
-human before the pilot. Last verified test run (2026-09-29): **660/660 green
-across 35 files** (`./node_modules/.bin/vitest run`: api 124, redirect 10,
-shared 15, workers 15, web 496; the earlier figures of 57, 94, 133, 558, 587,
-612 and 616 are stale). Legend: ✅ verified in this repo · ⏳ not done — needs
+human before the pilot. Last verified test run (2026-09-29): **669/669 green
+across 35 files** (`./node_modules/.bin/vitest run`: api 126, redirect 10,
+shared 15, workers 15, web 503; the earlier figures of 57, 94, 133, 558, 587,
+612, 616 and 660 are stale). Legend: ✅ verified in this repo · ⏳ not done — needs
 engineering work · 👤 needs a human (see
 [EXTERNAL DEPENDENCIES](#external-dependencies) and the
 [action tracker](./action-tracker.md)).
@@ -22,7 +22,7 @@ has seen real merchants, real money, real traffic or a real host.
   `packageManager` pin, used locally, in CI and in the images
   ([`docker/README.md`](../docker/README.md) "pnpm version policy"). The old
   "known-broken" note is obsolete.
-- ✅ `vitest run` green — 660 tests in 35 files: ledger math
+- ✅ `vitest run` green — 669 tests in 35 files: ledger math
   ([`packages/shared/src/ledger.test.ts`](../packages/shared/src/ledger.test.ts)),
   money-loop API incl. idempotency ×10, revision ordering, suspense,
   reversals, payout gates, maker-checker
@@ -97,7 +97,7 @@ has seen real merchants, real money, real traffic or a real host.
   ([`docker/README.md`](../docker/README.md)) boots Postgres 16 + Redis 7 +
   all five images: migrate applies 0001–0005, both seeds run, `/healthz` on
   api, redirect and the web's `/api` proxy answer `{"ok":true}`, `/` is
-  titled "Afflino", `/shop` renders the five TEST network looks live (no
+  titled "Afflino", `/shop` renders the TEST network looks live (no
   demo badge), `mint-links.mjs` mints
   one link (`minted=1 … failed=0`), the look page shows
   `<a href="…/r/<token>" rel="sponsored nofollow noopener">View at
@@ -175,7 +175,14 @@ has seen real merchants, real money, real traffic or a real host.
   host networking so afflino.com can carry an AAAA record. ShellCheck clean
   and rehearsed in the sandbox
   ([`deploy/linode/README.md`](../deploy/linode/README.md) "What was
-  checked"); **not yet run on the Linode**.
+  checked"), again after the review fixes: migrations before anything is
+  recreated (a failing one leaves the stack as it was), the rollback tag
+  `afflino-previous`, the rest of the run from the checkout's own copy, a
+  refusal on a server that runs other compose projects, the route cache
+  cleared by `restore.sh --replace-live`, the edge's own errors with the
+  security headers. **The owner ran it on the Linode (172.105.52.150) on
+  2026-09-29**: afflino.com answered over HTTPS with Let's Encrypt
+  certificates for the apex and www at 17:20 UTC.
 - ✅ Capacity plan written from the owner's figure:
   [`docs/capacity-plan.md`](./capacity-plan.md) — arithmetic only; nothing
   in it is measured.
@@ -334,12 +341,11 @@ and acceptance criteria.
   dates recorded in `assets`; re-review queue empty; takedown workflow
   timelines from counsel. *Only a rights-holder review can clear celebrity
   imagery; owning footage ≠ advertising rights.*
-- 👤 Infra provisioning: the owner has chosen Linode and created the
-  server (2026-09-29); still open on it: the DNS change for afflino.com
-  (`A @` and `AAAA @` → the Linode; at 16:34 UTC on 2026-09-29 the apex
-  already resolved to 172.105.52.150), the first deploy — one line,
-  `docs/runbooks/deploy.md` §1 — off-server copies of the daily dumps and a
-  restore check on the server, monitoring, optionally a Linode Cloud
+- 👤 Infra provisioning: the owner chose Linode, created the server
+  (172.105.52.150), pointed DNS at it (GoDaddy `A @`; no AAAA) and ran the
+  first deploy on 2026-09-29 (`docs/runbooks/deploy.md` §1). Still open on
+  it: off-server copies of the daily dumps and a restore check on the
+  server, monitoring, optionally a Linode Cloud
   Firewall and Linode Backups (§6). Managed Postgres +
   Redis remain an option
   ([`docs/infrastructure-recommendation.md`](./infrastructure-recommendation.md);

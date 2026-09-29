@@ -2,18 +2,16 @@
 
 ## Decision (2026-09-29): the owner has chosen Linode
 
-The owner has created a Linode for Afflino ("linode is ready", 2026-09-29),
-separate from the server that runs the owner's other sites. Its plan, region,
-image and address are not recorded in this repository; the owner's
-convention for their other servers is Ubuntu 24.04 in Mumbai (ap-west) on a
-4 GB plan, with ufw (OpenSSH, 80, 443), fail2ban, unattended-upgrades and
-Docker from get.docker.com. **Nothing has been deployed to it, or to
-afflino.com, from this repository.** DNS for afflino.com is at GoDaddy
-(nameservers `ns01.domaincontrol.com`); at 15:19 UTC on 2026-09-29 its A
-records were GoDaddy's parking/forwarding addresses, at 16:34 UTC the single
-A record 172.105.52.150 (the Afflino Linode, per the owner; no
-AAAA), `www` a CNAME to the apex both times — `A @` (and `AAAA @`) must point
-at the Afflino Linode before the edge can obtain certificates. **One command
+The owner has created a Linode for Afflino ("linode is ready", 2026-09-29)
+at **172.105.52.150** (the owner's word), a server of Afflino's own. Its
+plan, region and image are not recorded here; the recommended shape is
+Ubuntu 24.04 in Mumbai (ap-west) on a 4 GB plan, with ufw (OpenSSH, 80,
+443), fail2ban, unattended-upgrades and Docker from get.docker.com. DNS for
+afflino.com is at GoDaddy (nameservers `ns01.domaincontrol.com`): at 15:19
+UTC that day its A records were GoDaddy's parking/forwarding addresses;
+the owner then pointed `A @` at 172.105.52.150 (no AAAA, `www` a CNAME to
+the apex) and ran the installer, and **at 17:20 UTC afflino.com answered
+over HTTPS** with Let's Encrypt certificates for the apex and www. **One command
 installs and updates the server**: `deploy/linode/install.sh` (README.md
 "Deploying afflino.com on Linode", `docs/runbooks/deploy.md` §1), which
 follows those conventions (ufw OpenSSH / 80 / 443, fail2ban, unattended

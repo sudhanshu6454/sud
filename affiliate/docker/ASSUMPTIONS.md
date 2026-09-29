@@ -130,3 +130,14 @@
     an unchanged checkout keeps the same image ids and recreates nothing (checked). Running
     compose by hand without the variable still works; it only recreates the services.
 
+21. **The edge's own errors carry the security headers** (2026-09-29). The `header` block in
+    the site only wraps responses a handler writes; a 502 while an upstream is down (the web
+    restarting, `restore.sh --replace-live`, an update), a `CONNECT` and the 413 from
+    `request_body` went out with `Server: Caddy` and no HSTS, nosniff, Referrer-Policy or
+    X-Frame-Options. The headers are now the `security_headers` snippet, imported in the site
+    and in a `handle_errors` block that answers `{err.status_code} {err.status_text}` as plain
+    text (checked: 502 with the web stopped, over HTTP and over HTTPS; 413; `CONNECT`). Not
+    covered: Caddy's automatic HTTP → HTTPS `308` on port 80, which is served outside the site
+    block and carries `Server: Caddy` (harmless: a redirect with no content; HSTS is ignored
+    over plain HTTP anyway). An explicit `http://` site for it would also bind port 80 in the
+    plain-HTTP test mode, so it is not added.

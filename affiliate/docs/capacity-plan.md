@@ -7,21 +7,36 @@ repository, or arithmetic from an assumption named in the same sentence.
 
 ## 1. The input figure
 
-The owner's figure is **about 12 billion views a month**. It is the owner's
-figure, not a measurement made by anything in this repository; nothing here
-counts views, and no real network file is in the repository (the shipped one
-is TEST data). The owner's words were "our in-house views of 12b monthly".
-Which properties those views cover, and whether they are the audience of
-Afflino's in-house publisher network (the properties `db/seed-network.ts`
-registers from a network file), is **for the owner to confirm** (§7,
-`docs/action-tracker.md`). The arithmetic below takes the figure as given.
+The owner's figure is **about 12 billion views a month**. The owner's words
+were "our in-house views of 12b monthly" and, on 2026-09-29, "we have
+publisher traffic in house from instagram, facebook and snapchat and
+youtube": the views are **social views on the owner's own accounts** on
+those four platforms, not web page views. Nothing in this repository counts
+views; the owner's figures are the source.
+
+The owner's Meta export of 2026-09-28 (28 days, data through 2026-09-27;
+the files are not in this repository, and neither is the network file
+built from them, which lives on the server as `/etc/afflino/network.yaml`)
+bears the figure out for Facebook and Instagram alone:
+
+| Platform | Accounts | Views, 28 days |
+|---|---|---|
+| Facebook | 322 pages | 9 564 778 510 |
+| Instagram | 82 accounts | 2 385 360 240 |
+| **Meta total** | 404 | **11 950 138 750** (≈ 12.8 billion per 30 days) |
+
+Snapchat and YouTube come on top; their account lists had not arrived. The
+arithmetic below keeps the round 12 billion a month.
 
 Arithmetic on it:
 
 - 12 000 000 000 / (30 × 86 400 s) ≈ **4 630 views/s** on average.
 - Views are not the platform's load. Many of them are impressions on posts
   that carry no clickable link, and a tracked link is only clicked where a
-  placement renders one. The platform's public hot path — `GET /r/{token}`
+  placement renders one: for example the bio link and story link stickers on
+  Instagram (captions and reels carry no clickable link), links in Facebook
+  posts, Snapchat link stickers, and YouTube video descriptions (Shorts
+  descriptions are not clickable). The platform's public hot path — `GET /r/{token}`
   on `packages/redirect` — only sees **clicks on tracked links**.
 
 ## 2. What reaches the hot path
@@ -194,12 +209,10 @@ headroom, and nothing has been measured.
 
 ## 7. What we do not know yet
 
-- Which properties the owner's "in-house views of 12b monthly" cover, and
-  whether that is the audience Afflino's in-house network will reach (§1).
+- How the views split across Snapchat and YouTube (the Meta split is in §1),
+  and what share of each platform's posts will carry a tracked link.
 - The real click-through on a shoppable placement (no placement has served
   real traffic; 0.05 %–0.5 % is an assumption).
-- How much of the 12 billion is web page views versus social impressions
-  that cannot carry a clickable tracked link.
 - The bot and crawler share of hits on `/r/{token}` (each is a `clicks`
   row today; there is no rate limiting on the redirect — open in
   `docs/pilot-checklist.md`).

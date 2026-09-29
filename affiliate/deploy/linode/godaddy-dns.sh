@@ -4,9 +4,10 @@
 #   bash /opt/afflino/affiliate/deploy/linode/godaddy-dns.sh
 #
 # Run it ON the Linode. It reads the server's public IPv4 and IPv6 from its
-# network interfaces (no third-party lookup), asks for a GoDaddy API key and
-# secret through hidden prompts (or a personal access token, gd_pat_...,
-# instead of the pair), then:
+# network interfaces (no third-party lookup), asks through two hidden prompts
+# for GoDaddy credentials — a personal access token (sent as
+# `Authorization: Bearer <token>`; press Enter at the second prompt), or an
+# API key and its secret (`sso-key <key>:<secret>`) — then:
 #   A     @    → this server's IPv4 (replaces every A record for @, including
 #                GoDaddy's parking / forwarding addresses)
 #   AAAA  @    → this server's IPv6 (or removes AAAA @ when it has none)
@@ -15,18 +16,22 @@
 # memory for this run only: never written to disk, never printed, never on a
 # command line (curl reads the header from a pipe).
 #
-# GoDaddy grants DNS API access only to accounts with 10 or more domains or
-# a Discount Domain Club plan (403 otherwise). Without it, set the records by
-# hand (docs/runbooks/deploy.md §1, or the installer's status output).
-# Keys: developer.godaddy.com → API Keys → Create New API Key, environment
-# Production. Domain forwarding (GoDaddy → Domain → Forwarding) is not
-# reachable through this API: if it is on, turn it off by hand.
+# GoDaddy grants DNS API access only to eligible accounts (10 or more
+# domains, or a Discount Domain Club plan) and to credentials that carry the
+# domains / DNS scope; a 403 means one of those is missing. Without access,
+# set the records by hand (docs/runbooks/deploy.md §1, or the installer's
+# status output). Credentials: developer.godaddy.com — a personal access
+# token with the DNS scope, or an API key (environment Production) and its
+# secret (GoDaddy lists key/secret as deprecated for Domains). Domain
+# forwarding (GoDaddy → Domain → Forwarding) is not reachable through this
+# API: if it is on, turn it off by hand.
 #
 # TEST-ONLY settings (never needed on the Linode): AFFLINO_GODADDY_API (API
 # base, default https://api.godaddy.com), AFFLINO_DNS_DOMAIN (default
 # afflino.com), AFFLINO_PUBLIC_IPV4 / AFFLINO_PUBLIC_IPV6 (instead of the
 # interfaces), GODADDY_API_KEY / GODADDY_API_SECRET in the environment instead
-# of the prompts (never type a real key on a command line: it lands in the
+# of the prompts (GODADDY_API_SECRET unset or empty = the key is a personal
+# access token; never type a real key on a command line: it lands in the
 # shell history).
 
 set -Eeuo pipefail
@@ -59,31 +64,29 @@ main() {
   say "This server: IPv4 $ip4, IPv6 ${ip6:-none}"
   say "Domain: $domain (GoDaddy API $api)"
 
-  # ---- credentials (hidden prompts; memory only)
-  local key="${GODADDY_API_KEY:-}" secret="${GODADDY_API_SECRET:-}" auth
+  # ---- credentials (hidden prompts; memory only). An empty secret means the
+  # first value is a personal access token (Bearer); otherwise key + secret.
+  local key="${GODADDY_API_KEY:-}" secret="${GODADDY_API_SECRET:-}" auth kind
   if [ -z "$key" ]; then
     { : </dev/tty; } 2>/dev/null || die "this needs a terminal for the hidden prompts"
-    printf 'GoDaddy API key (or a personal access token gd_pat_...), hidden: ' >/dev/tty
+    printf 'GoDaddy personal access token or API key, hidden: ' >/dev/tty
     IFS= read -r -s key </dev/tty || true
     printf '\n' >/dev/tty
+    [ -n "$key" ] || die "nothing entered; nothing changed"
+    printf 'API secret, hidden (press Enter if you pasted a personal access token): ' >/dev/tty
+    IFS= read -r -s secret </dev/tty || true
+    printf '\n' >/dev/tty
   fi
-  [ -n "$key" ] || die "no key entered; nothing changed"
-  case "$key" in *[[:space:]\"\\]*) die "the key contains spaces, quotes or backslashes; paste it again" ;; esac
-  case "$key" in
-    gd_pat_*) auth="Bearer $key" ;;
-    *)
-      if [ -z "$secret" ]; then
-        { : </dev/tty; } 2>/dev/null || die "this needs a terminal for the hidden prompts"
-        printf 'GoDaddy API secret, hidden: ' >/dev/tty
-        IFS= read -r -s secret </dev/tty || true
-        printf '\n' >/dev/tty
-      fi
-      [ -n "$secret" ] || die "no secret entered; nothing changed"
-      case "$secret" in *[[:space:]\"\\]*) die "the secret contains spaces, quotes or backslashes; paste it again" ;; esac
-      auth="sso-key $key:$secret"
-      ;;
-  esac
+  [ -n "$key" ] || die "nothing entered; nothing changed"
+  case "$key" in *[[:space:]\"\\]*) die "the token or key contains spaces, quotes or backslashes; paste it again" ;; esac
+  case "$secret" in *[[:space:]\"\\]*) die "the secret contains spaces, quotes or backslashes; paste it again" ;; esac
+  if [ -z "$secret" ]; then
+    auth="Bearer $key"; kind="a personal access token"
+  else
+    auth="sso-key $key:$secret"; kind="an API key and secret"
+  fi
   key=""; secret=""
+  say "Credentials: $kind (held in memory for this run only)"
 
   # ---- API helper: gd METHOD PATH [JSON]; the response body lands in $resp.
   local code
@@ -107,8 +110,8 @@ except Exception:
   check() { # $1 = what; exits on an error status
     case "$code" in
       2??) return 0 ;;
-      401) die "GoDaddy rejected the credentials (401) while $1: check that the key is a Production key (not OTE) and that key and secret belong together. Nothing further was changed." ;;
-      403) die "GoDaddy refused API access (403) while $1: GoDaddy grants DNS API access only to accounts with 10 or more domains or a Discount Domain Club plan, or the key has no access to $domain. Set the records by hand at GoDaddy (DNS → DNS Records): A @ $ip4${ip6:+, AAAA @ $ip6}, keep CNAME www → @ (docs/runbooks/deploy.md §1)." ;;
+      401) die "GoDaddy rejected the credentials (401, $kind) while $1: a personal access token may have expired or been revoked (press Enter at the secret prompt for one); an API key must be a Production key (not OTE) with its own secret. Nothing further was changed." ;;
+      403) die "GoDaddy refused API access (403) while $1: GoDaddy grants DNS API access only to accounts with 10 or more domains or a Discount Domain Club plan, or the token lacks the domains/DNS scope (create a personal access token with the DNS scope on developer.godaddy.com), or the credentials have no access to $domain. Set the records by hand at GoDaddy (DNS → DNS Records): A @ $ip4${ip6:+, AAAA @ $ip6}, keep CNAME www → @ (docs/runbooks/deploy.md §1)." ;;
       404) die "GoDaddy does not know $domain in this account (404) while $1: $(message)" ;;
       422) die "GoDaddy rejected the request as invalid (422) while $1: $(message)" ;;
       429) die "GoDaddy rate-limited the requests (429) while $1: wait a minute and run this again." ;;

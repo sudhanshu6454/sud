@@ -1,10 +1,11 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import robots from '../app/robots';
 import sitemap from '../app/sitemap';
 import manifest from '../app/manifest';
 import {
+  NOT_FOR_INDEX_ROBOTS,
   OG_IMAGE_PATH,
   PRE_LAUNCH_ROBOTS,
   ROBOTS_DISALLOW,
@@ -13,6 +14,7 @@ import {
   pageMetadata,
   robotsFor,
   rootMetadata,
+  shopDetailMetadata,
   sitemapFor,
 } from '../lib/seo';
 import { DEFAULT_SITE_URL, siteIndexing, siteUrl } from '../lib/site';
@@ -122,7 +124,7 @@ describe('pageMetadata (canonical + og:url per page)', () => {
       ['app/(marketing)/terms/page.tsx', "pageMetadata('/terms', 'Terms of use')"],
       ['app/(marketing)/privacy/page.tsx', "pageMetadata('/privacy', 'Privacy notice')"],
       ['app/(shop)/shop/page.tsx', "pageMetadata('/shop', 'Shop the looks')"],
-      ['app/(shop)/looks/[id]/page.tsx', 'pageMetadata(`/looks/${encodeURIComponent(look.id)}`, look.title)'],
+      ['app/(shop)/looks/[id]/page.tsx', 'shopDetailMetadata(`/looks/${encodeURIComponent(look.id)}`, look.title, {'],
       ['app/(shop)/looks/[id]/items/[itemId]/page.tsx', '`/looks/${encodeURIComponent(look.id)}/items/${encodeURIComponent(item.id)}`'],
     ];
     for (const [file, call] of pages) {
@@ -217,6 +219,31 @@ describe('robots.txt (SITE_INDEXING=on)', () => {
     expect(robots().sitemap).toBe('http://127.0.0.1:8088/sitemap.xml');
   });
 
+  it('every disallowed area that renders HTML also declares noindex, nofollow', () => {
+    const noindex = /robots:\s*\{ index: false, follow: false \}/;
+    const walk = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((d) =>
+        d.isDirectory() ? walk(join(dir, d.name)) : [join(dir, d.name)],
+      );
+    const groups = readdirSync(join(WEB, 'app')).filter((d) => /^\(.*\)$/.test(d));
+    for (const area of ROBOTS_DISALLOW) {
+      const dirs = [join(WEB, 'app', area), ...groups.map((g) => join(WEB, 'app', g, area))].filter((d) => existsSync(d));
+      expect(dirs, area).toHaveLength(1);
+      const files = walk(dirs[0]!);
+      const pages = files.filter((f) => /[/\\]page\.tsx$/.test(f));
+      if (pages.length === 0) {
+        // /api: route handlers only, no HTML to carry a meta tag.
+        expect(files.some((f) => /[/\\]route\.ts$/.test(f)), area).toBe(true);
+        continue;
+      }
+      const layout = join(dirs[0]!, 'layout.tsx');
+      if (existsSync(layout) && noindex.test(readFileSync(layout, 'utf8'))) continue;
+      for (const page of pages) {
+        expect(readFileSync(page, 'utf8'), `${area}: ${page}`).toMatch(noindex);
+      }
+    }
+  });
+
   it('never disallows a public page', () => {
     const disallow = [...ROBOTS_DISALLOW];
     for (const path of ['/', '/shop', '/looks/x', '/contact', '/terms', '/privacy']) {
@@ -227,8 +254,8 @@ describe('robots.txt (SITE_INDEXING=on)', () => {
 });
 
 describe('sitemap.xml (SITE_INDEXING=on)', () => {
-  it('lists /, /shop and /contact, and one entry per live look', () => {
-    expect([...SITEMAP_PATHS]).toEqual(['/', '/shop', '/contact']);
+  it('lists / and /shop, and one entry per live look', () => {
+    expect([...SITEMAP_PATHS]).toEqual(['/', '/shop']);
     const s = sitemapFor(
       'https://afflino.com',
       [
@@ -240,12 +267,11 @@ describe('sitemap.xml (SITE_INDEXING=on)', () => {
     expect(s).toEqual([
       { url: 'https://afflino.com/' },
       { url: 'https://afflino.com/shop' },
-      { url: 'https://afflino.com/contact' },
       { url: 'https://afflino.com/looks/5793fbd2-9e8b-4a94-ac49-b1fde7128084', lastModified: '2026-09-29T00:00:00.000Z' },
       { url: 'https://afflino.com/looks/b2' },
     ]);
-    // The stub legal pages stay out until they have content.
-    expect(s.some((e) => /\/(terms|privacy)$/.test(e.url))).toBe(false);
+    // The stub pages (contact, terms, privacy) stay out until they have content.
+    expect(s.some((e) => /\/(contact|terms|privacy)$/.test(e.url))).toBe(false);
   });
 
   it('never lists a TEST-labelled look, even from the live catalogue', () => {
@@ -264,7 +290,6 @@ describe('sitemap.xml (SITE_INDEXING=on)', () => {
     expect(s.map((e) => e.url)).toEqual([
       'https://afflino.com/',
       'https://afflino.com/shop',
-      'https://afflino.com/contact',
       'https://afflino.com/looks/real-1',
     ]);
   });
@@ -276,7 +301,7 @@ describe('sitemap.xml (SITE_INDEXING=on)', () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     const s = await sitemap();
-    expect(s.map((e) => e.url)).toEqual(['https://afflino.com/', 'https://afflino.com/shop', 'https://afflino.com/contact']);
+    expect(s.map((e) => e.url)).toEqual(['https://afflino.com/', 'https://afflino.com/shop']);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -286,7 +311,7 @@ describe('sitemap.xml (SITE_INDEXING=on)', () => {
     process.env.WEB_API_TOKEN = 'token';
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNREFUSED')));
     const s = await sitemap();
-    expect(s).toHaveLength(3);
+    expect(s).toHaveLength(2);
   });
 
   it('the live catalogue adds its looks', async () => {
@@ -329,9 +354,46 @@ describe('sitemap.xml (SITE_INDEXING=on)', () => {
     expect(s.map((e) => e.url)).toEqual([
       'https://afflino.com/',
       'https://afflino.com/shop',
-      'https://afflino.com/contact',
       'https://afflino.com/looks/5793fbd2-9e8b-4a94-ac49-b1fde7128084',
     ]);
+  });
+});
+
+describe('look and item pages (shopDetailMetadata)', () => {
+  it('a live, non-TEST look is indexable: no robots of its own', () => {
+    const m = shopDetailMetadata('/looks/real-1', 'Festive edit', { demo: false, lookTitle: 'Festive edit' });
+    expect(m.robots).toBeUndefined();
+    expect(m).toEqual(pageMetadata('/looks/real-1', 'Festive edit'));
+  });
+
+  it('demo data and TEST-labelled looks or items are noindex, nofollow', () => {
+    const cases: Array<[string, { demo: boolean; lookTitle: string }]> = [
+      // the web's own demo looks (no WEB_API_TOKEN / API unreachable)
+      ['Office wear', { demo: true, lookTitle: 'Office wear' }],
+      // the network seed's TEST looks, served by the live API
+      ['Demo look — Demo Web', { demo: false, lookTitle: 'Demo look — Demo Web' }],
+      // an item of a TEST look
+      ['Blazer', { demo: false, lookTitle: 'Demo look — Demo Instagram' }],
+      // a TEST-labelled item
+      ['Demo Kaya — Blazer', { demo: false, lookTitle: 'Festive edit' }],
+    ];
+    for (const [title, opts] of cases) {
+      const m = shopDetailMetadata('/looks/x', title, opts);
+      expect(m.robots, title).toEqual(NOT_FOR_INDEX_ROBOTS);
+      expect(m.robots, title).toEqual({ index: false, follow: false });
+      // canonical and og:url stay on the page's own path
+      expect(m.alternates).toEqual({ canonical: '/looks/x' });
+    }
+  });
+
+  it('both look routes use it with the catalogue result\'s demo flag (source check)', () => {
+    for (const file of ['app/(shop)/looks/[id]/page.tsx', 'app/(shop)/looks/[id]/items/[itemId]/page.tsx']) {
+      const src = readFileSync(join(WEB, file), 'utf8');
+      expect(src, file).toContain('shopDetailMetadata(');
+      expect(src, file).toContain('demo: result.demo');
+      expect(src, file).toMatch(/lookTitle: look\.title/);
+      expect(src, file).not.toContain('pageMetadata(');
+    }
   });
 });
 

@@ -124,7 +124,10 @@ other agents) — flag anything that looks wrong to the owning agent.
   back and the call fails with nothing changed (before, a failing audit
   insert returned 500 after the pause had already taken effect). Resume's
   update is conditional on `status = 'paused'`, so a concurrent resume is
-  409. Tested in `test/phase3.test.ts` ("a failing audit insert …").
+  409. Tested in `test/phase3.test.ts` ("a failing audit insert …", and
+  "a resume that loses the race to a concurrent one is 409 and changes
+  nothing": the conditional update matches no row → 409, no event, no
+  audit row, no cache delete).
   The other audit/outbox writers (`disputes.ts`, `contracts.ts`,
   `publishers.ts`) still write their rows outside one transaction — open.
 - **Redis dependency of the kill switch**: pause/resume delete
@@ -136,6 +139,18 @@ other agents) — flag anything that looks wrong to the owning agent.
   wrong behaviour. The response reports `redis_available` so operators can
   see which mode applied. Test seam: `__setRedis` in `src/redis.ts`
   (mirrors `__setPool`); `undefined` = resolve from REDIS_URL as usual.
+  **Second delete (2026-09-29):** a redirect whose DB read happened just
+  before COMMIT (old status) writes its best-effort `set route:{token} … EX
+  300` a moment later; landing after the delete, it would cache the old
+  status for up to 300 s. So the same keys are deleted again
+  `ROUTE_CACHE_SECOND_DELETE_MS` (2 s) after the first delete, on a timer
+  off the request path (tested: "a redirect that re-caches the old status
+  after the first delete is cleared by the second"). **Residual window,
+  accepted:** a redirect whose read-to-SET gap exceeds 2 s (a stalled
+  Redis or event loop), or an api restart in those 2 s, can still leave the
+  old status cached until its 300 s TTL. A versioned cache entry (the
+  redirect refusing a payload older than the programme's last change)
+  would close it; not built.
 - **Publisher onboarding** (`src/routes/publishers.ts`, 0003): forward-only
   state machine application → identity_review → property_verification →
   programme_eligibility → contract → active; skips are 409, same-state is

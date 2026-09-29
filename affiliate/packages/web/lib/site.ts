@@ -42,10 +42,10 @@ export function siteUrl(): string {
  * `Disallow: /` with no sitemap line, the sitemap lists nothing, and every
  * page carries `<meta name="robots" content="noindex, nofollow">`.
  *
- * Why closed by default: the public pages carry placeholder prices, fees,
- * TDS figures and legal stubs (lib/site-copy.ts) that the owner has not
- * confirmed; they must not be indexed until the owner flips this.
- * docker-compose.prod.yml passes ${SITE_INDEXING:-off}.
+ * Why closed by default: opening a site to search engines is the owner's
+ * decision, taken on the server. The figures in lib/site-copy.ts are
+ * confirmed (2026-09-29); the terms, privacy and contact pages are still
+ * stubs. docker-compose.prod.yml passes ${SITE_INDEXING:-off}.
  */
 export function siteIndexing(): boolean {
   return process.env.SITE_INDEXING?.trim().toLowerCase() === 'on';

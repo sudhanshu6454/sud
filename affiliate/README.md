@@ -120,10 +120,19 @@ shims ([`db/README.md`](db/README.md)).
 
 ## Deploying afflino.com on Linode
 
-**Status (2026-09-29): the owner has created a Linode for Afflino; nothing
-has been deployed to it or to afflino.com from this repository.** The Linode is
-172.105.52.150 (the owner's word); at 16:34 UTC that day afflino.com already
-resolved to it, with nothing answering on port 80 there yet.
+**Status (2026-09-29): afflino.com is live on the owner's Linode,
+172.105.52.150.** The owner created the Linode for Afflino ("linode is
+ready"), gave its address ("172.105.52.150 THIS IS LINODE IP"), pointed
+DNS at it (GoDaddy `A @` → 172.105.52.150, the `www` CNAME kept, no AAAA)
+and ran the installer below. Checked from outside at 17:20 UTC the same
+day: afflino.com and www.afflino.com answer over HTTPS with Let's Encrypt
+certificates for both names (issued that day, valid to 2026-12-28, per the
+public certificate-transparency logs); every public page, the app areas
+and all 14 static assets return 200; www and plain HTTP redirect to the
+apex; the security headers are present; `/api/healthz` answers
+`{"ok":true}`; and search engines are kept out (`SITE_INDEXING=off`).
+That check ran against f7046bd; later commits reach the server when the
+owner re-runs the same line.
 
 **The one command**, as root on a fresh Ubuntu 24.04 Linode dedicated to
 Afflino (log in with `ssh root@afflino.com`, or Cloud Manager → the Linode →
@@ -133,13 +142,15 @@ Launch LISH Console):
 bash <(curl -fsSL https://raw.githubusercontent.com/sudhanshu6454/sud/refs/heads/claude/nifty-pasteur-flrulw/affiliate/deploy/linode/install.sh)
 ```
 
-It checks the server (root, Ubuntu 24.04 / 22.04 or Debian 12, ports
-80/443 free, memory: a 2 GB swapfile on plans under
-4 GB), installs the packages, Docker (get.docker.com), ufw (OpenSSH first,
+It checks the server (root, Ubuntu 24.04 / 22.04 or Debian 12, a server of
+its own — no other Docker compose project, ports 80/443 free — memory: a
+2 GB swapfile on plans under 4 GB), installs the packages, Docker (get.docker.com), ufw (OpenSSH first,
 then 80/tcp, 443/tcp, 443/udp), fail2ban and automatic security updates,
-clones the branch into `/opt/afflino`, writes `/etc/afflino/afflino.env`
+clones the branch into `/opt/afflino` (and continues with that checkout's
+copy of the installer), writes `/etc/afflino/afflino.env`
 (root, 0600) with every secret generated and never printed — the only
-question is an optional email for Let's Encrypt — starts the stack, waits
+question is an optional email for the Let's Encrypt account — builds the
+images, runs the migrations on their own, starts the stack, waits
 for it to be healthy, sets up a daily database backup and prints the
 status: the server's IPv4 / IPv6, whether afflino.com and www.afflino.com
 point at it, and the exact DNS records to set if not
@@ -151,15 +162,17 @@ the Linode's IPv4 (delete every other `A @`, e.g. GoDaddy's parking
 3.33.130.190 and 15.197.148.33), `AAAA @` = the Linode's IPv6, keep `CNAME
 www` → `@`, and delete GoDaddy domain forwarding if it is set up. With
 GoDaddy API access (accounts with 10+ domains or a Discount Domain Club
-plan) `bash /opt/afflino/affiliate/deploy/linode/godaddy-dns.sh` sets them
-instead (hidden prompts; the keys are never stored). Certificates for
+plan, and a personal access token with the DNS scope or an API key and
+secret) `bash /opt/afflino/affiliate/deploy/linode/godaddy-dns.sh` sets them
+instead (hidden prompts; the credentials are never stored). Certificates for
 afflino.com and www.afflino.com are then issued automatically; watch with
 `docker logs -f afflino-edge-1 2>&1 | grep -i certificate`.
 
 | To | Run as root on the Linode (one line each) |
 |---|---|
-| Update (re-run: keeps the secrets, backs up first when something changed, changes nothing when nothing did) | `bash <(curl -fsSL https://raw.githubusercontent.com/sudhanshu6454/sud/refs/heads/claude/nifty-pasteur-flrulw/affiliate/deploy/linode/install.sh)` |
-| Open the site to search engines, after the owner confirmed `packages/web/lib/site-copy.ts` | `sed -i 's/^SITE_INDEXING=.*/SITE_INDEXING=on/' /etc/afflino/afflino.env && bash <(curl -fsSL https://raw.githubusercontent.com/sudhanshu6454/sud/refs/heads/claude/nifty-pasteur-flrulw/affiliate/deploy/linode/install.sh)` |
+| Update (re-run: keeps the secrets, backs up first when something changed, keeps the release before as the git tag `afflino-previous`, changes nothing when nothing did) | `bash <(curl -fsSL https://raw.githubusercontent.com/sudhanshu6454/sud/refs/heads/claude/nifty-pasteur-flrulw/affiliate/deploy/linode/install.sh)` |
+| Roll back a code-only release to the one before the last update (`docs/runbooks/deploy.md` §3) | `cd /opt/afflino && git checkout afflino-previous && cd affiliate && docker compose --env-file /etc/afflino/afflino.env -f docker-compose.prod.yml -f docker-compose.single-host.yml up -d --build` |
+| Open the site to search engines (the owner's call; the figures are confirmed) | `sed -i 's/^SITE_INDEXING=.*/SITE_INDEXING=on/' /etc/afflino/afflino.env && bash <(curl -fsSL https://raw.githubusercontent.com/sudhanshu6454/sud/refs/heads/claude/nifty-pasteur-flrulw/affiliate/deploy/linode/install.sh)` |
 | Health | `curl -s http://127.0.0.1:3000/healthz; curl -s http://127.0.0.1:3001/healthz; curl -s http://127.0.0.1:3002/api/healthz; curl -s https://afflino.com/api/healthz; echo` |
 | Services | `cd /opt/afflino/affiliate && docker compose --env-file /etc/afflino/afflino.env -f docker-compose.prod.yml -f docker-compose.single-host.yml ps` |
 | Logs | `cd /opt/afflino/affiliate && docker compose --env-file /etc/afflino/afflino.env -f docker-compose.prod.yml -f docker-compose.single-host.yml logs -f --since 15m` |
@@ -171,16 +184,19 @@ afflino.com and www.afflino.com are then issued automatically; watch with
 **Owner actions in Linode Cloud Manager** (optional, recommended): a Cloud
 Firewall on the Linode (inbound Drop; accept TCP 22, 80, 443 and UDP 443;
 outbound Accept), and Linode Backups (whole-disk snapshots, including the
-environment file). **Plan**: 4 GB (the owner's convention); sizing for
+environment file). **Plan**: 4 GB recommended; sizing for
 Afflino's real traffic is unmeasured — about 166 MiB for the whole stack at
 idle, the web image build needs more for a minute or two, and the load soak
 has never run ([`docs/capacity-plan.md`](docs/capacity-plan.md)).
 
 **What stays demo on the live site**: no merchant programme exists (the
-shop shows labelled TEST demo looks until a real network file and programme
-exist); sign-in is the JWT stub (`/login` takes a pasted token; no
-accounts, OTP or KYC); the payout rail is the stub; the public figures and
-legal pages are placeholders, hence `SITE_INDEXING=off`. Still open before
+shop shows labelled TEST demo looks until a real programme exists);
+sign-in is the JWT stub (`/login` takes a pasted token; no accounts, OTP
+or KYC); the payout rail is the stub. The figures on the public pages
+(`packages/web/lib/site-copy.ts`) are the owner's, confirmed on 2026-09-29;
+the terms, privacy and contact pages are still stubs and the #ad
+disclosure wording still waits for counsel. `SITE_INDEXING` stays `off`
+until the owner turns it on. Still open before
 real traffic: an identity provider, webhook signature verification, rate
 limiting, a CSP, monitoring, off-server backups and a restore drill on the
 server, the load soak and counsel's decisions
@@ -278,21 +294,25 @@ Fixed in the compose file, not read from the environment file:
 **The indexing gate.** `SITE_INDEXING=on` is the owner's switch to let
 search engines in: robots.txt then allows the public pages (the app areas,
 `/join`, `/login`, `/api`, `/dev`, `/saved` stay disallowed) and names
-`https://afflino.com/sitemap.xml`, which lists `/`, `/shop`, `/contact` and
-the live, non-TEST looks. Until then (the default) robots.txt is
+`https://afflino.com/sitemap.xml`, which lists `/`, `/shop` and
+the live, non-TEST looks (the look pages of demo and TEST looks are
+`noindex, nofollow`). Until then (the default) robots.txt is
 `Disallow: /`, the sitemap is empty and every page carries
-`noindex, nofollow`, because the public pages carry placeholder prices,
-fees, TDS figures and legal stubs (`packages/web/lib/site-copy.ts`) the
-owner has not confirmed. Flipping it is a restart of the web, not a rebuild.
+`noindex, nofollow`, so the owner decides when search engines come in.
+The figures are confirmed (2026-09-29); the terms, privacy and contact
+pages are still stubs (they stay out of the sitemap). Flipping it is a
+restart of the web, not a rebuild.
 
 **Client addresses.** The edge runs with host networking, so the address
 it sees is the client's own, over IPv4 and IPv6 (a port Docker publishes
 would hand IPv6 clients to Caddy through Docker's userland proxy, from the
 compose network's gateway address; that is why the AAAA record waited for
-this). api and redirect trust `X-Forwarded-For` only from loopback and
-private peers (`TRUST_PROXY`, `packages/shared/src/trust-proxy.ts`), i.e.
-the edge, which reaches them from the compose network's gateway, and the
-edge replaces whatever a client sends. The redirect stores `ip_hash` = HMAC-SHA256(`IP_HASH_KEY`, the
+this). api and redirect trust `X-Forwarded-For` from loopback and any
+private-range peer (`TRUST_PROXY=loopback,uniquelocal`,
+`packages/shared/src/trust-proxy.ts`). The only such peers are the stack's
+own containers and Docker's proxy for the 127.0.0.1-published ports, which
+is how the host-networked edge reaches them; nothing outside the server can
+connect to those ports, and the edge replaces whatever a client sends. The redirect stores `ip_hash` = HMAC-SHA256(`IP_HASH_KEY`, the
 address the edge saw) — keyed so it cannot be reversed by enumerating IPv4
 addresses; without the key it falls back to the plain SHA-256 of before. No
 log carries the address (api and redirect log method, url and hostname; the
@@ -327,12 +347,17 @@ address; a `network_admin` token whose subject is not a user → pause 500,
 status still `active`, no audit or outbox row, the link still 302; a real
 pause / resume → paused page 200 / 302 again; with `SITE_INDEXING=on`
 robots.txt allowing the public site with the sitemap line and a sitemap of
-`/`, `/shop`, `/contact` (the five TEST looks left out); a 5 MB body → 413
+`/`, `/shop`, `/contact` (the TEST looks left out); a 5 MB body → 413
 at the edge; the edge in HTTPS mode (internal CA, `afflino.internal`) as in
 [`docs/runbooks/deploy.md`](docs/runbooks/deploy.md) §1R; then `down -v`:
 no container, volume or network left. Not done: a real certificate for
 afflino.com and any check over the internet — they need the DNS change and
-the server.
+the server. (That record predates the review fixes of the same day, which
+took `/contact` out of the sitemap, made the look pages of TEST and demo
+looks `noindex, nofollow`, added a pre-launch notice (removed the same day,
+once the owner confirmed the figures) and gave the edge's
+own 502 / 413 the security headers; the installer rehearsal after them is
+in [`deploy/linode/README.md`](deploy/linode/README.md) "What was checked".)
 
 ## Setup
 

@@ -162,8 +162,8 @@ collections, landing pages.
   none does by default)? This is a description of the implementation for
   counsel to assess, not a compliance position (`docs/threat-model.md` §4.11).
 - Hosting fact (2026-09-29): the owner has chosen a Linode (Akamai) server
-  for the pilot; the region is not confirmed in this repository (the owner's
-  other sites use Mumbai, ap-west).
+  for the pilot (172.105.52.150); its region is not confirmed in this
+  repository (the recommendation is Mumbai, ap-west).
 
 ---
 

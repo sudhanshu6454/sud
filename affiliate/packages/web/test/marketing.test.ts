@@ -28,7 +28,7 @@ const MARKETING_SOURCES = [...filesUnder(join(WEB, 'app/(marketing)')), ...files
   .filter((f) => /\.(tsx?|css)$/.test(f));
 
 describe('marketing copy (1b) comes from lib/site-copy', () => {
-  it('prints the design copy with the placeholder figures', () => {
+  it('prints the design copy with the owner-confirmed figures', () => {
     expect(HERO.title).toBe('400 million people. One link between them and your brand.');
     expect(HERO.body).toContain('across Meta, YouTube and Snapchat.');
     expect(HERO_STATS.map((s) => s.value)).toEqual(['400M', '₹0', 'T+7']);

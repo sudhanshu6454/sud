@@ -4,8 +4,10 @@
 # Two shapes, one file:
 #   * single host (the pilot on the owner's Linode): add
 #     docker-compose.single-host.yml, which runs Postgres 16 and Redis 7 next
-#     to the services and points DATABASE_URL / REDIS_URL at them:
-#       docker compose -f docker-compose.prod.yml -f docker-compose.single-host.yml up -d --build
+#     to the services and points DATABASE_URL / REDIS_URL at them. On the
+#     Linode, from /opt/afflino/affiliate (deploy/linode/install.sh runs the
+#     equivalent; docs/runbooks/deploy.md §1 has every operator line):
+#       docker compose --env-file /etc/afflino/afflino.env -f docker-compose.prod.yml -f docker-compose.single-host.yml up -d --build
 #   * managed databases (an option, docs/infrastructure-recommendation.md):
 #     this file alone, with DATABASE_URL and REDIS_URL set to the provider's
 #     private endpoints.
@@ -42,17 +44,18 @@
 # smoke test.
 #
 # Seeds and operator scripts (re-runnable; db/README.md, docker/README.md
-# "Operator scripts"). A re-run must read the same network file as the first
-# run: for the operator's own network set NETWORK_FILE=/app/config/network.yaml
-# and uncomment the migrate volume below; -e NODE_ENV=production then makes a
+# "Operator scripts"; on the Linode from /opt/afflino/affiliate, and
+# docs/runbooks/deploy.md §1 step 6 has the full lines). A re-run must read
+# the same network file as the first run: for the operator's own network
+# see deploy.md §1 ("Own network file"); -e NODE_ENV=production then makes a
 # lost NETWORK_FILE fail instead of seeding the TEST example:
-#   docker compose -f docker-compose.prod.yml -f docker-compose.single-host.yml run --rm -T -e NODE_ENV=production migrate ./node_modules/.bin/tsx db/seed-network.ts
-#   docker compose -f docker-compose.prod.yml -f docker-compose.single-host.yml run --rm -T migrate ./node_modules/.bin/tsx db/seed-network.ts --with-demo-programme
+#   docker compose --env-file /etc/afflino/afflino.env -f docker-compose.prod.yml -f docker-compose.single-host.yml run --rm -T -e NODE_ENV=production migrate ./node_modules/.bin/tsx db/seed-network.ts
+#   docker compose --env-file /etc/afflino/afflino.env -f docker-compose.prod.yml -f docker-compose.single-host.yml run --rm -T migrate ./node_modules/.bin/tsx db/seed-network.ts --with-demo-programme
 #   (--with-demo-programme adds the TEST programme and the shop placement reported as
 #    web_placement_id → WEB_PLACEMENT_ID; it refuses to run with NODE_ENV=production, by design)
 #
 # A database migrated before schema_migrations tracking existed needs, once:
-#   docker compose -f docker-compose.prod.yml -f docker-compose.single-host.yml run --rm migrate node db/migrate.mjs --baseline
+#   docker compose --env-file /etc/afflino/afflino.env -f docker-compose.prod.yml -f docker-compose.single-host.yml run --rm migrate node db/migrate.mjs --baseline
 
 # Fixed project name: containers, the network and the volumes are afflino_*
 # wherever the checkout lives (a throwaway rehearsal passes -p <other name>).
@@ -75,7 +78,8 @@ services:
   # Docker publishes would reach IPv6 clients through Docker's userland proxy,
   # which replaces their address with the compose network's gateway), and
   # ufw's rules apply to it. It reaches redirect and web on their 127.0.0.1
-  # ports below; they see it as the compose network's private gateway, which
+  # ports below, through Docker's proxy for published ports, so they see it
+  # as a private-range peer (the compose network's gateway), which
   # TRUST_PROXY trusts.
   edge:
     image: caddy:2-alpine
@@ -115,8 +119,10 @@ services:
       # Public origin of tracked links: every link is REDIRECT_BASE_URL/r/<token>,
       # served by the edge's /r/* route.
       REDIRECT_BASE_URL: ${REDIRECT_BASE_URL:-https://${SITE_HOST:-afflino.com}}
-      # Trust X-Forwarded-For only from loopback and private peers: the edge
-      # and the web's /api proxy on the compose network (docker/Caddyfile).
+      # Trust X-Forwarded-For from loopback and any private-range peer. The
+      # only such peers are the stack's own containers (the web's /api proxy)
+      # and Docker's proxy for the 127.0.0.1-published ports, which is how
+      # the host-networked edge reaches them (docker/Caddyfile).
       TRUST_PROXY: ${TRUST_PROXY:-loopback,uniquelocal}
       LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
@@ -211,9 +217,8 @@ services:
       # Canonical URLs, og:url, robots.txt and the sitemap.
       SITE_URL: ${SITE_URL:-https://${SITE_HOST:-afflino.com}}
       # "on" opens the site to search engines. Anything else (the default,
-      # off) = pre-launch: robots.txt Disallow: /, an empty sitemap and
-      # noindex,nofollow on every page, because the public pages carry
-      # placeholder prices, fees, TDS and legal stubs (lib/site-copy.ts).
+      # off) keeps them out: robots.txt Disallow: /, an empty sitemap and
+      # noindex,nofollow on every page. The owner's switch (README.md).
       SITE_INDEXING: ${SITE_INDEXING:-off}
       NEXT_PUBLIC_SITE_NAME: ${NEXT_PUBLIC_SITE_NAME:-Afflino}
       LOG_LEVEL: ${LOG_LEVEL:-info}
@@ -250,9 +255,12 @@ services:
       # --with-demo-programme, the placement reported as web_placement_id).
       # Default: the site's own host.
       WEB_HOST: ${WEB_HOST:-${SITE_HOST:-afflino.com}}
-    # Optional, to seed your own network instead of the TEST example: save it as
-    # network.yaml next to this file (gitignored), uncomment the two lines below
-    # and set NETWORK_FILE=/app/config/network.yaml.
+    # Optional, to seed your own network instead of the TEST example on a dev
+    # machine: save it as network.yaml next to this file (gitignored),
+    # uncomment the two lines below and set NETWORK_FILE=/app/config/network.yaml.
+    # On the Linode, never edit this checkout (the installer refuses to update
+    # one with local changes): keep the file at /etc/afflino/network.yaml and
+    # mount it per run (docs/runbooks/deploy.md §1, "Own network file").
     # volumes:
     #   - ./network.yaml:/app/config/network.yaml:ro
     command: ["node", "db/migrate.mjs"]

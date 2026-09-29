@@ -26,7 +26,33 @@ const ACTIVE_LINK_TOKENS_SQL = `select l.token as token
       where l.org_id = $1 and o.programme_id = $2 and l.status = 'active'`;
 
 /**
- * Delete `route:{token}` for each token.
+ * How long after the first `route:{token}` delete the second one runs.
+ *
+ * WHY TWO DELETES: a redirect that read the programme row just before COMMIT
+ * (old status) writes its best-effort `set route:{token} … EX 300` a moment
+ * later. If that SET lands after the first delete, the old status is cached
+ * again for up to 300 s. The second delete, this long after the first,
+ * clears that entry; a redirect's read-to-SET gap is milliseconds. Residual
+ * window (api ASSUMPTIONS.md): a SET later than this, or an api restart
+ * before the timer fires.
+ */
+export const ROUTE_CACHE_SECOND_DELETE_MS = 2000;
+let secondDeleteDelayMs = ROUTE_CACHE_SECOND_DELETE_MS;
+let lastSecondDelete: Promise<void> | null = null;
+
+/** Test seam: the delay of the second delete (default ROUTE_CACHE_SECOND_DELETE_MS). */
+export function __setRouteCacheSecondDeleteDelay(ms: number | undefined): void {
+  secondDeleteDelayMs = ms ?? ROUTE_CACHE_SECOND_DELETE_MS;
+}
+
+/** Test seam: settles when the most recently scheduled second delete has run. */
+export function __lastRouteCacheSecondDelete(): Promise<void> | null {
+  return lastSecondDelete;
+}
+
+/**
+ * Delete `route:{token}` for each token, now and once more
+ * ROUTE_CACHE_SECOND_DELETE_MS later (see above).
  *
  * WHY THIS EXISTS: the redirect service caches route payloads (including the
  * programme/offer eligibility snapshot) in Redis. Pausing a programme must
@@ -48,13 +74,24 @@ async function deleteRouteKeys(
   if (tokens.length === 0) {
     return { tokens: 0, deleted: 0, redisAvailable: true };
   }
+  const keys = tokens.map((t) => `route:${t}`);
   let deleted = 0;
   try {
-    const res = await client.del(...tokens.map((t) => `route:${t}`));
+    const res = await client.del(...keys);
     deleted = typeof res === 'number' ? res : 0;
   } catch (err) {
     log?.warn({ err }, 'route cache invalidation failed; DB remains source of truth');
   }
+  // The second delete, on the same client, off the request path.
+  lastSecondDelete = new Promise<void>((resolve) => {
+    const timer = setTimeout(() => {
+      Promise.resolve()
+        .then(() => client.del(...keys))
+        .catch((err: unknown) => log?.warn({ err }, 'second route cache invalidation failed; DB remains source of truth'))
+        .finally(() => resolve());
+    }, secondDeleteDelayMs);
+    timer.unref?.();
+  });
   return { tokens: tokens.length, deleted, redisAvailable: true };
 }
 
@@ -71,7 +108,10 @@ async function deleteRouteKeys(
  * Why the cache goes after COMMIT: deleting `route:{token}` before the new
  * status is visible would let a concurrent redirect re-cache the old status
  * from the DB. After commit, the next redirect read rebuilds from the new
- * status. The invalidation stays best-effort (logged, never fails the call).
+ * status; a redirect whose read was already in flight at COMMIT can still
+ * write the old status back, which the second delete (deleteRouteKeys,
+ * ROUTE_CACHE_SECOND_DELETE_MS later) clears. The invalidation stays
+ * best-effort (logged, never fails the call).
  *
  * `update` is run with [$1 org_id, $2 programme id] and must `returning id`;
  * zero rows means the programme is no longer in a state the action accepts

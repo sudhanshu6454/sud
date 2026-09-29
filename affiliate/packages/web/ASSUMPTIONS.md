@@ -156,10 +156,10 @@
     mock names include real companies and plausible real channels); the
     numbers are as designed. The mapping is in `lib/demo/afflino.ts`'s module
     header; `test/format.test.ts` asserts no original name survives.
-32. **Claims and prices are placeholders** in one module, `lib/site-copy.ts`
-    (400M reach, ₹0 upfront, T+7, ₹24,999/month, 15% / 8% fees, TDS 1% under
-    194-O, 7-day validation, ₹500 minimum withdrawal) — to be confirmed by the
-    business before launch. The creator disclosure line there is a draft
+32. **Claims and prices live in one module**, `lib/site-copy.ts` (400M reach,
+    ₹0 upfront, T+7, ₹24,999/month, 15% / 8% fees, TDS 1% under 194-O, 7-day
+    validation, ₹500 minimum withdrawal). They came from the handover as
+    placeholders; the owner confirmed them on 2026-09-29 (item 78). The creator disclosure line there is a draft
     pending counsel (docs/action-tracker.md, ASCI rows), not a compliant
     disclosure.
 33. **Tracking is unchanged.** The design's first-party attribution cookie and
@@ -631,14 +631,16 @@ instead).
     disallows `/app /brand /agency /admin /join /login /api /dev /saved`
     (plus an `Allow: /apple-icon.png`, which `/app` would otherwise match as
     a prefix) and names `https://<SITE_URL host>/sitemap.xml`; the sitemap
-    lists `/`, `/shop`, `/contact` and the live catalogue's looks. Anything
+    lists `/`, `/shop` and the live catalogue's looks. Anything
     else — unset, empty, `off`, a typo — is **pre-launch**: robots.txt is
     `Disallow: /` with no sitemap line, the sitemap is an empty urlset (the
     catalogue is not read), and the root metadata adds
     `robots: noindex, nofollow`, which every public page inherits (Next merges
     metadata shallowly; the app areas, `/join`, `/login` and `/dev` set their
     own noindex, and a test asserts no `robots:` anywhere in `app/` says
-    otherwise). Why closed by default: the public pages carry placeholder
+    otherwise; another checks that every disallowed area that renders HTML
+    declares noindex, `/saved` included). Why closed by default: the public
+    pages carry placeholder
     prices, fees, TDS figures, a validation window, a minimum withdrawal and
     legal stubs (`lib/site-copy.ts`) the owner has not confirmed.
     docker-compose.prod.yml passes `${SITE_INDEXING:-off}`. Tests:
@@ -648,15 +650,23 @@ instead).
     from the live API (`isTestLabelledTitle`: a title starting with the word
     "Demo", which is how the network seed's `--with-demo-programme` looks are
     titled — CLAUDE.md invariant 11). Conservative: a real look titled
-    "Demo …" is simply not listed. The TEST look pages themselves are still
-    reachable from `/shop` and carry no noindex of their own, so with
-    `SITE_INDEXING=on` they could be crawled from there: unpublish the TEST
-    looks (or keep indexing off) until real programmes exist. `/terms` and
-    `/privacy` stay out while they are stubs.
+    "Demo …" is simply not listed. The look and item pages of those looks
+    (and of the web's own demo looks) are reachable from `/shop`, so they
+    carry `noindex, nofollow` themselves (`shopDetailMetadata`: the
+    catalogue result's `demo` flag, or a TEST-labelled look or item title;
+    2026-09-29). `/contact`, `/terms` and `/privacy` stay out of the
+    sitemap while they are stubs.
 77. **robots.txt disallow vs noindex.** Item 72 above kept the app areas out
     of robots.txt so a crawler could see their noindex; the indexing gate
     now disallows them explicitly (the brief for afflino.com asked for it).
     Trade-off: a disallowed URL that is linked from elsewhere can still be
     listed URL-only (the crawler never fetches it, so never sees the
     noindex). The noindex stays on those pages as the second line.
-
+78. **A pre-launch notice, added and removed on 2026-09-29** (history).
+    A review added a full-width "Preview: … placeholders" note above the
+    nav of every marketing and shop page while `SITE_INDEXING` was off,
+    because the figures in `lib/site-copy.ts` were then unconfirmed. The
+    owner confirmed them the same day ("figures are confirmed, keep them"),
+    so the note, its component and its copy were removed; the pages show the
+    confirmed figures, and `test/site-copy.test.ts` pins them. Opening the
+    site to search engines stays the owner's switch (items 74–77).

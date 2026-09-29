@@ -14,8 +14,8 @@ Postgres schema and migration runner for the Paparazzi Affiliate Commerce Platfo
 - `seed-network.ts` — exports `seedNetwork(query, opts)` and the network-file parser
   `networkFromYaml`; Afflino's in-house publisher network, read from a network file (see
   "Network seed"). Idempotent.
-- `network.example.yaml` — the seed's default network file: five TEST properties, one per
-  platform, on reserved example.com names.
+- `network.example.yaml` — the seed's default network file: six TEST properties, one per
+  platform (Instagram, Facebook, YouTube, Snapchat, Telegram, web), on reserved example.com names.
 - `../scripts/demo-money-loop.ts` — the end-to-end money-loop demo (in-process pg-mem
   sandbox by default; `DEMO_TARGET=postgres` runs the same assertions on a real Postgres).
 
@@ -92,7 +92,7 @@ It reads a **network file** (YAML), by default `db/network.example.yaml` (overri
 properties:
   - key: demo-ig                 # unique, 1-40 of [a-z0-9-]
     name: Demo Instagram         # unique (case-insensitive), at most 80 characters
-    platform: instagram          # instagram | youtube | snapchat | telegram | web
+    platform: instagram          # instagram | facebook | youtube | snapchat | telegram | web
     account: demo.afflino        # handle (social) or bare hostname (web)
     url: https://instagram.example.com/demo.afflino   # https; for web, host == account
 ```
@@ -129,12 +129,12 @@ links: merchant "Demo Merchant (network sandbox)", programme "Demo Network Progr
 re-run), one published look per property ("Demo look — <name>", `source_page` = the name,
 `sponsored` false, locale `en`, category Fashion, cover asset `demo/network/<key>.jpg`, one
 `exact` look item), campaign "Demo Network Campaign", and one placement per property
-(`network-<key>-<channel>`, channel `instagram_bio` / `youtube_description` /
-`snapchat_profile` / `telegram_post` / `web_article` by platform; `network-shop-web`, channel
+(`network-<key>-<channel>`, channel `instagram_bio` / `facebook_post` /
+`youtube_description` / `snapchat_profile` / `telegram_post` / `web_article` by platform; `network-shop-web`, channel
 `shop_web`, for the shop host). The demo programme refuses to seed under
 `NODE_ENV=production`, and so does the example network file (`db/network.example.yaml`,
 whether by default or by `--network`): a production run names the operator's own file, so a
-re-run that lost `NETWORK_FILE` fails instead of seeding the five TEST properties into the
+re-run that lost `NETWORK_FILE` fails instead of seeding the six TEST properties into the
 real organisation. `--with-demo-programme` without `WEB_HOST` prints a notice on stderr: no
 shop placement, so no `web_placement_id`.
 

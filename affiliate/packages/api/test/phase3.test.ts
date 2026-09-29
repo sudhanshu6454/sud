@@ -12,13 +12,14 @@ process.env.JWT_SECRET ??= 'phase3-test-secret';
 process.env.API_PORT ??= '0';
 process.env.REDIRECT_PORT ??= '0';
 
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import jwt from 'jsonwebtoken';
 import type { Redis } from 'ioredis';
 import { createTestDb, type TestDatabase } from './pgmem.js';
 import { __setRedis } from '../src/redis.js';
+import type * as ProgrammesModule from '../src/routes/programmes.js';
 import { buildRedirectApp } from '../../redirect/src/index.js';
 
 type PoolLike = TestDatabase['Pool'] extends new () => infer P ? P : never;
@@ -426,6 +427,18 @@ describe('link creation guards', () => {
 // ---------------------------------------------------------------------------
 
 describe('programme kill switch', () => {
+  // The second route-cache delete (programmes.ts) runs this long after the
+  // first; tests that count deletes wait for it (__lastRouteCacheSecondDelete).
+  // (Imported here: the module loads db.ts, which needs DATABASE_URL first.)
+  let killSwitch: typeof ProgrammesModule;
+  const __setRouteCacheSecondDeleteDelay = (ms: number | undefined) => killSwitch.__setRouteCacheSecondDeleteDelay(ms);
+  const __lastRouteCacheSecondDelete = () => killSwitch.__lastRouteCacheSecondDelete();
+  beforeAll(async () => {
+    killSwitch = await import('../src/routes/programmes.js');
+    __setRouteCacheSecondDeleteDelay(20);
+  });
+  afterAll(() => __setRouteCacheSecondDeleteDelay(undefined));
+
   it('pause -> paused page + cache invalidation + blocked minting; resume -> 302 again', async () => {
     const c = await seedChain(ORG_A, merchantA, { publisher: 'Pub KillSwitch' });
     const minted = await mintLink(c, ORG_A);
@@ -587,6 +600,7 @@ describe('programme kill switch', () => {
       expect(paused.statusCode).toBe(200);
       expect(await counts()).toEqual({ outbox: 1, audit: 1 });
       expect(deletedKeys).toContain(`route:${token}`);
+      await __lastRouteCacheSecondDelete();
       deletedKeys.length = 0;
 
       const failedResume = await app.inject({
@@ -602,6 +616,126 @@ describe('programme kill switch', () => {
       expect(during.statusCode).toBe(200);
       expect(during.body).toContain('paused');
     } finally {
+      __setRedis(undefined);
+    }
+  });
+
+  it('a redirect that re-caches the old status after the first delete is cleared by the second', async () => {
+    const c = await seedChain(ORG_A, merchantA, { publisher: 'Pub SecondDelete' });
+    const minted = await mintLink(c, ORG_A);
+    expect(minted.statusCode).toBe(201);
+    const token = String(minted.json().data.token);
+    const key = `route:${token}`;
+
+    // A Map-backed stand-in for Redis that records every delete.
+    const store = new Map<string, string>();
+    const dels: string[][] = [];
+    const fake = {
+      get: async (k: string) => store.get(k) ?? null,
+      set: async (k: string, v: string) => {
+        store.set(k, v);
+        return 'OK';
+      },
+      del: async (...keys: string[]) => {
+        dels.push(keys);
+        let n = 0;
+        for (const k of keys) if (store.delete(k)) n += 1;
+        return n;
+      },
+    };
+    __setRedis(fake as unknown as Redis);
+    __setRouteCacheSecondDeleteDelay(300);
+    try {
+      await fake.set(key, JSON.stringify({ programme_status: 'active', note: 'cached before the pause' }));
+      const paused = await app.inject({
+        method: 'POST',
+        url: `/v1/programmes/${c.programmeId}/pause`,
+        headers: bearer(USERS.AD, ORG_A),
+      });
+      expect(paused.statusCode).toBe(200);
+      expect(paused.json().data.cache_deleted).toBe(1);
+      expect(store.has(key)).toBe(false);
+
+      // A redirect that read the row before COMMIT (status active) writes
+      // its best-effort cache rebuild after the first delete.
+      await fake.set(key, JSON.stringify({ programme_status: 'active', note: 'in-flight read, late SET' }));
+      expect(store.has(key)).toBe(true);
+
+      await __lastRouteCacheSecondDelete();
+      expect(store.has(key)).toBe(false);
+      expect(dels).toEqual([[key], [key]]);
+    } finally {
+      __setRouteCacheSecondDeleteDelay(20);
+      __setRedis(undefined);
+    }
+  });
+
+  it('a resume that loses the race to a concurrent one is 409 and changes nothing', async () => {
+    const c = await seedChain(ORG_A, merchantA, { publisher: 'Pub ResumeRace' });
+    const minted = await mintLink(c, ORG_A);
+    expect(minted.statusCode).toBe(201);
+    const token = String(minted.json().data.token);
+    const deletedKeys: string[] = [];
+    __setRedis({
+      get: async () => null,
+      set: async () => 'OK',
+      del: async (...keys: string[]) => {
+        deletedKeys.push(...keys);
+        return keys.length;
+      },
+    } as unknown as Redis);
+    const counts = async () => {
+      const outbox = await pool.query(
+        `select count(*) as n from outbox where org_id = $1 and event_type = 'programme.resumed' and payload::text like $2`,
+        [ORG_A, `%${c.programmeId}%`],
+      );
+      const audit = await pool.query(
+        `select count(*) as n from audit_log where org_id = $1 and entity = 'programme' and entity_id = $2 and action = 'programme.resume'`,
+        [ORG_A, c.programmeId],
+      );
+      return { outbox: Number(outbox.rows[0]!.n), audit: Number(audit.rows[0]!.n) };
+    };
+    const originalConnect = pool.connect;
+    try {
+      const paused = await app.inject({
+        method: 'POST',
+        url: `/v1/programmes/${c.programmeId}/pause`,
+        headers: bearer(USERS.AD, ORG_A),
+      });
+      expect(paused.statusCode).toBe(200);
+      await __lastRouteCacheSecondDelete();
+      deletedKeys.length = 0;
+      expect(await counts()).toEqual({ outbox: 0, audit: 0 });
+
+      // The route's status check has seen 'paused'; a concurrent resume
+      // commits before this request's transaction starts (the next
+      // connect()), so the conditional update matches no row.
+      let raced = 0;
+      pool.connect = (async () => {
+        pool.connect = originalConnect;
+        raced += 1;
+        await pool.query(`update programmes set status = 'active' where id = $1`, [c.programmeId]);
+        return originalConnect.call(pool);
+      }) as typeof pool.connect;
+
+      const resumed = await app.inject({
+        method: 'POST',
+        url: `/v1/programmes/${c.programmeId}/resume`,
+        headers: bearer(USERS.AD, ORG_A),
+      });
+      expect(raced).toBe(1);
+      expect(resumed.statusCode).toBe(409);
+      expect(resumed.json().error.code).toBe('CONFLICT');
+      expect(resumed.json().error.message).toContain('resumed concurrently');
+      // The losing call wrote no event, no audit row and touched no cache.
+      expect(await counts()).toEqual({ outbox: 0, audit: 0 });
+      expect(deletedKeys).toEqual([]);
+      const status = await pool.query(`select status from programmes where id = $1`, [c.programmeId]);
+      expect(String(status.rows[0]!.status)).toBe('active');
+      const r = await redirectApp.inject({ method: 'GET', url: `/r/${token}` });
+      expect(r.statusCode).toBe(302);
+    } finally {
+      pool.connect = originalConnect;
       __setRedis(undefined);
     }
   });

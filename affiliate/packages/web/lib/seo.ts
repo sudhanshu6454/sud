@@ -116,11 +116,11 @@ export function robotsFor(base: string, indexing: boolean): MetadataRoute.Robots
 }
 
 /**
- * Pages in the sitemap: the home page, the shop and contact. /terms and
- * /privacy stay out while they are "being prepared" stubs; add them here
- * when they have content.
+ * Pages in the sitemap: the home page and the shop. /contact, /terms and
+ * /privacy stay out while they are stubs ("will be published with the
+ * launch", "being prepared"); add each here when it has content.
  */
-export const SITEMAP_PATHS = ['/', '/shop', '/contact'] as const;
+export const SITEMAP_PATHS = ['/', '/shop'] as const;
 
 /**
  * TEST-labelled catalogue rows (CLAUDE.md invariant 11): the network seed's
@@ -132,6 +132,28 @@ export const SITEMAP_PATHS = ['/', '/shop', '/contact'] as const;
  */
 export function isTestLabelledTitle(title: string): boolean {
   return /^demo\b/i.test(title.trim());
+}
+
+/** The robots meta of a page that must never be indexed (see shopDetailMetadata). */
+export const NOT_FOR_INDEX_ROBOTS = { index: false, follow: false } as const;
+
+/**
+ * A look or item page's metadata: pageMetadata plus `noindex, nofollow` when
+ * the page shows TEST data — the web's own demo looks (`demo`: no
+ * WEB_API_TOKEN, or the API unreachable) or a TEST-labelled look from the
+ * live catalogue (`isTestLabelledTitle` on the look's or the item's title).
+ * The sitemap already leaves them out, but /shop links to every look, so
+ * without this a crawler would still find and index them once
+ * SITE_INDEXING=on.
+ */
+export function shopDetailMetadata(
+  path: string,
+  title: string,
+  opts: { demo: boolean; lookTitle: string },
+): Metadata {
+  const meta = pageMetadata(path, title);
+  const testData = opts.demo || isTestLabelledTitle(opts.lookTitle) || isTestLabelledTitle(title);
+  return testData ? { ...meta, robots: { ...NOT_FOR_INDEX_ROBOTS } } : meta;
 }
 
 /**

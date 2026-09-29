@@ -9,10 +9,10 @@ README.md "Deploying afflino.com on Linode".
 
 | Script | What it does |
 |---|---|
-| `install.sh` | Install, and every later run update: preflight, system (packages, Docker, ufw, fail2ban, unattended upgrades, swap on small plans), the code in `/opt/afflino`, the secrets in `/etc/afflino/afflino.env` (generated, never printed), `docker compose up -d --build`, health, the DNS status, the daily backup timer |
+| `install.sh` | Install, and every later run update: preflight (root, the OS, a server of its own), system (packages, Docker, ufw, fail2ban, unattended upgrades, swap on small plans), the code in `/opt/afflino` (the release before kept as the git tag `afflino-previous`; the rest of the run is the checkout's own copy of the script), the secrets in `/etc/afflino/afflino.env` (generated, never printed), `docker compose build`, the migrations on their own, `up -d`, health, the DNS status, the daily backup timer |
 | `backup.sh` | `pg_dump` inside the postgres container → `/var/backups/afflino/afflino-<UTC time>-<kind>.sql.gz` (0600, checked, the 14 newest of each kind kept); run daily at 02:30 UTC by `afflino-backup.timer` |
-| `restore.sh` | Default: restores the newest dump into a scratch database and checks it (migrations, tables, row counts, the ledger balanced per currency), the live database untouched. `--replace-live`: after you type `REPLACE`, takes a pre-restore backup, loads the dump into a staging database (a failed load changes nothing), then swaps it in while web, api, redirect and workers are stopped for a few seconds |
-| `godaddy-dns.sh` | Optional, needs GoDaddy API access: sets `A @` and `AAAA @` for afflino.com to this server, keeps the `www` CNAME, prints before / after. Hidden prompts; the keys are never stored |
+| `restore.sh` | Default: restores the newest dump into a scratch database and checks it (migrations, tables, row counts, the ledger balanced per currency), the live database untouched. `--replace-live`: after you type `REPLACE`, takes a pre-restore backup, loads the dump into a staging database (a failed load changes nothing), then swaps it in while web, api, redirect and workers are stopped for a few seconds, and clears the redirect's route cache in Redis (`route:*`) before starting them again |
+| `godaddy-dns.sh` | Optional, needs GoDaddy API access: sets `A @` and `AAAA @` for afflino.com to this server, keeps the `www` CNAME, prints before / after. Two hidden prompts — a personal access token (Enter at the secret prompt: `Bearer`) or an API key and its secret (`sso-key`); never stored |
 
 The owner's lines (each one complete, as root on the Linode):
 
@@ -26,16 +26,38 @@ bash /opt/afflino/affiliate/deploy/linode/restore.sh
 The first line is also the update: run it again whenever the branch has new
 commits. It keeps every value in the environment file, stops (changing
 nothing) when the checkout has local changes, takes a backup before an
-update that changes the code or the environment file, rebuilds, and leaves
-running containers alone when nothing changed.
+update that changes the code or the environment file, keeps the release
+before as `afflino-previous` (rollback: `docs/runbooks/deploy.md` §3),
+rebuilds, runs the migrations before recreating anything (a failure leaves
+the running services as they were), and leaves running containers alone
+when nothing changed.
 
 ## Design notes
 
 - **One function, called on the last line** (`main "$@"; exit`): bash has
   read the whole script before it runs, so a `git merge` that rewrites the
-  file mid-run cannot change what runs. When the update changes
-  `install.sh` itself and the run started from the checkout's copy, it
-  continues with the new version (once).
+  file mid-run cannot change what runs.
+- **The rest of the run is the checkout's copy**: the owner's line runs
+  whatever raw.githubusercontent.com served (from `/dev/fd/63`; the file is
+  cached for up to 5 minutes, `cache-control: max-age=300`), which can be
+  older than the commit the code step just checked out. So after the code
+  step the script re-executes the checkout's `install.sh` once
+  (`AFFLINO_REEXECED=1`), also when a run started from the checkout's copy
+  and the update changed it, and hands over the commit the run started
+  from (`AFFLINO_HEAD_BEFORE`), so the re-executed pass still takes the
+  pre-update backup. The ACME question is asked after that point, once.
+- **A server of its own**: preflight refuses a machine where Docker already
+  runs another compose project (any `com.docker.compose.project` label but
+  Afflino's), whether or not that stack currently holds 80/443, because the
+  installer also sets ufw, fail2ban, sysctl and swap for the whole server.
+- **Migrations first**: `docker compose build`, then `run --rm migrate` on
+  its own, then `up -d`. A failed migration stops the run before any
+  container is recreated, so api, redirect, workers and web keep the release
+  that ran before.
+- **The rollback point** is a local git tag, `afflino-previous`, moved to
+  the old commit at every update that changes the code (and written to
+  `/etc/afflino/previous-release`); the runbook's §3 line checks it out and
+  rebuilds.
 - **The environment file is the only source of the stack's variables**:
   every compose call runs with the contract's variables (`.env.prod.example`)
   removed from its environment, so a value exported in the shell cannot win
@@ -59,15 +81,74 @@ never needed there): `AFFLINO_SKIP_SYSTEM=1`, `AFFLINO_SKIP_DOCKER_INSTALL=1`,
 `AFFLINO_STOP_AFTER=preflight|system|code|env`, `AFFLINO_DIR`,
 `AFFLINO_ENV_FILE`, `AFFLINO_PROJECT`, `AFFLINO_BACKUP_DIR`,
 `AFFLINO_EDGE_TEST=1` (the edge on plain HTTP, 127.0.0.1:8088),
-`AFFLINO_EXTRA_COMPOSE_FILE`, `AFFLINO_PUBLIC_IPV4` / `AFFLINO_PUBLIC_IPV6`,
+`AFFLINO_EXTRA_COMPOSE_FILE`, `AFFLINO_ALLOW_OTHER_STACKS=1` (run beside
+other compose projects), `AFFLINO_PUBLIC_IPV4` / `AFFLINO_PUBLIC_IPV6`,
 and any `.env.prod.example` variable preset in the environment (written
 into a new environment file instead of generated or asked; ignored, with a
 note, once the file has it). `godaddy-dns.sh` also takes
 `AFFLINO_GODADDY_API`, `AFFLINO_DNS_DOMAIN` and `GODADDY_API_KEY` /
-`GODADDY_API_SECRET` (never type a real key on a command line). Each script's
-header lists its own.
+`GODADDY_API_SECRET` (an empty secret = a personal access token; never type
+a real key on a command line). Each script's header lists its own.
 
 ## What was checked (2026-09-29, in the sandbox)
+
+Re-checked after the review fixes (the latest script versions):
+
+- `install.sh` as the owner's line runs it (`bash <(…)`, on a pty) with
+  `AFFLINO_SKIP_SYSTEM=1 AFFLINO_SKIP_GIT=1 AFFLINO_EDGE_TEST=1`, a
+  throwaway project and an extra compose file for the sandbox's CA: the
+  new ACME prompt (account and policy notices; Enter skipped it), the
+  environment file `root:root 0600` in a 0700 directory, the four secrets
+  64 / 96 / 64 / 64 hex characters and none of them (whole or a 16-character
+  prefix) in the output or any container log; `build`, then the migrations
+  on their own (`5 migration(s) applied`), then `up`; api, redirect and web
+  healthy; the edge answered. A second run (no terminal, `JWT_SECRET` set in
+  the shell): "kept the file's JWT_SECRET", the file's hash and mtime
+  unchanged, every container the same id and start time but the one-shot
+  migrate, the same image ids, no pre-update backup. Through the edge:
+  `/r/<token>` 302 with `subid` and no `set-cookie`; with `X-Forwarded-For`,
+  `X-Real-IP`, `Forwarded`, `True-Client-IP`, `CF-Connecting-IP` and
+  `X-Client-IP` spoofed, `ip_hash` = HMAC(`IP_HASH_KEY`, 127.0.0.1) and no
+  spoofed value; 0 log lines with an address; www → 301 with path and query;
+  HSTS / nosniff / Referrer-Policy / DENY, no `Server`; both `SITE_INDEXING`
+  states through the documented sed + installer line (on: robots.txt open,
+  a sitemap of `/` and `/shop`, the TEST look and item pages
+  `noindex, nofollow`, and a pre-launch notice that was removed later the
+  same day once the owner confirmed the figures; off: `Disallow: /`); with the web stopped a 502 carrying the security headers
+  and no `Server`; a 5 MB body → 413 with them; a `CONNECT` → 502 with them.
+- A failing migrate command (an extra compose file) stopped the run at the
+  migrations ("Nothing was recreated"): every container kept its id, state
+  and start time and the site kept answering; the next normal run went on.
+- The dedicated-server guard: another project's run stopped at preflight
+  naming the running compose project; `AFFLINO_ALLOW_OTHER_STACKS=1` turned
+  that into a warning (the port guard then still stopped it on 8088 and
+  127.0.0.1:3000–3002). The python port check (used where `ss` is missing)
+  no longer mistakes a port with only closed (TIME_WAIT) connections for a
+  listener, and still refuses a real one.
+- The code step against the public repository (a sparse clone reset to
+  296b392, the curl form of this `install.sh`): `updated 296b392 → f7046bd;
+  the release before is kept as the git tag afflino-previous`, the tag and
+  `previous-release` written, then "continuing with the checkout's copy of
+  the installer" and a second pass from the checkout's copy; the
+  re-executed pass of this version (`AFFLINO_REEXECED=1
+  AFFLINO_HEAD_BEFORE=296b392…`) printed "this run updates 296b392 →
+  f7046bd", the condition of the pre-update backup. Refusals: the detached
+  checkout after a rollback and a local edit, each with a complete
+  one-line way back; a non-root user ("log in … as root (or run sudo -i
+  first)").
+- `restore.sh --replace-live` (typed `REPLACE` on a pty): with a link
+  cached in Redis and a dump that predates it, "cleared the redirect's
+  route cache in Redis (1 route:* key(s))" and the link then 404 (without
+  the clear it would have kept redirecting from the cache); the seeded dump
+  restored back → the link 302 again. The restore check: PASS.
+- `godaddy-dns.sh` against a local stand-in: a token with an empty secret
+  went as `Bearer`, a key and secret as `sso-key` (both through the hidden
+  prompts on a pty and through the environment); the 403 text names the
+  missing DNS scope; the 401 text covers both kinds; the token, key and
+  secret appeared 0 times in the terminal output.
+- ShellCheck 0.11.0 and 0.9.0 and `bash -n`: clean on all four scripts.
+
+Earlier (the first rehearsal of the scripts):
 
 - `bash -n` and ShellCheck 0.11.0 and 0.9.0 (the version on CI's
   ubuntu-latest image): clean on all four scripts (CI runs both checks on

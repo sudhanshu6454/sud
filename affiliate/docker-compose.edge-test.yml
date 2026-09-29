@@ -1,7 +1,9 @@
 # Plain-HTTP test mode for the edge: add this file last to test routing,
-# headers and client-address handling without certificates or DNS.
+# headers and client-address handling without certificates or DNS, under a
+# throwaway project name and with TEST values for the required variables
+# (the full lines: docs/runbooks/deploy.md §1R):
 #
-#   docker compose -f docker-compose.prod.yml -f docker-compose.single-host.yml -f docker-compose.edge-test.yml up -d
+#   docker compose -p afflino-rehearsal -f docker-compose.prod.yml -f docker-compose.single-host.yml -f docker-compose.edge-test.yml up -d
 #
 # Caddy then serves plain HTTP on 127.0.0.1:8088 for any Host header (no ACME,
 # no certificates; it listens on nothing else, so 80 and 443 stay free), with

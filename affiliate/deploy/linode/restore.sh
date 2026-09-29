@@ -15,10 +15,15 @@
 #       pre-restore backup first, loads the dump into a staging database
 #       (a failed load stops here, the live database untouched), then stops
 #       api, redirect, workers and web for a few seconds (the edge answers
-#       502 meanwhile), swaps the staging database in, and starts them
-#       again. Everything written after the dump was taken is lost: use it
-#       for a lost or corrupted database, not to undo a release
-#       (docs/runbooks/deploy.md §2 and §3).
+#       502 meanwhile), swaps the staging database in, clears the redirect's
+#       route cache in Redis (route:*, so no link follows the replaced
+#       database's link or programme state for the cache's 5-10 minutes),
+#       and starts them again. Queued Redis jobs from before the swap (click
+#       events, outbox, provider events) are kept; any that refer to rows the
+#       dump does not have fail and are retried or left failed in the
+#       workers' log. Everything written after the dump was taken is lost:
+#       use it for a lost or corrupted database, not to undo a release
+#       (docs/runbooks/deploy.md §2, §3 and §5).
 #
 # Settings (the installer's defaults): AFFLINO_PROJECT=afflino,
 # AFFLINO_BACKUP_DIR=/var/backups/afflino. No password is needed or printed.
@@ -141,6 +146,22 @@ main() {
   fi
   pg postgres -c "DROP DATABASE IF EXISTS \"$live\" WITH (FORCE)" -c "ALTER DATABASE $staging RENAME TO \"$live\"" >/dev/null
   log "$live replaced by the contents of $file"
+
+  # The redirect caches each link's route (programme and offer state) in
+  # Redis for up to 10 minutes; those entries describe the database that was
+  # just replaced. Cleared while the services are stopped, so the first
+  # click after the restart reads the restored rows.
+  local rid cleared
+  rid="$(docker ps -q --filter "label=com.docker.compose.project=$project" --filter label=com.docker.compose.service=redis --filter status=running | head -n 1)"
+  if [ -n "$rid" ]; then
+    if cleared="$(docker exec "$rid" sh -c 'redis-cli --scan --pattern "route:*" | xargs -r -n 500 redis-cli del | awk "{ n += \$1 } END { print n + 0 }"')"; then
+      log "cleared the redirect's route cache in Redis ($cleared route:* key(s))"
+    else
+      log "WARNING: could not clear the route cache in Redis; links may follow the old data until the cache expires (10 minutes)"
+    fi
+  else
+    log "WARNING: no running redis container; the route cache was not cleared (links may follow the old data for up to 10 minutes)"
+  fi
   start_again
   trap - EXIT
   log "done. Check: curl -s http://127.0.0.1:3000/healthz; curl -s http://127.0.0.1:3001/healthz; curl -s http://127.0.0.1:3002/api/healthz"

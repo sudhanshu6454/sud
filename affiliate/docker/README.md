@@ -152,7 +152,7 @@ seeds TEST-labelled rows and refuses to run under `NODE_ENV=production`. Pass
 `-e NODE_ENV=production` to a run when that guard is wanted; under it the seed
 also refuses the example network file, so a re-run of the seed against the
 operator's own network fails when `NETWORK_FILE` is missing instead of seeding
-the five TEST properties into the real organisation
+the six TEST properties into the real organisation
 (`docs/runbooks/deploy.md` §1).
 
 ## Operator scripts shipped in the api image
@@ -208,11 +208,16 @@ Routes: `www.<SITE_HOST>/<path>?<query>` → `301` to
 else → the web (the web serves `/api/*` as its same-origin proxy to the
 API, so provider webhooks and payout callbacks are
 `https://<SITE_HOST>/api/v1/...`; request bodies above 4 MB are refused at
-the edge with 413). Every response: `Strict-Transport-Security:
-max-age=31536000` (no includeSubDomains, no preload),
-`X-Content-Type-Options: nosniff`, `Referrer-Policy:
+the edge with 413). Every response of the site, the edge's own errors
+included (a 502 while an upstream is down or restarting, the 413, a
+`CONNECT`: the `security_headers` snippet is imported in the site and in
+its `handle_errors`, which answers `<status> <text>` as plain text):
+`Strict-Transport-Security: max-age=31536000` (no includeSubDomains, no
+preload), `X-Content-Type-Options: nosniff`, `Referrer-Policy:
 strict-origin-when-cross-origin`, `X-Frame-Options: DENY`; `Server`, `Via`
-and `X-Powered-By` removed. No Content-Security-Policy yet (open item,
+and `X-Powered-By` removed. The one response without them is Caddy's own
+HTTP → HTTPS `308` on port 80 in production (outside the site block; it
+carries `Server: Caddy`, and browsers ignore HSTS over plain HTTP). No Content-Security-Policy yet (open item,
 `docs/threat-model.md` §4.7). Caddy trusts no client (`trusted_proxies` is not
 set), so it replaces any client-supplied `X-Forwarded-For` with the address
 it saw; `X-Real-IP` is overwritten with the same address and `Forwarded` is
@@ -284,17 +289,20 @@ curl -s -o /dev/null -D - -H 'Host: afflino.com' -H 'X-Forwarded-For: 203.0.113.
 docker exec pz-db psql -U paparazzi -d paparazzi -tAc "select count(*) from clicks"
 python3 -c 'import hmac,hashlib,sys; k,h,peer,spoof=sys.argv[1:]; f=lambda ip: hmac.new(k.encode(),ip.encode(),hashlib.sha256).hexdigest(); print("ip_hash is HMAC(edge peer %s): %s; is HMAC(spoofed %s): %s; is plain sha256(peer): %s" % (peer, h==f(peer), spoof, h==f(spoof), h==hashlib.sha256(peer.encode()).hexdigest()))' test-ip-hash-key-0123456789abcdef "$(docker exec pz-db psql -U paparazzi -d paparazzi -tAc "select context->>'ip_hash' from clicks order by occurred_at desc limit 1")" "$(docker network inspect pz-test -f '{{range .IPAM.Config}}{{.Gateway}}{{end}}')" 203.0.113.99
 docker logs pz-edge 2>&1 | grep -c "$(docker network inspect pz-test -f '{{range .IPAM.Config}}{{.Gateway}}{{end}}')\|203.0.113.99"
+head -c 5000000 /dev/zero | curl -s -D - -o /dev/null -H 'Host: afflino.com' --data-binary @- http://127.0.0.1:8088/api/v1/looks | grep -i '^HTTP/1.1 4\|^strict-transport\|^x-frame\|^server'
+docker stop pz-web
+curl -s -D - -H 'Host: afflino.com' http://127.0.0.1:8088/ | grep -i '^HTTP\|^strict-transport\|^x-content-type\|^referrer-policy\|^x-frame\|^server\|^via\|^502'
+docker start pz-web
 sleep 8; docker logs pz-workers 2>&1 | grep -o '"message":"[^"]*"' | sort -u
 docker rm -f -v pz-edge pz-web pz-workers pz-redirect pz-api pz-redis pz-db && docker network rm pz-test && rm -f seed-network.json
 ```
 
-Observed on the last run (2026-09-29, verbatim, with `paparazzi/api:test`,
-`redirect:test`, `workers:test` and `web:test` rebuilt from this tree and the
-`migrate:test` image of the same day — `db/` did not change; `caddy:2-alpine`
-= Caddy v2.11.4):
+Observed on the last run (2026-09-29, verbatim, all five `:test` images
+rebuilt from this tree — last for Facebook in the network seed and the
+removal of a same-day pre-launch notice; `caddy:2-alpine` = Caddy v2.11.4):
 
 - migrate: `5 migration(s) applied, 0 already applied`; `seed.ts` succeeds;
-  `seed-network: 5 properties from /app/db/network.example.yaml, shop host afflino.com, with TEST demo programme`.
+  `seed-network: 6 properties from /app/db/network.example.yaml, shop host afflino.com, with TEST demo programme`.
 - `/healthz` on 3100 (api) and 3101 (redirect), `/api/healthz` on 3200 (web
   proxy) and through the edge → `{"ok":true}` each.
 - Edge `/` (`Host: afflino.com`) → `<title>Afflino</title>`,
@@ -310,10 +318,10 @@ Observed on the last run (2026-09-29, verbatim, with `paparazzi/api:test`,
 - `Host: www.afflino.com`, `/shop?utm_source=smoke&x=1` →
   `HTTP/1.1 301 Moved Permanently`,
   `Location: https://afflino.com/shop?utm_source=smoke&x=1`.
-- `/shop` → `<title>Shop the looks · Afflino</title>` and the five TEST
-  network looks (`Demo look — Demo Instagram` / YouTube / Snapchat /
-  Telegram / Web), no "Demo data" badge (live).
-- mint-links: `summary: looks=5 items=5 minted=1 replayed=0 skipped_linked=4 skipped_no_offer=0 skipped_duplicate_offer=0 failed=0`, url `https://afflino.com/r/<token>`.
+- `/shop` → `<title>Shop the looks · Afflino</title>` and the six TEST
+  network looks (`Demo look — Demo Instagram` / Facebook / YouTube /
+  Snapchat / Telegram / Web), no "Demo data" badge (live).
+- mint-links: `summary: looks=6 items=6 minted=1 replayed=0 skipped_linked=5 skipped_no_offer=0 skipped_duplicate_offer=0 failed=0`, url `https://afflino.com/r/<token>`.
 - Look page → `<title>Demo look — Demo Instagram · Afflino</title>` and
   `<a href="https://afflino.com/r/<token>" rel="sponsored nofollow noopener"`.
 - `GET /r/<token>` through the edge with `X-Forwarded-For`, `X-Real-IP` and
@@ -323,6 +331,12 @@ Observed on the last run (2026-09-29, verbatim, with `paparazzi/api:test`,
   `ip_hash is HMAC(edge peer 172.18.0.1): True; is HMAC(spoofed 203.0.113.99): False; is plain sha256(peer): False`
   (the edge peer is the network gateway, see "The edge").
 - Edge log lines naming the peer or the spoofed address: `0`.
+- A 5 MB body → `HTTP/1.1 413 Request Entity Too Large` with HSTS and
+  `X-Frame-Options: DENY` (after curl's `100 Continue`); with `pz-web`
+  stopped, `/` → `HTTP/1.1 502 Bad Gateway` with a `502 Bad Gateway` body,
+  HSTS, nosniff, Referrer-Policy and DENY, and no `Server` or `Via` line
+  (re-run 2026-09-29 after the `handle_errors` change; before it the 502
+  carried `Server: Caddy` and no security header).
 - workers log: `workers started`, `outbox relay started`, `retention repeat
   scheduled`, `outbox batch published`, `click.observed`.
 - The last line removed the seven containers with their anonymous volumes (`-v`: the Postgres, Redis and Caddy images declare volumes; before 2026-09-29 the line left them behind) and the network.

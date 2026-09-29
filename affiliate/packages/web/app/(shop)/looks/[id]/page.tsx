@@ -11,7 +11,7 @@ import { productCount, publishedLabel } from '@/components/shop/model';
 import styles from '@/components/shop/detail.module.css';
 import { EmptyState, Eyebrow, PageHeader, Tag } from '@/components/ui';
 import { getLook, lookOrMiss } from '@/lib/catalogue';
-import { pageMetadata } from '@/lib/seo';
+import { shopDetailMetadata } from '@/lib/seo';
 
 interface Params {
   params: { id: string };
@@ -21,13 +21,18 @@ export const dynamic = 'force-dynamic';
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   // An outage throws (the shop's error state), never a 404 for a look that exists.
-  const look = lookOrMiss(await getLook(params.id));
+  const result = await getLook(params.id);
+  const look = lookOrMiss(result);
   // A miss is a 404 here too. No loading.tsx on this route: a Suspense
   // boundary would start the stream before notFound(), turning it into 200.
   if (!look) notFound();
   // The root layout's title template appends the site name; canonical and
-  // og:url are the look's own path.
-  return pageMetadata(`/looks/${encodeURIComponent(look.id)}`, look.title);
+  // og:url are the look's own path; demo and TEST-labelled looks are
+  // noindex, nofollow (lib/seo.ts).
+  return shopDetailMetadata(`/looks/${encodeURIComponent(look.id)}`, look.title, {
+    demo: result.demo,
+    lookTitle: look.title,
+  });
 }
 
 /**

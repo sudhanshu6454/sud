@@ -8,26 +8,34 @@
 #
 # The first run installs; every later run of the same line updates (it is
 # idempotent). What it does, in order:
-#   1. Preflight: root; a supported OS; refuses ports 80/443 held by
-#      anything but Afflino's edge; warns under 2 GB of RAM and adds a 2 GB swapfile under 4 GB of
-#      RAM when there is less than 1 GB of swap (the web image build needs
-#      the memory; Linode images ship a 512 MB swap disk).
+#   1. Preflight: root; a supported OS; a server of its own (refuses a
+#      machine that already runs other Docker compose projects, and ports
+#      80/443 held by anything but Afflino's edge); warns under 2 GB of RAM
+#      and adds a 2 GB swapfile under 4 GB of RAM when there is less than
+#      1 GB of swap (the web image build needs the memory; Linode images
+#      ship a 512 MB swap disk).
 #   2. System: apt packages, Docker (get.docker.com, only when missing),
 #      ufw (OpenSSH first, then 80/tcp, 443/tcp, 443/udp), fail2ban (sshd),
 #      unattended security upgrades.
 #   3. Code: clones branch claude/nifty-pasteur-flrulw of the public
 #      repository into /opt/afflino (sparse: affiliate/ only), or fetches and
-#      fast-forwards it; stops if the checkout has local changes.
+#      fast-forwards it, keeping the release that ran before as the git tag
+#      afflino-previous (the rollback point, docs/runbooks/deploy.md §3);
+#      stops if the checkout has local changes. Then the rest of the run is
+#      the checkout's own copy of this script (the line above runs whatever
+#      raw.githubusercontent.com served, which can lag a push by minutes).
 #   4. Environment: /etc/afflino/afflino.env (root:root, 0600, outside the
 #      checkout). The first run generates every secret with openssl and never
 #      prints one; the only question is the optional ACME_EMAIL. Later runs
 #      keep every value and only add keys that are missing. SITE_INDEXING=off.
 #   5. Deploy: docker compose (project afflino, docker-compose.prod.yml +
-#      docker-compose.single-host.yml) up -d --build --remove-orphans, waits
-#      for migrate and for api, redirect and web to be healthy, restarts the
-#      edge if its Caddyfile changed, and prints the status: the server's
-#      addresses, whether afflino.com and www.afflino.com resolve here, the
-#      DNS records to set if not, and how to watch the certificates arrive.
+#      docker-compose.single-host.yml): build the images, run the migrations
+#      on their own (a failure stops here, the running services untouched),
+#      then up -d --remove-orphans; waits for api, redirect and web to be
+#      healthy, restarts the edge if its Caddyfile changed, and prints the
+#      status: the server's addresses, whether afflino.com and
+#      www.afflino.com resolve here, the DNS records to set if not, and how
+#      to watch the certificates arrive.
 #   6. Backups: a daily systemd timer (02:30 UTC) running backup.sh next to
 #      this file (pg_dump inside the postgres container, gzip, 0600, the 14
 #      newest kept, /var/backups/afflino), plus one backup before an update
@@ -52,6 +60,8 @@
 #                                  (docker-compose.edge-test.yml): no ports 80/443,
 #                                  no certificates
 #   AFFLINO_EXTRA_COMPOSE_FILE=f   one more compose file, added last
+#   AFFLINO_ALLOW_OTHER_STACKS=1   run beside other Docker compose projects
+#                                  (a sandbox that hosts other stacks)
 #   AFFLINO_PUBLIC_IPV4 / AFFLINO_PUBLIC_IPV6   the addresses to report, instead
 #                                  of the ones found on the interfaces
 #   <KEY>=<value>                  any variable of .env.prod.example preset in the
@@ -137,6 +147,10 @@ main() {
 import socket, sys
 host, port, proto = sys.argv[1], int(sys.argv[2]), sys.argv[3]
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM if proto == "udp" else socket.SOCK_STREAM)
+if proto != "udp":
+    # Connections that just closed (TIME_WAIT) must not count as a
+    # listener; a real listener still refuses the bind.
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 try:
     s.bind((host, port))
 finally:
@@ -187,7 +201,7 @@ PY
 
   # ================================================================ 1. preflight
   say "Afflino installer ($STARTED_AT)"
-  [ "$(id -u)" -eq 0 ] || die "run this as root (on the Linode: log in as root, or prefix the line with sudo)."
+  [ "$(id -u)" -eq 0 ] || die "run this as root: log in to the Linode as root (or run sudo -i first), then run the line again."
 
   local OS_ID="" OS_VER="" OS_NAME=""
   if [ -r /etc/os-release ]; then
@@ -203,11 +217,22 @@ PY
     *) die "unsupported OS '${OS_NAME:-unknown}'. Afflino's installer supports Ubuntu 24.04 (recommended), Ubuntu 22.04 and Debian 12. Rebuild the Linode with Ubuntu 24.04 LTS." ;;
   esac
 
-  # Ports: free, or already Afflino's own (the project's containers exist).
-  local ours=""
+  # A server of its own: no Docker compose project here but Afflino's.
+  local ours="" others=""
   if have docker && docker info >/dev/null 2>&1; then
     ours="$(docker ps -q --filter "label=com.docker.compose.project=$PROJECT" 2>/dev/null | head -n 1)"
+    others="$(docker ps -a --format '{{.Label "com.docker.compose.project"}}' 2>/dev/null | sort -u | grep -vx -e '' -e "$PROJECT" | tr '\n' ' ' || true)"
+    others="${others% }"
   fi
+  if [ -n "$others" ]; then
+    if is_on "${AFFLINO_ALLOW_OTHER_STACKS:-}"; then
+      warn "other Docker compose projects on this machine ($others): allowed by AFFLINO_ALLOW_OTHER_STACKS (test only)"
+    else
+      die "this server already runs other Docker stacks (compose projects: $others). Afflino needs a Linode of its own: its edge takes ports 80 and 443, and this installer sets the firewall, fail2ban, kernel settings and swap for the whole server. Nothing was changed. Create a fresh Linode (Ubuntu 24.04 LTS) and run the line there."
+    fi
+  fi
+
+  # Ports: free, or already Afflino's own (the project's containers exist).
   if [ -n "$ours" ]; then
     info "Afflino's stack ($PROJECT) is already running here: this run is an update."
   else
@@ -345,7 +370,9 @@ net.core.wmem_max = 7500000'; then
   stop_after system
 
   # ================================================================ 3. code
-  local head_before="" head_after=""
+  # head_now: the checkout when this pass started; head_before: when the
+  # whole run started (the same, unless this pass is the re-executed one).
+  local head_before="" head_after="" head_now=""
   if is_on "$SKIP_GIT"; then
     say "Code: using $DIR as it is (AFFLINO_SKIP_GIT, test only)"
     [ -f "$APP/docker-compose.prod.yml" ] || die "$APP/docker-compose.prod.yml not found (AFFLINO_DIR must be the repository root)."
@@ -370,37 +397,58 @@ net.core.wmem_max = 7500000'; then
       local branch_now
       branch_now="$(git -C "$DIR" symbolic-ref --quiet --short HEAD 2>/dev/null || echo '(detached)')"
       if [ "$branch_now" != "$BRANCH" ]; then
-        die "$DIR is on '$branch_now', not on $BRANCH (a rollback to a release tag?). To go back to the latest release: cd $DIR && git checkout $BRANCH"
+        die "$DIR is on '$branch_now', not on $BRANCH (rolled back to afflino-previous, docs/runbooks/deploy.md §3?). Nothing was changed. To go back to the latest release: cd $DIR && git checkout $BRANCH && bash <(curl -fsSL $RAW_INSTALL)"
       fi
       if ! git -C "$DIR" diff --quiet || ! git -C "$DIR" diff --cached --quiet; then
         git -C "$DIR" status --short --untracked-files=no >&2
-        die "$DIR has local changes (above). Nothing was discarded. Keep them elsewhere, then: cd $DIR && git stash (or git checkout -- the files) and run the line again."
+        die "$DIR has local changes (above). Nothing was discarded. Keep a copy of them elsewhere if you need them (settings belong in $ENV_FILE), then: cd $DIR && git stash && bash <(curl -fsSL $RAW_INSTALL)"
       fi
       local untracked
       untracked="$(git -C "$DIR" ls-files --others --exclude-standard | head -n 5)"
       [ -z "$untracked" ] || warn "untracked files in $DIR (kept, not touched): $(printf '%s ' "$untracked")"
-      head_before="$(git -C "$DIR" rev-parse HEAD)"
+      head_now="$(git -C "$DIR" rev-parse HEAD)"
       git -C "$DIR" fetch --quiet origin "$BRANCH"
       local remote
       remote="$(git -C "$DIR" rev-parse FETCH_HEAD)"
-      if [ "$remote" = "$head_before" ]; then
+      if [ "$remote" = "$head_now" ]; then
         info "up to date at $(git -C "$DIR" rev-parse --short HEAD)"
-      elif git -C "$DIR" merge-base --is-ancestor "$head_before" "$remote"; then
+      elif git -C "$DIR" merge-base --is-ancestor "$head_now" "$remote"; then
+        # The release that ran until now is the rollback point (§3 of
+        # docs/runbooks/deploy.md): a local tag, moved at every update.
+        git -C "$DIR" tag -f afflino-previous "$head_now" >/dev/null
+        local rec_dir
+        rec_dir="$(dirname "$ENV_FILE")"
+        install -d -m 0700 -o root -g root "$rec_dir"
+        printf 'afflino-previous %s: the release that ran before the update of %s (docs/runbooks/deploy.md §3)\n' "$head_now" "$STARTED_AT" >"$rec_dir/previous-release"
         git -C "$DIR" merge --quiet --ff-only "$remote"
-        info "updated $(git -C "$DIR" rev-parse --short "$head_before") → $(git -C "$DIR" rev-parse --short HEAD)"
+        info "updated $(git -C "$DIR" rev-parse --short "$head_now") → $(git -C "$DIR" rev-parse --short HEAD); the release before is kept as the git tag afflino-previous"
       else
         die "$DIR has commits that are not on origin/$BRANCH (or the branch was rewritten); a fast-forward is impossible and nothing was changed. Inspect with: cd $DIR && git log --oneline --left-right HEAD...FETCH_HEAD"
       fi
     fi
     head_after="$(git -C "$DIR" rev-parse HEAD)"
-    # If this run started from the checkout's own copy and the update changed
-    # it, continue with the new version (once).
-    local new_self="$APP/deploy/linode/install.sh"
-    if [ -z "${AFFLINO_REEXECED:-}" ] && [ -f "$SELF" ] && [ -f "$new_self" ] \
-      && [ "$(readlink -f "$SELF")" = "$(readlink -f "$new_self")" ] && [ -n "$head_before" ] && [ "$head_before" != "$head_after" ] \
-      && ! git -C "$DIR" diff --quiet "$head_before" "$head_after" -- affiliate/deploy/linode/install.sh; then
-      info "the installer itself changed: continuing with the new version"
-      AFFLINO_REEXECED=1 exec bash "$new_self" "$@"
+    head_before="$head_now"
+    if [ -n "${AFFLINO_REEXECED:-}" ]; then
+      head_before="${AFFLINO_HEAD_BEFORE:-$head_now}"
+      [ "$head_before" = "$head_after" ] || info "this run updates $(git -C "$DIR" rev-parse --short "$head_before") → $(git -C "$DIR" rev-parse --short "$head_after")"
+    fi
+    # The rest of the run is the checkout's own copy of this script, once:
+    # the install line runs whatever raw.githubusercontent.com served (from
+    # /dev/fd/63, cached up to 5 minutes), which can be older than the
+    # commit just checked out; a run started from the checkout's copy
+    # continues with the new version when the update changed it.
+    local new_self="$APP/deploy/linode/install.sh" reexec=""
+    if [ -z "${AFFLINO_REEXECED:-}" ] && [ -f "$new_self" ]; then
+      if [ "$(readlink -f "$SELF" 2>/dev/null || printf '%s' "$SELF")" != "$(readlink -f "$new_self")" ]; then
+        reexec="continuing with the checkout's copy of the installer ($(git -C "$DIR" rev-parse --short HEAD))"
+      elif [ -n "$head_now" ] && [ "$head_now" != "$head_after" ] \
+        && ! git -C "$DIR" diff --quiet "$head_now" "$head_after" -- affiliate/deploy/linode/install.sh; then
+        reexec="the installer itself changed: continuing with the new version"
+      fi
+    fi
+    if [ -n "$reexec" ]; then
+      info "$reexec"
+      AFFLINO_REEXECED=1 AFFLINO_HEAD_BEFORE="$head_before" exec bash "$new_self" "$@"
     fi
   fi
   [ -f "$APP/.env.prod.example" ] || die "$APP/.env.prod.example not found; the checkout is incomplete."
@@ -448,7 +496,7 @@ net.core.wmem_max = 7500000'; then
     if [ -n "${ACME_EMAIL+x}" ]; then
       email="$ACME_EMAIL"; how="preset"
     elif tty_ok; then
-      printf '\n   Optional: an email address for Let'"'"'s Encrypt certificate notices (expiry, problems).\n   Press Enter to skip. Email: ' >/dev/tty
+      printf '\n   Optional: an email for the Let'"'"'s Encrypt account (account and policy notices only;\n   Let'"'"'s Encrypt sends no expiry emails, and the edge renews certificates by itself).\n   Press Enter to skip. Email: ' >/dev/tty
       IFS= read -r email </dev/tty || email=""
     else
       how="no terminal: left empty"
@@ -548,15 +596,29 @@ net.core.wmem_max = 7500000'; then
   dc config -q
 
   # A backup before an update that changes something.
-  local pg_running
+  local pg_running backup_note="the database backups are in $BACKUPS"
   pg_running="$(docker ps -q --filter "label=com.docker.compose.project=$PROJECT" --filter label=com.docker.compose.service=postgres --filter status=running | head -n 1)"
   if [ -n "$pg_running" ] && { [ "$head_before" != "$head_after" ] || [ -n "$env_changed" ]; }; then
     info "backup before the update:"
     AFFLINO_PROJECT="$PROJECT" AFFLINO_BACKUP_DIR="$BACKUPS" bash "$APP/deploy/linode/backup.sh" pre-update | sed 's/^/   /'
+    backup_note="the backup taken before this update is the newest *-pre-update.sql.gz in $BACKUPS"
   fi
 
-  info "building the images and starting the stack (the first build takes several minutes)"
-  dc up -d --build --remove-orphans
+  info "building the images (the first build takes several minutes)"
+  dc build
+  # The migrations on their own, before anything is recreated: if one fails,
+  # the running api, redirect, workers and web are not touched and keep
+  # serving the release that ran before (fix forward, docs/runbooks/deploy.md
+  # §2). On the first run this also starts postgres.
+  info "running the database migrations"
+  local mig_rc=0
+  dc run --rm -T migrate 2>&1 | sed 's/^/   /' || mig_rc=$?
+  if [ "$mig_rc" -ne 0 ]; then
+    die "the database migrations failed (exit $mig_rc; the output is above). Nothing was recreated: the services that were running keep the release that ran before. Fix forward (docs/runbooks/deploy.md §2); $backup_note."
+  fi
+
+  info "starting the stack"
+  dc up -d --remove-orphans
 
   # Caddy reads its Caddyfile once, at start: restart the edge when the
   # checkout's copy changed after the running edge started (a git update
@@ -583,7 +645,7 @@ net.core.wmem_max = 7500000'; then
       state="$(docker inspect -f '{{.State.Status}} {{.State.ExitCode}}' "$mig_id")"
       case "$state" in
         "exited 0") ;;
-        exited*) dc logs --no-color --tail 30 migrate >&2 || true; die "migrate failed ($state); its last lines are above. Nothing else was restarted." ;;
+        exited*) dc logs --no-color --tail 30 migrate >&2 || true; die "migrate failed ($state) when the stack started, after the same migrations had run on their own; its last lines are above." ;;
         *) ready="" ;;
       esac
     else
@@ -734,7 +796,12 @@ WantedBy=timers.target"; then unit_changed=1; fi
   info "logs:     $compose_line logs -f --since 15m"
   info "backup:   bash $APP/deploy/linode/backup.sh manual"
   info "restore check (into a scratch database, the live one untouched):  bash $APP/deploy/linode/restore.sh"
-  info "indexing: leave SITE_INDEXING=off until the owner has confirmed packages/web/lib/site-copy.ts (docs/runbooks/deploy.md)"
+  if ! is_on "$SKIP_GIT" && git -C "$DIR" rev-parse -q --verify refs/tags/afflino-previous >/dev/null 2>&1; then
+    local rollback_line="cd $DIR && git checkout afflino-previous && ${compose_line} up -d --build"
+    info "rollback to the release before the last update ($(git -C "$DIR" rev-parse --short afflino-previous); code-only releases, docs/runbooks/deploy.md §3):"
+    info "  $rollback_line"
+  fi
+  info "indexing: SITE_INDEXING=on lets search engines in; the switch is yours (docs/runbooks/deploy.md)"
 }
 
 main "$@"; exit

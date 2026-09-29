@@ -5,7 +5,7 @@
  * browser APIs (unit-tested in test/payouts.test.ts).
  *
  * Money is integer minor units (paise). The TDS rate, the section and the
- * minimum withdrawal are the placeholders in lib/site-copy.ts.
+ * minimum withdrawal are the owner-confirmed figures in lib/site-copy.ts.
  */
 
 import type { EarningsResponse } from '../../../lib/api';
