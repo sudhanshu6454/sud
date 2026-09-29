@@ -56,6 +56,24 @@ class State:
                 updated_at REAL NOT NULL,
                 PRIMARY KEY (site, key)
             );
+            CREATE TABLE IF NOT EXISTS buzz_subjects (
+                id TEXT PRIMARY KEY,           -- tmdb:movie:1234 | tmdb:tv:1234 | tmdb:person:56
+                site TEXT NOT NULL,
+                kind TEXT NOT NULL,            -- movie | tv | person
+                title TEXT NOT NULL,
+                release_date TEXT,             -- ISO date, or NULL (person subjects, or an unknown release)
+                status TEXT NOT NULL,          -- tracking | retired
+                first_seen REAL NOT NULL,
+                raw TEXT                       -- JSON: the last reading's un-normalized inputs, for tomorrow's delta
+            );
+            CREATE INDEX IF NOT EXISTS idx_buzz_subjects_site_status ON buzz_subjects(site, status);
+            CREATE TABLE IF NOT EXISTS buzz_readings (
+                subject_id TEXT NOT NULL,
+                date TEXT NOT NULL,            -- YYYY-MM-DD, settings.timezone
+                score REAL NOT NULL,
+                breakdown TEXT,                -- JSON: {popularity, views, mentions, pageviews}
+                PRIMARY KEY (subject_id, date)
+            );
             """
         )
 
@@ -142,6 +160,59 @@ class State:
             "ON CONFLICT(site,key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
             (site, key, value, time.time()),
         )
+
+    # -- buzz meter ---------------------------------------------------------
+    def buzz_upsert_subject(self, subject_id: str, site: str, kind: str, title: str, release_date: str | None) -> None:
+        self.conn.execute(
+            "INSERT INTO buzz_subjects(id,site,kind,title,release_date,status,first_seen) VALUES(?,?,?,?,?,'tracking',?) "
+            "ON CONFLICT(id) DO NOTHING",
+            (subject_id, site, kind, title, release_date, time.time()),
+        )
+
+    def buzz_active(self, site: str) -> list[sqlite3.Row]:
+        return self.conn.execute(
+            "SELECT * FROM buzz_subjects WHERE site=? AND status='tracking' ORDER BY first_seen", (site,)
+        ).fetchall()
+
+    def buzz_subject(self, subject_id: str) -> sqlite3.Row | None:
+        return self.conn.execute("SELECT * FROM buzz_subjects WHERE id=?", (subject_id,)).fetchone()
+
+    def buzz_set_raw(self, subject_id: str, raw: str) -> None:
+        self.conn.execute("UPDATE buzz_subjects SET raw=? WHERE id=?", (raw, subject_id))
+
+    def buzz_retire(self, subject_id: str) -> None:
+        self.conn.execute("UPDATE buzz_subjects SET status='retired' WHERE id=?", (subject_id,))
+
+    def buzz_record_reading(self, subject_id: str, date: str, score: float, breakdown: str) -> None:
+        self.conn.execute(
+            "INSERT INTO buzz_readings(subject_id,date,score,breakdown) VALUES(?,?,?,?) "
+            "ON CONFLICT(subject_id,date) DO UPDATE SET score=excluded.score, breakdown=excluded.breakdown",
+            (subject_id, date, score, breakdown),
+        )
+
+    def buzz_last_reading(self, subject_id: str, before: str | None = None) -> sqlite3.Row | None:
+        """The most recent reading for a subject, strictly before `before` when given (yesterday's, for a delta)."""
+        if before:
+            return self.conn.execute(
+                "SELECT * FROM buzz_readings WHERE subject_id=? AND date<? ORDER BY date DESC LIMIT 1", (subject_id, before)
+            ).fetchone()
+        return self.conn.execute(
+            "SELECT * FROM buzz_readings WHERE subject_id=? ORDER BY date DESC LIMIT 1", (subject_id,)
+        ).fetchone()
+
+    def buzz_reading_count(self, subject_id: str) -> int:
+        row = self.conn.execute("SELECT COUNT(*) c FROM buzz_readings WHERE subject_id=?", (subject_id,)).fetchone()
+        return int(row["c"])
+
+    def buzz_recent_scores(self, subject_id: str, limit: int) -> list[float]:
+        """The subject's last `limit` scores, newest first."""
+        rows = self.conn.execute(
+            "SELECT score FROM buzz_readings WHERE subject_id=? ORDER BY date DESC LIMIT ?", (subject_id, limit)
+        ).fetchall()
+        return [r["score"] for r in rows]
+
+    def buzz_update_release(self, subject_id: str, title: str, release_date: str | None) -> None:
+        self.conn.execute("UPDATE buzz_subjects SET title=?, release_date=? WHERE id=?", (title, release_date, subject_id))
 
     def social_results(self, url: str, site: str) -> list[sqlite3.Row]:
         return self.conn.execute(

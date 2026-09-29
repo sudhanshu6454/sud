@@ -128,6 +128,48 @@ def anniversaries(today=None, days: int = 7, timeout: int = 15, per_year: int = 
     return out
 
 
+def upcoming(kind: str = "movie", days: int = 60, timeout: int = 15, limit: int = 12) -> list[dict]:
+    """Films or shows releasing in the next `days`, most popular first: for pre-release buzz tracking."""
+    import datetime as dt
+    today = dt.date.today()
+    date_field = "primary_release_date" if kind == "movie" else "first_air_date"
+    data = _get(f"/discover/{kind}", {"sort_by": "popularity.desc", "include_adult": "false",
+                                      f"{date_field}.gte": today.isoformat(),
+                                      f"{date_field}.lte": (today + dt.timedelta(days=days)).isoformat(),
+                                      "with_original_language": "|".join(LANGUAGES)}, timeout) or {}
+    out = []
+    for hit in (data.get("results") or [])[:limit]:
+        date = hit.get("release_date") or hit.get("first_air_date") or ""
+        out.append({"id": hit.get("id"), "kind": kind, "title": hit.get("title") or hit.get("name") or "",
+                    "release_date": date or None, "language": hit.get("original_language") or "",
+                    "popularity": float(hit.get("popularity") or 0),
+                    "backdrop": f"{IMG}/{BACKDROP_SIZE}{hit['backdrop_path']}" if hit.get("backdrop_path") else None})
+    return out
+
+
+def trending_people(window: str = "week", timeout: int = 15, limit: int = 8) -> list[dict]:
+    """The people TMDB says the world is looking at this week: name, id, popularity, a profile photo."""
+    data = _get(f"/trending/person/{window}", {}, timeout) or {}
+    out = []
+    for hit in data.get("results") or []:
+        out.append({"id": hit.get("id"), "kind": "person", "title": hit.get("name") or "",
+                    "popularity": float(hit.get("popularity") or 0),
+                    "backdrop": f"{IMG}/{POSTER_SIZE}{hit['profile_path']}" if hit.get("profile_path") else None})
+    return out[:limit]
+
+
+def detail(kind: str, tmdb_id: int, timeout: int = 15) -> dict | None:
+    """A quick refresh of one subject's current popularity (and release date for a movie/show)."""
+    if not tmdb_id:
+        return None
+    data = _get(f"/{kind}/{tmdb_id}", {}, timeout)
+    if not data or data.get("success") is False:
+        return None
+    date = data.get("release_date") or data.get("first_air_date") or ""
+    return {"id": tmdb_id, "kind": kind, "title": data.get("title") or data.get("name") or "",
+            "popularity": float(data.get("popularity") or 0), "release_date": date or None}
+
+
 MIN_STILL_WIDTH = 1280
 
 

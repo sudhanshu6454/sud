@@ -52,6 +52,7 @@ class Site:
     trailers: bool = False      # trailer features: the official upload fetched and posted in the site's frame, at settings.trailer_hours
     scenes: bool = False        # scene features: an iconic or viral scene, the rights holder's own upload, in the frame, at settings.scene_hours
     deepdives: bool = False     # trivia and breakdown carousels on one film, facts from Wikipedia, frames from TMDB, at settings.deepdive_hours
+    buzz_meter: bool = False    # daily buzz-meter digest: films, shows and celebs tracked pre- and post-release, at settings.buzz_meter_hours
     news_hours: list[int] | None = None   # hours (in settings.timezone) at which the news post may run; None = every cycle
     formats: list[str] = field(default_factory=list)   # the site's house post shapes, told to the writer (see sites.yaml)
 
@@ -148,6 +149,12 @@ class Settings:
     # Trivia and breakdown carousels (sites with deepdives: true): one film, six to nine facts from its
     # Wikipedia page, one frame from the film per slide
     deepdive_hours: list[int] = field(default_factory=lambda: [8, 12, 17])
+    # Buzz Meter (sites with buzz_meter: true): once a day, a ranked digest of the films, shows and
+    # celebs currently tracked for hype - pre-release and for buzz_meter_retire_days after release -
+    # scored from TMDB popularity, trailer view velocity, Wikipedia pageviews and news mentions.
+    buzz_meter_hours: list[int] = field(default_factory=lambda: [9])
+    buzz_meter_max_tracked: int = 10    # subjects tracked (and shown in the digest) at once
+    buzz_meter_retire_days: int = 14    # days after release a subject stays on the meter
     # Instagram allows 100 API publishes per account a day and every story frame counts as one, so a
     # story sequence goes out for every Nth news article (1 = every article). Throwbacks and
     # scorecards always get theirs.
@@ -199,6 +206,7 @@ def load(path: str | os.PathLike | None = None) -> Settings:
     settings.trailer_hours = sorted({int(h) % 24 for h in (settings.trailer_hours or [])})
     settings.scene_hours = sorted({int(h) % 24 for h in (settings.scene_hours or [])})
     settings.deepdive_hours = sorted({int(h) % 24 for h in (settings.deepdive_hours or [])})
+    settings.buzz_meter_hours = sorted({int(h) % 24 for h in (settings.buzz_meter_hours or [])})
     for site in settings.sites:
         if site.news_hours is not None:
             site.news_hours = sorted({int(h) % 24 for h in site.news_hours})

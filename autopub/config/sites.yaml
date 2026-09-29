@@ -78,6 +78,12 @@ settings:
   # Trivia and breakdown carousels (sites with deepdives: true): one film, six to nine facts from its
   # Wikipedia page, a frame from the film on every slide
   deepdive_hours: [8, 12, 17]
+  # Buzz Meter (sites with buzz_meter: true): once a day, a ranked digest of the films, shows and
+  # celebs currently tracked for hype - pre-release and for buzz_meter_retire_days after release -
+  # scored from TMDB popularity, trailer view velocity, Wikipedia pageviews and news mentions.
+  buzz_meter_hours: [9]
+  buzz_meter_max_tracked: 10    # subjects tracked (and shown in the digest) at once
+  buzz_meter_retire_days: 14    # days after release a subject stays on the meter
   # Instagram allows 100 API publishes per account a day and every story frame counts as one. A story
   # sequence (cover, 1-3 text frames, closing) therefore goes out for every 3rd news article; the ad
   # features and scorecards always get theirs. 1 = every article.
@@ -283,6 +289,7 @@ sites:
       rail: bars            # a numbers brand: the section rule is a bar chart
     socials: [twitter, facebook, instagram, linkedin, pinterest, telegram, threads, instagram_story, facebook_story, instagram_reel, facebook_video]
     scorecards: true             # five actor scorecards a day, at settings.scorecard_hours
+    buzz_meter: true             # daily Buzz Meter digest: pre- and post-release hype, at settings.buzz_meter_hours
 
   - key: FILMYBUFF
     domain: filmybuff.com

@@ -9,7 +9,7 @@ from pathlib import Path
 
 from slugify import slugify
 
-from . import adclip, cards, carousels, deepdives, extract, followups, images, music, nostalgia, poster, rank, scenes, scorecards, seo, sources, speech, trailers, video, watchlists, tmdb
+from . import adclip, buzzmeter, cards, carousels, deepdives, extract, followups, images, music, nostalgia, poster, rank, scenes, scorecards, seo, sources, speech, trailers, video, watchlists, tmdb
 from .config import Settings, Site
 from .rewrite import CuratedPost, Rewriter, RewriteSkipped, effective_model
 from .social import SocialPost, build_publishers, dispatch
@@ -582,6 +582,13 @@ def run_site(site: Site, settings: Settings, state: State, rewriter: Rewriter | 
             deepdives.publish_daily(site, settings, state, rewriter, wp, publishers, work_dir, report)
         except Exception as exc:  # noqa: BLE001
             log.exception("[%s] deep dive failed: %s", site.key, exc)
+    # ScreenStat's Buzz Meter: a daily ranked digest of pre- and post-release hype, scored from data
+    if site.buzz_meter and buzzmeter.due(settings, state, site):
+        try:
+            ready()
+            buzzmeter.publish_daily(site, settings, state, rewriter, wp, publishers, work_dir, report)
+        except Exception as exc:  # noqa: BLE001
+            log.exception("[%s] buzz meter failed: %s", site.key, exc)
     log.info(report.summary())
     return report
 

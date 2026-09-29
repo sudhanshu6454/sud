@@ -296,6 +296,28 @@ def lead_image(title: str) -> dict | None:
             "page": f"https://commons.wikimedia.org/wiki/File:{name}"}
 
 
+PAGEVIEWS = "https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/en.wikipedia/all-access/user"
+
+
+def pageviews(title: str, timeout: int = 15) -> int | None:
+    """Yesterday's reader count for the page, for the buzz meter: how much attention it is getting
+    right now, not how famous it has always been. None when Wikimedia has nothing for it yet
+    (a brand-new page) or the request fails; a subject's buzz score just does without the signal."""
+    import datetime as dt
+    yesterday = (dt.date.today() - dt.timedelta(days=1)).strftime("%Y%m%d")
+    url = f"{PAGEVIEWS}/{requests.utils.quote(title, safe='')}/daily/{yesterday}/{yesterday}"
+    try:
+        resp = requests.get(url, headers=UA, timeout=timeout)
+        if resp.status_code == 404:
+            return None
+        resp.raise_for_status()
+        items = resp.json().get("items") or []
+        return int(items[0]["views"]) if items else None
+    except (requests.RequestException, ValueError, KeyError) as exc:
+        log.debug("pageviews for %r failed: %s", title, exc)
+        return None
+
+
 # ---- a film's page, by section ------------------------------------------------------------------------
 
 @dataclass

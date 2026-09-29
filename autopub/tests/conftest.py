@@ -15,8 +15,9 @@ def settings(tmp_path):
     s = config.load(ROOT / "config" / "sites.yaml")
     s.data_dir = tmp_path / "data"
     s.min_gap_minutes_between_posts = 0
-    # the curated day is opted into by the tests that exercise it: no news-hour gate, no scene or deep-dive slot
-    s.scene_hours, s.deepdive_hours = [], []
+    # the curated day is opted into by the tests that exercise it: no news-hour gate, no scene, deep-dive
+    # or buzz-meter slot
+    s.scene_hours, s.deepdive_hours, s.buzz_meter_hours = [], [], []
     for site_ in s.sites:
         site_.news_hours = None
     return s
