@@ -290,6 +290,7 @@ sites:
     socials: [twitter, facebook, instagram, linkedin, pinterest, telegram, threads, instagram_story, facebook_story, instagram_reel, facebook_video]
     scorecards: true             # five actor scorecards a day, at settings.scorecard_hours
     buzz_meter: true             # daily Buzz Meter digest: pre- and post-release hype, at settings.buzz_meter_hours
+    tags_cast: true               # a story naming one film or show tags its billed cast on Instagram
 
   - key: FILMYBUFF
     domain: filmybuff.com
@@ -358,3 +359,4 @@ sites:
     trailers: true               # two trailer features a day: the studio's upload in the frame, at settings.trailer_hours
     scenes: true                 # two scene features a day: an iconic or viral scene from the rights holder's channel, at settings.scene_hours
     deepdives: true              # three deep dives a day: trivia or a breakdown on one film, facts from Wikipedia, at settings.deepdive_hours
+    tags_cast: true               # a story naming one film or show tags its billed cast on Instagram

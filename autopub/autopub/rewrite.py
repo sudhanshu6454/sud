@@ -261,14 +261,15 @@ def schema_for(site: Site, carousel: bool = False) -> dict[str, Any]:
     if carousel:
         schema["properties"]["carousel_slides"] = deepcopy(CAROUSEL_SCHEMA)
         schema["required"] = [*schema["required"], "carousel_slides"]
-    if site.brand.style == "poster":
+    if site.brand.style == "poster" or site.tags_cast:
         schema["properties"]["film"] = deepcopy(FILM_SCHEMA)
     return schema
 
 
 FILM_SCHEMA: dict[str, Any] = {
     "type": "object", "additionalProperties": False, "required": ["title"],
-    "description": ("The ONE film or series this story is about, when there is one: the poster's still will be a frame from it. "
+    "description": ("The ONE film or series this story is about, when there is one: on a poster-style site its still will "
+                    "be a frame from it, and on any site that tags cast, its billed actors go up for tagging too. "
                     "Give the title exactly as released (no quotes, no 'trailer'), and the year of release when known. "
                     "Leave out when the story is about a person, a studio or the industry rather than one title."),
     "properties": {"title": {"type": "string", "description": "The title as released"},

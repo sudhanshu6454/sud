@@ -1,18 +1,24 @@
 """Filmybuff's poster is always built on an original frame from the film the story is about: the writer names
-the film, TMDB gives its best textless backdrop, and the source's press photo is only the fallback."""
+the film, TMDB gives its best textless backdrop, and the source's press photo is only the fallback.
+
+A site with `tags_cast: true` (Filmybuff, and ScreenStat though it is not poster-style) also gets the film's
+billed cast tagged on Instagram, their handles taken from TMDB's own cross-referenced ids, never guessed."""
 from datetime import datetime, timezone
 
 from autopub import extract, images, pipeline, refresh, rewrite, sources, tmdb, trailers, youtube
-from autopub.rewrite import Captions, CuratedPost, Film
+from autopub.rewrite import Captions, CuratedPost, Film, Mention
+from autopub.social import mentions as mentions_mod
 from autopub.state import State
+from tests.test_images import _fake_photo_fetch
 from tests.test_pipeline import FakeWP, Recorder
 from tests.test_refresh import UpdatingWP, _state
 from tests.test_trailers import UPLOAD, FakeRewriter, _post
 
 
-def test_only_poster_sites_ask_the_writer_for_the_film(settings):
-    assert "film" in rewrite.schema_for(settings.site("FILMYBUFF"))["properties"]
-    assert "film" not in rewrite.schema_for(settings.site("SCREENSTAT"))["properties"]
+def test_only_poster_or_cast_tagging_sites_ask_the_writer_for_the_film(settings):
+    assert "film" in rewrite.schema_for(settings.site("FILMYBUFF"))["properties"], "poster site"
+    assert "film" in rewrite.schema_for(settings.site("SCREENSTAT"))["properties"], "tags_cast site, though not poster style"
+    assert "film" not in rewrite.schema_for(settings.site("MENTALIST"))["properties"], "neither poster nor tags_cast"
     assert "film" not in rewrite.schema_for(settings.site("FILMYBUFF"))["required"], "a story about a person names no film"
 
 
@@ -36,6 +42,30 @@ def test_the_best_textless_backdrop_is_the_still(monkeypatch):
     assert tmdb.film_still("war 3", None, exact=True)["title"] == "War 3"
 
 
+def test_credits_person_instagram_and_cast_mentions(monkeypatch):
+    monkeypatch.setenv("TMDB_API_KEY", "k")
+    answers = {
+        "/tv/55/credits": {"cast": [
+            {"id": 103, "name": "Third Billed", "character": "C", "order": 2},
+            {"id": 101, "name": "Lead Actor", "character": "A", "order": 0},
+            {"id": 102, "name": "Second Lead", "character": "B", "order": 1},
+        ]},
+        "/person/101/external_ids": {"instagram_id": "leadactor"},
+        "/person/102/external_ids": {"instagram_id": None},
+        "/person/103/external_ids": {},
+    }
+    monkeypatch.setattr(tmdb, "_get", lambda path, params, timeout=15: answers.get(path))
+    cast = tmdb.credits("tv", 55)
+    assert [c["name"] for c in cast] == ["Lead Actor", "Second Lead", "Third Billed"], "billing order, not list order"
+    assert tmdb.credits("tv", 55, limit=2) == cast[:2]
+    assert tmdb.person_instagram(101) == "leadactor" and tmdb.person_instagram(102) is None
+    assert tmdb.cast_mentions("tv", 55) == [
+        {"name": "Lead Actor", "instagram": "leadactor"},
+        {"name": "Second Lead", "instagram": None},
+        {"name": "Third Billed", "instagram": None},
+    ]
+
+
 def test_a_filmybuff_story_that_names_a_film_is_postered_on_a_frame_from_it(monkeypatch, settings, tmp_path):
     site = settings.site("FILMYBUFF")
     settings.trailer_hours = settings.watchlist_hours = settings.scorecard_hours = settings.carousel_hours = settings.reel_hours = []
@@ -57,6 +87,57 @@ def test_a_filmybuff_story_that_names_a_film_is_postered_on_a_frame_from_it(monk
     report = pipeline.run_site(site, settings, state, rewriter=Writer(), wp=wp, publishers=[Recorder({})], work_dir=tmp_path / "img")
     assert report.published and looked == [("War 3", 2026)]
     assert "https://image.tmdb.org/t/p/original/frame.jpg" in fetched and "https://bh.com/press.jpg" not in fetched
+
+
+def test_a_screenstat_story_that_names_a_show_tags_its_billed_cast(monkeypatch, settings, tmp_path):
+    """ScreenStat is not poster-style, but tags_cast is on: the show is still named and its cast tagged."""
+    from autopub.social import REGISTRY, instagram as ig
+    from tests.test_social import _graph
+
+    site = settings.site("SCREENSTAT")
+    settings.trailer_hours = settings.watchlist_hours = settings.scorecard_hours = settings.carousel_hours = settings.reel_hours = []
+    settings.buzz_meter_hours = []
+    now = datetime.now(timezone.utc)
+    monkeypatch.setattr(sources, "collect", lambda s, timeout=30: [sources.Candidate("VisionQuest renewed", "https://ss.com/vq", "", now, "SS")])
+    monkeypatch.setattr(extract, "extract", lambda url, timeout=20: extract.Article(url=url, title="VisionQuest renewed", text="words " * 200, sitename="SS", image="https://ss.com/press.jpg"))
+    monkeypatch.setattr(pipeline.time, "sleep", lambda s: None)
+    _fake_photo_fetch(monkeypatch)
+    looked = []
+    monkeypatch.setattr(tmdb, "find", lambda title, year=None, timeout=15:
+                        (looked.append((title, year)), {"id": 55, "kind": "tv", "title": "VisionQuest", "year": 2026,
+                                                        "poster": None, "backdrop": None, "overview": ""})[1] if title == "VisionQuest" else None)
+    monkeypatch.setattr(tmdb, "cast_mentions", lambda kind, tmdb_id, timeout=15, limit=10: [
+        {"name": "Lead Actor", "instagram": "leadactor"},
+        {"name": "TOI Reporter", "instagram": "already_here"},   # same name the writer already proposed: not duplicated
+        {"name": "No Handle Actor", "instagram": None},          # TMDB has no id for them: never a tag candidate
+    ] if (kind, tmdb_id) == ("tv", 55) else [])
+
+    calls = []
+
+    def fake_verify(candidates, uid, token, state, limit=mentions_mod.MAX_TAGS):
+        calls.append(limit)
+        return [c.instagram for c in candidates if getattr(c, "instagram", None)][:limit]
+
+    monkeypatch.setattr(mentions_mod, "verify", fake_verify)
+
+    class Writer:
+        def rewrite(self, site, article, carousel=False, keywords=None):
+            p = _post(); p.film = Film(title="VisionQuest", year=2026); p.category = "Streaming"
+            p.mentions = [Mention(name="TOI Reporter", kind="person", instagram="already_here")]
+            return p
+
+    state = State(tmp_path / "s.db"); wp = FakeWP(); Recorder.seen.clear()
+    call, Resp = _graph({
+        "/content_publishing_limit": (200, {"data": [{"config": {"quota_total": 100}, "quota_usage": 0}]}),
+        "/media_publish": (200, {"id": "m1"}), "/m1": (200, {"permalink": "https://instagram.com/p/x/"}),
+        "c1": (200, {"status_code": "FINISHED"}), "/media": lambda method, url, kwargs: (200, {"id": "c1"}),
+    })
+    monkeypatch.setattr(ig.requests, "request", call)
+    monkeypatch.setattr(ig.requests, "get", lambda *a, **k: Resp(200, {}))
+    pub = REGISTRY["instagram"]({"USER_ID": "17", "ACCESS_TOKEN": "t"})
+    report = pipeline.run_site(site, settings, state, rewriter=Writer(), wp=wp, publishers=[pub], work_dir=tmp_path / "img")
+    assert report.published and looked == [("VisionQuest", 2026)]
+    assert calls == [mentions_mod.FILM_TAG_LIMIT], "a film/show story gets the raised cap, not the ordinary one"
 
 
 def test_a_story_about_a_person_keeps_the_sources_photo(monkeypatch, settings, tmp_path):

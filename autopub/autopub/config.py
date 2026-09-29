@@ -53,6 +53,7 @@ class Site:
     scenes: bool = False        # scene features: an iconic or viral scene, the rights holder's own upload, in the frame, at settings.scene_hours
     deepdives: bool = False     # trivia and breakdown carousels on one film, facts from Wikipedia, frames from TMDB, at settings.deepdive_hours
     buzz_meter: bool = False    # daily buzz-meter digest: films, shows and celebs tracked pre- and post-release, at settings.buzz_meter_hours
+    tags_cast: bool = False     # a story naming one film or show also asks for it (post.film) and tags its billed cast on Instagram
     news_hours: list[int] | None = None   # hours (in settings.timezone) at which the news post may run; None = every cycle
     formats: list[str] = field(default_factory=list)   # the site's house post shapes, told to the writer (see sites.yaml)
 

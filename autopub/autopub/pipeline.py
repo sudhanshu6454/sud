@@ -11,8 +11,9 @@ from slugify import slugify
 
 from . import adclip, buzzmeter, cards, carousels, deepdives, extract, followups, images, music, nostalgia, poster, rank, scenes, scorecards, seo, sources, speech, trailers, video, watchlists, tmdb
 from .config import Settings, Site
-from .rewrite import CuratedPost, Rewriter, RewriteSkipped, effective_model
+from .rewrite import CuratedPost, Mention, Rewriter, RewriteSkipped, effective_model
 from .social import SocialPost, build_publishers, dispatch
+from .social import mentions as mentions_mod
 from .state import State
 from .wordpress import WordPress, WordPressError
 
@@ -184,6 +185,24 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
             if shot:
                 log.info("[%s] the source's photo is too small for the poster; %s's portrait from TMDB instead", site.key, shot["name"])
                 image_url, credit, use_source_image = shot["url"], shot["credit"], True
+    if site.tags_cast and post.film:
+        # the cast goes up for tagging too, when this story names one film or show: handles come
+        # from TMDB's own cross-referenced ids, never guessed, and are still verified live before
+        # anything is actually tagged (autopub/social/mentions.py)
+        film_hit = tmdb.find(post.film.title, post.film.year, settings.request_timeout)
+        if film_hit and film_hit.get("id"):
+            cast = tmdb.cast_mentions(film_hit["kind"], film_hit["id"], settings.request_timeout, limit=mentions_mod.FILM_TAG_LIMIT)
+            have = {m.name.lower() for m in post.mentions if m.name}
+            added = 0
+            for c in cast:
+                if not c.get("instagram") or c["name"].lower() in have:
+                    continue
+                post.mentions.append(Mention(name=c["name"], kind="person", instagram=c["instagram"]))
+                have.add(c["name"].lower())
+                added += 1
+            log.info("[%s] cast: %d of %d billed for %r have a TMDB Instagram id", site.key, added, len(cast), post.film.title)
+        else:
+            log.info("[%s] no TMDB match for %r; no cast to tag", site.key, post.film.title)
     history = cards.parse_history(state.note(site.key, "card_formats"))
     kind = card_brief.kind if card_brief is not None else cards.choose(history, post.card, photo=bool(use_source_image and image_url))
     kicker = post.image_kicker or post.category or site.category
@@ -400,7 +419,8 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
     if ig is not None and post.mentions:
         try:
             from .social.mentions import verify
-            mentions = verify(post.mentions, ig.creds["USER_ID"], ig.creds["ACCESS_TOKEN"], state)
+            limit = mentions_mod.FILM_TAG_LIMIT if post.film else mentions_mod.MAX_TAGS
+            mentions = verify(post.mentions, ig.creds["USER_ID"], ig.creds["ACCESS_TOKEN"], state, limit=limit)
             log.info("[%s] tagging %s (of %d suggested)", site.key, ", ".join("@" + h for h in mentions) or "nobody",
                      len(post.mentions))
         except Exception as exc:  # noqa: BLE001 - tags are a bonus; the post must not depend on them

@@ -170,6 +170,29 @@ def detail(kind: str, tmdb_id: int, timeout: int = 15) -> dict | None:
             "popularity": float(data.get("popularity") or 0), "release_date": date or None}
 
 
+def credits(kind: str, tmdb_id: int, timeout: int = 15, limit: int = 10) -> list[dict]:
+    """The top-billed cast, in billing order: id, name, character."""
+    data = _get(f"/{kind}/{tmdb_id}/credits", {}, timeout) or {}
+    cast = sorted((data.get("cast") or []), key=lambda c: c.get("order", 999))
+    return [{"id": c.get("id"), "name": c.get("name") or "", "character": c.get("character") or ""}
+            for c in cast[:limit] if c.get("id")]
+
+
+def person_instagram(person_id: int, timeout: int = 15) -> str | None:
+    """The person's Instagram username, from TMDB's own cross-referenced external ids - never guessed."""
+    data = _get(f"/person/{person_id}/external_ids", {}, timeout) or {}
+    return data.get("instagram_id") or None
+
+
+def cast_mentions(kind: str, tmdb_id: int, timeout: int = 15, limit: int = 10) -> list[dict]:
+    """The top-billed cast worth tagging: name and Instagram username, only where TMDB has one on record."""
+    out = []
+    for c in credits(kind, tmdb_id, timeout, limit):
+        handle = person_instagram(c["id"], timeout)
+        out.append({"name": c["name"], "instagram": handle})
+    return out
+
+
 MIN_STILL_WIDTH = 1280
 
 

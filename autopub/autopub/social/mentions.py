@@ -22,6 +22,7 @@ from .instagram import GRAPH
 log = logging.getLogger(__name__)
 
 MAX_TAGS = 4                  # the three or four accounts the story is really about
+FILM_TAG_LIMIT = 10           # raised for a film or show story: its own billed cast is the story
 CACHE_DAYS = 30
 CACHE_SITE = "_instagram"     # site_notes rows under this key hold handle verdicts, shared by every site
 HANDLE = re.compile(r"^[a-z0-9._]{1,30}$")
