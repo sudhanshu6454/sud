@@ -137,7 +137,9 @@ let chainB: Chain; // ORG_B, fully mintable
 let merchantA: string;
 
 beforeAll(async () => {
-  const tdb = createTestDb();
+  // rollback: true — the kill-switch atomicity test needs ROLLBACK to undo
+  // (pg-mem's own does not; see pgmem.ts). Transactions here run one at a time.
+  const tdb = createTestDb({ rollback: true });
   pool = new tdb.Pool();
 
   const dbMod = await import('../src/db.js');
@@ -522,6 +524,86 @@ describe('programme kill switch', () => {
     });
     expect(r2.statusCode).toBe(409);
     expect(r2.json().error.code).toBe('CONFLICT');
+  });
+
+  it('a failing audit insert leaves the status unchanged: status + audit + outbox are one transaction', async () => {
+    const c = await seedChain(ORG_A, merchantA, { publisher: 'Pub AtomicSwitch' });
+    const minted = await mintLink(c, ORG_A);
+    expect(minted.statusCode).toBe(201);
+    const token = String(minted.json().data.token);
+
+    // A network_admin whose subject is not a users row: audit_log.actor_id
+    // references users(id), so the audit insert fails (the runbook's "a
+    // subject that is not a user id fails the call").
+    const ghost = { id: randomUUID(), role: 'network_admin' };
+    const counts = async () => {
+      const outbox = await pool.query(
+        `select count(*) as n from outbox where org_id = $1 and event_type in ('programme.paused', 'programme.resumed')
+            and payload::text like $2`,
+        [ORG_A, `%${c.programmeId}%`],
+      );
+      const audit = await pool.query(
+        `select count(*) as n from audit_log where org_id = $1 and entity = 'programme' and entity_id = $2`,
+        [ORG_A, c.programmeId],
+      );
+      return { outbox: Number(outbox.rows[0]!.n), audit: Number(audit.rows[0]!.n) };
+    };
+    const status = async () =>
+      String((await pool.query(`select status from programmes where id = $1`, [c.programmeId])).rows[0]!.status);
+
+    const deletedKeys: string[] = [];
+    __setRedis({
+      get: async () => null,
+      set: async () => 'OK',
+      del: async (...keys: string[]) => {
+        deletedKeys.push(...keys);
+        return keys.length;
+      },
+    } as unknown as Redis);
+    try {
+      const failedPause = await app.inject({
+        method: 'POST',
+        url: `/v1/programmes/${c.programmeId}/pause`,
+        headers: bearer(ghost, ORG_A),
+      });
+      expect(failedPause.statusCode).toBe(500);
+      // Nothing took effect: still active, no event, no audit row, the link
+      // still redirects, and the cache was not touched (invalidation runs
+      // only after a commit).
+      expect(await status()).toBe('active');
+      expect(await counts()).toEqual({ outbox: 0, audit: 0 });
+      expect(deletedKeys).toEqual([]);
+      const still = await redirectApp.inject({ method: 'GET', url: `/r/${token}` });
+      expect(still.statusCode).toBe(302);
+      expect(String(still.headers.location)).toContain('subid=');
+
+      // The same for resume: a real admin pauses, the ghost's resume fails
+      // and leaves it paused.
+      const paused = await app.inject({
+        method: 'POST',
+        url: `/v1/programmes/${c.programmeId}/pause`,
+        headers: bearer(USERS.AD, ORG_A),
+      });
+      expect(paused.statusCode).toBe(200);
+      expect(await counts()).toEqual({ outbox: 1, audit: 1 });
+      expect(deletedKeys).toContain(`route:${token}`);
+      deletedKeys.length = 0;
+
+      const failedResume = await app.inject({
+        method: 'POST',
+        url: `/v1/programmes/${c.programmeId}/resume`,
+        headers: bearer(ghost, ORG_A),
+      });
+      expect(failedResume.statusCode).toBe(500);
+      expect(await status()).toBe('paused');
+      expect(await counts()).toEqual({ outbox: 1, audit: 1 });
+      expect(deletedKeys).toEqual([]);
+      const during = await redirectApp.inject({ method: 'GET', url: `/r/${token}` });
+      expect(during.statusCode).toBe(200);
+      expect(during.body).toContain('paused');
+    } finally {
+      __setRedis(undefined);
+    }
   });
 
   it('non-admin roles cannot pull the kill switch (403)', async () => {

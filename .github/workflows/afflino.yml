@@ -55,3 +55,11 @@ jobs:
       - run: ./packages/api/node_modules/.bin/tsx db/seed-network.ts --with-demo-programme
       # the same money loop on a scratch database created on the CI Postgres and dropped at exit
       - run: DEMO_TARGET=postgres ./packages/api/node_modules/.bin/tsx scripts/demo-money-loop.ts
+      # the production compose files interpolate with only their required variables
+      # (managed databases; single host; the plain-HTTP edge rehearsal), and the edge's
+      # Caddyfile is valid in both of its modes (HTTPS for the two hosts; plain HTTP)
+      - run: JWT_SECRET=ci STUB_WEBHOOK_SECRET=ci docker compose -f docker-compose.prod.yml config -q
+      - run: JWT_SECRET=ci STUB_WEBHOOK_SECRET=ci POSTGRES_PASSWORD=ci docker compose -f docker-compose.prod.yml -f docker-compose.single-host.yml config -q
+      - run: JWT_SECRET=ci STUB_WEBHOOK_SECRET=ci POSTGRES_PASSWORD=ci docker compose -f docker-compose.prod.yml -f docker-compose.single-host.yml -f docker-compose.edge-test.yml config -q
+      - run: docker run --rm -v "$PWD/docker/Caddyfile:/etc/caddy/Caddyfile:ro" -e SITE_HOST=afflino.com -e ACME_EMAIL= -e "EDGE_ADDRESS=afflino.com, www.afflino.com" caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+      - run: docker run --rm -v "$PWD/docker/Caddyfile:/etc/caddy/Caddyfile:ro" -e SITE_HOST=afflino.com -e ACME_EMAIL= -e EDGE_ADDRESS=:8088 caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile

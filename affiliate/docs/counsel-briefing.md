@@ -152,6 +152,18 @@ collections, landing pages.
 - **[DECISION]** Incident notification: what are our breach-notification
   obligations, timelines and recipients under the provisions in force at
   launch? (Operational runbook exists: `docs/runbooks/data-incident.md`.)
+- **[DECISION]** Hashed client addresses (added 2026-09-29). Each click row
+  keeps `ip_hash` = HMAC-SHA256 of the visitor's IP address under a secret
+  key (`IP_HASH_KEY`; without the key it is a plain SHA-256, which for IPv4
+  can be reversed by trying every address), alongside the user-agent string.
+  The value is stable per address so that per-address fraud checks work. Is
+  it personal data; who may hold the key; may the key ever rotate; how long
+  may the hashes be kept; may any server log carry client addresses (today
+  none does by default)? This is a description of the implementation for
+  counsel to assess, not a compliance position (`docs/threat-model.md` §4.11).
+- Hosting fact (2026-09-29): the owner has chosen a Linode (Akamai) server
+  for the pilot; the region is not confirmed in this repository (the owner's
+  other sites use Mumbai, ap-west).
 
 ---
 

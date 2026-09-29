@@ -16,7 +16,8 @@ Env vars:
 | `API_PORT` | `3000` | Listen port |
 | `API_HOST` | `0.0.0.0` | Listen host |
 | `DATABASE_URL` | — (required) | Postgres connection string |
-| `REDIS_URL` | — (optional) | Redis for link-route cache warming; API works without it |
+| `REDIS_URL` | — (optional in development; **required** under `NODE_ENV=production`, boot fails without it) | Redis for link-route cache warming and kill-switch invalidation; outside production the API works without it |
+| `TRUST_PROXY` | unset = trust nothing | Which peers may set X-Forwarded-For for `req.ip` (`true`, a hop count, or a comma list of addresses / CIDRs / `loopback`, `linklocal`, `uniquelocal`; invalid → boot fails). docker-compose.prod.yml: `loopback,uniquelocal`. The request log never records the address |
 | `JWT_SECRET` | — (required) | Signs/verifies API JWTs; also HMAC-signs link tokens (dev-grade, see ASSUMPTIONS.md) |
 | `REDIRECT_BASE_URL` | `http://localhost:3001` | Base URL used to build `/r/{token}` links |
 

@@ -11,6 +11,7 @@ import { productCount, publishedLabel } from '@/components/shop/model';
 import styles from '@/components/shop/detail.module.css';
 import { EmptyState, Eyebrow, PageHeader, Tag } from '@/components/ui';
 import { getLook, lookOrMiss } from '@/lib/catalogue';
+import { pageMetadata } from '@/lib/seo';
 
 interface Params {
   params: { id: string };
@@ -24,8 +25,9 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   // A miss is a 404 here too. No loading.tsx on this route: a Suspense
   // boundary would start the stream before notFound(), turning it into 200.
   if (!look) notFound();
-  // The root layout's title template appends the site name.
-  return { title: look.title };
+  // The root layout's title template appends the site name; canonical and
+  // og:url are the look's own path.
+  return pageMetadata(`/looks/${encodeURIComponent(look.id)}`, look.title);
 }
 
 /**

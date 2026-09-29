@@ -8,6 +8,13 @@
  * restate them in a page.
  */
 
+/**
+ * The one-line description of the site: the root <meta name="description">,
+ * og:description / twitter:description (lib/seo.ts) and the PWA manifest.
+ * Not a figure, so not a placeholder — but it is marketing copy, so it lives here.
+ */
+export const SITE_DESCRIPTION = 'An India-first affiliate network for brands, creators, publishers and agencies.';
+
 export const MARKETING_CLAIMS = {
   /** Hero H1 / stat: in-house network reach across Meta, YouTube and Snapchat. */
   audienceReach: '400M',

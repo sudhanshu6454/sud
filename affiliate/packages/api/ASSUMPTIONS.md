@@ -118,10 +118,19 @@ other agents) — flag anything that looks wrong to the owning agent.
   programme is 409. Both write `audit_log` and an outbox event
   (`programme.paused` / `programme.resumed`); the workers' outbox relay
   publishes these to the `events` Redis stream for corrections consumers
-  (at-least-once, dedupe on `envelope.event_id`).
+  (at-least-once, dedupe on `envelope.event_id`). **Atomic (2026-09-29):**
+  the status change, the outbox event and the audit row are one transaction
+  (`killSwitchTransition`); a failing audit or outbox insert rolls the status
+  back and the call fails with nothing changed (before, a failing audit
+  insert returned 500 after the pause had already taken effect). Resume's
+  update is conditional on `status = 'paused'`, so a concurrent resume is
+  409. Tested in `test/phase3.test.ts` ("a failing audit insert …").
+  The other audit/outbox writers (`disputes.ts`, `contracts.ts`,
+  `publishers.ts`) still write their rows outside one transaction — open.
 - **Redis dependency of the kill switch**: pause/resume delete
-  `route:{token}` for every active link on the programme via
-  `invalidateProgrammeRouteCache`. If Redis is absent or a delete fails, the
+  `route:{token}` for every active link on the programme **after the
+  transaction commits** (`deleteRouteKeys`; before commit a concurrent
+  redirect could re-cache the old status). If Redis is absent or a delete fails, the
   redirect's DB fallback still serves the correct paused/active page — the
   failure mode is TTL-bound staleness (600s mint-warm / 300s rebuild), never
   wrong behaviour. The response reports `redis_available` so operators can
@@ -345,3 +354,25 @@ other agents) — flag anything that looks wrong to the owning agent.
   route or migration changed; the one-publisher org named in the review fixes above is now the
   in-house network that `db/seed-network.ts` seeds from a network file. Its parser has a unit test
   here (`test/seed-network.test.ts`) because this package owns the `yaml` dependency the seed borrows.
+
+## Behind the edge (2026-09-29)
+
+- **`TRUST_PROXY`** (`packages/shared/src/trust-proxy.ts`) is passed to Fastify's `trustProxy`:
+  unset = trust nothing (as before). docker-compose.prod.yml sets `loopback,uniquelocal`: browser
+  calls arrive from the web's `/api` proxy on the compose network, which forwards the
+  X-Forwarded-For the edge (Caddy) wrote, and Caddy overwrites any client-supplied value
+  (`docker/Caddyfile`). So `req.ip` is the visitor's address. Nothing in the API uses it yet
+  (rate limiting would); tested in `test/trust-proxy.test.ts`.
+- **The request log carries no client address**: the `req` serializer is `requestLogFields`
+  (method, url, hostname), not Fastify's default with `remoteAddress` / `remotePort`. With
+  `TRUST_PROXY` set the default would log every visitor's real address in the clear; whether
+  any log may do so is a counsel item (`docs/threat-model.md` §6.7). `buildApp({ logStream })`
+  is the test seam.
+- **Production boot guard**: under `NODE_ENV=production` the API refuses to start without
+  `REDIS_URL` (no route-cache warming, no kill-switch invalidation otherwise).
+  docker-compose.prod.yml no longer refuses an empty `REDIS_URL` itself, because
+  docker-compose.single-host.yml supplies it.
+- The API is not public: the edge routes `/r/*` to the redirect and everything else to the web,
+  so the API's public surface is `https://afflino.com/api/v1/...` through the web's proxy
+  (provider webhooks and payout callbacks included). Port 3000 is published on 127.0.0.1 only.
+

@@ -34,7 +34,15 @@ import { newDb, type IMemoryDb } from 'pg-mem';
  *   on for dedupe assertions.
  * - pg-mem returns bigint columns as JS numbers (not strings) in some paths;
  *   tests coerce with Number(...) rather than assuming string types.
- * - Transactions (BEGIN/COMMIT/ROLLBACK) are supported on pool clients.
+ * - Transactions: BEGIN / COMMIT / ROLLBACK are accepted on pool clients,
+ *   but a ROLLBACK sent as its own statement (how the app issues it) undoes
+ *   NOTHING in pg-mem 3.0.14 — verified 2026-09-29: begin, update, rollback
+ *   as three client.query calls leaves the update in place (only a single
+ *   multi-statement string rolls back). `createTestDb({ rollback: true })`
+ *   emulates it: BEGIN on a pooled client takes `db.backup()`, ROLLBACK
+ *   restores it, COMMIT drops it. There is no isolation: the restore is
+ *   database-wide, so writes other connections made in between are undone
+ *   too — only for suites whose transactions run one at a time.
  */
 
 const MIGRATIONS_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'db', 'migrations');
@@ -197,7 +205,7 @@ function adaptQuery(
  * applied in lexical order. Each test file should call this in beforeAll (or
  * beforeEach for full isolation) — pg-mem databases are cheap to create.
  */
-export function createTestDb(): TestDatabase {
+export function createTestDb(opts: { rollback?: boolean } = {}): TestDatabase {
   const db = newDb();
 
   // Stand-in for the pgcrypto extension: the schema only uses gen_random_uuid().
@@ -253,7 +261,20 @@ export function createTestDb(): TestDatabase {
     override async connect() {
       const client = await super.connect();
       const origQuery = client.query.bind(client);
+      // Only with opts.rollback (see the header): BEGIN snapshots the whole
+      // database, ROLLBACK restores it, COMMIT forgets it.
+      let snapshot: ReturnType<IMemoryDb['backup']> | null = null;
       client.query = ((t: string, p?: unknown[]) => {
+        if (opts.rollback) {
+          const verb = t.trim().replace(/;$/, '').toLowerCase();
+          if (verb === 'begin') snapshot = db.backup();
+          else if (verb === 'commit') snapshot = null;
+          else if (verb === 'rollback' && snapshot) {
+            snapshot.restore();
+            snapshot = null;
+            return Promise.resolve({ rows: [] });
+          }
+        }
         const adapted = adaptQuery(t, p);
         return origQuery(adapted.text, adapted.params);
       }) as typeof client.query;

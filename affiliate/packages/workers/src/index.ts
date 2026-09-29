@@ -8,7 +8,7 @@
  *
  * Required env:
  *   DATABASE_URL          Postgres connection string.
- *   REDIS_URL             Redis connection string (defaults to localhost).
+ *   REDIS_URL             Redis connection string (defaults to localhost; required under NODE_ENV=production).
  *   STUB_WEBHOOK_SECRET   HMAC secret for the stub connector's webhook demo flow.
  *
  * Optional env:
@@ -42,6 +42,12 @@ async function main(): Promise<void> {
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
     throw new Error('DATABASE_URL is not configured');
+  }
+  // queues.ts falls back to a local Redis for development; in production an
+  // unset REDIS_URL is a misconfiguration (docker-compose.prod.yml no longer
+  // refuses it itself, because docker-compose.single-host.yml supplies it).
+  if (process.env.NODE_ENV === 'production' && !process.env.REDIS_URL?.trim()) {
+    throw new Error('REDIS_URL is not configured');
   }
 
   const pool = new Pool({ connectionString: databaseUrl });

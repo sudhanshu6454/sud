@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import localFont from 'next/font/local';
 import './globals.css';
-import { siteName } from '../lib/site';
+import { rootMetadata } from '../lib/seo';
 
 /*
  * Archivo (SIL OFL 1.1, app/fonts/OFL.txt), self-hosted: no request to Google
@@ -48,20 +48,15 @@ const archivoLatinExt = localFont({
 // env) are read from the server's runtime environment, never baked at build.
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = {
-  title: {
-    default: siteName(),
-    template: `%s · ${siteName()}`,
-  },
-  description: 'An India-first affiliate network for brands, creators, publishers and agencies.',
-  applicationName: siteName(),
-  appleWebApp: {
-    capable: true,
-    title: siteName(),
-    statusBarStyle: 'default',
-  },
-  formatDetection: { telephone: false },
-};
+/**
+ * Root metadata (lib/seo.ts): metadataBase = SITE_URL, the title template,
+ * the description from lib/site-copy.ts, Open Graph (site name, website,
+ * en_IN, og:url, the 512 px icon) and a summary Twitter card. A function, so
+ * SITE_URL and NEXT_PUBLIC_SITE_NAME are read per request.
+ */
+export function generateMetadata(): Metadata {
+  return rootMetadata();
+}
 
 export const viewport: Viewport = {
   width: 'device-width',

@@ -1623,8 +1623,10 @@ paths:
         cache entries (`route:{token}`) are invalidated (Redis best-effort —
         the DB fallback keeps behaviour correct); existing links serve the
         paused page; a `programme.paused` outbox event is emitted and the
-        action is written to `audit_log`. Idempotent: pausing an already-paused
-        programme returns 200 with the current state.
+        action is written to `audit_log`. The status change, the event and the
+        audit row commit in one transaction (the cache invalidation runs after
+        the commit): a `500` means none of them took effect. Idempotent:
+        pausing an already-paused programme returns 200 with the current state.
         Roles: `network_admin`.
       parameters:
         - $ref: '#/components/parameters/PathId'
@@ -1665,8 +1667,9 @@ paths:
       description: |
         `paused` → `active` (+ same route-cache invalidation, so a payload
         cached while paused doesn't keep serving the paused page). Resuming a
-        non-paused programme is `409 CONFLICT`. Emits `programme.resumed` and
-        writes `audit_log`.
+        non-paused programme is `409 CONFLICT` (also when a concurrent resume
+        won). Emits `programme.resumed` and writes `audit_log`, in the same
+        transaction as the status change: a `500` leaves the programme paused.
         Roles: `network_admin`.
       parameters:
         - $ref: '#/components/parameters/PathId'

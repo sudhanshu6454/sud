@@ -2,7 +2,7 @@
 
 Date: 2026-09-22. Scope: the sandbox codebase at this repo root (API, redirect
 service, workers, the web app — creator / brand / agency areas, admin, shop —
-DB migrations; web paths updated 2026-09-29 for the Afflino rebuild). Grounded in code and
+DB migrations; web paths updated 2026-09-29 for the Afflino rebuild; the edge, TRUST_PROXY and IP_HASH_KEY added 2026-09-29). Grounded in code and
 tests as they exist today — every mitigation claim cites a file or test.
 Anything not implemented is marked **residual risk** (§4) or **open question**
 (§6); §5 is the proposed pentest scope.
@@ -13,9 +13,14 @@ Anything not implemented is marked **residual risk** (§4) or **open question**
  [internet user]            [publisher / editor / finance human]
        |                                    |
        v                                    v
- GET /r/:token                    Publisher portal / Editorial console
- (redirect service, :3001,         (Next.js, packages/web — client-rendered,
-  UNAUTHENTICATED by design)       calls API with Bearer JWT in localStorage)
+ edge (Caddy, docker/Caddyfile: the only public listener, 80/443; TLS for
+       afflino.com + www only; overwrites X-Forwarded-For / X-Real-IP /
+       Forwarded; security headers; no access log)
+       |  /r/*                              |  everything else
+       v                                    v
+ GET /r/:token                    Afflino web app (Next.js, packages/web;
+ (redirect service, :3001,         app areas call the API with a Bearer JWT
+  UNAUTHENTICATED by design)       in localStorage, through the web's /api proxy)
        |                                    |
        +--> Redis route cache --------------+
        |    BullMQ click-events queue
@@ -36,8 +41,9 @@ Boundaries, in order of exposure:
    unguessable bearer token, globally unique (`links.token text not null
    unique`, `db/migrations/0001_core.sql:190`). Token → route lookup is the
    one sanctioned cross-tenant read (documented exception; writes use the
-   row's `org_id`). Raw IPs are never stored — `sha256(ip)` into
-   `clicks.context` (`redirect/src/index.ts`).
+   row's `org_id`). Raw IPs are never stored — `clicks.context.ip_hash`
+   is HMAC-SHA256(`IP_HASH_KEY`, ip), or a plain SHA-256 when no key is set
+   (`hashClientAddress`, `redirect/src/index.ts`); see §3a and §4.11.
 2. **Creator app** (`packages/web/app/app/*`, formerly `/portal`) —
    authenticated, publisher-scoped views (earnings, links, payouts,
    statements, disputes). The brand and agency areas (`app/brand/*`,
@@ -96,6 +102,21 @@ Boundaries, in order of exposure:
   and redirect responses (`packages/api/test/phase3.test.ts:407`).
   Implementation detail for counsel to assess — whether this posture satisfies
   DPDP consent obligations is for counsel to determine.
+  **Client address (2026-09-29).** Which address is hashed is decided by
+  `TRUST_PROXY` (unset = trust nothing; `packages/shared/src/trust-proxy.ts`):
+  docker-compose.prod.yml sets `loopback,uniquelocal`, so only the edge (and
+  the web's /api proxy) on the compose network may set X-Forwarded-For, and
+  the edge overwrites any client-supplied X-Forwarded-For / X-Real-IP /
+  Forwarded with the address it saw (`docker/Caddyfile`). A shopper therefore
+  cannot choose their `ip_hash` (tested: `packages/redirect/test/client-ip.test.ts`;
+  end to end through the edge in `docker/README.md`). The hash is keyed with
+  `IP_HASH_KEY` when set: an unsalted SHA-256 of an IPv4 address is reversible
+  by enumerating 2^32 values in minutes, an HMAC without the key is not. The
+  stored value is still a stable pseudonymous identifier per address, i.e.
+  still data for counsel to assess, not an anonymisation claim (§4.11). The
+  api and redirect request logs carry no client address (`requestLogFields`,
+  `packages/shared/src/request-log.ts`) and the edge writes no access log;
+  its error log drops the address and request headers.
   Unknown/paused tokens serve a static paused page (200, `text/html`, no
   user input → no reflected XSS surface).
 - **DoS (D)** — Redis route cache (300s TTL) absorbs the hot path; DB is
@@ -279,8 +300,11 @@ HMAC uses `route_signature` — **dev-grade: reuses `JWT_SECRET`**
    defaults in `packages/workers/src/retention/config.ts`, env-overridable,
    with fail-closed-to-default on misconfiguration. Counsel has not set the
    real windows (see `docs/counsel-briefing.md` §1).
-7. **XSS → token theft**: `localStorage` Bearer <redacted> + no CSP headers
-   observed; React escaping is the only XSS control.
+7. **XSS → token theft**: `localStorage` Bearer <redacted> + **no CSP**
+   (the edge sets HSTS, nosniff, Referrer-Policy and X-Frame-Options DENY,
+   `docker/Caddyfile`, but deliberately no Content-Security-Policy yet: one
+   has to be written against the Next.js bundle and tested); React escaping
+   is the only XSS control.
 8. **No rate limiting** on `/r/:token`, webhook, or CSV endpoints; Redis
    outage degrades the click path to DB-per-click.
 9. **Payout callback trust**: stub trusts the caller's `outcome`; real rail
@@ -289,6 +313,21 @@ HMAC uses `route_signature` — **dev-grade: reuses `JWT_SECRET`**
 10. **`tenantQuery`'s org check is a regex** (`/\borg_id\b/`) — it catches
     accidents, not adversaries (a string literal containing "org_id" would
     pass). It's a safety net over code review, not a security boundary.
+11. **Click `ip_hash` is pseudonymous, not anonymous** (2026-09-29). Without
+    `IP_HASH_KEY` it is SHA-256(ip), reversible for IPv4 by enumeration —
+    rows written before a key was set stay that way until the retention
+    purge nulls `clicks.context`. With the key it is HMAC-SHA256(key, ip):
+    not reversible without the key, but anyone holding the key can test a
+    known address, and the value is stable per address (that is what makes
+    per-address fraud checks work). Key custody (who holds it, where it is
+    stored), rotation (a new key breaks comparison with older rows) and
+    whether a hashed address is personal data under DPDP are **counsel
+    items**, not claims (docs/counsel-briefing.md). Deployment caveat: Docker
+    rewrites the source address of connections it forwards through its
+    userland proxy (IPv6 to an IPv4-only compose network, hairpin
+    connections), so every such client hashes to the network gateway; the
+    domain has no AAAA record, and one must not be added until the edge
+    sees real IPv6 client addresses.
 
 ## 5. Proposed pentest scope
 
@@ -349,5 +388,9 @@ HMAC uses `route_signature` — **dev-grade: reuses `JWT_SECRET`**
    Includes moving link `route_signature` off the reused JWT secret.
 6. **Infra**: production Postgres (not pg-mem) soak + load test; Redis
    HA story for the click path; rate limiting / WAF in front of
-   `/r/:token` and ingestion endpoints; log pipeline for the click-loss
-   error signal in the fail-open path.
+   `/r/:token` and ingestion endpoints (the edge has none yet); log
+   pipeline for the click-loss error signal in the fail-open path.
+7. **Client-address hashing** (counsel): is `clicks.context.ip_hash`
+   (HMAC-SHA256 with `IP_HASH_KEY`) personal data; who holds the key; may it
+   ever rotate; how long may the hashes be kept (`RETENTION_CLICK_CONTEXT_DAYS`)?
+   And may any log carry client addresses (today none does by default)?

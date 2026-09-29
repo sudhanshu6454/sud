@@ -31,6 +31,9 @@ docs
 scripts
 docker-compose.yml
 docker-compose.prod.yml
+docker-compose.single-host.yml
+docker-compose.edge-test.yml
+docker/Caddyfile
 
 # A dev server may run with NEXT_DIST_DIR=.next-dev next to a build in .next.
 .next-dev

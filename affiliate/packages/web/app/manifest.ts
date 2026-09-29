@@ -1,5 +1,6 @@
 import type { MetadataRoute } from 'next';
 import { siteName } from '../lib/site';
+import { SITE_DESCRIPTION } from '../lib/site-copy';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,7 +10,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name,
     short_name: name === 'Afflino' ? 'afflino' : name.length > 12 ? (name.split(/\s+/)[0] ?? name) : name,
-    description: 'An India-first affiliate network for brands, creators, publishers and agencies.',
+    description: SITE_DESCRIPTION,
     start_url: '/',
     display: 'standalone',
     background_color: '#F3F2F2',

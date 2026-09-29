@@ -1,4 +1,4 @@
-# docker/ — the five Paparazzi images
+# docker/ — the five Paparazzi images and the edge
 
 Every Dockerfile here is built from the **repository root** (`affiliate/`) as its
 context; `.dockerignore` trims that context to sources, manifests, `db/` and
@@ -17,6 +17,10 @@ All five run as the unprivileged `node` user (uid 1000) and listen above port
 1024; every copied file is `chown`ed to it, so no image needs a capability and
 `cap_drop: [ALL]` + `no-new-privileges` can be set on every service
 (`docker-compose.prod.yml` sets neither today).
+
+The sixth container is the **edge**: the stock `caddy:2-alpine` image with
+[`Caddyfile`](Caddyfile) mounted read-only — no image is built for it. It is
+the only service that publishes on all interfaces (see "The edge" below).
 
 ## Build
 
@@ -113,6 +117,8 @@ Runtime environment (read on every request, never baked — see
 | `WEB_API_TOKEN` | Read-only bearer (`publisher_analyst`) for catalogue reads. Server-side only. Missing → TEST demo data with a badge. |
 | `WEB_PLACEMENT_ID` | The shop's own placement; items carry tracked links only for it. |
 | `NEXT_PUBLIC_SITE_NAME` | Site name in `<title>` (`%s · Afflino`), the footer and the manifest; default `Afflino` (a rename is a restart). |
+| `SITE_URL` | Public origin for canonical URLs, og:url, robots.txt and the sitemap; default `https://afflino.com` (compose: `https://${SITE_HOST:-afflino.com}`). |
+| `SITE_INDEXING` | `on` opens the site to search engines; anything else (compose default `off`) = pre-launch: robots.txt `Disallow: /`, empty sitemap, noindex on every page. |
 | `HOSTNAME` / `PORT` | Set to `0.0.0.0` / `3000` in the image. |
 
 ## migrate
@@ -165,20 +171,65 @@ the deploy):
 ```
 WEB_API_TOKEN=$(docker run --rm --pull never -e JWT_SECRET "paparazzi/api:${IMAGE_TAG:-latest}" node scripts/mint-dev-token.mjs --org-id "$(grep -m1 '"org_id"' seed-network.json | sed 's/.*: "\(.*\)".*/\1/')" --role publisher_analyst --sub web-shop --ttl 365d)
 OWNER_TOKEN=$(docker run --rm --pull never -e JWT_SECRET "paparazzi/api:${IMAGE_TAG:-latest}" node scripts/mint-dev-token.mjs --org-id "$(grep -m1 '"org_id"' seed-network.json | sed 's/.*: "\(.*\)".*/\1/')" --role publisher_owner --sub network-owner)
-docker compose -f docker-compose.prod.yml run --rm --no-deps -e API_BASE=http://api:3000 -e API_TOKEN="$OWNER_TOKEN" api node scripts/mint-links.mjs --placement "$(grep -m1 '"web_placement_id"' seed-network.json | sed 's/.*: "\(.*\)".*/\1/')"
+docker compose -f docker-compose.prod.yml -f docker-compose.single-host.yml run --rm --no-deps -T -e API_BASE=http://api:3000 -e API_TOKEN="$OWNER_TOKEN" api node scripts/mint-links.mjs --placement "$(grep -m1 '"web_placement_id"' seed-network.json | sed 's/.*: "\(.*\)".*/\1/')"
 ```
+
+(With managed databases, drop `-f docker-compose.single-host.yml`.)
 
 (`run --no-deps api` starts a one-off container from the api image on the
 compose network, so `http://api:3000` is the running api service; the smoke test
 below does the same with plain `docker run --network pz-test`. `grep`/`sed` read
 the JSON so the host needs no node outside the containers.)
 
-## Smoke test (what was verified, 2026-09-29; re-run with the network seed)
+## The edge (`docker/Caddyfile`)
 
-Run from `affiliate/` after building the five images with the `:test` tag. Every
-line is a complete command (ids come from the seed's JSON, tokens from the api
-image); the seed rows are TEST-labelled and the last line removes everything
-but the images.
+`docker-compose.prod.yml` runs `caddy:2-alpine` as the `edge` service with
+`./docker/Caddyfile` mounted at `/etc/caddy/Caddyfile` and the volumes
+`caddy_data` (certificates, ACME account) and `caddy_config`. It publishes
+80/tcp, 443/tcp and 443/udp (HTTP/3); api (3000), redirect (3001) and web
+(3002) publish on 127.0.0.1 only. Environment (set by compose):
+
+| Var | Compose value | Meaning |
+|---|---|---|
+| `SITE_HOST` | `${SITE_HOST:-afflino.com}` | the apex host; `www.<SITE_HOST>` redirects to it |
+| `ACME_EMAIL` | `${ACME_EMAIL:-}` | optional ACME account email; empty = none |
+| `EDGE_ADDRESS` | `<SITE_HOST>, www.<SITE_HOST>` | the site address: HTTPS with automatic certificates for exactly those two names; `docker-compose.edge-test.yml` sets `:8088` (plain HTTP, any Host, no certificates, published on 127.0.0.1:8088 only) |
+
+Routes: `www.<SITE_HOST>/<path>?<query>` → `301` to
+`https://<SITE_HOST>/<path>?<query>`; `/r/*` → `redirect:3001`; everything
+else → `web:3000` (the web serves `/api/*` as its same-origin proxy to the
+API, so provider webhooks and payout callbacks are
+`https://<SITE_HOST>/api/v1/...`; request bodies above 4 MB are refused at
+the edge with 413). Every response: `Strict-Transport-Security:
+max-age=31536000` (no includeSubDomains, no preload),
+`X-Content-Type-Options: nosniff`, `Referrer-Policy:
+strict-origin-when-cross-origin`, `X-Frame-Options: DENY`; `Server`, `Via`
+and `X-Powered-By` removed. No Content-Security-Policy yet (open item,
+`docs/threat-model.md` §4.7). Caddy trusts no client (`trusted_proxies` is not
+set), so it replaces any client-supplied `X-Forwarded-For` with the address
+it saw; `X-Real-IP` is overwritten with the same address and `Forwarded` is
+removed. api and redirect run with `TRUST_PROXY=loopback,uniquelocal`, so the
+redirect hashes the address the edge saw and nothing a shopper sends. No
+access log is configured; the default log (startup, certificates, errors)
+drops `remote_ip`, `remote_port`, `client_ip` and the request headers.
+
+Client addresses and Docker: a connection Docker forwards through its
+userland proxy reaches Caddy from the compose network's gateway address,
+not from the client. That is the case for host-local curls to
+`127.0.0.1:8088` (the smoke test below relies on it) and for IPv6 clients
+when the compose network has no IPv6; IPv4 clients reaching a published port
+from outside keep their address (iptables DNAT). afflino.com has no AAAA
+record; do not add one before the edge sees real IPv6 client addresses.
+
+## Smoke test (what was verified, 2026-09-29; re-run with the edge)
+
+Run from `affiliate/` after building the five images with the `:test` tag
+(`caddy:2-alpine`, `postgres:16-alpine` and `redis:7-alpine` are pulled if
+absent). Every line is a complete command (ids come from the seed's JSON,
+tokens from the api image); the seed rows are TEST-labelled, the secrets are
+TEST values, and the last line removes everything but the images. The edge
+runs in its plain-HTTP test mode on 127.0.0.1:8088 with the same Caddyfile as
+production, so the checks send `Host: afflino.com` / `Host: www.afflino.com`.
 
 ```
 docker network create pz-test
@@ -187,55 +238,88 @@ docker run -d --name pz-redis --network pz-test redis:7-alpine
 until docker exec pz-db pg_isready -U paparazzi -d paparazzi >/dev/null 2>&1; do sleep 1; done
 docker run --rm --network pz-test -e DATABASE_URL=postgresql://paparazzi:pw@pz-db:5432/paparazzi paparazzi/migrate:test
 docker run --rm --network pz-test -e DATABASE_URL=postgresql://paparazzi:pw@pz-db:5432/paparazzi paparazzi/migrate:test ./node_modules/.bin/tsx db/seed.ts
-docker run --rm --network pz-test -e DATABASE_URL=postgresql://paparazzi:pw@pz-db:5432/paparazzi -e WEB_HOST=shop.pz-test.invalid paparazzi/migrate:test ./node_modules/.bin/tsx db/seed-network.ts --with-demo-programme > seed-network.json
+docker run --rm --network pz-test -e DATABASE_URL=postgresql://paparazzi:pw@pz-db:5432/paparazzi -e WEB_HOST=afflino.com paparazzi/migrate:test ./node_modules/.bin/tsx db/seed-network.ts --with-demo-programme > seed-network.json
 ORG_ID=$(grep -m1 '"org_id"' seed-network.json | sed 's/.*: "\(.*\)".*/\1/')
 WEB_PLACEMENT_ID=$(grep -m1 '"web_placement_id"' seed-network.json | sed 's/.*: "\(.*\)".*/\1/')
 LOOK_ID=$(grep -m1 '"look_id"' seed-network.json | sed 's/.*: "\(.*\)".*/\1/')
 WEB_API_TOKEN=$(docker run --rm -e JWT_SECRET=test-secret paparazzi/api:test node scripts/mint-dev-token.mjs --org-id "$ORG_ID" --role publisher_analyst --sub web-shop)
 OWNER_TOKEN=$(docker run --rm -e JWT_SECRET=test-secret paparazzi/api:test node scripts/mint-dev-token.mjs --org-id "$ORG_ID" --role publisher_owner --sub network-owner)
-docker run -d --name pz-api --network pz-test --network-alias api -p 127.0.0.1:3100:3000 -e NODE_ENV=production -e API_HOST=0.0.0.0 -e API_PORT=3000 -e DATABASE_URL=postgresql://paparazzi:pw@pz-db:5432/paparazzi -e REDIS_URL=redis://pz-redis:6379 -e JWT_SECRET=test-secret -e REDIRECT_BASE_URL=http://redirect:3001 paparazzi/api:test
-docker run -d --name pz-redirect --network pz-test --network-alias redirect -p 127.0.0.1:3101:3001 -e NODE_ENV=production -e REDIRECT_PORT=3001 -e DATABASE_URL=postgresql://paparazzi:pw@pz-db:5432/paparazzi -e REDIS_URL=redis://pz-redis:6379 paparazzi/redirect:test
+docker run -d --name pz-api --network pz-test --network-alias api -p 127.0.0.1:3100:3000 -e NODE_ENV=production -e API_HOST=0.0.0.0 -e API_PORT=3000 -e DATABASE_URL=postgresql://paparazzi:pw@pz-db:5432/paparazzi -e REDIS_URL=redis://pz-redis:6379 -e JWT_SECRET=test-secret -e REDIRECT_BASE_URL=https://afflino.com -e TRUST_PROXY=loopback,uniquelocal paparazzi/api:test
+docker run -d --name pz-redirect --network pz-test --network-alias redirect -p 127.0.0.1:3101:3001 -e NODE_ENV=production -e REDIRECT_PORT=3001 -e DATABASE_URL=postgresql://paparazzi:pw@pz-db:5432/paparazzi -e REDIS_URL=redis://pz-redis:6379 -e TRUST_PROXY=loopback,uniquelocal -e IP_HASH_KEY=test-ip-hash-key-0123456789abcdef paparazzi/redirect:test
 docker run -d --name pz-workers --network pz-test -e NODE_ENV=production -e DATABASE_URL=postgresql://paparazzi:pw@pz-db:5432/paparazzi -e REDIS_URL=redis://pz-redis:6379 -e STUB_WEBHOOK_SECRET=test-secret paparazzi/workers:test
-docker run -d --name pz-web --network pz-test -p 127.0.0.1:3200:3000 -e API_BASE=http://api:3000 -e WEB_API_TOKEN="$WEB_API_TOKEN" -e WEB_PLACEMENT_ID="$WEB_PLACEMENT_ID" -e NEXT_PUBLIC_SITE_NAME=Afflino paparazzi/web:test
+docker run -d --name pz-web --network pz-test --network-alias web -p 127.0.0.1:3200:3000 -e API_BASE=http://api:3000 -e WEB_API_TOKEN="$WEB_API_TOKEN" -e WEB_PLACEMENT_ID="$WEB_PLACEMENT_ID" -e NEXT_PUBLIC_SITE_NAME=Afflino -e SITE_URL=https://afflino.com -e SITE_INDEXING=off paparazzi/web:test
+docker run -d --name pz-edge --network pz-test -p 127.0.0.1:8088:8088 -e SITE_HOST=afflino.com -e ACME_EMAIL= -e EDGE_ADDRESS=:8088 -v "$PWD/docker/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine
 sleep 5
 curl -s http://127.0.0.1:3100/healthz; echo
 curl -s http://127.0.0.1:3101/healthz; echo
 curl -s http://127.0.0.1:3200/api/healthz; echo
-curl -s http://127.0.0.1:3200/ | grep -o '<title>[^<]*</title>'
-curl -s http://127.0.0.1:3200/shop | grep -o '<title>[^<]*</title>\|<h2 class="LookCard_title[^"]*">[^<]*</h2>\|Demo data[^<]*'
+curl -s -H 'Host: afflino.com' http://127.0.0.1:8088/api/healthz; echo
+curl -s -H 'Host: afflino.com' http://127.0.0.1:8088/ | grep -o '<title>[^<]*</title>\|<link rel="canonical" href="[^"]*"/>\|<meta property="og:url" content="[^"]*"/>\|<meta name="robots" content="[^"]*"/>'
+curl -s -D - -o /dev/null -H 'Host: afflino.com' http://127.0.0.1:8088/ | grep -i '^HTTP\|^strict-transport\|^x-content-type\|^referrer-policy\|^x-frame\|^server\|^via\|^x-powered-by'
+curl -s -H 'Host: afflino.com' http://127.0.0.1:8088/robots.txt
+curl -s -H 'Host: afflino.com' http://127.0.0.1:8088/sitemap.xml; echo
+curl -s -D - -o /dev/null -H 'Host: www.afflino.com' 'http://127.0.0.1:8088/shop?utm_source=smoke&x=1' | grep -i '^HTTP\|^location'
+curl -s -H 'Host: afflino.com' http://127.0.0.1:8088/shop | grep -o '<title>[^<]*</title>\|<h2 class="LookCard_title[^"]*">[^<]*</h2>\|Demo data[^<]*'
 docker run --rm --network pz-test -e API_BASE=http://api:3000 -e API_TOKEN="$OWNER_TOKEN" paparazzi/api:test node scripts/mint-links.mjs --placement "$WEB_PLACEMENT_ID"
-curl -s "http://127.0.0.1:3200/looks/$LOOK_ID" | grep -o '<title>[^<]*</title>\|<a href="http://redirect:3001/r/[0-9a-f]*" rel="[^"]*"\|Link not available yet\|Demo data[^<]*'
-LINK_TOKEN=$(curl -s "http://127.0.0.1:3200/looks/$LOOK_ID" | grep -o 'redirect:3001/r/[0-9a-f]*' | head -1 | sed 's#.*/r/##')
-curl -s -o /dev/null -D - "http://127.0.0.1:3101/r/$LINK_TOKEN" | grep -i '^HTTP\|^location\|^set-cookie'
+curl -s -H 'Host: afflino.com' "http://127.0.0.1:8088/looks/$LOOK_ID" | grep -o '<title>[^<]*</title>\|<a href="https://afflino.com/r/[0-9a-f]*" rel="[^"]*"\|Link not available yet\|Demo data[^<]*'
+LINK_TOKEN=$(curl -s -H 'Host: afflino.com' "http://127.0.0.1:8088/looks/$LOOK_ID" | grep -o 'https://afflino.com/r/[0-9a-f]*' | head -1 | sed 's#.*/r/##')
+curl -s -o /dev/null -D - -H 'Host: afflino.com' -H 'X-Forwarded-For: 203.0.113.99' -H 'X-Real-IP: 203.0.113.99' -H 'Forwarded: for=203.0.113.99' "http://127.0.0.1:8088/r/$LINK_TOKEN" | grep -i '^HTTP\|^location\|^set-cookie\|^strict-transport'
 docker exec pz-db psql -U paparazzi -d paparazzi -tAc "select count(*) from clicks"
+python3 -c 'import hmac,hashlib,sys; k,h,peer,spoof=sys.argv[1:]; f=lambda ip: hmac.new(k.encode(),ip.encode(),hashlib.sha256).hexdigest(); print("ip_hash is HMAC(edge peer %s): %s; is HMAC(spoofed %s): %s; is plain sha256(peer): %s" % (peer, h==f(peer), spoof, h==f(spoof), h==hashlib.sha256(peer.encode()).hexdigest()))' test-ip-hash-key-0123456789abcdef "$(docker exec pz-db psql -U paparazzi -d paparazzi -tAc "select context->>'ip_hash' from clicks order by occurred_at desc limit 1")" "$(docker network inspect pz-test -f '{{range .IPAM.Config}}{{.Gateway}}{{end}}')" 203.0.113.99
+docker logs pz-edge 2>&1 | grep -c "$(docker network inspect pz-test -f '{{range .IPAM.Config}}{{.Gateway}}{{end}}')\|203.0.113.99"
 sleep 8; docker logs pz-workers 2>&1 | grep -o '"message":"[^"]*"' | sort -u
-docker rm -f pz-web pz-workers pz-redirect pz-api pz-redis pz-db && docker network rm pz-test && rm -f seed-network.json
+docker rm -f pz-edge pz-web pz-workers pz-redirect pz-api pz-redis pz-db && docker network rm pz-test && rm -f seed-network.json
 ```
 
-Observed on the last run (2026-09-29, re-run verbatim after the switch to
-the network seed and again after the review fixes, with `paparazzi/migrate:test`
-(262 MB) and `paparazzi/api:test` (264 MB) rebuilt from this tree,
-`paparazzi/web:test` (273 MB) rebuilt with every layer cached (no input
-changed), and the redirect and workers images of the same day — their code did
-not change; all containers running as `node`, PID 1). On that stack, with the
-api forwarded to `localhost:3000`, the kill-switch drill lines of
-`docs/runbooks/deploy.md` §4 ran as written: pause 200 `paused` (the link then
-served the paused page, 200), resume 200 `active` (302 again), `editor` pause
-403, and `audit_log` rows `programme.pause` / `programme.resume` naming the
-seeded `network_admin` user:
+Observed on the last run (2026-09-29, verbatim, with `paparazzi/api:test`,
+`redirect:test`, `workers:test` and `web:test` rebuilt from this tree and the
+`migrate:test` image of the same day — `db/` did not change; `caddy:2-alpine`
+= Caddy v2.11.4):
 
-- migrate: `5 migration(s) applied, 0 already applied`; `seed.ts` succeeds and `seed-network.ts --with-demo-programme` reads the example file shipped in the image (`seed-network: 5 properties from /app/db/network.example.yaml, shop host shop.pz-test.invalid, with TEST demo programme`). Not repeated inside the image here (checked the same day on a fresh Postgres 16 outside Docker): a second run gives identical row counts and byte-identical JSON.
-- `curl http://127.0.0.1:3100/healthz` → `{"ok":true}`; `curl http://127.0.0.1:3101/healthz` → `{"ok":true}`; `curl http://127.0.0.1:3200/api/healthz` (proxy) → `{"ok":true}`.
-- `curl http://127.0.0.1:3200/` → `<title>Afflino</title>` (the marketing home); `curl http://127.0.0.1:3200/shop` → `<title>Shop the looks · Afflino</title>` and five `<h2 class="LookCard_title__…">` cells, one per entry of the network file (`Demo look — Demo Instagram`, `— Demo YouTube`, `— Demo Snapchat`, `— Demo Telegram`, `— Demo Web`; order varies with publish time), no "Demo data" badge (live).
-- mint-links: `summary: looks=5 items=5 minted=1 replayed=0 skipped_linked=4 skipped_no_offer=0 skipped_duplicate_offer=0 failed=0` (one live offer shared by the five looks), url `http://redirect:3001/r/<token>`.
-- `curl http://127.0.0.1:3200/looks/<look id>` (the first property's look) → `<title>Demo look — Demo Instagram · Afflino</title>` and `<a href="http://redirect:3001/r/<token>" rel="sponsored nofollow noopener"` (the "View at merchant →" CTA), no "Link not available yet", no demo badge.
-- `curl -D - http://127.0.0.1:3101/r/<token>` → `HTTP/1.1 302 Found`, `location: https://shop.example.com/p/demo-network-sku?subid=<click_id>`, no `set-cookie` line; `select count(*) from clicks` → `1`.
-- workers log: `workers started`, `outbox relay started`, `retention repeat scheduled`, `outbox batch published`, then `click.observed` for that click.
+- migrate: `5 migration(s) applied, 0 already applied`; `seed.ts` succeeds;
+  `seed-network: 5 properties from /app/db/network.example.yaml, shop host afflino.com, with TEST demo programme`.
+- `/healthz` on 3100 (api) and 3101 (redirect), `/api/healthz` on 3200 (web
+  proxy) and through the edge → `{"ok":true}` each.
+- Edge `/` (`Host: afflino.com`) → `<title>Afflino</title>`,
+  `<meta name="robots" content="noindex, nofollow"/>` (SITE_INDEXING=off),
+  `<link rel="canonical" href="https://afflino.com"/>`,
+  `<meta property="og:url" content="https://afflino.com"/>`; headers
+  `HTTP/1.1 200 OK`, `Referrer-Policy: strict-origin-when-cross-origin`,
+  `Strict-Transport-Security: max-age=31536000`,
+  `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, and no
+  `Server`, `Via` or `X-Powered-By` line.
+- `/robots.txt` → `User-Agent: *` / `Disallow: /` (no Sitemap line);
+  `/sitemap.xml` → an empty `<urlset>`.
+- `Host: www.afflino.com`, `/shop?utm_source=smoke&x=1` →
+  `HTTP/1.1 301 Moved Permanently`,
+  `Location: https://afflino.com/shop?utm_source=smoke&x=1`.
+- `/shop` → `<title>Shop the looks · Afflino</title>` and the five TEST
+  network looks (`Demo look — Demo Instagram` / YouTube / Snapchat /
+  Telegram / Web), no "Demo data" badge (live).
+- mint-links: `summary: looks=5 items=5 minted=1 replayed=0 skipped_linked=4 skipped_no_offer=0 skipped_duplicate_offer=0 failed=0`, url `https://afflino.com/r/<token>`.
+- Look page → `<title>Demo look — Demo Instagram · Afflino</title>` and
+  `<a href="https://afflino.com/r/<token>" rel="sponsored nofollow noopener"`.
+- `GET /r/<token>` through the edge with `X-Forwarded-For`, `X-Real-IP` and
+  `Forwarded` all claiming 203.0.113.99 → `HTTP/1.1 302 Found`,
+  `Location: https://shop.example.com/p/demo-network-sku?subid=<click_id>`,
+  HSTS, no `set-cookie`; `select count(*) from clicks` → `1`;
+  `ip_hash is HMAC(edge peer 172.18.0.1): True; is HMAC(spoofed 203.0.113.99): False; is plain sha256(peer): False`
+  (the edge peer is the network gateway, see "The edge").
+- Edge log lines naming the peer or the spoofed address: `0`.
+- workers log: `workers started`, `outbox relay started`, `retention repeat
+  scheduled`, `outbox batch published`, `click.observed`.
+- The last line removed the seven containers and the network.
 
 The sandbox that ran this build cannot reach the npm registry without an extra
 CA, so the builds were run with `--build-arg NODE_IMAGE=<node:22-alpine plus
 that CA>`; nothing else differed from the commands above, and the Dockerfiles
 themselves contain no proxy or CA settings.
+
+## Compose rehearsal (prod + single-host + edge in plain-HTTP mode)
+
+The same stack as the Linode, with the edge on 127.0.0.1:8088 instead of
+80/443 (`docker-compose.edge-test.yml`), under a throwaway project name. See
+`docs/runbooks/deploy.md` §1 for the commands and what was observed.
 
 ## Sizes (docker image ls, containerd snapshotter; `node:22-alpine` alone reports 238 MB)
 
@@ -249,4 +333,6 @@ themselves contain no proxy or CA settings.
 
 The service images add 17–32 MB of application code and production
 dependencies on top of the base; the migrate image adds pg, yaml and tsx (with
-esbuild) and nothing else.
+esbuild) and nothing else. The 2026-09-29 rebuild for the edge (trust proxy,
+keyed ip hash, indexing gate) left every size unchanged (cached layers, not
+`--no-cache`). The edge's `caddy:2-alpine` reports 88.8 MB.

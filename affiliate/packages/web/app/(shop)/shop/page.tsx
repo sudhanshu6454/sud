@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
 import LookGrid from '@/components/LookGrid';
 import { listLooks } from '@/lib/catalogue';
 
@@ -6,7 +7,9 @@ import { listLooks } from '@/lib/catalogue';
 // (lib/catalogue.ts), so the grid is never a build-time snapshot.
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = { title: 'Shop the looks' };
+export function generateMetadata(): Metadata {
+  return pageMetadata('/shop', 'Shop the looks');
+}
 
 /** Afflino's consumer shop grid: live GET /v1/looks (all pages), TEST demo looks + badge on fallback. */
 export default async function ShopPage() {

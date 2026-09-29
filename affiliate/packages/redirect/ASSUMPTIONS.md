@@ -25,10 +25,43 @@
 
 ## Privacy
 
-- Raw IP is never stored: only `sha256(ip)` goes into `clicks.context`,
-  alongside the user-agent string. X-Forwarded-For is not specially handled;
-  `req.ip` follows Fastify's trust-proxy default (direct peer). Put the
-  service behind the real edge proxy config before production.
+- Raw IP is never stored: only a hash of it goes into `clicks.context`
+  (`ip_hash`), alongside the user-agent string.
+- **Which address (2026-09-29): `TRUST_PROXY`.** Passed to Fastify's
+  `trustProxy` via `parseTrustProxy` (`packages/shared/src/trust-proxy.ts`):
+  unset / empty / `false` = trust nothing (`req.ip` is the TCP peer, the
+  behaviour before the setting existed); `true`; a hop count; or a comma
+  list of addresses, CIDRs and proxy-addr names (`loopback`, `linklocal`,
+  `uniquelocal`). An invalid value fails the boot. docker-compose.prod.yml
+  sets `loopback,uniquelocal`: the edge (Caddy, `docker/Caddyfile`) is the
+  peer, and it overwrites any client-supplied X-Forwarded-For / X-Real-IP /
+  Forwarded, so the address hashed is the one the edge saw. Tested in
+  `test/client-ip.test.ts` (trusted peer + XFF → the forwarded client;
+  untrusted peer or unset → the peer) and end to end through the edge
+  (`docker/README.md` smoke test: a spoofed X-Forwarded-For does not change
+  the stored hash).
+- **How (2026-09-29): `IP_HASH_KEY`.** When set, `ip_hash` =
+  HMAC-SHA256(key, ip) as hex (`hashClientAddress`); unset or empty keeps
+  the plain SHA-256 of before, so existing rows and the tests' expectations
+  stay valid. A plain SHA-256 of an IPv4 address is reversible by
+  enumerating the 2^32 addresses; the HMAC is not without the key. A key
+  shorter than 32 characters (after trimming) fails the boot; the error
+  never echoes it. Consequences: hashes made under different keys — or
+  before and after the key was first set — do not compare, so per-address
+  fraud checks (`docs/runbooks/publisher-fraud.md`) only work within one
+  key's lifetime; set the key before the first real click and do not rotate
+  it casually. The keyed hash is still a stable pseudonymous value per
+  address: whether it is personal data, who holds the key and how long it
+  may be kept are counsel items (`docs/threat-model.md` §4.11,
+  `docs/counsel-briefing.md` §8), not a compliance claim.
+- The request log records method, url and hostname only (`requestLogFields`,
+  `packages/shared/src/request-log.ts`), never Fastify's default
+  `remoteAddress` / `remotePort`: with TRUST_PROXY set that would be the
+  shopper's real address in the clear.
+- Production boot guard: under `NODE_ENV=production` the service refuses to
+  start without `REDIS_URL` (without it clicks would be persisted but never
+  enqueued); docker-compose.prod.yml leaves the check to the service because
+  docker-compose.single-host.yml supplies the value.
 
 ## Misc
 

@@ -16,6 +16,9 @@ is gitignored.
 | `REDIS_URL` (incl. password/auth token) | Secure Vault → env | Platform |
 | `JWT_SECRET` | Secure Vault → env | Platform (generated, see below) |
 | `STUB_WEBHOOK_SECRET` | Secure Vault → env | Platform (generated, see below) |
+| `POSTGRES_PASSWORD` (single host) | Secure Vault → env | Platform (generated, hex: it goes into `DATABASE_URL`) |
+| `IP_HASH_KEY` | Secure Vault → env | Platform (generated once, before the first real click; see rotation) |
+| `WEB_API_TOKEN` | Secure Vault → env | Platform (minted with the api image from `JWT_SECRET`) |
 | Payout-rail API key / webhook secret | Secure Vault → env | **User** — only when the real rail is integrated (post-pilot) |
 | `ALERT_WEBHOOK_URL` | Secure Vault → env (or alarm config) | Platform (Slack/PagerDuty webhook created by user) |
 | Cloud account root / IAM | Cloud console + MFA | **User** (account owner) |
@@ -23,6 +26,21 @@ is gitignored.
 
 Non-secret config may live in the compose file or a plain env file.
 Anything that authenticates or signs goes in the vault — no exceptions.
+
+## Single-host Linode (the owner's choice, 2026-09-29)
+
+The pilot runs on one Linode with `docker-compose.prod.yml` +
+`docker-compose.single-host.yml` (Postgres and Redis in containers, the edge
+terminating TLS with automatic certificates). The "vault" is then one
+root-owned file on the server, mode `0600`, outside the repository checkout
+(the repository is public), holding the variables of `.env.prod.example`.
+Secrets are entered through hidden prompts (`read -s`), never typed on a
+command line, never echoed or printed, and never pasted into chat. Required:
+`POSTGRES_PASSWORD`, `JWT_SECRET`, `STUB_WEBHOOK_SECRET`; `IP_HASH_KEY`
+before the first real click; `WEB_API_TOKEN` + `WEB_PLACEMENT_ID` after the
+network seed. On a server without openssl, `python3 -c 'import secrets; print(secrets.token_hex(32))'`
+produces the same shape. Backups of that file and of the `pgdata` volume
+are the owner's (docs/runbooks/backup-restore.md).
 
 ## Generating secrets
 
@@ -33,6 +51,8 @@ the vault (don't leave values in terminal scrollback):
 # JWT_SECRET and STUB_WEBHOOK_SECRET — 256+ bits each, independent values
 openssl rand -base64 48   # JWT_SECRET
 openssl rand -base64 48   # STUB_WEBHOOK_SECRET (must differ from JWT_SECRET)
+openssl rand -hex 32      # POSTGRES_PASSWORD (hex: URL-safe inside DATABASE_URL)
+openssl rand -hex 32      # IP_HASH_KEY (at least 32 characters, or the redirect refuses to boot)
 ```
 
 Database and Redis credentials: accept the provider-generated values at
@@ -59,6 +79,8 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO paparazzi_app;
 |---|---|---|
 | `JWT_SECRET` | On suspected compromise; scheduled every 12 months | Generate new → update vault → rolling restart of `api`. **Note:** rotating invalidates outstanding tokens — schedule in a maintenance window and warn publishers. |
 | `STUB_WEBHOOK_SECRET` | Same as above | Generate new → update vault → restart `workers`. |
+| `IP_HASH_KEY` | **Not on a schedule.** Only on compromise, and only after counsel has said what a rotation means for stored hashes | New value → vault → restart `redirect`. Hashes made under the old key no longer compare with new ones (per-address fraud checks restart from zero); rows age out with `RETENTION_CLICK_CONTEXT_DAYS`. |
+| `POSTGRES_PASSWORD` (single host) | Every 12 months, or on staff change | `ALTER USER afflino PASSWORD …` inside the postgres container → update the file → `up -d` (recreates api, redirect, workers with the new `DATABASE_URL`). Changing the variable alone does nothing to an existing `pgdata` volume. |
 | DB password (`paparazzi_app`) | Every 12 months, or on staff change | `ALTER ROLE … PASSWORD` → update vault → rolling restart of `api`, `redirect`, `workers`, `migrate` job. |
 | Redis auth token | Every 12 months, or on compromise | Provider console rotation → update vault → restart all services. |
 | Payout-rail keys | Per provider policy (post-pilot) | Provider dashboard → vault → restart `api`/`workers`. |

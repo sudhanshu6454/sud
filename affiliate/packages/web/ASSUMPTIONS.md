@@ -610,3 +610,53 @@ instead).
     `docker-compose.prod.yml` and the api image instead of the shared host's
     compose file, and the live mint form points at `db/seed-network.ts` for
     real ids. No route, component or behaviour changed.
+
+## Site URL, search and the indexing gate (2026-09-29)
+
+74. **`SITE_URL`** (server runtime, default `https://afflino.com`; only the
+    origin of an absolute http(s) URL is used, anything else falls back to
+    the default so a typo never canonicalises to a foreign host) is
+    `metadataBase`; the root metadata (`lib/seo.ts` `rootMetadata`) sets the
+    title template, the description from `lib/site-copy.ts`
+    (`SITE_DESCRIPTION`, also the manifest's), Open Graph (site name,
+    `website`, `en_IN`, og:url, `/icons/icon-512.png` — the only site image
+    there is) and a `summary` Twitter card. The marketing and shop pages set
+    `<link rel="canonical">` and og:url on their own path (`pageMetadata`;
+    Next replaces rather than merges a parent's openGraph, so each page
+    carries the full block). The home page's canonical renders as
+    `https://afflino.com` (Next drops the root slash); the sitemap writes
+    `https://afflino.com/` — the same URL.
+75. **`SITE_INDEXING`** (server runtime, read per request). Exactly `on`
+    (case-insensitive, trimmed) opens the site: robots.txt allows `/`,
+    disallows `/app /brand /agency /admin /join /login /api /dev /saved`
+    (plus an `Allow: /apple-icon.png`, which `/app` would otherwise match as
+    a prefix) and names `https://<SITE_URL host>/sitemap.xml`; the sitemap
+    lists `/`, `/shop`, `/contact` and the live catalogue's looks. Anything
+    else — unset, empty, `off`, a typo — is **pre-launch**: robots.txt is
+    `Disallow: /` with no sitemap line, the sitemap is an empty urlset (the
+    catalogue is not read), and the root metadata adds
+    `robots: noindex, nofollow`, which every public page inherits (Next merges
+    metadata shallowly; the app areas, `/join`, `/login` and `/dev` set their
+    own noindex, and a test asserts no `robots:` anywhere in `app/` says
+    otherwise). Why closed by default: the public pages carry placeholder
+    prices, fees, TDS figures, a validation window, a minimum withdrawal and
+    legal stubs (`lib/site-copy.ts`) the owner has not confirmed.
+    docker-compose.prod.yml passes `${SITE_INDEXING:-off}`. Tests:
+    `test/seo.test.ts`.
+76. **Sitemap contents.** Demo data (no `WEB_API_TOKEN`, or the API
+    unreachable) contributes no look, and neither does a TEST-labelled look
+    from the live API (`isTestLabelledTitle`: a title starting with the word
+    "Demo", which is how the network seed's `--with-demo-programme` looks are
+    titled — CLAUDE.md invariant 11). Conservative: a real look titled
+    "Demo …" is simply not listed. The TEST look pages themselves are still
+    reachable from `/shop` and carry no noindex of their own, so with
+    `SITE_INDEXING=on` they could be crawled from there: unpublish the TEST
+    looks (or keep indexing off) until real programmes exist. `/terms` and
+    `/privacy` stay out while they are stubs.
+77. **robots.txt disallow vs noindex.** Item 72 above kept the app areas out
+    of robots.txt so a crawler could see their noindex; the indexing gate
+    now disallows them explicitly (the brief for afflino.com asked for it).
+    Trade-off: a disallowed URL that is linked from elsewhere can still be
+    listed URL-only (the crawler never fetches it, so never sees the
+    noindex). The noindex stays on those pages as the second line.
+

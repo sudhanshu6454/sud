@@ -1,7 +1,10 @@
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
 import { StubPage } from '@/components/marketing/StubPage';
 
-export const metadata: Metadata = { title: 'Terms of use' };
+export function generateMetadata(): Metadata {
+  return pageMetadata('/terms', 'Terms of use');
+}
 
 /** Honest stub: the terms do not exist yet. */
 export default function TermsPage() {

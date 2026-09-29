@@ -1,8 +1,11 @@
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
 import { StubPage } from '@/components/marketing/StubPage';
 import { Button } from '@/components/ui';
 
-export const metadata: Metadata = { title: 'Contact' };
+export function generateMetadata(): Metadata {
+  return pageMetadata('/contact', 'Contact');
+}
 
 /**
  * Honest stub ("Talk to sales →" lands here). No email address or phone

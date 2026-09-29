@@ -204,7 +204,8 @@ headroom, and nothing has been measured.
   row today; there is no rate limiting on the redirect — open in
   `docs/pilot-checklist.md`).
 - The Redis hit ratio and the Postgres insert latency under load on the
-  chosen hosting (the soak has never run, and hosting is not chosen).
+  chosen hosting (the soak has never run; the owner has chosen a single
+  Linode, where Postgres, Redis and the services share one machine).
 - The web's render cost per page and whether the load balancer or reverse
   proxy in front of it adds measurable latency.
 - Whether a CDN will front the shop, and with what cache headers.

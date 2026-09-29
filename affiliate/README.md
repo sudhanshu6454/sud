@@ -108,87 +108,151 @@ the seed's JSON is `WEB_PLACEMENT_ID` (both for the web server's environment).
 Drop `--dry-run` to mint. The tokens are the JWT dev stub
 (`mint-dev-token.mjs`, default TTL 8 h) until an identity provider lands.
 
-**Production shape.** [`docker-compose.prod.yml`](docker-compose.prod.yml)
-runs `api` (3000), `redirect` (3001), `workers` and `web` (3002) against
-**managed** Postgres and Redis supplied through the environment (no database
-containers), after a one-shot `migrate` service that applies pending
-migrations and exits; the app services wait for it. Every value comes from
-the environment ([`.env.prod.example`](.env.prod.example), filled in a vault
-or `/run/secrets/paparazzi.env`, never committed). Compose interpolates the
-whole file for every command and the web requires `WEB_API_TOKEN` and
-`WEB_PLACEMENT_ID`, which come from the database — so the **first deploy**
-migrates, seeds and mints with the images directly, from this directory.
-`WEB_HOST`, the shop's public hostname, must be set in that environment for
-it: without it the seed creates no shop placement and prints no
-`web_placement_id`, so `WEB_PLACEMENT_ID` comes out empty and compose refuses
-to start. Every `docker run` that carries a secret uses `--pull never`, so a
-missing local image fails instead of being pulled from a registry:
-
-```sh
-set -a; . /run/secrets/paparazzi.env; set +a
-docker build -f docker/Dockerfile.migrate -t "paparazzi/migrate:${IMAGE_TAG:-latest}" .
-docker build -f docker/Dockerfile.api -t "paparazzi/api:${IMAGE_TAG:-latest}" .
-docker run --rm --pull never -e DATABASE_URL "paparazzi/migrate:${IMAGE_TAG:-latest}"
-docker run --rm --pull never -e DATABASE_URL -e WEB_HOST "paparazzi/migrate:${IMAGE_TAG:-latest}" ./node_modules/.bin/tsx db/seed-network.ts --with-demo-programme > seed-network.json
-WEB_PLACEMENT_ID=$(grep -m1 '"web_placement_id"' seed-network.json | sed 's/.*: "\(.*\)".*/\1/')
-WEB_API_TOKEN=$(docker run --rm --pull never -e JWT_SECRET "paparazzi/api:${IMAGE_TAG:-latest}" node scripts/mint-dev-token.mjs --org-id "$(grep -m1 '"org_id"' seed-network.json | sed 's/.*: "\(.*\)".*/\1/')" --role publisher_analyst --sub web-shop --ttl 365d)
-export WEB_PLACEMENT_ID WEB_API_TOKEN
-docker compose -f docker-compose.prod.yml up -d --build
-```
-
-Store the two values in the vault next to the other secrets so later
-deploys have them; from then on a deploy is the last line alone
-([`docs/runbooks/deploy.md`](docs/runbooks/deploy.md)). The seed line above
-uses the TEST example network inside the image; for the operator's own
-network add `-e NETWORK_FILE=/app/config/network.yaml -v "$PWD/network.yaml:/app/config/network.yaml:ro"`
-to it (the `migrate` service documents the same mount), and keep
-`NETWORK_FILE=/app/config/network.yaml` in the vault with that volume
-uncommented, so a later re-run of the seed reads the same file
-([`docs/runbooks/deploy.md`](docs/runbooks/deploy.md) §1; under
-`NODE_ENV=production` the seed refuses the example file).
-`seed-network.json` stays in this directory for the lines below and is
-gitignored: it holds the organisation and user ids and the `SEED_*_EMAIL`
-addresses. Until a real programme is contracted, `--with-demo-programme` is the only way to get a
-placement, so `WEB_PLACEMENT_ID` points at TEST rows — a sandbox shape, not a
-launch. With the stack up, the links for the shop's placement are minted
-from the api image with an owner token (both scripts ship in it;
-`docker/README.md` "Operator scripts"):
-
-```sh
-OWNER_TOKEN=$(docker run --rm --pull never -e JWT_SECRET "paparazzi/api:${IMAGE_TAG:-latest}" node scripts/mint-dev-token.mjs --org-id "$(grep -m1 '"org_id"' seed-network.json | sed 's/.*: "\(.*\)".*/\1/')" --role publisher_owner --sub network-owner)
-docker compose -f docker-compose.prod.yml run --rm --no-deps -e API_BASE=http://api:3000 -e API_TOKEN="$OWNER_TOKEN" api node scripts/mint-links.mjs --placement "$WEB_PLACEMENT_ID"
-```
-
-**Environment contract** (every read documented in
-[`.env.prod.example`](.env.prod.example)):
-
-| Env | Read by | Meaning |
-|---|---|---|
-| `DATABASE_URL`, `REDIS_URL` | api, redirect, workers; migrate (`DATABASE_URL`) | managed Postgres 16 / Redis (dev: `docker-compose.yml`) |
-| `JWT_SECRET` | api | signs API tokens (the dev stub), including `WEB_API_TOKEN` |
-| `STUB_WEBHOOK_SECRET` | workers | the stub connector's HMAC until a real feed lands |
-| `REDIRECT_BASE_URL` | api | public origin of the redirect service; every tracked link is `<this>/r/<token>` |
-| `API_BASE` | web (server runtime) | catalogue client and the `/api/*` proxy target; compose default `http://api:3000` |
-| `WEB_API_TOKEN` | web (server-only) | read-only `publisher_analyst` bearer; never `NEXT_PUBLIC_`; missing → TEST demo data with a badge |
-| `WEB_PLACEMENT_ID` | web | the shop's placement (`web_placement_id`); items carry tracked links only for it |
-| `NEXT_PUBLIC_API_BASE` | web (build arg) | browser API base; default `/api`, the same-origin proxy |
-| `NEXT_PUBLIC_SITE_NAME` | web (runtime) | site name in titles, footer, manifest; default `Afflino` (a rename is a restart) |
-| `NETWORK_FILE`, `WEB_HOST`, `SEED_*_EMAIL` | migrate (`seed-network.ts`) | the network file (default the TEST example), the shop's host, the four logins |
-| `RETENTION_*_DAYS`, `RETENTION_CRON` | workers | 365-day placeholders, `0 3 * * *` |
-| `LOG_LEVEL`, `IMAGE_TAG` | compose | log level (`info`); the image tag to run |
-| `DEMO_TARGET`, `DEMO_DATABASE_URL` | dev only | `postgres` runs the demo on a scratch database of the `DATABASE_URL` server |
-
-**Hosting** is still a human decision: nothing is provisioned, and
-[`docs/infrastructure-recommendation.md`](docs/infrastructure-recommendation.md)
-(AWS ap-south-1 ≈₹6,700/mo, or DigitalOcean blr1 ≈₹5,200/mo) needs the
-owner's approval first; [`docs/capacity-plan.md`](docs/capacity-plan.md) says
-why its sizes must be revisited against a measured click-through.
+**Production** — afflino.com on a single Linode (edge, services, Postgres
+and Redis in one compose project): "Deploying afflino.com" below and
+[`docs/runbooks/deploy.md`](docs/runbooks/deploy.md).
 
 **Real-Postgres demo** — `DEMO_TARGET=postgres` runs the 51-assertion money
 loop on a scratch database `paparazzi_demo_<8 hex>` created on the
 `DATABASE_URL` server and dropped at exit (verified on PostgreSQL 16.13:
 51 PASS, 0 FAIL, 0 scratch databases left). Same assertions as pg-mem, no
 shims ([`db/README.md`](db/README.md)).
+
+## Deploying afflino.com
+
+**Status (2026-09-29): the owner has created a Linode for Afflino; nothing
+has been deployed to it or to afflino.com from this repository.** What
+follows is the deploy shape, rehearsed end to end on one machine with the
+edge in plain-HTTP mode (below). The step-by-step procedure, rollback, the
+kill-switch drill and backups are in
+[`docs/runbooks/deploy.md`](docs/runbooks/deploy.md).
+
+**Shape (single host, the pilot).** One compose project (`name: afflino`)
+from [`docker-compose.prod.yml`](docker-compose.prod.yml) plus
+[`docker-compose.single-host.yml`](docker-compose.single-host.yml):
+
+| Service | Image | Listens | Role |
+|---|---|---|---|
+| `edge` | `caddy:2-alpine` + [`docker/Caddyfile`](docker/Caddyfile) | **80, 443/tcp, 443/udp on all interfaces — the only public listener** | TLS with automatic certificates for `SITE_HOST` and `www.SITE_HOST` only (no on-demand TLS); `www` → 301 to the apex keeping path and query; `/r/*` → redirect; everything else → web; HSTS (no preload), nosniff, `strict-origin-when-cross-origin`, `X-Frame-Options: DENY`, no `Server` / `Via` / `X-Powered-By`; no CSP yet (open); overwrites client-supplied `X-Forwarded-For` / `X-Real-IP` / `Forwarded`; no access log |
+| `web` | `paparazzi/web` | 127.0.0.1:3002 | the Afflino site, app areas and shop; serves `/api/*` as its same-origin proxy to the API, so the API is not public — provider webhooks and payout callbacks use `https://afflino.com/api/v1/...` |
+| `redirect` | `paparazzi/redirect` | 127.0.0.1:3001 | `GET /r/{token}` → 302 with `subid`, no cookies, keyed hash of the client address |
+| `api` | `paparazzi/api` | 127.0.0.1:3000 | the v1 API |
+| `workers` | `paparazzi/workers` | — | BullMQ workers, outbox relay, retention purge |
+| `migrate` | `paparazzi/migrate` | — | one-shot `node db/migrate.mjs` before api / redirect / workers start; also runs the seeds |
+| `postgres` | `postgres:16-alpine` | — (no published port) | volume `afflino_pgdata`; healthcheck |
+| `redis` | `redis:7-alpine` | — (no published port) | `--appendonly yes`, volume `afflino_redisdata`; healthcheck |
+
+The 127.0.0.1 ports are for checks and operator scripts on the server
+(Docker's published ports bypass ufw, which is why nothing but the edge
+binds publicly). Managed databases remain an option: drop
+`docker-compose.single-host.yml` and set `DATABASE_URL` / `REDIS_URL`
+([`docs/infrastructure-recommendation.md`](docs/infrastructure-recommendation.md)).
+[`docker-compose.edge-test.yml`](docker-compose.edge-test.yml) switches the
+edge to plain HTTP on 127.0.0.1:8088 for any Host (no certificates) to
+rehearse routing before DNS points at the server.
+
+**The command line** (from `affiliate/`, with the environment file the
+Linode installer writes):
+
+```sh
+docker compose --env-file /etc/afflino/afflino.env -f docker-compose.prod.yml -f docker-compose.single-host.yml up -d --build
+```
+
+**First deploy** = that line alone (the site comes up with labelled TEST
+demo data and every page noindex), then the TEST network seed, the shop's
+placement and read-only token written into the environment file, `up -d
+web`, and the shop's links — the exact lines are
+[`docs/runbooks/deploy.md`](docs/runbooks/deploy.md) §1. DNS first: the
+`A` record of afflino.com (GoDaddy) must point at the Linode, with no AAAA
+record; `www` is already a CNAME to the apex.
+
+**Environment contract** ([`.env.prod.example`](.env.prod.example) has each
+one with its comment). Required on the single host: `POSTGRES_PASSWORD`,
+`JWT_SECRET`, `STUB_WEBHOOK_SECRET`; everything else has a production
+default or is optional.
+
+| Variable | Required? | Default | Secret? | Read by |
+|---|---|---|---|---|
+| `POSTGRES_PASSWORD` | **yes** with `docker-compose.single-host.yml` (URL-safe: `openssl rand -hex 32`) | — | **yes** | postgres; written into `DATABASE_URL` |
+| `POSTGRES_USER`, `POSTGRES_DB` | no | `afflino`, `afflino` | no | postgres (single host) |
+| `DATABASE_URL`, `REDIS_URL` | **yes** without the single-host override (ignored with it); an empty value stops the stack (migrate fails, services refuse to boot) | — | **yes** (`DATABASE_URL` carries the password) | api, redirect, workers; migrate (`DATABASE_URL`) |
+| `JWT_SECRET` | **yes** | — | **yes** | api (signs the dev-stub tokens, `WEB_API_TOKEN` included) |
+| `STUB_WEBHOOK_SECRET` | **yes** | — | **yes** | workers |
+| `IP_HASH_KEY` | no — strongly recommended, before the first real click (≥ 32 characters) | empty = plain SHA-256 | **yes** | redirect (`ip_hash` = HMAC-SHA256(key, ip)) |
+| `SITE_HOST` | no | `afflino.com` | no | edge; defaults of `REDIRECT_BASE_URL`, `SITE_URL`, `WEB_HOST` |
+| `ACME_EMAIL` | no | empty (no email on the ACME account) | no | edge |
+| `SITE_INDEXING` | no | `off` (pre-launch: robots.txt `Disallow: /`, empty sitemap, noindex on every page) | no | web (runtime) |
+| `SITE_URL` | no | `https://${SITE_HOST}` | no | web (runtime: canonical, og:url, robots.txt, sitemap) |
+| `REDIRECT_BASE_URL` | no | `https://${SITE_HOST}` | no | api (links are `<this>/r/<token>`) |
+| `TRUST_PROXY` | no | `loopback,uniquelocal` | no | api, redirect (unset in the code = trust nothing) |
+| `WEB_API_TOKEN` | no — until set, TEST demo data with a badge | empty | **yes** | web (server only) |
+| `WEB_PLACEMENT_ID` | no — until set, items carry no link | empty | no | web |
+| `API_BASE` | no | `http://api:3000` | no | web (runtime; `/api/*` proxy target) |
+| `NEXT_PUBLIC_API_BASE` | no | `/api` | no | web **build** argument |
+| `NEXT_PUBLIC_SITE_NAME` | no | `Afflino` | no | web (runtime) |
+| `RETENTION_CLICK_CONTEXT_DAYS`, `RETENTION_CONVERSION_RAW_DAYS`, `RETENTION_OUTBOX_DAYS`, `RETENTION_CRON` | no | `365`, `365`, `365`, `0 3 * * *` (counsel placeholders) | no | workers |
+| `NETWORK_FILE` | no | empty = the image's TEST example | no | migrate (`seed-network.ts`) |
+| `WEB_HOST` | no | `${SITE_HOST}` | no | migrate (`seed-network.ts`: the shop's property and placement) |
+| `SEED_OWNER_EMAIL`, `SEED_OPERATOR_EMAIL`, `SEED_APPROVER_EMAIL`, `SEED_ADMIN_EMAIL` | no; passed to a seed run with `-e`, not stored | `<role>@afflino.invalid` | no | migrate (`seed-network.ts`) |
+| `IMAGE_TAG` | no | `latest` | no | compose (image tags) |
+| `LOG_LEVEL` | no | `info` | no | passed to the services; none reads it today |
+| `DEMO_TARGET`, `DEMO_DATABASE_URL` | dev only | — | — | `scripts/demo-money-loop.ts` |
+
+Fixed in the compose file, not read from the environment file:
+`NODE_ENV=production` (api, redirect, workers, web), `API_HOST`,
+`API_PORT`, `REDIRECT_PORT`, and the edge's `EDGE_ADDRESS`
+(`<SITE_HOST>, www.<SITE_HOST>`; `:8088` in the test override).
+
+**The indexing gate.** `SITE_INDEXING=on` is the owner's switch to let
+search engines in: robots.txt then allows the public pages (the app areas,
+`/join`, `/login`, `/api`, `/dev`, `/saved` stay disallowed) and names
+`https://afflino.com/sitemap.xml`, which lists `/`, `/shop`, `/contact` and
+the live, non-TEST looks. Until then (the default) robots.txt is
+`Disallow: /`, the sitemap is empty and every page carries
+`noindex, nofollow`, because the public pages carry placeholder prices,
+fees, TDS figures and legal stubs (`packages/web/lib/site-copy.ts`) the
+owner has not confirmed. Flipping it is a restart of the web, not a rebuild.
+
+**Client addresses.** api and redirect trust `X-Forwarded-For` only from
+loopback and private peers (`TRUST_PROXY`, `packages/shared/src/trust-proxy.ts`),
+i.e. the edge on the compose network, and the edge replaces whatever a
+client sends. The redirect stores `ip_hash` = HMAC-SHA256(`IP_HASH_KEY`, the
+address the edge saw) — keyed so it cannot be reversed by enumerating IPv4
+addresses; without the key it falls back to the plain SHA-256 of before. No
+log carries the address (api and redirect log method, url and hostname; the
+edge has no access log). A stable keyed hash is still pseudonymous data:
+what it is under DPDP, who holds the key and how long it is kept are counsel
+items ([`docs/threat-model.md`](docs/threat-model.md) §4.11), not claims.
+
+**Rehearsed on 2026-09-29** (this sandbox, images rebuilt from this tree,
+throwaway project, TEST secrets, prod + single-host + the plain-HTTP edge on
+127.0.0.1:8088, `Host: afflino.com`): every service up (migrate exited 0),
+only the edge on 8088 and api / redirect / web on 127.0.0.1; `/` 200 with
+`<link rel="canonical" href="https://afflino.com"/>` and
+`og:url` `https://afflino.com`; with `SITE_INDEXING=off` robots.txt
+`Disallow: /` without a sitemap line, an empty sitemap and
+`noindex, nofollow` on `/` and `/shop`; `/api/healthz` 200 through the edge;
+headers HSTS / nosniff / Referrer-Policy / `X-Frame-Options: DENY`, no
+`Server` / `Via`; `Host: www.afflino.com` `/shop?utm_source=test&x=1` → 301
+`https://afflino.com/shop?utm_source=test&x=1`; the TEST network seed
+(`--with-demo-programme`, `WEB_HOST=afflino.com`, NODE_ENV unset in the
+migrate image) + the tokens + `up -d web` + mint-links (`minted=1 ...
+failed=0`); the look page shows `https://afflino.com/r/<token>`;
+`GET /r/<token>` through the edge → 302 with `subid`, no `set-cookie`; a
+request with `X-Forwarded-For`, `X-Real-IP` and `Forwarded` all spoofed
+stored the same `ip_hash` as a plain one, equal to HMAC(`IP_HASH_KEY`, the
+compose network's gateway — the peer the edge sees for a host-local curl)
+and not to the HMAC of any spoofed address; zero log lines with either
+address; a `network_admin` token whose subject is not a user → pause 500,
+status still `active`, no audit or outbox row, the link still 302; a real
+pause / resume → paused page 200 / 302 again; with `SITE_INDEXING=on`
+robots.txt allowing the public site with the sitemap line and a sitemap of
+`/`, `/shop`, `/contact` (the five TEST looks left out); a 5 MB body → 413
+at the edge; the edge in HTTPS mode (internal CA, `afflino.internal`) as in
+[`docs/runbooks/deploy.md`](docs/runbooks/deploy.md) §1R; then `down -v`:
+no container, volume or network left. Not done: a real certificate for
+afflino.com and any check over the internet — they need the DNS change and
+the server.
 
 ## Setup
 
@@ -328,23 +392,26 @@ checklist: [backup/restore runbook](docs/runbooks/backup-restore.md) ·
 
 ## Infrastructure & deployment
 
-Sandbox only — nothing is provisioned and no real credentials exist. The
-pilot recommendation (AWS ap-south-1 Mumbai, with a DigitalOcean blr1
-alternative), dated cost estimates (~₹5,200–6,700/mo), backup strategy,
-monitoring stack, and the DPDP open questions for counsel live in
-[docs/infrastructure-recommendation.md](docs/infrastructure-recommendation.md)
-— **it needs your approval before anything is provisioned.**
+The owner has chosen **Linode** (2026-09-29) and created a server for
+Afflino; nothing has been deployed to it from this repository, and no real
+credentials exist here. The pilot shape is a single host — the edge (Caddy),
+api, redirect, workers, web, migrate, Postgres 16 and Redis 7 in one compose
+project ("Deploying afflino.com" above,
+[docs/runbooks/deploy.md](docs/runbooks/deploy.md)); managed databases
+remain an option (drop the single-host override, set `DATABASE_URL` /
+`REDIS_URL`). The earlier AWS / DigitalOcean recommendation, the trade-offs
+of self-hosted databases for a ledger, backup strategy, monitoring and the
+DPDP open questions for counsel:
+[docs/infrastructure-recommendation.md](docs/infrastructure-recommendation.md).
 
-Deployment shape: [docker-compose.prod.yml](docker-compose.prod.yml) runs
-`api`, `redirect`, `workers`, `web` plus a one-shot `migrate` service
-against **managed** Postgres/Redis supplied via environment (no Postgres or
-Redis containers in prod). The five images in `docker/` build and boot end
-to end ([docker/README.md](docker/README.md): build steps, runtime layout,
-sizes, the recorded smoke test from migrate to a `302` with `subid`); the
-first-deploy order is in "Running Afflino" above. Environment contract: [.env.prod.example](.env.prod.example) — every
-`process.env` read in the codebase is documented there with a comment; the
-filled copy is never committed. Secret generation, vault-vs-env rules,
-rotation cadence, and the pre-launch checklist:
+The five images in `docker/` build and boot end to end, and the edge runs
+the stock `caddy:2-alpine` with [docker/Caddyfile](docker/Caddyfile)
+([docker/README.md](docker/README.md): build steps, runtime layout, sizes,
+the edge, the recorded smoke test from migrate through the edge to a `302`
+with `subid`). Environment contract: [.env.prod.example](.env.prod.example)
+— every variable, required or optional, secret or not, with its default;
+the filled copy is never committed. Secret generation, the single-host
+secrets file, rotation cadence, and the pre-launch checklist:
 [docs/credential-setup.md](docs/credential-setup.md).
 
 ## Repo map

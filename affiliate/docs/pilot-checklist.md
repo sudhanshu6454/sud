@@ -1,9 +1,10 @@
 # Pre-pilot checklist
 
 What is built and proven in this sandbox vs what still needs engineering or a
-human before the pilot. Last verified test run (2026-09-29): **616/616 green
-across 31 files** (`./node_modules/.bin/vitest run`: api 117, shared 11,
-workers 15, web 473; the earlier figures of 57, 94, 133, 558, 587 and 612 are stale). Legend: ✅ verified in this repo · ⏳ not done — needs
+human before the pilot. Last verified test run (2026-09-29): **660/660 green
+across 35 files** (`./node_modules/.bin/vitest run`: api 124, redirect 10,
+shared 15, workers 15, web 496; the earlier figures of 57, 94, 133, 558, 587,
+612 and 616 are stale). Legend: ✅ verified in this repo · ⏳ not done — needs
 engineering work · 👤 needs a human (see
 [EXTERNAL DEPENDENCIES](#external-dependencies) and the
 [action tracker](./action-tracker.md)).
@@ -21,7 +22,7 @@ has seen real merchants, real money, real traffic or a real host.
   `packageManager` pin, used locally, in CI and in the images
   ([`docker/README.md`](../docker/README.md) "pnpm version policy"). The old
   "known-broken" note is obsolete.
-- ✅ `vitest run` green — 616 tests in 31 files: ledger math
+- ✅ `vitest run` green — 660 tests in 35 files: ledger math
   ([`packages/shared/src/ledger.test.ts`](../packages/shared/src/ledger.test.ts)),
   money-loop API incl. idempotency ×10, revision ordering, suspense,
   reversals, payout gates, maker-checker
@@ -156,9 +157,18 @@ has seen real merchants, real money, real traffic or a real host.
   that must be fixed before any shared environment, and a proposed pentest
   scope.
 - ✅ Runbooks written and reviewed:
-  [`docs/runbooks/`](./runbooks/) — deploy (managed infra via
-  `docker-compose.prod.yml`), tracking outage, wrong-product/rights, merchant
-  nonpayment, publisher fraud, data incident.
+  [`docs/runbooks/`](./runbooks/) — deploy (afflino.com on a single Linode:
+  `docker-compose.prod.yml` + `docker-compose.single-host.yml`, the edge in
+  front; managed databases as the alternative), tracking outage,
+  wrong-product/rights, merchant nonpayment, publisher fraud, data incident.
+- ✅ Production deploy shape for afflino.com (2026-09-29), rehearsed end to
+  end locally with the edge in plain-HTTP mode (README.md "Deploying
+  afflino.com"): Caddy edge as the only public listener (TLS for the apex
+  and www only, www → apex, security headers, client-supplied
+  X-Forwarded-For overwritten, no access log), `TRUST_PROXY` on api and
+  redirect, the keyed click hash (`IP_HASH_KEY`), the indexing gate
+  (`SITE_INDEXING`, off by default), Postgres and Redis on the same host.
+  **Nothing has been deployed to the Linode or the domain.**
 - ✅ Capacity plan written from the owner's figure:
   [`docs/capacity-plan.md`](./capacity-plan.md) — arithmetic only; nothing
   in it is measured.
@@ -195,8 +205,8 @@ real infrastructure or real traffic yet:
   PASS with p95 < 150 ms service processing on `GET /r/{token}` and error
   rate < 0.1%; brief targets also include 99.9% redirect availability and
   p75 LCP ≤ 2.5 s on the PWA. It needs a real deployment
-  ([`docs/infrastructure-recommendation.md`](./infrastructure-recommendation.md),
-  not provisioned); the estimate it must cover is in
+  ([`docs/infrastructure-recommendation.md`](./infrastructure-recommendation.md);
+  the Linode exists, nothing is deployed on it); the estimate it must cover is in
   [`docs/capacity-plan.md`](./capacity-plan.md) (≈ 23–230 rps peak).
 - ⏳ Vitest still runs on pg-mem. The migrations and the money loop are now
   proven on Postgres 16 (`pnpm demo:pg`, the seeds, the docker smoke), but
@@ -317,12 +327,14 @@ and acceptance criteria.
   dates recorded in `assets`; re-review queue empty; takedown workflow
   timelines from counsel. *Only a rights-holder review can clear celebrity
   imagery; owning footage ≠ advertising rights.*
-- 👤 Infra provisioning: cloud/region choice, managed Postgres + Redis with
-  HA/persistence decided, backups + WAL archiving, monitoring. The shape is
-  `docker-compose.prod.yml`; the proposal is
-  [`docs/infrastructure-recommendation.md`](./infrastructure-recommendation.md)
-  (sizes to revisit per [`docs/capacity-plan.md`](./capacity-plan.md) §6).
-  *Sandbox has no real infrastructure to provision.*
+- 👤 Infra provisioning: the owner has chosen Linode and created the
+  server (2026-09-29); still open on it: the DNS change for afflino.com,
+  the first deploy (`docs/runbooks/deploy.md` §1), off-server backups of the
+  single-host Postgres and a restore drill, monitoring. Managed Postgres +
+  Redis remain an option
+  ([`docs/infrastructure-recommendation.md`](./infrastructure-recommendation.md);
+  sizes to revisit per [`docs/capacity-plan.md`](./capacity-plan.md) §6).
+  *Only the owner can change DNS and run the deploy on the server.*
 - 👤 Load soak executed on a real deployment and results recorded. *The
   soak must run against real Postgres + Redis with real DNS and TLS in
   front, which only a human can stand up and approve for traffic.*

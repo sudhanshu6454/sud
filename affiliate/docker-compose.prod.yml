@@ -1,45 +1,96 @@
-# Production-shaped compose for Afflino: api, redirect, workers, web and the
-# one-shot migrate runner.
+# Production compose for Afflino (afflino.com): the edge (Caddy), api,
+# redirect, workers, web and the one-shot migrate runner.
 #
-# Assumes managed Postgres + managed Redis/Valkey (RDS / ElastiCache or
-# DigitalOcean Managed Databases) reached over the private network; which one
-# is still a human decision (docs/infrastructure-recommendation.md).
-# THERE ARE NO SECRETS IN THIS FILE — every sensitive value comes from the
-# environment (populated from the Secure Vault at deploy time; see
-# .env.prod.example and docs/credential-setup.md).
+# Two shapes, one file:
+#   * single host (the pilot on the owner's Linode): add
+#     docker-compose.single-host.yml, which runs Postgres 16 and Redis 7 next
+#     to the services and points DATABASE_URL / REDIS_URL at them:
+#       docker compose -f docker-compose.prod.yml -f docker-compose.single-host.yml up -d --build
+#   * managed databases (an option, docs/infrastructure-recommendation.md):
+#     this file alone, with DATABASE_URL and REDIS_URL set to the provider's
+#     private endpoints.
+# DATABASE_URL and REDIS_URL are therefore not refused here when empty (the
+# override supplies them, and compose checks each file on its own); an empty
+# value still stops the stack: migrate exits "DATABASE_URL is not set" and
+# nothing else starts, and api, redirect and workers refuse to boot under
+# NODE_ENV=production without REDIS_URL.
 #
-# Images are built from ./docker/Dockerfile.* (node:22-alpine, pnpm via corepack,
-# non-root `node` user); docker/README.md documents the layout and the smoke test
-# every image passed.
+# THERE ARE NO SECRETS IN THIS FILE. Every value comes from the environment
+# (.env.prod.example lists each one: required or optional, secret or not,
+# default). Only these are required: JWT_SECRET and STUB_WEBHOOK_SECRET, plus
+# POSTGRES_PASSWORD with the single-host override or DATABASE_URL and
+# REDIS_URL without it. Everything else has a production default:
+# SITE_HOST=afflino.com, REDIRECT_BASE_URL=https://${SITE_HOST},
+# SITE_URL=https://${SITE_HOST}, SITE_INDEXING=off (pre-launch: noindex),
+# TRUST_PROXY=loopback,uniquelocal. WEB_API_TOKEN and WEB_PLACEMENT_ID are
+# optional: until both are set the web renders labelled TEST demo data, so
+# the first deploy is `up` alone, then the seed, the token and the links
+# (README.md "Deploying afflino.com"), then `up -d web` again.
 #
-# Compose interpolates this whole file for every command, so WEB_API_TOKEN and
-# WEB_PLACEMENT_ID (both required below) must be set before any
-# `docker compose -f docker-compose.prod.yml ...` line runs. Both come from the
-# database, so the first deploy migrates, seeds and mints with the images
-# directly (README.md "Running Afflino", docker/README.md "Operator scripts").
+# Public surface: ONLY the edge publishes on all interfaces (80/tcp, 443/tcp,
+# 443/udp). api (3000), redirect (3001) and web (3002) publish on 127.0.0.1
+# for host-side checks and operator scripts; Docker's published ports bypass
+# ufw, which is why nothing else may listen publicly. Plain-HTTP test mode
+# for the edge (no certificates, 127.0.0.1:8088): add
+# docker-compose.edge-test.yml.
 #
-# Bring-up (migrate runs first; api, redirect and workers wait for it to succeed):
-#   set -a; source /run/secrets/paparazzi.env; set +a   # or your vault's inject step
-#   docker compose -f docker-compose.prod.yml up -d --build
+# Images are built from ./docker/Dockerfile.* (node:22-alpine, pnpm via
+# corepack, non-root `node` user); the edge is the stock caddy:2-alpine with
+# ./docker/Caddyfile mounted. docker/README.md documents the layout and the
+# smoke test.
 #
-# Seeds, re-runnable (see db/README.md). A re-run must read the same network file
-# as the first run: for the operator's own network set NETWORK_FILE=/app/config/network.yaml
-# in the vault env and uncomment the migrate volume below; -e NODE_ENV=production
-# then makes a lost NETWORK_FILE fail instead of seeding the TEST example:
-#   docker compose -f docker-compose.prod.yml run --rm -T -e NODE_ENV=production migrate ./node_modules/.bin/tsx db/seed-network.ts
-#   docker compose -f docker-compose.prod.yml run --rm -T migrate ./node_modules/.bin/tsx db/seed-network.ts --with-demo-programme
+# Seeds and operator scripts (re-runnable; db/README.md, docker/README.md
+# "Operator scripts"). A re-run must read the same network file as the first
+# run: for the operator's own network set NETWORK_FILE=/app/config/network.yaml
+# and uncomment the migrate volume below; -e NODE_ENV=production then makes a
+# lost NETWORK_FILE fail instead of seeding the TEST example:
+#   docker compose -f docker-compose.prod.yml -f docker-compose.single-host.yml run --rm -T -e NODE_ENV=production migrate ./node_modules/.bin/tsx db/seed-network.ts
+#   docker compose -f docker-compose.prod.yml -f docker-compose.single-host.yml run --rm -T migrate ./node_modules/.bin/tsx db/seed-network.ts --with-demo-programme
 #   (--with-demo-programme adds the TEST programme and the shop placement reported as
 #    web_placement_id → WEB_PLACEMENT_ID; it refuses to run with NODE_ENV=production, by design)
-#   docker compose -f docker-compose.prod.yml run --rm -T migrate ./node_modules/.bin/tsx db/seed.ts   # TEST demo org
 #
 # A database migrated before schema_migrations tracking existed needs, once:
-#   docker compose -f docker-compose.prod.yml run --rm migrate node db/migrate.mjs --baseline
-#
-# The web's bearer (WEB_API_TOKEN) is minted from the api image until the IdP
-# lands, and the shop placement's tracked links with the sibling script — see
-# docker/README.md ("Operator scripts") for the exact single-line commands.
+#   docker compose -f docker-compose.prod.yml -f docker-compose.single-host.yml run --rm migrate node db/migrate.mjs --baseline
+
+# Fixed project name: containers, the network and the volumes are afflino_*
+# wherever the checkout lives (a throwaway rehearsal passes -p <other name>).
+name: afflino
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
 
 services:
+  # The only public entry: TLS (automatic certificates for SITE_HOST and
+  # www.SITE_HOST only), www → apex, /r/* → redirect, everything else → web
+  # (which proxies /api/* to the API). Overwrites client-supplied
+  # X-Forwarded-For / X-Real-IP / Forwarded; no access log. docker/Caddyfile.
+  edge:
+    image: caddy:2-alpine
+    environment:
+      SITE_HOST: ${SITE_HOST:-afflino.com}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+      EDGE_ADDRESS: ${SITE_HOST:-afflino.com}, www.${SITE_HOST:-afflino.com}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      # Started, not healthy: the edge must come up (and fetch certificates)
+      # even while an upstream is still starting; it answers 502 until then.
+      redirect:
+        condition: service_started
+      web:
+        condition: service_started
+    restart: unless-stopped
+    logging: *logging
+
   api:
     build:
       context: .
@@ -49,13 +100,18 @@ services:
       NODE_ENV: production
       API_HOST: "0.0.0.0"
       API_PORT: "3000"
-      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
-      REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
-      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
-      REDIRECT_BASE_URL: ${REDIRECT_BASE_URL:?REDIRECT_BASE_URL is required (public https origin of the redirect service; links are REDIRECT_BASE_URL/r/<token>)}
+      DATABASE_URL: ${DATABASE_URL:-}
+      REDIS_URL: ${REDIS_URL:-}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required (a long random secret; it also signs WEB_API_TOKEN)}
+      # Public origin of tracked links: every link is REDIRECT_BASE_URL/r/<token>,
+      # served by the edge's /r/* route.
+      REDIRECT_BASE_URL: ${REDIRECT_BASE_URL:-https://${SITE_HOST:-afflino.com}}
+      # Trust X-Forwarded-For only from loopback and private peers: the edge
+      # and the web's /api proxy on the compose network (docker/Caddyfile).
+      TRUST_PROXY: ${TRUST_PROXY:-loopback,uniquelocal}
       LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -66,11 +122,7 @@ services:
       retries: 3
       start_period: 20s
     restart: unless-stopped
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
+    logging: *logging
 
   redirect:
     build:
@@ -80,11 +132,18 @@ services:
     environment:
       NODE_ENV: production
       REDIRECT_PORT: "3001"
-      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
-      REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
+      DATABASE_URL: ${DATABASE_URL:-}
+      REDIS_URL: ${REDIS_URL:-}
+      # The edge is the peer; Caddy has already replaced X-Forwarded-For.
+      TRUST_PROXY: ${TRUST_PROXY:-loopback,uniquelocal}
+      # Secret for clicks.context.ip_hash = HMAC-SHA256(key, client address).
+      # Empty = the plain SHA-256 (reversible for IPv4 by enumeration). Set it
+      # before the first real click and never change it (hashes made under
+      # different keys do not compare).
+      IP_HASH_KEY: ${IP_HASH_KEY:-}
       LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
-      - "3001:3001"
+      - "127.0.0.1:3001:3001"
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -95,11 +154,7 @@ services:
       retries: 3
       start_period: 20s
     restart: unless-stopped
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
+    logging: *logging
 
   workers:
     build:
@@ -108,9 +163,9 @@ services:
     image: paparazzi/workers:${IMAGE_TAG:-latest}
     environment:
       NODE_ENV: production
-      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
-      REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
-      STUB_WEBHOOK_SECRET: ${STUB_WEBHOOK_SECRET:?STUB_WEBHOOK_SECRET is required}
+      DATABASE_URL: ${DATABASE_URL:-}
+      REDIS_URL: ${REDIS_URL:-}
+      STUB_WEBHOOK_SECRET: ${STUB_WEBHOOK_SECRET:?STUB_WEBHOOK_SECRET is required (a long random secret)}
       RETENTION_CLICK_CONTEXT_DAYS: ${RETENTION_CLICK_CONTEXT_DAYS:-365}
       RETENTION_CONVERSION_RAW_DAYS: ${RETENTION_CONVERSION_RAW_DAYS:-365}
       RETENTION_OUTBOX_DAYS: ${RETENTION_OUTBOX_DAYS:-365}
@@ -120,13 +175,9 @@ services:
       migrate:
         condition: service_completed_successfully
     restart: unless-stopped
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
+    logging: *logging
 
-  # Consumer shop + publisher portal + editorial console (Next.js standalone).
+  # The Afflino web app (Next.js standalone): marketing site, app areas, shop.
   # The browser talks to /api/* on the web origin; the web server proxies that
   # to API_BASE at request time and calls the API itself with WEB_API_TOKEN
   # (server-side only, never sent to the browser).
@@ -142,12 +193,23 @@ services:
     environment:
       NODE_ENV: production
       API_BASE: ${API_BASE:-http://api:3000}
-      WEB_API_TOKEN: ${WEB_API_TOKEN:?WEB_API_TOKEN is required (read-only bearer for the shop; without it the shop renders TEST demo data)}
-      WEB_PLACEMENT_ID: ${WEB_PLACEMENT_ID:?WEB_PLACEMENT_ID is required (web_placement_id from seed-network; without it no item carries a tracked link)}
+      # Optional, both: until they are set the shop renders TEST demo data with
+      # a "Demo data" badge. WEB_API_TOKEN = read-only publisher_analyst bearer
+      # (a secret; minted with the api image); WEB_PLACEMENT_ID =
+      # web_placement_id from seed-network.
+      WEB_API_TOKEN: ${WEB_API_TOKEN:-}
+      WEB_PLACEMENT_ID: ${WEB_PLACEMENT_ID:-}
+      # Canonical URLs, og:url, robots.txt and the sitemap.
+      SITE_URL: ${SITE_URL:-https://${SITE_HOST:-afflino.com}}
+      # "on" opens the site to search engines. Anything else (the default,
+      # off) = pre-launch: robots.txt Disallow: /, an empty sitemap and
+      # noindex,nofollow on every page, because the public pages carry
+      # placeholder prices, fees, TDS and legal stubs (lib/site-copy.ts).
+      SITE_INDEXING: ${SITE_INDEXING:-off}
       NEXT_PUBLIC_SITE_NAME: ${NEXT_PUBLIC_SITE_NAME:-Afflino}
       LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
-      - "3002:3000"
+      - "127.0.0.1:3002:3000"
     depends_on:
       api:
         condition: service_healthy
@@ -158,11 +220,7 @@ services:
       retries: 3
       start_period: 20s
     restart: unless-stopped
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
+    logging: *logging
 
   # One-shot migration runner: `node db/migrate.mjs` against DATABASE_URL, then
   # exits; the app services wait for it to succeed. The same image runs the
@@ -175,13 +233,14 @@ services:
       dockerfile: docker/Dockerfile.migrate
     image: paparazzi/migrate:${IMAGE_TAG:-latest}
     environment:
-      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      DATABASE_URL: ${DATABASE_URL:-}
       # The network file seed-network.ts reads. Unset → the TEST example the image
       # ships (/app/db/network.example.yaml).
       NETWORK_FILE: ${NETWORK_FILE:-}
-      # When set, seed-network also creates the shop's own `web` property (and, with
+      # seed-network creates the shop's own `web` property for this host (and, with
       # --with-demo-programme, the placement reported as web_placement_id).
-      WEB_HOST: ${WEB_HOST:-}
+      # Default: the site's own host.
+      WEB_HOST: ${WEB_HOST:-${SITE_HOST:-afflino.com}}
     # Optional, to seed your own network instead of the TEST example: save it as
     # network.yaml next to this file (gitignored), uncomment the two lines below
     # and set NETWORK_FILE=/app/config/network.yaml.
@@ -189,3 +248,8 @@ services:
     #   - ./network.yaml:/app/config/network.yaml:ro
     command: ["node", "db/migrate.mjs"]
     restart: "no"
+    logging: *logging
+
+volumes:
+  caddy_data:
+  caddy_config:

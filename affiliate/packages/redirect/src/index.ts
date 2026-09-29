@@ -2,8 +2,17 @@ import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest }
 import { Pool } from 'pg';
 import Redis from 'ioredis';
 import { Queue } from 'bullmq';
-import { createHash, randomUUID } from 'node:crypto';
-import { apiError, buildEnvelope } from '@paparazzi/shared';
+import { createHash, createHmac, randomUUID } from 'node:crypto';
+import {
+  apiError,
+  buildEnvelope,
+  parseTrustProxy,
+  requestLogFields,
+  type TrustProxySetting,
+} from '@paparazzi/shared';
+
+// Re-exported: the request-log contract is tested from this package too.
+export { requestLogFields };
 
 /**
  * Redirect service — the public click hot path: GET /r/{token}.
@@ -28,6 +37,17 @@ import { apiError, buildEnvelope } from '@paparazzi/shared';
  * global unique constraint, so the route lookup is by token alone (documented
  * exception to the org_id-everywhere rule — see ASSUMPTIONS.md). All writes
  * use the org_id read back from the link row.
+ *
+ * Client address: `req.ip` is what gets hashed. TRUST_PROXY (unset = trust
+ * nothing, `req.ip` is the TCP peer) is passed to Fastify's `trustProxy`
+ * (`parseTrustProxy` in @paparazzi/shared); behind the edge,
+ * docker-compose.prod.yml sets `loopback,uniquelocal` and Caddy overwrites
+ * any client-supplied X-Forwarded-For, so the hash is of the address the
+ * edge saw, never of a value the shopper chose. The hash is HMAC-SHA256
+ * keyed with IP_HASH_KEY when that is set (`hashClientAddress`); without a
+ * key it is the plain SHA-256 of before, which for IPv4 is reversible by
+ * enumerating the 2^32 addresses. The request log never carries the address
+ * either (`requestLogFields`).
  *
  * Test seam (exact contract name): `buildRedirectApp({ pool })` builds the
  * Fastify app WITHOUT listening, so harnesses can inject a pg-mem-backed
@@ -74,6 +94,39 @@ interface RouteCache {
 }
 
 const TOKEN_RE = /^[0-9a-f]{32}$/;
+
+/**
+ * IP_HASH_KEY: the secret for the keyed client-address hash. Unset or empty
+ * → `null` (plain SHA-256, the behaviour before the key existed, so existing
+ * rows and tests stay valid). Set → at least IP_HASH_KEY_MIN_LENGTH
+ * characters after trimming, or boot fails (a short key would make the HMAC
+ * as enumerable as the unkeyed hash). The error never echoes the value.
+ */
+export const IP_HASH_KEY_MIN_LENGTH = 32;
+
+export function parseIpHashKey(raw: string | undefined | null): string | null {
+  const value = (raw ?? '').trim();
+  if (value === '') return null;
+  if (value.length < IP_HASH_KEY_MIN_LENGTH) {
+    throw new Error(
+      `IP_HASH_KEY: must be at least ${IP_HASH_KEY_MIN_LENGTH} characters (e.g. the 64 hex characters of openssl rand -hex 32);` +
+        ` the value given has ${value.length}`,
+    );
+  }
+  return value;
+}
+
+/**
+ * `clicks.context.ip_hash`: HMAC-SHA256(key, ip) as lowercase hex with a key,
+ * SHA-256(ip) without one. The same address always gives the same value under
+ * one key (so per-address fraud checks keep working); values made under
+ * different keys, or before and after a key was set, do not compare.
+ */
+export function hashClientAddress(ip: string, key: string | null): string {
+  return key
+    ? createHmac('sha256', key).update(ip).digest('hex')
+    : createHash('sha256').update(ip).digest('hex');
+}
 
 const PAUSED_HTML = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>Link paused</title></head>
@@ -147,7 +200,7 @@ async function loadRoute(pool: Pool, token: string, req: FastifyRequest): Promis
   return route;
 }
 
-async function handleRedirect(pool: Pool, req: FastifyRequest, reply: FastifyReply) {
+async function handleRedirect(pool: Pool, ipHashKey: string | null, req: FastifyRequest, reply: FastifyReply) {
   const requestId = randomUUID();
   const token = (req.params as { token?: string }).token ?? '';
 
@@ -185,7 +238,8 @@ async function handleRedirect(pool: Pool, req: FastifyRequest, reply: FastifyRep
   let persisted = false;
   try {
     const ua = req.headers['user-agent'];
-    const ipHash = createHash('sha256').update(req.ip).digest('hex'); // never store raw IP
+    // Never store the raw address: only its (keyed) hash. req.ip honours TRUST_PROXY.
+    const ipHash = hashClientAddress(req.ip, ipHashKey);
     await pool.query(
       `insert into clicks (id, org_id, link_id, click_id, occurred_at, context)
        values ($1, $2, $3, $4, now(), $5::jsonb)`,
@@ -217,6 +271,12 @@ async function handleRedirect(pool: Pool, req: FastifyRequest, reply: FastifyRep
 export interface RedirectAppDeps {
   /** Injected pool (test seam). When omitted, DATABASE_URL is required. */
   pool?: Pool;
+  /** Fastify trustProxy (test seam). When omitted, parsed from TRUST_PROXY. */
+  trustProxy?: TrustProxySetting;
+  /** Where the request log goes (test seam). When omitted, stdout. */
+  logStream?: { write(line: string): void };
+  /** Key for the client-address hash (test seam). When omitted, parsed from IP_HASH_KEY. */
+  ipHashKey?: string | null;
 }
 
 /** Build the Fastify app without listening (test seam — exact contract name). */
@@ -228,10 +288,22 @@ export async function buildRedirectApp(deps?: RedirectAppDeps): Promise<FastifyI
       return new Pool({ connectionString: process.env.DATABASE_URL, max: 20 });
     })();
 
-  const app = Fastify({ logger: true });
+  // Both parsed before anything listens, so a bad value fails the boot.
+  const trustProxy = deps?.trustProxy ?? parseTrustProxy(process.env.TRUST_PROXY);
+  const ipHashKey = deps?.ipHashKey !== undefined ? deps.ipHashKey : parseIpHashKey(process.env.IP_HASH_KEY);
+
+  const app = Fastify({
+    logger: {
+      level: 'info',
+      // method, url, hostname: never remoteAddress (@paparazzi/shared request-log.ts).
+      serializers: { req: requestLogFields },
+      ...(deps?.logStream ? { stream: deps.logStream } : {}),
+    },
+    trustProxy,
+  });
 
   app.get('/healthz', async () => ({ ok: true }));
-  app.get('/r/:token', (req, reply) => handleRedirect(pool, req, reply));
+  app.get('/r/:token', (req, reply) => handleRedirect(pool, ipHashKey, req, reply));
 
   app.setNotFoundHandler((req, reply) => {
     const requestId = randomUUID();
@@ -242,6 +314,14 @@ export async function buildRedirectApp(deps?: RedirectAppDeps): Promise<FastifyI
 }
 
 async function main() {
+  // In production the route cache and the click-events queue are not
+  // optional: without REDIS_URL every click would be persisted but never
+  // enqueued for the workers. Fail the boot instead (docker-compose.prod.yml
+  // no longer refuses an empty REDIS_URL itself, because
+  // docker-compose.single-host.yml supplies it).
+  if (process.env.NODE_ENV === 'production' && !process.env.REDIS_URL?.trim()) {
+    throw new Error('REDIS_URL is required in production');
+  }
   const app = await buildRedirectApp();
   const port = Number(process.env.REDIRECT_PORT ?? 3001);
   await app.listen({ port, host: '0.0.0.0' });

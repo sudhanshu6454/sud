@@ -1,4 +1,5 @@
 import Fastify from 'fastify';
+import { parseTrustProxy, requestLogFields } from '@paparazzi/shared';
 import { requestIdHook } from './middleware.js';
 import { registerIdempotencyCapture } from './idempotency.js';
 import { registerErrorHandling } from './errors.js';
@@ -15,8 +16,28 @@ import { disputesRoutes } from './routes/disputes.js';
 import { contractsRoutes } from './routes/contracts.js';
 import { suspenseRoutes } from './routes/suspense.js';
 
-export async function buildApp() {
-  const app = Fastify({ logger: true });
+/**
+ * TRUST_PROXY (unset = trust nothing: `req.ip` is the TCP peer) becomes
+ * Fastify's `trustProxy` via `parseTrustProxy` (@paparazzi/shared). Behind
+ * the edge, docker-compose.prod.yml sets `loopback,uniquelocal`: browser
+ * calls reach the API through Caddy and the web's /api proxy, and Caddy
+ * overwrites any client-supplied X-Forwarded-For. An invalid value throws
+ * here, at boot.
+ *
+ * The request log records method, url and hostname only
+ * (`requestLogFields`): with TRUST_PROXY set, `req.ip` is the visitor's real
+ * address, and Fastify's default serializer would log it in the clear.
+ * `opts.logStream` is a test seam (default: stdout).
+ */
+export async function buildApp(opts: { logStream?: { write(line: string): void } } = {}) {
+  const app = Fastify({
+    logger: {
+      level: 'info',
+      serializers: { req: requestLogFields },
+      ...(opts.logStream ? { stream: opts.logStream } : {}),
+    },
+    trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
+  });
 
   await requestIdHook(app);
   await registerIdempotencyCapture(app);
@@ -42,6 +63,13 @@ export async function buildApp() {
 }
 
 async function main() {
+  // Redis is best-effort per request (redis.ts), but a production API without
+  // it would warm no route cache and invalidate none on a kill switch pull.
+  // docker-compose.prod.yml no longer refuses an empty REDIS_URL itself
+  // (docker-compose.single-host.yml supplies it), so the boot does.
+  if (process.env.NODE_ENV === 'production' && !process.env.REDIS_URL?.trim()) {
+    throw new Error('REDIS_URL is required in production');
+  }
   const app = await buildApp();
   const port = Number(process.env.API_PORT ?? 3000);
   const host = process.env.API_HOST ?? '0.0.0.0';

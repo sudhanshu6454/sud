@@ -13,6 +13,7 @@ import { displayCategory, hasPrice, itemName, matchTag, stockIsOut, variantFacts
 import shared from '@/components/shop/detail.module.css';
 import { PageHeader, Tag } from '@/components/ui';
 import { getLook, lookOrMiss } from '@/lib/catalogue';
+import { pageMetadata } from '@/lib/seo';
 import { formatMoney, freshnessLabel, stockLabel } from '@/lib/format';
 import styles from './page.module.css';
 
@@ -32,9 +33,13 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const item = look?.items.find((i) => i.id === params.itemId);
   // A miss is a 404 here too. No loading.tsx on this route: a Suspense
   // boundary would start the stream before notFound(), turning it into 200.
-  if (!item) notFound();
-  // The root layout's title template appends the site name.
-  return { title: itemName(item) };
+  if (!look || !item) notFound();
+  // The root layout's title template appends the site name; canonical and
+  // og:url are the item's own path.
+  return pageMetadata(
+    `/looks/${encodeURIComponent(look.id)}/items/${encodeURIComponent(item.id)}`,
+    itemName(item),
+  );
 }
 
 /**

@@ -16,7 +16,9 @@ Env vars:
 |---|---|---|
 | `REDIRECT_PORT` | `3001` | Listen port |
 | `DATABASE_URL` | — (required) | Postgres (route fallback + click writes) |
-| `REDIS_URL` | — (optional) | Route cache + BullMQ transport; service works without it |
+| `REDIS_URL` | — (optional in development; **required** under `NODE_ENV=production`, boot fails without it) | Route cache + BullMQ transport; outside production the service works without it |
+| `TRUST_PROXY` | unset = trust nothing | Which peers may set X-Forwarded-For (`true`, a hop count, or a comma list of addresses / CIDRs / `loopback`, `linklocal`, `uniquelocal`); decides the address that is hashed. docker-compose.prod.yml: `loopback,uniquelocal` (the edge) |
+| `IP_HASH_KEY` | unset = plain SHA-256 | Secret (≥ 32 characters) for `ip_hash` = HMAC-SHA256(key, ip); set it before the first real click and keep it |
 
 ## Hot-path sequence (`GET /r/:token`)
 
@@ -31,8 +33,9 @@ Env vars:
    the programme's `allowed_hosts` → else `403 PROGRAMME_NOT_APPROVED`
    (fail closed; logged).
 5. **Click capture** — `click_id = randomUUID()`; insert into `clicks`
-   (`context = { ua, ip_hash }` — the IP is stored only as a SHA-256 hash,
-   never raw) and enqueue a `click-events` BullMQ job with
+   (`context = { ua, ip_hash }` — the IP is stored only as a hash, never
+   raw: HMAC-SHA256 with `IP_HASH_KEY`, plain SHA-256 without it; the address
+   is `req.ip` under `TRUST_PROXY`, see ASSUMPTIONS.md "Privacy") and enqueue a `click-events` BullMQ job with
    `buildEnvelope({ source: 'redirect', event_type: 'click.observed', … })`.
 6. **302** to `destination_url` with the subid query param (`subid_field`,
    default `subid`) set to `click_id`.

@@ -15,6 +15,8 @@ coordinated migration**.
 | `domain.ts` | `MinorUnits`, `assertMinorUnits()`, entity interfaces mirroring `db/migrations/0001_core.sql` |
 | `connectors.ts` | `Connector` interface, `CapabilityError`, capabilities / conversion / reconciliation types |
 | `ledger.ts` | `LedgerAccount`, `LedgerEntryDraft`, `assertEntriesBalanced()`, `buildConversionEntries()`, `buildAdjustmentEntries()`, `checkBooksBalanced()` |
+| `trust-proxy.ts` | `parseTrustProxy()` — `TRUST_PROXY` → Fastify `trustProxy` (unset = trust nothing; `true`, a hop count, or a comma list of addresses / CIDRs / `loopback`, `linklocal`, `uniquelocal`; anything else throws at boot), shared by the api and the redirect (`trust-proxy.test.ts`) |
+| `request-log.ts` | `requestLogFields()` — the api's and the redirect's request-log serializer: method, url, hostname, never the client address |
 
 ## Conventions
 

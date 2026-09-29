@@ -14,8 +14,8 @@ Everything here runs from this directory; nothing outside it is needed.
 ## Verified state (2026-09-29)
 
 - `pnpm typecheck` clean on all 5 packages (`packages/*`)
-- **616/616 tests green across 31 test files** (`./node_modules/.bin/vitest run`:
-  api 117, shared 11, workers 15, web 473)
+- **660/660 tests green across 35 test files** (`./node_modules/.bin/vitest run`:
+  api 124, redirect 10, shared 15, workers 15, web 496)
 - Demo: **51/51 assertions** on pg-mem (`tsx scripts/demo-money-loop.ts`) **and
   51/51 on a real PostgreSQL 16.13** (`DEMO_TARGET=postgres`, scratch database
   `paparazzi_demo_<8 hex>` created and dropped, no shims) — link → click →
@@ -43,7 +43,19 @@ Everything here runs from this directory; nothing outside it is needed.
   TEST network looks live → `mint-links.mjs` mints → the look page carries the
   tracked link → `GET /r/{token}` → 302 with `subid`, no `set-cookie` → one
   `clicks` row → workers log `click.observed` (`docker/README.md`, smoke test,
-  re-run 2026-09-29 with the network seed)
+  re-run 2026-09-29 with the network seed and again through the edge)
+- **Production deploy shape for afflino.com** (2026-09-29): the edge
+  (`caddy:2-alpine` + `docker/Caddyfile`) is the only public listener;
+  `docker-compose.prod.yml` + `docker-compose.single-host.yml` (Postgres 16 +
+  Redis 7 on the host) rehearsed end to end locally with the edge in
+  plain-HTTP mode (`docker-compose.edge-test.yml`, 127.0.0.1:8088) and in
+  HTTPS mode with Caddy's internal CA: canonical / og:url on
+  `https://afflino.com`, both `SITE_INDEXING` states, www → apex 301 with
+  path + query, HTTP → 308, `/r/<token>` 302 with `subid` and no cookie, a
+  spoofed X-Forwarded-For leaving `ip_hash` = HMAC(`IP_HASH_KEY`, the address
+  the edge saw), the kill switch's atomicity on real Postgres, teardown clean
+  (README.md "Deploying afflino.com", `docs/runbooks/deploy.md` §1R).
+  **Nothing has been deployed to the owner's Linode or to afflino.com.**
 - The CI workflow `afflino` (`.github/workflows/afflino.yml`, runs on changes
   under `affiliate/`) runs the frozen install, typecheck, vitest, both demos, the
   web build and the real-Postgres migrate + seeds; no run has been observed from
@@ -56,7 +68,7 @@ not at the repo root, so the scripts that need it are given with the api package
 copy.
 
 ```bash
-./node_modules/.bin/vitest run                                        # tests (616)
+./node_modules/.bin/vitest run                                        # tests (660)
 pnpm typecheck                                                        # 5 packages
 ./packages/api/node_modules/.bin/tsx scripts/demo-money-loop.ts       # demo on pg-mem (51 assertions)
 DATABASE_URL=postgresql://paparazzi:changeme@127.0.0.1:5432/paparazzi DEMO_TARGET=postgres ./packages/api/node_modules/.bin/tsx scripts/demo-money-loop.ts   # same demo on real Postgres (scratch DB, dropped)
@@ -103,7 +115,14 @@ runs and the docker smoke test.
 - `packages/redirect` — standalone `GET /r/{token}` click service. Persists click
   records binding `click_id → placement`; sets **no cookies**; Redis route cache
   (600 s on mint, 300 s on rebuild); fail-open (302 without `subid` if the click
-  cannot be persisted).
+  cannot be persisted). The client address is `req.ip` under `TRUST_PROXY`
+  (`packages/shared/src/trust-proxy.ts`; unset = trust nothing; production
+  compose `loopback,uniquelocal`, behind the edge that overwrites
+  X-Forwarded-For) and is stored only as `ip_hash` = HMAC-SHA256(`IP_HASH_KEY`,
+  ip) — plain SHA-256 when the key is unset (reversible for IPv4, so the key
+  belongs in production). Neither the redirect's nor the api's request log
+  records the address (`requestLogFields`). Under `NODE_ENV=production` api,
+  redirect and workers refuse to boot without `REDIS_URL`.
 - `packages/workers` — BullMQ workers: click events, provider events, ledger
   mirror, outbox, suspense retry, retention purge (`src/retention/`).
 - `packages/web` — Next.js 14.2, the **Afflino** web app built to the design
@@ -131,7 +150,12 @@ runs and the docker smoke test.
   `NEXT_PUBLIC_`, never sent to the browser, missing → TEST demo data with a
   badge), `WEB_PLACEMENT_ID` (uuid appended as `placement_id` so items carry
   their links), `NEXT_PUBLIC_API_BASE` (browser, build-time; default `/api`),
-  `NEXT_PUBLIC_SITE_NAME` (runtime). `/api/[...path]` is a per-request proxy to
+  `NEXT_PUBLIC_SITE_NAME` (runtime), `SITE_URL` (runtime; default
+  `https://afflino.com`: metadataBase, canonical, og:url, robots.txt, sitemap),
+  `SITE_INDEXING` (runtime; exactly `on` opens robots.txt + the sitemap,
+  anything else — the default — is pre-launch: `Disallow: /`, an empty sitemap,
+  noindex on every page, because the public copy is placeholder; web
+  ASSUMPTIONS.md items 74–77). `/api/[...path]` is a per-request proxy to
   `API_BASE` (not a `rewrites()` entry — those are frozen at build). Every
   catalogue fetch is `revalidate: 60`; pages are `force-dynamic`. The merchant CTA
   is `<a href="{link.url}" rel="sponsored nofollow noopener">` or a visibly
@@ -144,10 +168,17 @@ runs and the docker smoke test.
   `--with-demo-programme` adds the TEST programme, one look per property and the
   placements; under `NODE_ENV=production` the seed refuses both the flag and the
   example network file).
-- `docker/` — five Dockerfiles that build and boot (`docker/README.md`,
-  `docker/ASSUMPTIONS.md`); `docker-compose.prod.yml` for managed infra
-  (`docker-compose.yml` is dev Postgres + Redis only). Hosting is not chosen yet
-  (`docs/infrastructure-recommendation.md`).
+- `docker/` — five Dockerfiles that build and boot, and `docker/Caddyfile` for
+  the edge (`docker/README.md`, `docker/ASSUMPTIONS.md`).
+  `docker-compose.prod.yml` (project `afflino`: edge, api, redirect, workers,
+  web, migrate; only the edge publishes publicly, the rest on 127.0.0.1) +
+  `docker-compose.single-host.yml` (Postgres + Redis on the host) is the shape
+  for the owner's Linode; the prod file alone takes managed `DATABASE_URL` /
+  `REDIS_URL`; `docker-compose.edge-test.yml` = the edge on plain HTTP,
+  127.0.0.1:8088 (`docker-compose.yml` is dev Postgres + Redis only). The
+  owner chose Linode on 2026-09-29 (`docs/infrastructure-recommendation.md`);
+  the env contract is `.env.prod.example`, the procedure
+  `docs/runbooks/deploy.md`.
 - `docs/openapi.yaml` — OpenAPI 3.1 spec; `packages/api/test/openapi.test.ts`
   asserts the spec matches the registered routes in both directions. Keep in sync.
 
@@ -200,8 +231,10 @@ runs and the docker smoke test.
   10 residual risks, pentest scope input
 - `docs/pentest-scope.md`, `docs/runbooks/` (deploy, backup-restore, alerts,
   incidents), `docs/monitoring/alerts.yaml`
-- `docs/infrastructure-recommendation.md` — AWS ap-south-1 ≈₹6,700/mo (or DO
-  blr1 ≈₹5,200/mo) estimates; `docker-compose.prod.yml`, `docs/credential-setup.md`
+- `docs/infrastructure-recommendation.md` — the owner's Linode decision and the
+  single-host trade-offs (the earlier AWS ap-south-1 ≈₹6,700/mo / DO blr1
+  ≈₹5,200/mo estimates kept as record); `docker-compose.prod.yml`,
+  `docs/credential-setup.md`
 - `docker/README.md` — the five images, how they are built, the smoke test
 - `docs/vendor-rfp.md`, `docs/merchant-outreach.md`, `docs/counsel-briefing.md`
   — sendable docx versions in `~/workspace/your_files/paparazzi-gate-docs/`
@@ -219,9 +252,10 @@ runs and the docker smoke test.
   default TTL 8 h, `exp` enforced); production needs a real IdP + membership
   validation. The shop's `WEB_API_TOKEN` is that stub too.
 - No webhook signature verification on API ingress; no rate limiting (also not
-  on `/r/{token}`); no CSP; `localStorage` bearer token in the web app's
-  areas (`/login` writes it) — all flagged in the threat model as pre-launch
-  work.
+  on `/r/{token}`, nor at the edge); no CSP (the edge sets HSTS, nosniff,
+  Referrer-Policy and X-Frame-Options only); `localStorage` bearer token in
+  the web app's areas (`/login` writes it) — all flagged in the threat model
+  as pre-launch work.
 - The Afflino screens without a v1 endpoint are demo flows and say so: no
   OTP / identity provider, no KYC or PAN check, no platform OAuth, no brand
   self-serve offers or admin approval, no creator link listing or report
@@ -236,7 +270,8 @@ runs and the docker smoke test.
   multipart/object-storage ingestion.
 - Retention defaults are 365-day placeholders; counsel sets real windows.
 - "No cookies, hashed IPs" is an **implementation detail for counsel to assess**,
-  not proof of DPDP/ASCI compliance — never present it as such.
+  not proof of DPDP/ASCI compliance — never present it as such. The keyed
+  `ip_hash` is pseudonymous, not anonymous (`docs/threat-model.md` §4.11).
 - `pnpm audit` couldn't reach the npm endpoint from the sandbox; OSV showed zero
   known vulns on 171 pinned packages — re-run `pnpm audit` on CI.
 - The load soak has never run on real infrastructure (`docs/capacity-plan.md`).

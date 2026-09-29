@@ -18,3 +18,5 @@ export {
   type TrackedLinkRequest,
 } from './connectors.js';
 export * from './ledger.js';
+export * from './trust-proxy.js';
+export * from './request-log.js';

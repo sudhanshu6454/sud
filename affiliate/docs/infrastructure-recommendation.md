@@ -1,12 +1,58 @@
 # Infrastructure recommendation — pilot deployment
 
-**Status:** recommendation for user approval. Nothing is provisioned; no
-credentials exist. Dated estimates below are from public pricing pages
-checked **2026-09-23** — they are estimates, not quotes, and will drift.
+## Decision (2026-09-29): the owner has chosen Linode
 
-**Decision requested:** approve Option A (AWS, ap-south-1) or Option B
-(DigitalOcean, blr1), then provide account access + payment method so the
-account owner can provision.
+The owner has created a Linode for Afflino ("linode is ready", 2026-09-29),
+separate from the server that runs the owner's other sites. Its plan, region,
+image and address are not recorded in this repository; the owner's
+convention for their other servers is Ubuntu 24.04 in Mumbai (ap-west) on a
+4 GB plan, with ufw (OpenSSH, 80, 443), fail2ban, unattended-upgrades and
+Docker from get.docker.com. **Nothing has been deployed to it, or to
+afflino.com, from this repository.** DNS for afflino.com is at GoDaddy
+(nameservers `ns01.domaincontrol.com`); on 2026-09-29 its A records were
+GoDaddy's parking/forwarding addresses and `www` a CNAME to the apex — the A
+record must point at the Linode before the edge can obtain certificates.
+
+**The pilot shape is a single host:** `docker-compose.prod.yml` +
+`docker-compose.single-host.yml` — the edge (Caddy: TLS with automatic
+certificates for afflino.com and www.afflino.com only), api, redirect,
+workers, web and the migrate job, with Postgres 16 and Redis 7 (append-only)
+in containers on named volumes, no database port published, and only the
+edge listening publicly (README.md "Deploying afflino.com",
+`docs/runbooks/deploy.md`). Trade-offs of that choice, recorded rather than
+decided:
+
+- Postgres and Redis share the host with the app: a disk-full or host loss
+  takes the ledger and the queues with it. Backups are therefore not
+  optional (`docs/runbooks/backup-restore.md`: nightly `pg_dump` off the
+  host, and a restore drill before real money); the Redis append-only file
+  keeps queued jobs across a restart, not across a lost disk.
+- No automatic failover, no point-in-time recovery, no managed minor-version
+  patching of Postgres; restores are from the last dump (RPO = dump
+  interval).
+- Capacity: one host for everything; `docs/capacity-plan.md` still applies
+  (the soak has not run on real infrastructure). The only number measured:
+  in the 2026-09-29 local rehearsal the seven long-running containers used
+  about 166 MiB together at idle (one `docker stats` sample: postgres 41,
+  web 32, redirect 27, api 25, workers 25, edge 11, redis 5 MiB) — no load,
+  so it says nothing about peak; building the web image (`next build`) on the
+  host needs noticeably more for a minute or two.
+
+**Managed databases remain an option** — the "Redis: managed vs
+self-hosted" reasoning below still holds for a ledger: drop
+`docker-compose.single-host.yml` and set `DATABASE_URL` / `REDIS_URL` to a
+provider's managed Postgres 16 / Redis (private endpoint); nothing else in
+the stack changes. The AWS and DigitalOcean options below are kept as the
+record of the earlier recommendation, not as the plan.
+
+---
+
+**Status of the sections below:** the earlier recommendation, superseded by
+the decision above. Dated estimates are from public pricing pages checked
+**2026-09-23** — they are estimates, not quotes, and will drift.
+
+**Decision that was requested:** approve Option A (AWS, ap-south-1) or
+Option B (DigitalOcean, blr1).
 
 ## Recommendation: Option A — AWS, ap-south-1 (Mumbai)
 
@@ -133,7 +179,8 @@ Recorded here per repo convention; challenge any line before provisioning.
 - Single region, no CDN at pilot. Add CloudFront / a CDN when media traffic
   justifies it.
 - TLS terminates at the ALB (ACM certificate, free); services listen on
-  plain HTTP inside the VPC / private network.
+  plain HTTP inside the VPC / private network. (Single host on Linode: TLS
+  terminates at the edge container instead, `docker/Caddyfile`.)
 - Web (Next.js) is served as a containerised `next start` behind the same
   ALB; no separate static hosting at pilot.
 - Backups are tested: a restore drill is part of the pre-launch checklist in

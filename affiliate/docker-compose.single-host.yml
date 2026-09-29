@@ -1,0 +1,97 @@
+# Single-host override for docker-compose.prod.yml: Postgres 16 and Redis 7
+# run on the same machine as the services, as the pilot on the owner's Linode
+# does. Always used together with the production file:
+#
+#   docker compose -f docker-compose.prod.yml -f docker-compose.single-host.yml up -d --build
+#
+# Adds `postgres` (postgres:16-alpine) and `redis` (redis:7-alpine, append-only
+# file on), each with a named volume and a healthcheck and NO published port:
+# only the services on the compose network reach them. Points DATABASE_URL and
+# REDIS_URL of api, redirect, workers and migrate at them (the values from the
+# environment are ignored) and makes each of those wait for healthy databases.
+#
+# Required: POSTGRES_PASSWORD (a secret; hex or other URL-safe characters only,
+# since it is written into the connection string: `openssl rand -hex 32`).
+# Optional: POSTGRES_USER / POSTGRES_DB (default afflino / afflino). The
+# volumes pgdata and redisdata hold the only copy of the data on this host:
+# `docker compose down -v` deletes them, and backups are
+# docs/runbooks/backup-restore.md. Managed databases stay an option
+# (docs/infrastructure-recommendation.md): drop this file and set DATABASE_URL
+# and REDIS_URL instead.
+
+x-single-host-databases: &databases
+  postgres:
+    condition: service_healthy
+  redis:
+    condition: service_healthy
+
+x-single-host-urls: &urls
+  DATABASE_URL: &database_url postgresql://${POSTGRES_USER:-afflino}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required with docker-compose.single-host.yml (openssl rand -hex 32)}@postgres:5432/${POSTGRES_DB:-afflino}
+  REDIS_URL: redis://redis:6379
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-afflino}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required with docker-compose.single-host.yml (openssl rand -hex 32)}
+      POSTGRES_DB: ${POSTGRES_DB:-afflino}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  redis:
+    image: redis:7-alpine
+    # Append-only file: BullMQ jobs (clicks, provider events) survive a restart.
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  migrate:
+    environment:
+      DATABASE_URL: *database_url
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    environment:
+      <<: *urls
+    depends_on: *databases
+
+  redirect:
+    environment:
+      <<: *urls
+    depends_on: *databases
+
+  workers:
+    environment:
+      <<: *urls
+    depends_on: *databases
+
+volumes:
+  pgdata:
+  redisdata:

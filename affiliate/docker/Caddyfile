@@ -1,0 +1,98 @@
+# Afflino edge (Caddy 2, image caddy:2-alpine): the ONLY public entry to the
+# stack. docker-compose.prod.yml runs it as the `edge` service, publishes
+# 80/tcp, 443/tcp and 443/udp (HTTP/3), keeps certificates in the caddy_data
+# volume, and sets the three variables below; api, redirect and web publish
+# only on 127.0.0.1 and are reached here over the compose network.
+#
+#   SITE_HOST     the public host (compose default afflino.com)
+#   ACME_EMAIL    optional ACME account email; empty = register without one
+#   EDGE_ADDRESS  the site address. Production (compose default):
+#                 "${SITE_HOST}, www.${SITE_HOST}" = HTTPS with automatic
+#                 certificates for exactly those two names (no on-demand TLS,
+#                 no wildcard, nothing for other hosts). Plain-HTTP test mode
+#                 (docker-compose.edge-test.yml): ":8088" = HTTP on port 8088,
+#                 any Host, no certificates.
+#
+# Routing:
+#   www.${SITE_HOST}/<path>?<query>  → 301 to https://${SITE_HOST}/<path>?<query>
+#   /r/*                             → redirect:3001 (the click service)
+#   everything else                  → web:3000 (the Next.js app; it serves
+#                                      /api/* as its same-origin proxy to the
+#                                      API, so the API itself is not public;
+#                                      provider webhooks and payout callbacks
+#                                      use https://${SITE_HOST}/api/v1/...)
+#
+# Client address: with no `trusted_proxies`, Caddy trusts no client and
+# REPLACES any client-supplied X-Forwarded-For with the address it saw (its
+# default; asserted end to end in docker/README.md). X-Real-IP is overwritten
+# with the same address and Forwarded is removed, so no header a shopper
+# sends can choose the address the redirect hashes into clicks.context.ip_hash
+# (api and redirect run with TRUST_PROXY=loopback,uniquelocal, i.e. they trust
+# this proxy on the compose network and nothing else).
+#
+# Logs: no access log is configured (Caddy writes none unless asked), and the
+# default log — startup, certificates, errors — drops the client address and
+# the request headers from every entry. Security headers: HSTS (one year, no
+# includeSubDomains, no preload), nosniff, Referrer-Policy
+# strict-origin-when-cross-origin, X-Frame-Options DENY, no Server, Via or
+# X-Powered-By header. No Content-Security-Policy yet (docs/threat-model.md,
+# open item).
+{
+	email "{$ACME_EMAIL}"
+
+	log default {
+		output stderr
+		format filter {
+			wrap json
+			fields {
+				request>remote_ip delete
+				request>remote_port delete
+				request>client_ip delete
+				request>headers delete
+			}
+		}
+	}
+
+	servers {
+		timeouts {
+			read_header 10s
+		}
+	}
+}
+
+(proxy_headers) {
+	# X-Forwarded-For is replaced by Caddy itself (see the header above).
+	header_up X-Real-IP {remote_host}
+	header_up -Forwarded
+}
+
+{$EDGE_ADDRESS} {
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "DENY"
+		-Server
+		-Via
+		-X-Powered-By
+	}
+
+	@www host www.{$SITE_HOST}
+	redir @www https://{$SITE_HOST}{uri} permanent
+
+	handle /r/* {
+		reverse_proxy redirect:3001 {
+			import proxy_headers
+		}
+	}
+
+	handle {
+		# The web proxy buffers request bodies; the API itself accepts 1 MiB.
+		request_body {
+			max_size 4MB
+		}
+		reverse_proxy web:3000 {
+			import proxy_headers
+		}
+	}
+}
