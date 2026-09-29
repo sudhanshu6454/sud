@@ -211,7 +211,10 @@ it saw; `X-Real-IP` is overwritten with the same address and `Forwarded` is
 removed. api and redirect run with `TRUST_PROXY=loopback,uniquelocal`, so the
 redirect hashes the address the edge saw and nothing a shopper sends. No
 access log is configured; the default log (startup, certificates, errors)
-drops `remote_ip`, `remote_port`, `client_ip` and the request headers.
+drops `remote_ip`, `remote_port`, `client_ip` and the request headers
+(checked 2026-09-29: with no upstream, a request carrying a spoofed
+`X-Forwarded-For` and a marker user-agent gave a 502 whose error entry holds
+only `proto`, `method`, `host` and `uri` — no address, no header).
 
 Client addresses and Docker: a connection Docker forwards through its
 userland proxy reaches Caddy from the compose network's gateway address,
@@ -268,7 +271,7 @@ docker exec pz-db psql -U paparazzi -d paparazzi -tAc "select count(*) from clic
 python3 -c 'import hmac,hashlib,sys; k,h,peer,spoof=sys.argv[1:]; f=lambda ip: hmac.new(k.encode(),ip.encode(),hashlib.sha256).hexdigest(); print("ip_hash is HMAC(edge peer %s): %s; is HMAC(spoofed %s): %s; is plain sha256(peer): %s" % (peer, h==f(peer), spoof, h==f(spoof), h==hashlib.sha256(peer.encode()).hexdigest()))' test-ip-hash-key-0123456789abcdef "$(docker exec pz-db psql -U paparazzi -d paparazzi -tAc "select context->>'ip_hash' from clicks order by occurred_at desc limit 1")" "$(docker network inspect pz-test -f '{{range .IPAM.Config}}{{.Gateway}}{{end}}')" 203.0.113.99
 docker logs pz-edge 2>&1 | grep -c "$(docker network inspect pz-test -f '{{range .IPAM.Config}}{{.Gateway}}{{end}}')\|203.0.113.99"
 sleep 8; docker logs pz-workers 2>&1 | grep -o '"message":"[^"]*"' | sort -u
-docker rm -f pz-edge pz-web pz-workers pz-redirect pz-api pz-redis pz-db && docker network rm pz-test && rm -f seed-network.json
+docker rm -f -v pz-edge pz-web pz-workers pz-redirect pz-api pz-redis pz-db && docker network rm pz-test && rm -f seed-network.json
 ```
 
 Observed on the last run (2026-09-29, verbatim, with `paparazzi/api:test`,
@@ -308,7 +311,7 @@ Observed on the last run (2026-09-29, verbatim, with `paparazzi/api:test`,
 - Edge log lines naming the peer or the spoofed address: `0`.
 - workers log: `workers started`, `outbox relay started`, `retention repeat
   scheduled`, `outbox batch published`, `click.observed`.
-- The last line removed the seven containers and the network.
+- The last line removed the seven containers with their anonymous volumes (`-v`: the Postgres, Redis and Caddy images declare volumes; before 2026-09-29 the line left them behind) and the network.
 
 The sandbox that ran this build cannot reach the npm registry without an extra
 CA, so the builds were run with `--build-arg NODE_IMAGE=<node:22-alpine plus
