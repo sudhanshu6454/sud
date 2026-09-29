@@ -7,6 +7,14 @@ just an ops chore.
 
 Scripts: `scripts/backup.sh` (take + verify + manifest) and
 `scripts/restore.sh` (restore drill into a scratch DB + validation).
+**On the single-host Linode** (Postgres in a container, no client on the
+host) the scripts are `deploy/linode/backup.sh` (daily systemd timer
+`afflino-backup.timer` at 02:30 UTC, plain `pg_dump` inside the postgres
+container, gzip, 0600, 14 kept in `/var/backups/afflino`) and
+`deploy/linode/restore.sh` (a restore check into the scratch database
+`afflino_restore_check` with the ledger-balance check; `--replace-live`
+replaces the live database after a typed confirmation) —
+`docs/runbooks/deploy.md` §5.
 Assumptions and open items: [scripts/ASSUMPTIONS.md](../../scripts/ASSUMPTIONS.md).
 
 ## Owner

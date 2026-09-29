@@ -185,19 +185,27 @@ the JSON so the host needs no node outside the containers.)
 
 `docker-compose.prod.yml` runs `caddy:2-alpine` as the `edge` service with
 `./docker/Caddyfile` mounted at `/etc/caddy/Caddyfile` and the volumes
-`caddy_data` (certificates, ACME account) and `caddy_config`. It publishes
-80/tcp, 443/tcp and 443/udp (HTTP/3); api (3000), redirect (3001) and web
-(3002) publish on 127.0.0.1 only. Environment (set by compose):
+`caddy_data` (certificates, ACME account) and `caddy_config`, with **host
+networking** (`network_mode: host`): Caddy itself listens on the server's
+80/tcp, 443/tcp and 443/udp (HTTP/3), IPv4 and IPv6, and reaches redirect
+and web on their 127.0.0.1 ports; api (3000), redirect (3001) and web (3002)
+publish on 127.0.0.1 only. Its admin API is off (with host networking it
+would listen on the server's localhost:2019; a changed Caddyfile is applied
+by restarting the edge, which the Linode installer does). Environment (set
+by compose):
 
 | Var | Compose value | Meaning |
 |---|---|---|
 | `SITE_HOST` | `${SITE_HOST:-afflino.com}` | the apex host; `www.<SITE_HOST>` redirects to it |
 | `ACME_EMAIL` | `${ACME_EMAIL:-}` | optional ACME account email; empty = none |
-| `EDGE_ADDRESS` | `<SITE_HOST>, www.<SITE_HOST>` | the site address: HTTPS with automatic certificates for exactly those two names; `docker-compose.edge-test.yml` sets `:8088` (plain HTTP, any Host, no certificates, published on 127.0.0.1:8088 only) |
+| `EDGE_ADDRESS` | `<SITE_HOST>, www.<SITE_HOST>` | the site address: HTTPS with automatic certificates for exactly those two names; `docker-compose.edge-test.yml` sets `:8088` (plain HTTP, any Host, no certificates) |
+| `EDGE_BIND` | unset | test mode only: `docker-compose.edge-test.yml` sets `bind 127.0.0.1`, so the test edge listens on 127.0.0.1:8088 and nowhere else; unset = every interface |
+| `REDIRECT_UPSTREAM` | `127.0.0.1:3001` | the click service; the Caddyfile's default `redirect:3001` serves an edge on the compose network (the smoke test below) |
+| `WEB_UPSTREAM` | `127.0.0.1:3002` | the web app; default `web:3000` |
 
 Routes: `www.<SITE_HOST>/<path>?<query>` → `301` to
-`https://<SITE_HOST>/<path>?<query>`; `/r/*` → `redirect:3001`; everything
-else → `web:3000` (the web serves `/api/*` as its same-origin proxy to the
+`https://<SITE_HOST>/<path>?<query>`; `/r/*` → the redirect; everything
+else → the web (the web serves `/api/*` as its same-origin proxy to the
 API, so provider webhooks and payout callbacks are
 `https://<SITE_HOST>/api/v1/...`; request bodies above 4 MB are refused at
 the edge with 413). Every response: `Strict-Transport-Security:
@@ -217,12 +225,18 @@ drops `remote_ip`, `remote_port`, `client_ip` and the request headers
 only `proto`, `method`, `host` and `uri` — no address, no header).
 
 Client addresses and Docker: a connection Docker forwards through its
-userland proxy reaches Caddy from the compose network's gateway address,
-not from the client. That is the case for host-local curls to
-`127.0.0.1:8088` (the smoke test below relies on it) and for IPv6 clients
-when the compose network has no IPv6; IPv4 clients reaching a published port
-from outside keep their address (iptables DNAT). afflino.com has no AAAA
-record; do not add one before the edge sees real IPv6 client addresses.
+userland proxy reaches the container from the compose network's gateway
+address, not from the client — the case for host-local curls to a published
+port and for IPv6 clients on an IPv4-only compose network. That is why the
+production edge uses host networking: Caddy owns the server's sockets and
+sees every client's own address, IPv4 and IPv6, so afflino.com can have an
+AAAA record. The redirect and api then see the edge (via their 127.0.0.1
+ports) from the gateway address, a private peer `TRUST_PROXY` trusts, and
+take the client's address from the `X-Forwarded-For` Caddy wrote. The smoke
+test below still runs the edge on its own network (`pz-test`, published
+127.0.0.1:8088), so there the stored hash is the gateway's; the Linode
+installer's rehearsal (`deploy/linode/README.md`) used the host-networked
+edge and stored HMAC(key, 127.0.0.1), the address the edge really saw.
 
 ## Smoke test (what was verified, 2026-09-29; re-run with the edge)
 
@@ -322,7 +336,8 @@ themselves contain no proxy or CA settings.
 
 The same stack as the Linode, with the edge on 127.0.0.1:8088 instead of
 80/443 (`docker-compose.edge-test.yml`), under a throwaway project name. See
-`docs/runbooks/deploy.md` §1 for the commands and what was observed.
+`docs/runbooks/deploy.md` §1R for the commands and what was observed, and
+`deploy/linode/README.md` for the installer run the same way.
 
 ## Sizes (docker image ls, containerd snapshotter; `node:22-alpine` alone reports 238 MB)
 

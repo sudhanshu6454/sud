@@ -176,7 +176,7 @@ the one known driver difference.
 
 ## 2026-09-29 — standalone app
 
-19. **Separated from the Marketing Fleet on 2026-09-29: `db/seed-fleet.ts` became `db/seed-network.ts`.**
+19. **Standalone since 2026-09-29: the seed became `db/seed-network.ts`.**
     History, not instructions. The seed no longer reads another repository's site list; it
     reads a network file (`db/network.example.yaml` by default, `--network` / `NETWORK_FILE`
     for the operator's own) of `key`, `name`, `platform` (instagram | youtube | snapchat |

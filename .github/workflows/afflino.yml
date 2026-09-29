@@ -56,10 +56,15 @@ jobs:
       # the same money loop on a scratch database created on the CI Postgres and dropped at exit
       - run: DEMO_TARGET=postgres ./packages/api/node_modules/.bin/tsx scripts/demo-money-loop.ts
       # the production compose files interpolate with only their required variables
-      # (managed databases; single host; the plain-HTTP edge rehearsal), and the edge's
-      # Caddyfile is valid in both of its modes (HTTPS for the two hosts; plain HTTP)
+      # (managed databases; single host, as the Linode installer runs it; the plain-HTTP
+      # edge rehearsal), and the edge's Caddyfile is valid in both of its modes (HTTPS for
+      # the two hosts; plain HTTP on 127.0.0.1:8088), with the host-networked upstreams
       - run: JWT_SECRET=ci STUB_WEBHOOK_SECRET=ci docker compose -f docker-compose.prod.yml config -q
       - run: JWT_SECRET=ci STUB_WEBHOOK_SECRET=ci POSTGRES_PASSWORD=ci docker compose -f docker-compose.prod.yml -f docker-compose.single-host.yml config -q
       - run: JWT_SECRET=ci STUB_WEBHOOK_SECRET=ci POSTGRES_PASSWORD=ci docker compose -f docker-compose.prod.yml -f docker-compose.single-host.yml -f docker-compose.edge-test.yml config -q
-      - run: docker run --rm -v "$PWD/docker/Caddyfile:/etc/caddy/Caddyfile:ro" -e SITE_HOST=afflino.com -e ACME_EMAIL= -e "EDGE_ADDRESS=afflino.com, www.afflino.com" caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
-      - run: docker run --rm -v "$PWD/docker/Caddyfile:/etc/caddy/Caddyfile:ro" -e SITE_HOST=afflino.com -e ACME_EMAIL= -e EDGE_ADDRESS=:8088 caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+      - run: docker run --rm -v "$PWD/docker/Caddyfile:/etc/caddy/Caddyfile:ro" -e SITE_HOST=afflino.com -e ACME_EMAIL= -e "EDGE_ADDRESS=afflino.com, www.afflino.com" -e REDIRECT_UPSTREAM=127.0.0.1:3001 -e WEB_UPSTREAM=127.0.0.1:3002 caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+      - run: docker run --rm -v "$PWD/docker/Caddyfile:/etc/caddy/Caddyfile:ro" -e SITE_HOST=afflino.com -e ACME_EMAIL= -e EDGE_ADDRESS=:8088 -e "EDGE_BIND=bind 127.0.0.1" -e REDIRECT_UPSTREAM=127.0.0.1:3001 -e WEB_UPSTREAM=127.0.0.1:3002 caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+      # the Linode installer and its helpers (deploy/linode/): syntax and ShellCheck
+      # (preinstalled on ubuntu-latest runners)
+      - run: for f in deploy/linode/*.sh; do bash -n "$f"; done
+      - run: shellcheck --version && shellcheck deploy/linode/*.sh

@@ -322,12 +322,15 @@ HMAC uses `route_signature` — **dev-grade: reuses `JWT_SECRET`**
     per-address fraud checks work). Key custody (who holds it, where it is
     stored), rotation (a new key breaks comparison with older rows) and
     whether a hashed address is personal data under DPDP are **counsel
-    items**, not claims (docs/counsel-briefing.md). Deployment caveat: Docker
+    items**, not claims (docs/counsel-briefing.md). Deployment note: Docker
     rewrites the source address of connections it forwards through its
     userland proxy (IPv6 to an IPv4-only compose network, hairpin
-    connections), so every such client hashes to the network gateway; the
-    domain has no AAAA record, and one must not be added until the edge
-    sees real IPv6 client addresses.
+    connections), so every such client would hash to the network gateway;
+    the production edge therefore runs with host networking
+    (`docker/ASSUMPTIONS.md` item 19) and sees each client's own IPv4 or
+    IPv6 address, which is what allows the AAAA record. (Verified for IPv4
+    in the sandbox; IPv6 follows from the edge owning the socket and is not
+    tested there.)
 
 ## 5. Proposed pentest scope
 

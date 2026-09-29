@@ -2,15 +2,14 @@
 # Afflino (afflino.com): install or update on the owner's Linode, one command.
 #
 # Run as root on a fresh Ubuntu 24.04 / 22.04 or Debian 12 Linode dedicated to
-# Afflino (not the Marketing Fleet's server):
+# Afflino:
 #
 #   bash <(curl -fsSL https://raw.githubusercontent.com/sudhanshu6454/sud/refs/heads/claude/nifty-pasteur-flrulw/affiliate/deploy/linode/install.sh)
 #
 # The first run installs; every later run of the same line updates (it is
 # idempotent). What it does, in order:
-#   1. Preflight: root; a supported OS; refuses the fleet's server
-#      (/opt/marketing-fleet) and ports 80/443 held by anything but Afflino's
-#      edge; warns under 2 GB of RAM and adds a 2 GB swapfile under 4 GB of
+#   1. Preflight: root; a supported OS; refuses ports 80/443 held by
+#      anything but Afflino's edge; warns under 2 GB of RAM and adds a 2 GB swapfile under 4 GB of
 #      RAM when there is less than 1 GB of swap (the web image build needs
 #      the memory; Linode images ship a 512 MB swap disk).
 #   2. System: apt packages, Docker (get.docker.com, only when missing),
@@ -93,7 +92,7 @@ main() {
   info() { printf '   %s\n' "$*"; }
   warn() { printf '   WARNING: %s\n' "$*" >&2; }
   die()  { printf '\nSTOPPED: %s\n' "$*" >&2; exit 1; }
-  # shellcheck disable=SC2329 # called by the ERR trap below
+  # shellcheck disable=SC2317,SC2329 # called by the ERR trap below
   on_error() {
     local rc="$1" line="$2"
     printf '\nSTOPPED: install.sh failed at line %s (exit %s). Nothing secret was printed; re-running is safe.\n' "$line" "$rc" >&2
@@ -203,15 +202,6 @@ PY
     ubuntu:24.04|ubuntu:22.04|debian:12) info "OS: $OS_NAME" ;;
     *) die "unsupported OS '${OS_NAME:-unknown}'. Afflino's installer supports Ubuntu 24.04 (recommended), Ubuntu 22.04 and Debian 12. Rebuild the Linode with Ubuntu 24.04 LTS." ;;
   esac
-
-  if [ -e /opt/marketing-fleet ]; then
-    die "/opt/marketing-fleet exists: this looks like the Marketing Fleet's server. Afflino runs on its own Linode and must not share this one (ports 80/443, Docker, backups). Run this line on the Afflino Linode instead."
-  fi
-  if have docker && docker info >/dev/null 2>&1; then
-    if [ -n "$(docker ps -aq --filter label=com.docker.compose.project=marketing-fleet 2>/dev/null)" ]; then
-      die "containers of the compose project 'marketing-fleet' exist on this server: this is the Marketing Fleet's server. Afflino runs on its own Linode."
-    fi
-  fi
 
   # Ports: free, or already Afflino's own (the project's containers exist).
   local ours=""

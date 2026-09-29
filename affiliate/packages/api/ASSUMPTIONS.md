@@ -350,7 +350,7 @@ other agents) — flag anything that looks wrong to the owning agent.
 
 ## Standalone app (2026-09-29)
 
-- **Separated from the Marketing Fleet on 2026-09-29** (history, not instructions). No API code,
+- **Standalone since 2026-09-29** (history, not instructions). No API code,
   route or migration changed; the one-publisher org named in the review fixes above is now the
   in-house network that `db/seed-network.ts` seeds from a network file. Its parser has a unit test
   here (`test/seed-network.test.ts`) because this package owns the `yaml` dependency the seed borrows.

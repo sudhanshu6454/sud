@@ -49,7 +49,8 @@ main() {
   tmp="$dir/.afflino-$ts-$kind.sql.gz.partial"
   trap 'rm -f "$tmp"' EXIT
 
-  docker exec "$cid" sh -c 'exec pg_dump --no-password -U "$POSTGRES_USER" -d "$POSTGRES_DB"' | gzip -6 >"$tmp"
+  docker exec "$cid" sh -c 'exec pg_dump --no-password -U "$POSTGRES_USER" -d "$POSTGRES_DB"' | gzip -6 >"$tmp" \
+    || die "pg_dump failed (its error is above); nothing kept"
   gzip -t "$tmp" || die "the compressed dump does not verify; nothing kept"
   gzip -dc "$tmp" | tail -n 5 | grep -q 'PostgreSQL database dump complete' \
     || die "the dump is incomplete (no closing line); nothing kept"

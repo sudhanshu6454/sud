@@ -9,9 +9,17 @@ convention for their other servers is Ubuntu 24.04 in Mumbai (ap-west) on a
 4 GB plan, with ufw (OpenSSH, 80, 443), fail2ban, unattended-upgrades and
 Docker from get.docker.com. **Nothing has been deployed to it, or to
 afflino.com, from this repository.** DNS for afflino.com is at GoDaddy
-(nameservers `ns01.domaincontrol.com`); on 2026-09-29 its A records were
-GoDaddy's parking/forwarding addresses and `www` a CNAME to the apex — the A
-record must point at the Linode before the edge can obtain certificates.
+(nameservers `ns01.domaincontrol.com`); at 15:19 UTC on 2026-09-29 its A
+records were GoDaddy's parking/forwarding addresses, at 16:34 UTC the single
+A record 172.105.52.150 (the Afflino Linode, per the owner; no
+AAAA), `www` a CNAME to the apex both times — `A @` (and `AAAA @`) must point
+at the Afflino Linode before the edge can obtain certificates. **One command
+installs and updates the server**: `deploy/linode/install.sh` (README.md
+"Deploying afflino.com on Linode", `docs/runbooks/deploy.md` §1), which
+follows those conventions (ufw OpenSSH / 80 / 443, fail2ban, unattended
+upgrades, Docker from get.docker.com) and adds a daily database backup.
+Optional owner actions in Cloud Manager: a Cloud Firewall (TCP 22 / 80 /
+443, UDP 443) and Linode Backups (`docs/runbooks/deploy.md` §6).
 
 **The pilot shape is a single host:** `docker-compose.prod.yml` +
 `docker-compose.single-host.yml` — the edge (Caddy: TLS with automatic

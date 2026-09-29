@@ -118,13 +118,80 @@ loop on a scratch database `paparazzi_demo_<8 hex>` created on the
 51 PASS, 0 FAIL, 0 scratch databases left). Same assertions as pg-mem, no
 shims ([`db/README.md`](db/README.md)).
 
-## Deploying afflino.com
+## Deploying afflino.com on Linode
 
 **Status (2026-09-29): the owner has created a Linode for Afflino; nothing
-has been deployed to it or to afflino.com from this repository.** What
-follows is the deploy shape, rehearsed end to end on one machine with the
-edge in plain-HTTP mode (below). The step-by-step procedure, rollback, the
-kill-switch drill and backups are in
+has been deployed to it or to afflino.com from this repository.** The Linode is
+172.105.52.150 (the owner's word); at 16:34 UTC that day afflino.com already
+resolved to it, with nothing answering on port 80 there yet.
+
+**The one command**, as root on a fresh Ubuntu 24.04 Linode dedicated to
+Afflino (log in with `ssh root@afflino.com`, or Cloud Manager → the Linode →
+Launch LISH Console):
+
+```sh
+bash <(curl -fsSL https://raw.githubusercontent.com/sudhanshu6454/sud/refs/heads/claude/nifty-pasteur-flrulw/affiliate/deploy/linode/install.sh)
+```
+
+It checks the server (root, Ubuntu 24.04 / 22.04 or Debian 12, ports
+80/443 free, memory: a 2 GB swapfile on plans under
+4 GB), installs the packages, Docker (get.docker.com), ufw (OpenSSH first,
+then 80/tcp, 443/tcp, 443/udp), fail2ban and automatic security updates,
+clones the branch into `/opt/afflino`, writes `/etc/afflino/afflino.env`
+(root, 0600) with every secret generated and never printed — the only
+question is an optional email for Let's Encrypt — starts the stack, waits
+for it to be healthy, sets up a daily database backup and prints the
+status: the server's IPv4 / IPv6, whether afflino.com and www.afflino.com
+point at it, and the exact DNS records to set if not
+([`deploy/linode/`](deploy/linode/README.md),
+[`docs/runbooks/deploy.md`](docs/runbooks/deploy.md) §1).
+
+**DNS at GoDaddy** (My Products → afflino.com → DNS → DNS Records): `A @` =
+the Linode's IPv4 (delete every other `A @`, e.g. GoDaddy's parking
+3.33.130.190 and 15.197.148.33), `AAAA @` = the Linode's IPv6, keep `CNAME
+www` → `@`, and delete GoDaddy domain forwarding if it is set up. With
+GoDaddy API access (accounts with 10+ domains or a Discount Domain Club
+plan) `bash /opt/afflino/affiliate/deploy/linode/godaddy-dns.sh` sets them
+instead (hidden prompts; the keys are never stored). Certificates for
+afflino.com and www.afflino.com are then issued automatically; watch with
+`docker logs -f afflino-edge-1 2>&1 | grep -i certificate`.
+
+| To | Run as root on the Linode (one line each) |
+|---|---|
+| Update (re-run: keeps the secrets, backs up first when something changed, changes nothing when nothing did) | `bash <(curl -fsSL https://raw.githubusercontent.com/sudhanshu6454/sud/refs/heads/claude/nifty-pasteur-flrulw/affiliate/deploy/linode/install.sh)` |
+| Open the site to search engines, after the owner confirmed `packages/web/lib/site-copy.ts` | `sed -i 's/^SITE_INDEXING=.*/SITE_INDEXING=on/' /etc/afflino/afflino.env && bash <(curl -fsSL https://raw.githubusercontent.com/sudhanshu6454/sud/refs/heads/claude/nifty-pasteur-flrulw/affiliate/deploy/linode/install.sh)` |
+| Health | `curl -s http://127.0.0.1:3000/healthz; curl -s http://127.0.0.1:3001/healthz; curl -s http://127.0.0.1:3002/api/healthz; curl -s https://afflino.com/api/healthz; echo` |
+| Services | `cd /opt/afflino/affiliate && docker compose --env-file /etc/afflino/afflino.env -f docker-compose.prod.yml -f docker-compose.single-host.yml ps` |
+| Logs | `cd /opt/afflino/affiliate && docker compose --env-file /etc/afflino/afflino.env -f docker-compose.prod.yml -f docker-compose.single-host.yml logs -f --since 15m` |
+| Back up now (daily at 02:30 UTC anyway; 14 kept in `/var/backups/afflino`) | `bash /opt/afflino/affiliate/deploy/linode/backup.sh manual` |
+| Check the newest backup restores (scratch database; live untouched) | `bash /opt/afflino/affiliate/deploy/linode/restore.sh` |
+| Replace the live database with the newest backup (asks you to type REPLACE) | `bash /opt/afflino/affiliate/deploy/linode/restore.sh --replace-live` |
+| Copy the backups off the server (on your own computer) | `scp -r root@afflino.com:/var/backups/afflino .` |
+
+**Owner actions in Linode Cloud Manager** (optional, recommended): a Cloud
+Firewall on the Linode (inbound Drop; accept TCP 22, 80, 443 and UDP 443;
+outbound Accept), and Linode Backups (whole-disk snapshots, including the
+environment file). **Plan**: 4 GB (the owner's convention); sizing for
+Afflino's real traffic is unmeasured — about 166 MiB for the whole stack at
+idle, the web image build needs more for a minute or two, and the load soak
+has never run ([`docs/capacity-plan.md`](docs/capacity-plan.md)).
+
+**What stays demo on the live site**: no merchant programme exists (the
+shop shows labelled TEST demo looks until a real network file and programme
+exist); sign-in is the JWT stub (`/login` takes a pasted token; no
+accounts, OTP or KYC); the payout rail is the stub; the public figures and
+legal pages are placeholders, hence `SITE_INDEXING=off`. Still open before
+real traffic: an identity provider, webhook signature verification, rate
+limiting, a CSP, monitoring, off-server backups and a restore drill on the
+server, the load soak and counsel's decisions
+([`docs/pilot-checklist.md`](docs/pilot-checklist.md),
+[`docs/runbooks/deploy.md`](docs/runbooks/deploy.md) §7).
+
+## Deploying afflino.com
+
+What the installer (above) deploys: the shape, rehearsed end to end on one
+machine with the edge in plain-HTTP mode (below). The step-by-step
+procedure, rollback, the kill-switch drill and backups are in
 [`docs/runbooks/deploy.md`](docs/runbooks/deploy.md).
 
 **Shape (single host, the pilot).** One compose project (`name: afflino`)
@@ -133,7 +200,7 @@ from [`docker-compose.prod.yml`](docker-compose.prod.yml) plus
 
 | Service | Image | Listens | Role |
 |---|---|---|---|
-| `edge` | `caddy:2-alpine` + [`docker/Caddyfile`](docker/Caddyfile) | **80, 443/tcp, 443/udp on all interfaces — the only public listener** | TLS with automatic certificates for `SITE_HOST` and `www.SITE_HOST` only (no on-demand TLS); `www` → 301 to the apex keeping path and query; `/r/*` → redirect; everything else → web; HSTS (no preload), nosniff, `strict-origin-when-cross-origin`, `X-Frame-Options: DENY`, no `Server` / `Via` / `X-Powered-By`; no CSP yet (open); overwrites client-supplied `X-Forwarded-For` / `X-Real-IP` / `Forwarded`; no access log |
+| `edge` | `caddy:2-alpine` + [`docker/Caddyfile`](docker/Caddyfile), host networking | **80, 443/tcp, 443/udp on all interfaces, IPv4 and IPv6 — the only public listener** (sees real client addresses; ufw applies) | TLS with automatic certificates for `SITE_HOST` and `www.SITE_HOST` only (no on-demand TLS); `www` → 301 to the apex keeping path and query; `/r/*` → redirect; everything else → web; HSTS (no preload), nosniff, `strict-origin-when-cross-origin`, `X-Frame-Options: DENY`, no `Server` / `Via` / `X-Powered-By`; no CSP yet (open); overwrites client-supplied `X-Forwarded-For` / `X-Real-IP` / `Forwarded`; no access log |
 | `web` | `paparazzi/web` | 127.0.0.1:3002 | the Afflino site, app areas and shop; serves `/api/*` as its same-origin proxy to the API, so the API is not public — provider webhooks and payout callbacks use `https://afflino.com/api/v1/...` |
 | `redirect` | `paparazzi/redirect` | 127.0.0.1:3001 | `GET /r/{token}` → 302 with `subid`, no cookies, keyed hash of the client address |
 | `api` | `paparazzi/api` | 127.0.0.1:3000 | the v1 API |
@@ -149,22 +216,25 @@ binds publicly). Managed databases remain an option: drop
 ([`docs/infrastructure-recommendation.md`](docs/infrastructure-recommendation.md)).
 [`docker-compose.edge-test.yml`](docker-compose.edge-test.yml) switches the
 edge to plain HTTP on 127.0.0.1:8088 for any Host (no certificates) to
-rehearse routing before DNS points at the server.
+rehearse routing before DNS points at the server. The edge reaches redirect
+and web on their 127.0.0.1 ports (`REDIRECT_UPSTREAM` / `WEB_UPSTREAM`), and
+its admin API is off.
 
-**The command line** (from `affiliate/`, with the environment file the
-Linode installer writes):
+**The command line** the installer runs (from `affiliate/`, with the
+environment file it writes; it adds `--remove-orphans` and
+`BUILDX_NO_DEFAULT_ATTESTATIONS=1`, see `deploy/linode/README.md`):
 
 ```sh
 docker compose --env-file /etc/afflino/afflino.env -f docker-compose.prod.yml -f docker-compose.single-host.yml up -d --build
 ```
 
-**First deploy** = that line alone (the site comes up with labelled TEST
-demo data and every page noindex), then the TEST network seed, the shop's
-placement and read-only token written into the environment file, `up -d
-web`, and the shop's links — the exact lines are
-[`docs/runbooks/deploy.md`](docs/runbooks/deploy.md) §1. DNS first: the
-`A` record of afflino.com (GoDaddy) must point at the Linode, with no AAAA
-record; `www` is already a CNAME to the apex.
+**First deploy** = the installer (the site comes up with labelled TEST
+demo data and every page noindex); optionally the TEST network seed, the
+shop's placement and read-only token written into the environment file,
+`up -d web`, and the shop's links, to exercise tracked links — the exact
+lines are [`docs/runbooks/deploy.md`](docs/runbooks/deploy.md) §1 step 6.
+DNS: `A @` and `AAAA @` of afflino.com (GoDaddy) point at the Linode; `www`
+stays a CNAME to the apex.
 
 **Environment contract** ([`.env.prod.example`](.env.prod.example) has each
 one with its comment). Required on the single host: `POSTGRES_PASSWORD`,
@@ -201,7 +271,9 @@ default or is optional.
 Fixed in the compose file, not read from the environment file:
 `NODE_ENV=production` (api, redirect, workers, web), `API_HOST`,
 `API_PORT`, `REDIRECT_PORT`, and the edge's `EDGE_ADDRESS`
-(`<SITE_HOST>, www.<SITE_HOST>`; `:8088` in the test override).
+(`<SITE_HOST>, www.<SITE_HOST>`; `:8088` in the test override, with
+`EDGE_BIND=bind 127.0.0.1`), `REDIRECT_UPSTREAM=127.0.0.1:3001` and
+`WEB_UPSTREAM=127.0.0.1:3002`.
 
 **The indexing gate.** `SITE_INDEXING=on` is the owner's switch to let
 search engines in: robots.txt then allows the public pages (the app areas,
@@ -213,10 +285,14 @@ the live, non-TEST looks. Until then (the default) robots.txt is
 fees, TDS figures and legal stubs (`packages/web/lib/site-copy.ts`) the
 owner has not confirmed. Flipping it is a restart of the web, not a rebuild.
 
-**Client addresses.** api and redirect trust `X-Forwarded-For` only from
-loopback and private peers (`TRUST_PROXY`, `packages/shared/src/trust-proxy.ts`),
-i.e. the edge on the compose network, and the edge replaces whatever a
-client sends. The redirect stores `ip_hash` = HMAC-SHA256(`IP_HASH_KEY`, the
+**Client addresses.** The edge runs with host networking, so the address
+it sees is the client's own, over IPv4 and IPv6 (a port Docker publishes
+would hand IPv6 clients to Caddy through Docker's userland proxy, from the
+compose network's gateway address; that is why the AAAA record waited for
+this). api and redirect trust `X-Forwarded-For` only from loopback and
+private peers (`TRUST_PROXY`, `packages/shared/src/trust-proxy.ts`), i.e.
+the edge, which reaches them from the compose network's gateway, and the
+edge replaces whatever a client sends. The redirect stores `ip_hash` = HMAC-SHA256(`IP_HASH_KEY`, the
 address the edge saw) — keyed so it cannot be reversed by enumerating IPv4
 addresses; without the key it falls back to the plain SHA-256 of before. No
 log carries the address (api and redirect log method, url and hostname; the
@@ -224,7 +300,11 @@ edge has no access log). A stable keyed hash is still pseudonymous data:
 what it is under DPDP, who holds the key and how long it is kept are counsel
 items ([`docs/threat-model.md`](docs/threat-model.md) §4.11), not claims.
 
-**Rehearsed on 2026-09-29** (this sandbox, images rebuilt from this tree,
+**Rehearsed on 2026-09-29** (with the edge still on the compose network;
+the host-networked edge and the installer were rehearsed afterwards, see
+[`deploy/linode/README.md`](deploy/linode/README.md) "What was checked":
+there the spoofed click's `ip_hash` was HMAC(`IP_HASH_KEY`, 127.0.0.1), the
+address the edge really saw) (this sandbox, images rebuilt from this tree,
 throwaway project, TEST secrets, prod + single-host + the plain-HTTP edge on
 127.0.0.1:8088, `Host: afflino.com`): every service up (migrate exited 0),
 only the edge on 8088 and api / redirect / web on 127.0.0.1; `/` 200 with
@@ -390,11 +470,21 @@ Full procedure, schedule, retention proposal, and the pilot-gate evidence
 checklist: [backup/restore runbook](docs/runbooks/backup-restore.md) ·
 [assumptions](scripts/ASSUMPTIONS.md).
 
+**On the single-host Linode** these two do not apply as-is (the server has
+no Postgres client and the database no published port):
+[`deploy/linode/backup.sh`](deploy/linode/backup.sh) and
+[`restore.sh`](deploy/linode/restore.sh) run `pg_dump` / `psql` inside the
+postgres container — a daily timer, gzip, 0600, 14 kept, and a restore
+check into a scratch database with the same ledger-balance check ("Deploying
+afflino.com on Linode" above, `docs/runbooks/deploy.md` §5).
+
 ## Infrastructure & deployment
 
 The owner has chosen **Linode** (2026-09-29) and created a server for
 Afflino; nothing has been deployed to it from this repository, and no real
-credentials exist here. The pilot shape is a single host — the edge (Caddy),
+credentials exist here. One command installs and updates it
+([`deploy/linode/install.sh`](deploy/linode/install.sh), "Deploying
+afflino.com on Linode" above). The pilot shape is a single host — the edge (Caddy),
 api, redirect, workers, web, migrate, Postgres 16 and Redis 7 in one compose
 project ("Deploying afflino.com" above,
 [docs/runbooks/deploy.md](docs/runbooks/deploy.md)); managed databases

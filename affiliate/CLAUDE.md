@@ -56,10 +56,26 @@ Everything here runs from this directory; nothing outside it is needed.
   the edge saw), the kill switch's atomicity on real Postgres, teardown clean
   (README.md "Deploying afflino.com", `docs/runbooks/deploy.md` §1R).
   **Nothing has been deployed to the owner's Linode or to afflino.com.**
+- **The Linode installer** (2026-09-29, `deploy/linode/`): `install.sh`
+  (one line, `bash <(curl -fsSL https://raw.githubusercontent.com/sudhanshu6454/sud/refs/heads/claude/nifty-pasteur-flrulw/affiliate/deploy/linode/install.sh)`,
+  install = update: preflight, system, sparse checkout `/opt/afflino`,
+  `/etc/afflino/afflino.env` 0600 with generated secrets, compose up,
+  health, DNS status, daily backup timer), `backup.sh` / `restore.sh`
+  (pg_dump / psql inside the postgres container; restore check with the
+  ledger-balance check), `godaddy-dns.sh` (optional, `A @` + `AAAA @`).
+  ShellCheck clean; rehearsed in the sandbox with its test-only settings
+  (first run creates the file and a healthy stack, a second run changes
+  nothing: same env-file hash, container and image ids), the system step
+  and the guards in an `ubuntu:24.04` container, the code step against the
+  public repository, `godaddy-dns.sh` against a local API stand-in
+  (`deploy/linode/README.md` "What was checked"). The edge now uses **host
+  networking** (sees real IPv4 and IPv6 client addresses, so afflino.com
+  gets an AAAA record; `docker/ASSUMPTIONS.md` item 19). Not run on the
+  real Linode; no real certificate, GoDaddy API call or IPv6 test.
 - The CI workflow `afflino` (`.github/workflows/afflino.yml`, runs on changes
   under `affiliate/`) runs the frozen install, typecheck, vitest, both demos, the
   web build and the real-Postgres migrate + seeds; no run has been observed from
-  this sandbox
+  this sandbox; it also runs ShellCheck on `deploy/linode/*.sh`
 
 ## Commands
 
@@ -171,14 +187,16 @@ runs and the docker smoke test.
 - `docker/` — five Dockerfiles that build and boot, and `docker/Caddyfile` for
   the edge (`docker/README.md`, `docker/ASSUMPTIONS.md`).
   `docker-compose.prod.yml` (project `afflino`: edge, api, redirect, workers,
-  web, migrate; only the edge publishes publicly, the rest on 127.0.0.1) +
+  web, migrate; only the edge listens publicly — host networking, reaching
+  redirect and web on 127.0.0.1:3001 / 3002 — the rest on 127.0.0.1) +
   `docker-compose.single-host.yml` (Postgres + Redis on the host) is the shape
   for the owner's Linode; the prod file alone takes managed `DATABASE_URL` /
   `REDIS_URL`; `docker-compose.edge-test.yml` = the edge on plain HTTP,
   127.0.0.1:8088 (`docker-compose.yml` is dev Postgres + Redis only). The
   owner chose Linode on 2026-09-29 (`docs/infrastructure-recommendation.md`);
   the env contract is `.env.prod.example`, the procedure
-  `docs/runbooks/deploy.md`.
+  `docs/runbooks/deploy.md`, the one-command install / update
+  `deploy/linode/install.sh` (`deploy/linode/README.md`).
 - `docs/openapi.yaml` — OpenAPI 3.1 spec; `packages/api/test/openapi.test.ts`
   asserts the spec matches the registered routes in both directions. Keep in sync.
 

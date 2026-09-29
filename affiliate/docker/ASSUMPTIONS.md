@@ -65,7 +65,7 @@
 
 ## 2026-09-29 — standalone app
 
-11. **Separated from the Marketing Fleet on 2026-09-29** (history, not instructions). The
+11. **Standalone since 2026-09-29** (history, not instructions). The
     Dockerfiles' build steps are unchanged (only comments changed): the migrate image ships
     `db/seed-network.ts` and `db/network.example.yaml` (`db/` is copied whole), the
     `migrate` service in `docker-compose.prod.yml` takes `NETWORK_FILE` and `WEB_HOST`
@@ -75,9 +75,9 @@
 ## 2026-09-29 — the edge and the single-host shape (afflino.com on a Linode)
 
 12. **The edge is the stock `caddy:2-alpine`**, not a built image: `docker/Caddyfile` is mounted
-    read-only, certificates live in the `caddy_data` volume. It is the only service publishing on
-    all interfaces (80, 443/tcp, 443/udp); api, redirect and web publish on 127.0.0.1 (Docker's
-    published ports bypass ufw). The image tag floats within Caddy 2 (the brief named
+    read-only, certificates live in the `caddy_data` volume. It is the only service listening on
+    all interfaces (80, 443/tcp, 443/udp; host networking since 2026-09-29, item 19); api,
+    redirect and web publish on 127.0.0.1 (Docker's published ports bypass ufw). The image tag floats within Caddy 2 (the brief named
     `caddy:2-alpine`); pin a minor (`caddy:2.11-alpine`) if a Caddy update ever needs holding
     back. Verified with Caddy v2.11.4.
 13. **Certificates only for `SITE_HOST` and `www.SITE_HOST`**: the site address is exactly those
@@ -85,17 +85,20 @@
     no certificate (TLS handshake refused, checked with Caddy's internal CA). `ACME_EMAIL` is
     optional (`email ""` in the Caddyfile = an ACME account without an email).
 14. **Plain-HTTP test mode** is a separate override (`docker-compose.edge-test.yml`,
-    `EDGE_ADDRESS=:8088`, ports `!override` to 127.0.0.1:8088 — needs Docker Compose 2.24.4 or
-    later) rather than variables on the production file, so the production ports cannot be
-    half-switched by a stray variable.
+    `EDGE_ADDRESS=:8088`, `EDGE_BIND=bind 127.0.0.1`: Caddy listens on 127.0.0.1:8088 and
+    nothing else) rather than variables on the production file, so the production listeners
+    cannot be half-switched by a stray variable. (Before host networking it overrode the
+    published ports with `!override`, which needed Docker Compose 2.24.4; no longer.)
+    `EDGE_BIND` carries the whole directive because Caddy has no "bind to the default" value:
+    unset, the line is empty and Caddy binds every interface.
 15. **X-Forwarded-For is Caddy's own** (it trusts no client, since `trusted_proxies` is unset, and
     replaces the header); an explicit `header_up X-Forwarded-For` would only add an
     "Unnecessary header_up" warning at every start. `X-Real-IP` is overwritten and `Forwarded`
     removed explicitly. Proven end to end by the spoofed-header check in README.md's smoke test.
 16. **Docker's userland proxy hides client addresses** for connections it forwards (host-local
-    curls, IPv6 clients on an IPv4-only compose network): Caddy then sees the network gateway.
-    Consequence recorded in `docs/threat-model.md` §4.11; no AAAA record for the domain until the
-    edge sees real IPv6 addresses (IPv6 on the compose network, or host networking for the edge).
+    curls, IPv6 clients on an IPv4-only compose network): a container behind a published port
+    then sees the network gateway. Resolved for the edge by item 19 (host networking), which is
+    what makes the AAAA record safe; still true of the smoke test's bridge-networked edge.
 17. **Single host**: `docker-compose.single-host.yml` adds `postgres:16-alpine` and
     `redis:7-alpine` (append-only), named volumes, no published ports, healthchecks, and points
     `DATABASE_URL` / `REDIS_URL` at them; `docker-compose.prod.yml` therefore interpolates
@@ -106,4 +109,24 @@
     `afflino_redisdata`, `afflino_caddy_data`, `afflino_caddy_config` wherever the checkout is.
 18. **Not set yet**: `cap_drop: [ALL]` / `no-new-privileges` on
     the node services, a CSP, rate limiting at the edge.
+19. **The edge uses host networking** (2026-09-29, with the Linode installer). Chosen over
+    enabling IPv6 on the compose network, which would need a ULA subnet, ip6tables NAT and IPv6
+    forwarding on the host (forwarding stops the kernel from accepting router advertisements,
+    and the Linode's IPv6 is SLAAC-configured): with host networking there is no NAT or proxy in
+    front of Caddy at all, ufw's rules apply to it, and nothing changes on the host's network
+    configuration. Costs: the edge reaches redirect and web through their 127.0.0.1 published
+    ports (Docker's proxy for loopback connections, one extra local hop per new upstream
+    connection; Caddy keeps upstream connections alive), and Caddy's admin API would have been
+    on the server's localhost, so it is off. Verified in the sandbox (IPv4 only; the sandbox
+    kernel has no IPv6): a spoofed click through the host-networked edge stored HMAC(key,
+    127.0.0.1), the address Caddy saw, not the gateway's. IPv6 behaviour follows from Caddy
+    owning the socket; it is not tested here.
+20. **Builds run with `BUILDX_NO_DEFAULT_ATTESTATIONS=1` in the Linode installer.** On Docker's
+    containerd image store (the default of a fresh Docker 29 install; this sandbox too) a
+    default build adds a provenance attestation that differs on every build, so an image built
+    from unchanged, fully cached layers still got a new id and compose recreated every service on
+    each `up -d --build` (observed in the sandbox: all five image ids changed, api / redirect /
+    workers / web recreated, with identical image configs). Without the attestation, a re-run on
+    an unchanged checkout keeps the same image ids and recreates nothing (checked). Running
+    compose by hand without the variable still works; it only recreates the services.
 

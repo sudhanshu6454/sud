@@ -12,11 +12,13 @@
 #   bash /opt/afflino/affiliate/deploy/linode/restore.sh --replace-live
 #       REPLACES the live database with the newest dump (or the file given
 #       after the flag). Asks you to type REPLACE on the terminal, takes a
-#       pre-restore backup first, stops api, redirect, workers and web (the
-#       edge stays up and answers 502 meanwhile), recreates the database from
-#       the dump, and starts them again. Everything written after the dump was
-#       taken is lost: use it for a lost or corrupted database, not to undo a
-#       release (docs/runbooks/deploy.md §2 and §3).
+#       pre-restore backup first, loads the dump into a staging database
+#       (a failed load stops here, the live database untouched), then stops
+#       api, redirect, workers and web for a few seconds (the edge answers
+#       502 meanwhile), swaps the staging database in, and starts them
+#       again. Everything written after the dump was taken is lost: use it
+#       for a lost or corrupted database, not to undo a release
+#       (docs/runbooks/deploy.md §2 and §3).
 #
 # Settings (the installer's defaults): AFFLINO_PROJECT=afflino,
 # AFFLINO_BACKUP_DIR=/var/backups/afflino. No password is needed or printed.
@@ -37,7 +39,7 @@ main() {
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --replace-live) mode=replace ;;
-      -h|--help) sed -n '2,23p' "${BASH_SOURCE[0]}"; exit 0 ;;
+      -h|--help) awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "${BASH_SOURCE[0]}"; exit 0 ;;
       -*) die "unknown option $1" ;;
       *) file="$1" ;;
     esac
@@ -105,29 +107,40 @@ main() {
   [ "$answer" = REPLACE ] || die "not confirmed; nothing changed"
 
   AFFLINO_PROJECT="$project" AFFLINO_BACKUP_DIR="$dir" bash "$here/backup.sh" pre-restore
+
+  # Load into a staging database first: if the load fails, the live
+  # database has not been touched.
+  local staging="afflino_restore_new"
+  [ "$live" != "$staging" ] || die "the live database is named $staging; refusing"
+  log "loading $file into the staging database $staging (the live database keeps running)"
+  pg postgres -c "DROP DATABASE IF EXISTS $staging" -c "CREATE DATABASE $staging" >/dev/null
+  if ! gzip -dc "$file" | pg "$staging" >/dev/null; then
+    pg postgres -c "DROP DATABASE IF EXISTS $staging" >/dev/null 2>&1 || true
+    die "the dump did not load (see the error above); the live database was not touched"
+  fi
+  log "loaded: $(pg "$staging" -tAc 'select count(*) from schema_migrations') migration(s) recorded"
+
   local svc id
   ids=()
   for svc in web api redirect workers; do
     id="$(docker ps -q --filter "label=com.docker.compose.project=$project" --filter "label=com.docker.compose.service=$svc" | head -n 1)"
     [ -n "$id" ] && ids+=("$id")
   done
-  if [ "${#ids[@]}" -gt 0 ]; then
-    log "stopping web, api, redirect and workers"
-    docker stop "${ids[@]}" >/dev/null
-  fi
   start_again() {
     if [ "${#ids[@]}" -gt 0 ]; then
       local i
       # Reverse order: workers, redirect, api, web.
       for ((i = ${#ids[@]} - 1; i >= 0; i--)); do docker start "${ids[$i]}" >/dev/null || true; done
-      log "started them again"
+      log "started web, api, redirect and workers again"
     fi
   }
   trap start_again EXIT
-  log "recreating $live from $file"
-  pg postgres -c "DROP DATABASE IF EXISTS \"$live\" WITH (FORCE)" -c "CREATE DATABASE \"$live\"" >/dev/null
-  gzip -dc "$file" | pg "$live" >/dev/null
-  log "restored: $(pg "$live" -tAc 'select count(*) from schema_migrations') migration(s) recorded"
+  if [ "${#ids[@]}" -gt 0 ]; then
+    log "stopping web, api, redirect and workers for the swap"
+    docker stop "${ids[@]}" >/dev/null
+  fi
+  pg postgres -c "DROP DATABASE IF EXISTS \"$live\" WITH (FORCE)" -c "ALTER DATABASE $staging RENAME TO \"$live\"" >/dev/null
+  log "$live replaced by the contents of $file"
   start_again
   trap - EXIT
   log "done. Check: curl -s http://127.0.0.1:3000/healthz; curl -s http://127.0.0.1:3001/healthz; curl -s http://127.0.0.1:3002/api/healthz"

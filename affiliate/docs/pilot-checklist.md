@@ -169,6 +169,13 @@ has seen real merchants, real money, real traffic or a real host.
   redirect, the keyed click hash (`IP_HASH_KEY`), the indexing gate
   (`SITE_INDEXING`, off by default), Postgres and Redis on the same host.
   **Nothing has been deployed to the Linode or the domain.**
+- ✅ One-command install / update for the Linode (2026-09-29):
+  [`deploy/linode/install.sh`](../deploy/linode/install.sh) with
+  `backup.sh`, `restore.sh` and the optional `godaddy-dns.sh`; the edge on
+  host networking so afflino.com can carry an AAAA record. ShellCheck clean
+  and rehearsed in the sandbox
+  ([`deploy/linode/README.md`](../deploy/linode/README.md) "What was
+  checked"); **not yet run on the Linode**.
 - ✅ Capacity plan written from the owner's figure:
   [`docs/capacity-plan.md`](./capacity-plan.md) — arithmetic only; nothing
   in it is measured.
@@ -328,9 +335,12 @@ and acceptance criteria.
   timelines from counsel. *Only a rights-holder review can clear celebrity
   imagery; owning footage ≠ advertising rights.*
 - 👤 Infra provisioning: the owner has chosen Linode and created the
-  server (2026-09-29); still open on it: the DNS change for afflino.com,
-  the first deploy (`docs/runbooks/deploy.md` §1), off-server backups of the
-  single-host Postgres and a restore drill, monitoring. Managed Postgres +
+  server (2026-09-29); still open on it: the DNS change for afflino.com
+  (`A @` and `AAAA @` → the Linode; at 16:34 UTC on 2026-09-29 the apex
+  already resolved to 172.105.52.150), the first deploy — one line,
+  `docs/runbooks/deploy.md` §1 — off-server copies of the daily dumps and a
+  restore check on the server, monitoring, optionally a Linode Cloud
+  Firewall and Linode Backups (§6). Managed Postgres +
   Redis remain an option
   ([`docs/infrastructure-recommendation.md`](./infrastructure-recommendation.md);
   sizes to revisit per [`docs/capacity-plan.md`](./capacity-plan.md) §6).

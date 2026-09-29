@@ -42,6 +42,19 @@ network seed. On a server without openssl, `python3 -c 'import secrets; print(se
 produces the same shape. Backups of that file and of the `pgdata` volume
 are the owner's (docs/runbooks/backup-restore.md).
 
+**The Linode installer writes that file** (`deploy/linode/install.sh`,
+2026-09-29): `/etc/afflino/afflino.env`, root:root 0600, with
+`POSTGRES_PASSWORD` (`openssl rand -hex 32`), `JWT_SECRET` (`openssl rand
+-hex 48`), `STUB_WEBHOOK_SECRET` and `IP_HASH_KEY` (`openssl rand -hex 32`)
+generated on the server and never printed, plus `SITE_HOST`,
+`SITE_INDEXING=off` and the optional `ACME_EMAIL` (the only question it
+asks, visibly: it is not a secret). Re-runs keep every value and only add
+missing keys; a value set in the shell never replaces one in the file. Two
+of them must not change once real data exists: `IP_HASH_KEY` (hashes under
+another key do not compare) and `POSTGRES_PASSWORD` (fixed when the
+database volume is created). Linode Backups covers the file; the database
+dumps do not contain it.
+
 ## Generating secrets
 
 Run on a trusted machine, never on a shared host, and pipe straight into

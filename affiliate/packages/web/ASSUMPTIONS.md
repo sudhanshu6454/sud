@@ -604,7 +604,7 @@ instead).
 
 ## Standalone app (2026-09-29)
 
-73. **Separated from the Marketing Fleet on 2026-09-29** (history, not instructions).
+73. **Standalone since 2026-09-29** (history, not instructions).
     Afflino is its own website and app: the shop is Afflino's consumer shop,
     items 21 and 27 and the `/api` proxy's comment now name
     `docker-compose.prod.yml` and the api image instead of the shared host's

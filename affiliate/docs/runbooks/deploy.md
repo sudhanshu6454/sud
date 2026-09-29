@@ -1,94 +1,138 @@
 # Runbook: deploy & rollback
 
 Dated 2026-09-23; revised 2026-09-29 for **afflino.com on the owner's
-Linode** (single host: `docker-compose.prod.yml` +
-`docker-compose.single-host.yml`, the edge terminating TLS). **Nothing has
-been deployed to the Linode or to afflino.com from this repository yet**;
-this is the procedure, and §1R is the rehearsal that was run locally.
+Linode**: one command, `deploy/linode/install.sh`, installs the whole single
+host (`docker-compose.prod.yml` + `docker-compose.single-host.yml`, the edge
+terminating TLS) and, run again, updates it. **Nothing has been deployed to
+the Linode or to afflino.com from this repository yet**; the installer was
+rehearsed in the sandbox (`deploy/linode/README.md` "What was checked"), §1R
+is the stack rehearsal.
 
-Conventions for every command below: run as root on the Linode, from the
-checkout's `affiliate/` directory. The paths are the ones the Linode
-installer uses — checkout `/opt/afflino` (branch
+Conventions for every command below: run as root on the Linode. Each command
+is one complete line with nothing to fill in. The paths are the installer's:
+checkout `/opt/afflino` (a sparse checkout of `affiliate/` from branch
 `claude/nifty-pasteur-flrulw` of the public repository
 `https://github.com/sudhanshu6454/sud`), environment file
-`/etc/afflino/afflino.env` (root-owned, mode 0600, the variables of
-`.env.prod.example`), seed output `/etc/afflino/seed-network.json`. Each
-command is one complete line. Secrets are only ever read from the
-environment file by compose: they are entered into it through hidden
-prompts, never typed on a command line, never printed; the lines below that
-need a token mint it inside a container and pass it through the environment
-(`API_TOKEN=... docker compose ... -e API_TOKEN`) or stdin (`curl -H @-`),
-never through a command-line argument. The server has bash, python3, curl,
-git and docker only (no make, no node, no dig); node runs inside the
-containers.
+`/etc/afflino/afflino.env` (root-owned, mode 0600, outside the checkout),
+backups `/var/backups/afflino`, compose project `afflino` (containers
+`afflino-<service>-1`). Secrets are generated on the server by the
+installer and only ever read from the environment file by compose: never
+typed on a command line, never printed; the lines below that need a token
+mint it inside a container and pass it through the environment (`API_TOKEN=...
+docker compose ... -e API_TOKEN`) or stdin (`curl -H @-`), never through a
+command-line argument. Lines that start with `docker compose` run from
+the checkout's `affiliate/` directory (`cd /opt/afflino/affiliate` once per
+login). The server has bash, python3, curl, git and docker only (no make, no
+node, no dig); node runs inside the containers. Never edit files inside
+`/opt/afflino`: the installer refuses to update a checkout with local
+changes (settings belong in the environment file).
 
-## 0. Preconditions (do not deploy without these)
+## 0. Preconditions
 
-- [ ] Release commit green: `pnpm typecheck`, `./node_modules/.bin/vitest run`
-      (660 tests in 35 files on 2026-09-29), `pnpm demo`, `pnpm demo:pg`,
-      the web build (CI workflow `afflino`).
+- [ ] A Linode **dedicated to Afflino** (the owner's is 172.105.52.150).
+      Recommended: Ubuntu 24.04 LTS, region Mumbai
+      (ap-west), the 4 GB plan (see §6 for the sizing caveat).
+- [ ] The release commit is green in CI (workflow `afflino`: typecheck,
+      vitest — 660 tests in 35 files on 2026-09-29 — both demos, the web
+      build, compose config, ShellCheck on `deploy/linode/*.sh`).
 - [ ] `docs/runbooks/dependency-review.md` re-run for the release; no
       unaddressed high/critical findings.
-- [ ] **DNS** (GoDaddy, nameservers `ns01.domaincontrol.com`): the `A`
-      record of `afflino.com` points at the Linode's IPv4 address, with
-      GoDaddy's parking/forwarding removed (on 2026-09-29 the apex resolved
-      to GoDaddy's 3.33.130.190 and 15.197.148.33); `www.afflino.com` stays a
-      CNAME to `afflino.com`; **no AAAA record** (see "Client addresses and
-      Docker" in `docker/README.md`). The edge asks Let's Encrypt for
-      certificates for exactly `afflino.com` and `www.afflino.com` as soon as
-      it starts and retries with backoff while DNS is not there yet. Check
-      from the server with
-      `curl -s 'https://dns.google/resolve?name=afflino.com&type=A'`.
-- [ ] The Linode: 80/tcp, 443/tcp and 443/udp reachable (ufw allows OpenSSH,
-      80, 443; Docker's published ports bypass ufw, which is why only the
-      edge publishes publicly and api / redirect / web bind 127.0.0.1).
-- [ ] `/etc/afflino/afflino.env` holds `POSTGRES_PASSWORD`, `JWT_SECRET`,
-      `STUB_WEBHOOK_SECRET` and `IP_HASH_KEY` (`docs/credential-setup.md`
-      "Single-host Linode"); `SITE_INDEXING` unset or `off`.
-- [ ] A backup exists and restores (§5) — from the second deploy on.
+- [ ] **DNS** (GoDaddy, nameservers `ns01`/`ns02.domaincontrol.com`): `A @`
+      = the Linode's IPv4 (every other `A @` removed), `AAAA @` = the
+      Linode's IPv6, `CNAME www` → `@` kept, GoDaddy domain forwarding off
+      (§1 step 3). The installer prints the exact values. Observed from
+      outside: at 15:19 UTC on 2026-09-29 the apex resolved to GoDaddy's
+      parking addresses 3.33.130.190 and 15.197.148.33; at 16:34 UTC the same
+      day to **172.105.52.150** only (the Afflino Linode, per the owner), no
+      AAAA, `www` a CNAME to the apex, and nothing answered on port 80 there.
+      The installer's status on the server confirms it ("A points here").
+- [ ] From the second deploy on: a backup exists and its restore check
+      passes (§5).
 - [ ] The release's migration files are reviewed (§2): append-only,
       forward-only.
-- [ ] An operator and the seeded `network_admin` are available for the
-      kill-switch drill (§4).
 
 ## 1. First deploy of afflino.com
 
-1. **Bring the stack up** (builds the five images; migrate runs first and
-   api, redirect and workers wait for it; the edge starts and fetches
-   certificates). Without `WEB_API_TOKEN` the shop shows labelled TEST demo
-   data, and with `SITE_INDEXING` off every page is noindex:
+1. **Log in to the Linode as root**: `ssh root@afflino.com` once the `A`
+   record points at it, or Linode Cloud Manager → the Linode → **Launch
+   LISH Console**.
+2. **Run the installer** (the first image build takes several minutes;
+   not yet timed on a Linode):
    ```sh
-   docker compose --env-file /etc/afflino/afflino.env -f docker-compose.prod.yml -f docker-compose.single-host.yml up -d --build
+   bash <(curl -fsSL https://raw.githubusercontent.com/sudhanshu6454/sud/refs/heads/claude/nifty-pasteur-flrulw/affiliate/deploy/linode/install.sh)
    ```
-2. **Seed the in-house network with the TEST programme** (`NODE_ENV` is unset
-   in the migrate image, which is what `--with-demo-programme` needs; the
-   shop's host defaults to `SITE_HOST`). Until a real programme is
-   contracted this is the only way to a placement, so `WEB_PLACEMENT_ID`
-   points at TEST rows — a sandbox shape, not a launch:
+   What it does, in order (details: `deploy/linode/README.md` and the
+   script's header):
+   - **Preflight**: root; Ubuntu 24.04 / 22.04 or Debian 12, anything else
+     refused; refuses ports 80/443 (or 127.0.0.1:
+     3000–3002) held by anything but Afflino's own stack; warns under 2 GB
+     of RAM and adds a 2 GB swapfile (`/swapfile-afflino`) under 4 GB of RAM
+     when there is less than 1 GB of swap (Linode images ship a 512 MB swap
+     disk; the web image build needs the memory).
+   - **System**: `ca-certificates curl git ufw fail2ban python3-systemd
+     unattended-upgrades openssl iproute2 python3 gzip`; Docker from
+     get.docker.com only when it is missing; ufw allows OpenSSH (and any
+     other port sshd listens on) **first**, then 80/tcp, 443/tcp, 443/udp,
+     and is enabled; fail2ban's sshd jail (journal backend); automatic
+     security updates (`/etc/apt/apt.conf.d/20auto-upgrades`); larger UDP
+     buffers for HTTP/3.
+   - **Code**: clones the branch into `/opt/afflino` (sparse: `affiliate/`
+     only), or fetches and fast-forwards it; stops, changing nothing, when
+     the checkout has local changes, local commits or is not on the branch.
+   - **Environment**: creates `/etc/afflino/afflino.env` (root:root 0600)
+     with `POSTGRES_PASSWORD`, `JWT_SECRET`, `STUB_WEBHOOK_SECRET` and
+     `IP_HASH_KEY` generated by openssl and never printed, `SITE_HOST=
+     afflino.com`, `SITE_INDEXING=off`, and `ACME_EMAIL` — the only
+     question: an optional address for Let's Encrypt notices (Enter skips
+     it). Later runs keep every value and only add keys that are missing.
+   - **Deploy**: `docker compose` (project `afflino`, both files) `up -d
+     --build --remove-orphans`; waits for migrate to finish and api,
+     redirect and web to be healthy; checks the edge answers.
+   - **Status**: the services, the three health checks, the server's IPv4
+     and IPv6 (from its interfaces), whether afflino.com and
+     www.afflino.com resolve to it, the exact DNS records to set if not,
+     and whether HTTPS already works.
+   - **Backups**: `afflino-backup.timer` (daily 02:30 UTC, `backup.sh`,
+     14 kept) and a first backup.
+3. **DNS at GoDaddy**, if the status says "NOT this server yet". By hand:
+   GoDaddy → My Products → afflino.com → **DNS** → DNS Records:
+   - `A` record, name `@`: edit it to the Linode's IPv4 address, and delete
+     every other `A` record named `@` (GoDaddy's parking addresses were
+     3.33.130.190 and 15.197.148.33).
+   - `AAAA` record, name `@`: add it with the Linode's IPv6 address (the
+     one the status prints; Cloud Manager → the Linode → Network shows it
+     too).
+   - `CNAME` record, name `www`, value `@`: keep it.
+   - GoDaddy → afflino.com → **Forwarding**: if domain forwarding is set up,
+     delete it (it keeps GoDaddy's own `A` records in place).
+
+   Or, only for GoDaddy accounts with API access (GoDaddy grants it to
+   accounts with 10 or more domains or a Discount Domain Club plan), from
+   the Linode, with an API key and secret from developer.godaddy.com
+   (Production) entered at hidden prompts and never stored:
    ```sh
-   docker compose --env-file /etc/afflino/afflino.env -f docker-compose.prod.yml -f docker-compose.single-host.yml run --rm -T migrate ./node_modules/.bin/tsx db/seed-network.ts --with-demo-programme > /etc/afflino/seed-network.json
+   bash /opt/afflino/affiliate/deploy/linode/godaddy-dns.sh
    ```
-3. **Store the shop's placement and its read-only token** in the environment
-   file (the token is minted inside the api container from `JWT_SECRET` and
-   never printed):
+   It sets `A @` and `AAAA @` to this server, keeps the `www` CNAME, prints
+   before / after, and stops with the reason on 401 (wrong key), 403 (no API
+   access: set the records by hand), 404 or 422.
+
+   IPv6 is safe to publish: the edge runs with host networking, so it sees
+   every client's real address over IPv4 and IPv6 (a Docker-published port
+   would have given every IPv6 client the compose network's gateway address,
+   which is why stage 1 held the AAAA record back).
+4. **Certificates** are automatic: the edge requests them from Let's Encrypt
+   for exactly afflino.com and www.afflino.com and retries until DNS points
+   at the server. Check DNS from the server and watch the edge:
    ```sh
-   sed -i '/^WEB_PLACEMENT_ID=/d' /etc/afflino/afflino.env && echo "WEB_PLACEMENT_ID=$(grep -m1 '"web_placement_id"' /etc/afflino/seed-network.json | sed 's/.*: "\(.*\)".*/\1/')" >> /etc/afflino/afflino.env
-   sed -i '/^WEB_API_TOKEN=/d' /etc/afflino/afflino.env && echo "WEB_API_TOKEN=$(docker compose --env-file /etc/afflino/afflino.env -f docker-compose.prod.yml -f docker-compose.single-host.yml run --rm --no-deps -T api node scripts/mint-dev-token.mjs --org-id "$(grep -m1 '"org_id"' /etc/afflino/seed-network.json | sed 's/.*: "\(.*\)".*/\1/')" --role publisher_analyst --sub web-shop --ttl 365d)" >> /etc/afflino/afflino.env
+   getent ahosts afflino.com
+   docker logs -f afflino-edge-1 2>&1 | grep -i certificate
    ```
-4. **Restart the web with them**:
+   Then run the installer line again: its status then reads "A points here"
+   and "HTTPS: https://afflino.com answers here with a valid certificate".
+5. **Verify** (each line prints what to compare):
    ```sh
-   docker compose --env-file /etc/afflino/afflino.env -f docker-compose.prod.yml -f docker-compose.single-host.yml up -d web
-   ```
-5. **Mint the shop's links** (an owner token, minted in a container and
-   handed over through the environment):
-   ```sh
-   API_TOKEN="$(docker compose --env-file /etc/afflino/afflino.env -f docker-compose.prod.yml -f docker-compose.single-host.yml run --rm --no-deps -T api node scripts/mint-dev-token.mjs --org-id "$(grep -m1 '"org_id"' /etc/afflino/seed-network.json | sed 's/.*: "\(.*\)".*/\1/')" --role publisher_owner --sub network-owner)" docker compose --env-file /etc/afflino/afflino.env -f docker-compose.prod.yml -f docker-compose.single-host.yml run --rm --no-deps -T -e API_BASE=http://api:3000 -e API_TOKEN api node scripts/mint-links.mjs --placement "$(grep -m1 '"web_placement_id"' /etc/afflino/seed-network.json | sed 's/.*: "\(.*\)".*/\1/')"
-   ```
-   Expect `summary: looks=5 items=5 minted=1 ... failed=0` (one live TEST
-   offer shared by the five looks).
-6. **Verify** (each line prints what to compare):
-   ```sh
-   docker compose --env-file /etc/afflino/afflino.env -f docker-compose.prod.yml -f docker-compose.single-host.yml ps
+   cd /opt/afflino/affiliate && docker compose --env-file /etc/afflino/afflino.env -f docker-compose.prod.yml -f docker-compose.single-host.yml ps
    curl -s http://127.0.0.1:3000/healthz; curl -s http://127.0.0.1:3001/healthz; curl -s http://127.0.0.1:3002/api/healthz; echo
    curl -s https://afflino.com/api/healthz; echo
    curl -s -D - -o /dev/null https://afflino.com/ | grep -i '^HTTP\|^strict-transport\|^x-content-type\|^referrer-policy\|^x-frame\|^server\|^via'
@@ -96,39 +140,83 @@ containers.
    curl -s -D - -o /dev/null http://afflino.com/ | grep -i '^HTTP\|^location'
    curl -s https://afflino.com/robots.txt
    curl -s https://afflino.com/ | grep -o '<link rel="canonical" href="[^"]*"/>\|<meta name="robots" content="[^"]*"/>'
-   curl -s "https://afflino.com/looks/$(grep -m1 '"look_id"' /etc/afflino/seed-network.json | sed 's/.*: "\(.*\)".*/\1/')" | grep -o 'https://afflino.com/r/[0-9a-f]*' | head -1
-   curl -s -D - -o /dev/null "$(curl -s "https://afflino.com/looks/$(grep -m1 '"look_id"' /etc/afflino/seed-network.json | sed 's/.*: "\(.*\)".*/\1/')" | grep -o 'https://afflino.com/r/[0-9a-f]*' | head -1)" | grep -i '^HTTP\|^location\|^set-cookie'
    ```
    Expected: every service `running` / `healthy` (migrate `exited (0)`);
    `{"ok":true}` four times; `HTTP/2 200` with HSTS, nosniff,
    `strict-origin-when-cross-origin`, `DENY` and no `server` / `via` line;
    `www` → `301` to `https://afflino.com/shop?x=1`; plain HTTP → `308` to
    https; robots.txt `Disallow: /`; the canonical `https://afflino.com` and
-   `noindex, nofollow`; a `https://afflino.com/r/<token>` link; and the link
-   → `302` to `https://shop.example.com/...?subid=<click_id>` with no
-   `set-cookie`.
-7. **Kill-switch drill** (§4). A deploy is not done until it passes.
-8. **Watch** for 15 minutes:
-   `docker compose --env-file /etc/afflino/afflino.env -f docker-compose.prod.yml -f docker-compose.single-host.yml logs -f --since 15m`
-   (no `LEDGER_IMBALANCE`, the workers log `click.observed` for the clicks
-   above; the edge logs certificate issuance for both names).
+   `noindex, nofollow`. The site then shows the marketing pages and a shop
+   of labelled TEST demo looks (no API call is made for them).
+6. **Optional: tracked links with the TEST programme.** Until a real
+   merchant programme is contracted, the only way to exercise
+   `https://afflino.com/r/<token>` (and the kill-switch drill, §4) is the
+   network seed's TEST programme (`--with-demo-programme`: five "Demo …"
+   properties on `example.com` names, "Demo Network Programme",
+   `shop.example.com`). It writes TEST rows into the live database — a
+   sandbox shape, not a launch. The lines (`NODE_ENV` is unset in the
+   migrate image, which the flag needs; the shop's host defaults to
+   `SITE_HOST`), from `/opt/afflino/affiliate`:
+   a. **Seed the in-house network with the TEST programme**:
+   ```sh
+   docker compose --env-file /etc/afflino/afflino.env -f docker-compose.prod.yml -f docker-compose.single-host.yml run --rm -T migrate ./node_modules/.bin/tsx db/seed-network.ts --with-demo-programme > /etc/afflino/seed-network.json
+   ```
+   b. **Store the shop's placement and its read-only token** in the environment
+   file (the token is minted inside the api container from `JWT_SECRET` and
+   never printed):
+   ```sh
+   sed -i '/^WEB_PLACEMENT_ID=/d' /etc/afflino/afflino.env && echo "WEB_PLACEMENT_ID=$(grep -m1 '"web_placement_id"' /etc/afflino/seed-network.json | sed 's/.*: "\(.*\)".*/\1/')" >> /etc/afflino/afflino.env
+   sed -i '/^WEB_API_TOKEN=/d' /etc/afflino/afflino.env && echo "WEB_API_TOKEN=$(docker compose --env-file /etc/afflino/afflino.env -f docker-compose.prod.yml -f docker-compose.single-host.yml run --rm --no-deps -T api node scripts/mint-dev-token.mjs --org-id "$(grep -m1 '"org_id"' /etc/afflino/seed-network.json | sed 's/.*: "\(.*\)".*/\1/')" --role publisher_analyst --sub web-shop --ttl 365d)" >> /etc/afflino/afflino.env
+   ```
+   c. **Restart the web with them**:
+   ```sh
+   docker compose --env-file /etc/afflino/afflino.env -f docker-compose.prod.yml -f docker-compose.single-host.yml up -d web
+   ```
+   d. **Mint the shop's links** (an owner token, minted in a container and
+   handed over through the environment):
+   ```sh
+   API_TOKEN="$(docker compose --env-file /etc/afflino/afflino.env -f docker-compose.prod.yml -f docker-compose.single-host.yml run --rm --no-deps -T api node scripts/mint-dev-token.mjs --org-id "$(grep -m1 '"org_id"' /etc/afflino/seed-network.json | sed 's/.*: "\(.*\)".*/\1/')" --role publisher_owner --sub network-owner)" docker compose --env-file /etc/afflino/afflino.env -f docker-compose.prod.yml -f docker-compose.single-host.yml run --rm --no-deps -T -e API_BASE=http://api:3000 -e API_TOKEN api node scripts/mint-links.mjs --placement "$(grep -m1 '"web_placement_id"' /etc/afflino/seed-network.json | sed 's/.*: "\(.*\)".*/\1/')"
+   ```
+   Expect `summary: looks=5 items=5 minted=1 ... failed=0` (one live TEST
+   offer shared by the five looks).
+   Then the look page carries the tracked link, and the link → `302` to
+   `https://shop.example.com/...?subid=<click_id>` with no `set-cookie`:
+   ```sh
+   curl -s "https://afflino.com/looks/$(grep -m1 '"look_id"' /etc/afflino/seed-network.json | sed 's/.*: "\(.*\)".*/\1/')" | grep -o 'https://afflino.com/r/[0-9a-f]*' | head -1
+   curl -s -D - -o /dev/null "$(curl -s "https://afflino.com/looks/$(grep -m1 '"look_id"' /etc/afflino/seed-network.json | sed 's/.*: "\(.*\)".*/\1/')" | grep -o 'https://afflino.com/r/[0-9a-f]*' | head -1)" | grep -i '^HTTP\|^location\|^set-cookie'
+   ```
+   The installer never runs these lines and later runs keep
+   `WEB_API_TOKEN` / `WEB_PLACEMENT_ID` in the environment file.
+7. **Kill-switch drill** (§4, needs step 6). A deploy of real traffic is not
+   done until it passes.
+8. **Watch** for 15 minutes (no `LEDGER_IMBALANCE`; the edge logs the
+   certificate issuance for both names):
+   ```sh
+   cd /opt/afflino/affiliate && docker compose --env-file /etc/afflino/afflino.env -f docker-compose.prod.yml -f docker-compose.single-host.yml logs -f --since 15m
+   ```
 
 **Opening the site to search engines** is a separate, owner-only decision:
-the public pages carry placeholder prices, fees, TDS figures and legal stubs
-(`packages/web/lib/site-copy.ts`) and the only looks are TEST rows. When
-those are replaced, set `SITE_INDEXING=on` in the environment file and run
-the step-4 line again (a restart, not a rebuild); robots.txt then names
-`https://afflino.com/sitemap.xml`.
+the public pages carry placeholder prices, fees, TDS figures, the
+validation window, the minimum withdrawal and legal stubs
+(`packages/web/lib/site-copy.ts`), and the only looks are TEST rows. When
+the owner has confirmed or replaced those figures, one line switches it on
+(the web restarts; nothing is rebuilt):
+```sh
+sed -i 's/^SITE_INDEXING=.*/SITE_INDEXING=on/' /etc/afflino/afflino.env && bash <(curl -fsSL https://raw.githubusercontent.com/sudhanshu6454/sud/refs/heads/claude/nifty-pasteur-flrulw/affiliate/deploy/linode/install.sh)
+```
+robots.txt then allows the public pages and names
+`https://afflino.com/sitemap.xml` (`/`, `/shop`, `/contact` and the live,
+non-TEST looks). The same line with `off` closes it again.
 
-**Own network file instead of the TEST example:** keep `network.yaml` next
-to `docker-compose.prod.yml`, uncomment the `migrate` service's volume, set
-`NETWORK_FILE=/app/config/network.yaml` in the environment file, and seed
-with `-e NODE_ENV=production` (the seed then refuses the example file, so a
-lost `NETWORK_FILE` fails instead of seeding the five TEST properties into the
-real `afflino` organisation):
+**Own network file instead of the TEST example:** save it on the server
+as `/etc/afflino/network.yaml` (outside the checkout, so updates keep
+working) and seed from it with `-e NODE_ENV=production`, which makes the
+seed refuse the example file (a missing file then fails instead of seeding
+the five TEST properties into the real `afflino` organisation). Every
+re-run must read the same file:
 
 ```sh
-docker compose --env-file /etc/afflino/afflino.env -f docker-compose.prod.yml -f docker-compose.single-host.yml run --rm -T -e NODE_ENV=production migrate ./node_modules/.bin/tsx db/seed-network.ts
+docker compose --env-file /etc/afflino/afflino.env -f docker-compose.prod.yml -f docker-compose.single-host.yml run --rm -T -v /etc/afflino/network.yaml:/app/config/network.yaml:ro -e NETWORK_FILE=/app/config/network.yaml -e NODE_ENV=production migrate ./node_modules/.bin/tsx db/seed-network.ts
 ```
 
 ## 1R. Rehearsal without DNS or certificates
@@ -139,7 +227,10 @@ values given to each compose command (not a secrets file, and never
 `export`ed: a variable in the shell overrides the environment file, so an
 exported TEST value would leak into a later real deploy from the same
 shell) — how the shape was verified on 2026-09-29 before any server
-existed. It does not bind 80/443, and `down -v` removes its volumes.
+existed. It does not bind 80/443 (the edge, host-networked as in
+production, listens on 127.0.0.1:8088 only), and `down -v` removes its
+volumes. The installer itself was rehearsed the same way, with its
+test-only settings (`deploy/linode/README.md` "What was checked").
 
 ```sh
 IMAGE_TAG=test JWT_SECRET=test-jwt-secret-rehearsal-0123456789 STUB_WEBHOOK_SECRET=test-stub-secret POSTGRES_PASSWORD=0123456789abcdef0123456789abcdef IP_HASH_KEY=e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0 docker compose -p afflino-rehearsal -f docker-compose.prod.yml -f docker-compose.single-host.yml -f docker-compose.edge-test.yml up -d
@@ -188,16 +279,27 @@ and the teardown — is recorded in README.md "Deploying afflino.com".
 
 ## 1U. Routine deploy (update)
 
-1. **Pin the release**: tag the commit (`release-YYYYMMDD-HHMM`); set
-   `IMAGE_TAG` to it in the environment file (never deploy `latest` to the
-   pilot once a release tag exists).
-2. **Take a backup** (§5).
-3. **Update and rebuild** (migrate runs before the services restart; if it
-   fails, nothing else is recreated — fix forward, §2):
-   ```sh
-   cd /opt/afflino && git fetch origin && git merge --ff-only origin/claude/nifty-pasteur-flrulw && cd affiliate && docker compose --env-file /etc/afflino/afflino.env -f docker-compose.prod.yml -f docker-compose.single-host.yml up -d --build --remove-orphans
-   ```
-4. **Verify** (§1 step 6), the drill (§4), and watch (§1 step 8).
+The update is the install line, run again as root on the Linode:
+
+```sh
+bash <(curl -fsSL https://raw.githubusercontent.com/sudhanshu6454/sud/refs/heads/claude/nifty-pasteur-flrulw/affiliate/deploy/linode/install.sh)
+```
+
+It fetches and fast-forwards `/opt/afflino` (stopping, with nothing
+changed, if the checkout has local edits or commits), keeps every value in
+`/etc/afflino/afflino.env` and adds only missing keys, **takes a backup
+first** when the code or the environment file changed
+(`afflino-<time>-pre-update.sql.gz`), rebuilds the images, lets migrate run
+before api, redirect and workers are recreated (if it fails, nothing else is
+recreated — fix forward, §2), restarts the edge only if its Caddyfile
+changed, and waits for health. When nothing changed it changes nothing (the
+same image ids, no container recreated; checked in the sandbox). Then:
+verify (§1 step 5), the drill (§4) when step 6 was done, and watch (§1 step
+8).
+
+Pinning a release: tag the commit (`release-YYYYMMDD-HHMM`) and set
+`IMAGE_TAG` to it in the environment file before the run (images are then
+tagged with it; never leave `latest` once a release tag exists).
 
 ## 2. Migration rollback policy
 
@@ -242,7 +344,7 @@ is already current). Consequences:
    every release `release-YYYYMMDD-HHMM`, so the second-newest tag is the
    one before this release; `--build` builds from the checkout, which is
    why the checkout comes first; set `IMAGE_TAG` in the environment file to
-   that tag afterwards so the next `up` keeps it), then re-run the §1 step 6
+   that tag afterwards so the next `up` keeps it), then re-run the §1 step 5
    checks. No database action needed.
    ```sh
    cd /opt/afflino && git fetch --tags origin && PREV="$(git tag --list 'release-*' | sort | tail -n 2 | head -n 1)" && git checkout "$PREV" && cd affiliate && IMAGE_TAG="$PREV" docker compose --env-file /etc/afflino/afflino.env -f docker-compose.prod.yml -f docker-compose.single-host.yml up -d --build
@@ -318,35 +420,116 @@ changes nothing.
 7. Log the drill (date, operator, programme id, all six outcomes) in the
    ops log. Any step failing = deploy is not accepted; roll back per §3.
 
-## 5. Backups on the single host
+## 5. Backups and restore on the single host
 
 Postgres runs in the `postgres` container with no published port and the
-server has no Postgres client, so `scripts/backup.sh` (which runs `pg_dump`
-on the host) does not apply as-is; a custom-format dump from inside the
-container does (one line; the directory must exist, `mkdir -p
-/var/backups/afflino` once):
+server has no Postgres client, so `scripts/backup.sh` / `scripts/restore.sh`
+(which run `pg_dump` / `psql` on the host) do not apply there; the Linode
+uses `deploy/linode/backup.sh` and `restore.sh`, which run them inside the
+container.
 
-```sh
-docker compose --env-file /etc/afflino/afflino.env -f docker-compose.prod.yml -f docker-compose.single-host.yml exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "/var/backups/afflino/afflino-$(date -u +%Y%m%dT%H%M%SZ).dump"
-```
+- **Daily**: `afflino-backup.timer` (installed by the installer) runs
+  `backup.sh daily` at 02:30 UTC (before the workers' 03:00 UTC retention
+  purge): a plain SQL `pg_dump`, gzip, mode 0600, in `/var/backups/afflino`,
+  checked (gzip test + pg_dump's closing line) before it is kept; the 14
+  newest of each kind (daily, pre-update, pre-restore, manual) are kept.
+- **Lines**:
+  ```sh
+  systemctl list-timers afflino-backup.timer
+  bash /opt/afflino/affiliate/deploy/linode/backup.sh manual
+  ls -l /var/backups/afflino
+  bash /opt/afflino/affiliate/deploy/linode/restore.sh
+  bash /opt/afflino/affiliate/deploy/linode/restore.sh --replace-live
+  ```
+  The fourth is the **restore check**: the newest dump restored into a
+  scratch database (`afflino_restore_check`) in the same container,
+  checked — migrations recorded, the tables present, row counts, the ledger
+  balanced per currency (debits = credits in integer minor units) — and
+  dropped; the live database is not touched. Run it after the first real
+  money and monthly. The fifth **replaces the live database** with the
+  newest dump (or a file named after the flag): it asks you to type
+  `REPLACE`, takes a pre-restore backup, loads the dump into a staging
+  database while the site keeps running (a dump that does not load stops
+  here, the live database untouched), then stops web, api, redirect and
+  workers for the few seconds of the swap (the edge answers 502 meanwhile)
+  and starts them again. Everything written after the dump is lost:
+  use it for a lost or corrupted database, not to undo a release (§2, §3).
+- **Off the server**: a dump on the same disk is not a backup. From the
+  owner's own computer (with afflino.com pointing at the Linode):
+  ```sh
+  scp -r root@afflino.com:/var/backups/afflino .
+  ```
+  and/or Linode Backups (§6), which also covers `/etc/afflino/afflino.env`
+  (the dumps do not: keep `IP_HASH_KEY` and `JWT_SECRET` with the data they
+  belong to).
+- The Redis append-only file (`afflino_redisdata`) keeps queued jobs across
+  a restart; it is not backed up, so jobs in flight when the disk is lost
+  are lost — the clicks, outbox rows and ledger are Postgres rows, which is
+  what the dump protects.
+- `docker compose ... down -v` deletes `afflino_pgdata`, `afflino_redisdata`
+  and the certificates in `afflino_caddy_data` — **never run it on the
+  Linode**. Changing `POSTGRES_PASSWORD` in the environment file later does
+  nothing to the existing database (the password is set when the volume is
+  first created).
 
-A dump on the same disk is not a backup: copy it off the server, schedule
-it (before the 03:00 UTC retention purge), and prove it with a restore into
-a scratch database (`docs/runbooks/backup-restore.md`) before real money
-flows. The Redis append-only file (`redisdata` volume) keeps queued jobs
-across a restart; it is not backed up, so jobs in flight when the disk is
-lost are lost — the clicks, outbox rows and ledger themselves are Postgres
-rows, which is what the dump protects. `docker compose ... down -v` deletes `pgdata`,
-`redisdata` and the certificates in `caddy_data` — never run it on the
-Linode.
+## 6. Owner actions in Linode Cloud Manager (optional, recommended)
+
+- **Cloud Firewall** (Networking → Firewalls → Create Firewall, then assign
+  it to the Afflino Linode): inbound policy **Drop**; inbound rules Accept
+  TCP 22, TCP 80, TCP 443 and UDP 443, IPv4 and IPv6; outbound **Accept**.
+  It filters before traffic reaches the server, so it holds even for
+  anything Docker publishes (Docker's published ports bypass ufw; only the
+  edge listens publicly, api / redirect / web publish on 127.0.0.1).
+  Keep TCP 22 in it, or SSH is cut off (LISH still works).
+- **Linode Backups** (the Linode → Backups → Enable; a paid add-on): daily
+  and weekly snapshots of the whole disk, including the environment file
+  and the dumps.
+- **Plan**: the 4 GB shared plan is the recommendation. Sizing for Afflino's real traffic is **unmeasured**: the
+  seven long-running containers used about 166 MiB together at idle in the
+  2026-09-29 rehearsal (no load), building the web image needs noticeably
+  more for a minute or two (the installer adds swap on plans under 4 GB),
+  and the load soak has never run on real infrastructure
+  (`docs/capacity-plan.md`). Resize in Cloud Manager when the numbers say
+  so; nothing in the stack depends on the plan.
+
+## 7. What stays demo on the live site, and what is still pre-launch
+
+On afflino.com after the install, honestly labelled:
+- **No merchant programme exists.** The shop shows labelled TEST demo looks
+  ("Demo data" badge) from the web's own demo data until a real network
+  file and a real programme exist; with §1 step 6 it shows the network
+  seed's TEST looks, whose links go to `shop.example.com`.
+- **Stub authentication**: `/login` is a paste-a-token dev page for the JWT
+  stub; there are no accounts, no OTP (`/join`'s OTP accepts any 6 digits),
+  no KYC / PAN check. Tokens can only be minted on the server (they need
+  `JWT_SECRET`).
+- **Stub payout rail**: no money moves (`packages/api/src/payout-rail.ts`).
+- The public figures (prices, fees, TDS, the validation window, the minimum
+  withdrawal, the #ad line) and the terms / privacy / contact pages are
+  placeholders (`packages/web/lib/site-copy.ts`) — hence `SITE_INDEXING=off`.
+- The app areas (`/app`, `/brand`, `/agency`, `/admin`) are demo flows
+  wherever no v1 endpoint exists, each with the "Demo data" badge.
+
+Still open before real traffic (`docs/pilot-checklist.md`, the gates with
+owners in `docs/action-tracker.md`): a real identity provider; webhook
+signature verification; rate limiting (none on `/r/{token}`, the API or the
+edge); a Content-Security-Policy; monitoring and alerts; off-server backups
+and a restore drill on the server; the load soak; counsel's decisions
+(retention windows, the keyed IP hash under DPDP, hosting jurisdiction);
+contracted merchant programmes and a real payout rail.
 
 ## PENDING (production-only, cannot be checked in the sandbox)
 
-- A real certificate issuance on afflino.com (needs the DNS change) and
-  the §1 step 6 checks over the internet.
-- A restore drill of a single-host dump on the Linode (validates §2 and §5
-  end to end).
+- The installer on the real Linode: Docker from get.docker.com, ufw,
+  fail2ban and the backup timer under systemd, the swapfile (all rehearsed
+  in containers or skipped in the sandbox; `deploy/linode/README.md`).
+- A real certificate issuance on afflino.com (needs the DNS change) and the
+  §1 step 5 checks over the internet, over IPv4 and IPv6.
+- `godaddy-dns.sh` against GoDaddy's real API (rehearsed against a local
+  stand-in only).
+- A restore check and a `--replace-live` drill of a single-host dump on the
+  Linode (validates §2 and §5 end to end).
 - Off-server copies of the dumps and their schedule.
 - Checksums in `schema_migrations` (filenames are tracked; content is not).
-- CI gate running `pnpm audit`, typecheck, tests, and the load soak
-  (`pnpm load:smoke`) on every release candidate.
+- CI gate running `pnpm audit` and the load soak (`pnpm load:smoke`) on
+  every release candidate.
