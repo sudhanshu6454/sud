@@ -4,15 +4,16 @@
 #   docker compose -f docker-compose.prod.yml -f docker-compose.single-host.yml -f docker-compose.edge-test.yml up -d
 #
 # Caddy then serves plain HTTP on 127.0.0.1:8088 for any Host header (no ACME,
-# no certificates, 80 and 443 not published), with the same routes and headers
-# as production (docker/Caddyfile): send `Host: afflino.com` or
-# `Host: www.afflino.com` to exercise them. Everything else (SITE_URL,
-# REDIRECT_BASE_URL) keeps its production value, so pages and links still
-# name https://afflino.com. Never used on a public deployment.
+# no certificates; it listens on nothing else, so 80 and 443 stay free), with
+# the same routes, headers and host networking as production
+# (docker/Caddyfile): send `Host: afflino.com` or `Host: www.afflino.com` to
+# exercise them. Everything else (SITE_URL, REDIRECT_BASE_URL) keeps its
+# production value, so pages and links still name https://afflino.com. Never
+# used on a public deployment (deploy/linode/install.sh uses it only under its
+# test-only AFFLINO_EDGE_TEST=1).
 
 services:
   edge:
     environment:
       EDGE_ADDRESS: ":8088"
-    ports: !override
-      - "127.0.0.1:8088:8088"
+      EDGE_BIND: "bind 127.0.0.1"

@@ -27,12 +27,14 @@
 # the first deploy is `up` alone, then the seed, the token and the links
 # (README.md "Deploying afflino.com"), then `up -d web` again.
 #
-# Public surface: ONLY the edge publishes on all interfaces (80/tcp, 443/tcp,
-# 443/udp). api (3000), redirect (3001) and web (3002) publish on 127.0.0.1
-# for host-side checks and operator scripts; Docker's published ports bypass
-# ufw, which is why nothing else may listen publicly. Plain-HTTP test mode
-# for the edge (no certificates, 127.0.0.1:8088): add
-# docker-compose.edge-test.yml.
+# Public surface: ONLY the edge listens on all interfaces (80/tcp, 443/tcp,
+# 443/udp, IPv4 and IPv6; host networking, so ufw applies to it). api (3000),
+# redirect (3001) and web (3002) publish on 127.0.0.1 for the edge, host-side
+# checks and operator scripts; Docker's published ports bypass ufw, which is
+# why nothing else may be published publicly. Plain-HTTP test mode for the
+# edge (no certificates, 127.0.0.1:8088): add docker-compose.edge-test.yml.
+# The Linode installer (deploy/linode/install.sh) runs this file with
+# docker-compose.single-host.yml and --env-file /etc/afflino/afflino.env.
 #
 # Images are built from ./docker/Dockerfile.* (node:22-alpine, pnpm via
 # corepack, non-root `node` user); the edge is the stock caddy:2-alpine with
@@ -67,16 +69,23 @@ services:
   # www.SITE_HOST only), www → apex, /r/* → redirect, everything else → web
   # (which proxies /api/* to the API). Overwrites client-supplied
   # X-Forwarded-For / X-Real-IP / Forwarded; no access log. docker/Caddyfile.
+  #
+  # Host networking: Caddy listens on the server's own 80/tcp, 443/tcp and
+  # 443/udp, IPv4 and IPv6, so it sees each client's real address (a port
+  # Docker publishes would reach IPv6 clients through Docker's userland proxy,
+  # which replaces their address with the compose network's gateway), and
+  # ufw's rules apply to it. It reaches redirect and web on their 127.0.0.1
+  # ports below; they see it as the compose network's private gateway, which
+  # TRUST_PROXY trusts.
   edge:
     image: caddy:2-alpine
+    network_mode: host
     environment:
       SITE_HOST: ${SITE_HOST:-afflino.com}
       ACME_EMAIL: ${ACME_EMAIL:-}
       EDGE_ADDRESS: ${SITE_HOST:-afflino.com}, www.${SITE_HOST:-afflino.com}
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
+      REDIRECT_UPSTREAM: 127.0.0.1:3001
+      WEB_UPSTREAM: 127.0.0.1:3002
     volumes:
       - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

@@ -1,22 +1,31 @@
 # Afflino edge (Caddy 2, image caddy:2-alpine): the ONLY public entry to the
-# stack. docker-compose.prod.yml runs it as the `edge` service, publishes
-# 80/tcp, 443/tcp and 443/udp (HTTP/3), keeps certificates in the caddy_data
-# volume, and sets the three variables below; api, redirect and web publish
-# only on 127.0.0.1 and are reached here over the compose network.
+# stack. docker-compose.prod.yml runs it as the `edge` service with HOST
+# networking (network_mode: host): Caddy listens on 80/tcp, 443/tcp and
+# 443/udp (HTTP/3) of the server itself, IPv4 and IPv6, so it sees every
+# client's real address (no Docker NAT or userland proxy in front of it, and
+# ufw's rules apply to it), keeps certificates in the caddy_data volume, and
+# reaches redirect and web on their 127.0.0.1 ports. Variables:
 #
-#   SITE_HOST     the public host (compose default afflino.com)
-#   ACME_EMAIL    optional ACME account email; empty = register without one
-#   EDGE_ADDRESS  the site address. Production (compose default):
-#                 "${SITE_HOST}, www.${SITE_HOST}" = HTTPS with automatic
-#                 certificates for exactly those two names (no on-demand TLS,
-#                 no wildcard, nothing for other hosts). Plain-HTTP test mode
-#                 (docker-compose.edge-test.yml): ":8088" = HTTP on port 8088,
-#                 any Host, no certificates.
+#   SITE_HOST          the public host (compose default afflino.com)
+#   ACME_EMAIL         optional ACME account email; empty = register without one
+#   EDGE_ADDRESS       the site address. Production (compose):
+#                      "${SITE_HOST}, www.${SITE_HOST}" = HTTPS with automatic
+#                      certificates for exactly those two names (no on-demand
+#                      TLS, no wildcard, nothing for other hosts). Plain-HTTP test
+#                      mode (docker-compose.edge-test.yml): ":8088" = HTTP on
+#                      port 8088, any Host, no certificates.
+#   EDGE_BIND          test mode only: a whole `bind` directive ("bind 127.0.0.1"
+#                      in docker-compose.edge-test.yml). Unset in production =
+#                      Caddy's default, every interface.
+#   REDIRECT_UPSTREAM  the click service (production: 127.0.0.1:3001; default
+#                      redirect:3001, the service name, for an edge on the
+#                      compose network as in docker/README.md's smoke test)
+#   WEB_UPSTREAM       the web app (production: 127.0.0.1:3002; default web:3000)
 #
 # Routing:
 #   www.${SITE_HOST}/<path>?<query>  → 301 to https://${SITE_HOST}/<path>?<query>
-#   /r/*                             → redirect:3001 (the click service)
-#   everything else                  → web:3000 (the Next.js app; it serves
+#   /r/*                             → REDIRECT_UPSTREAM (the click service)
+#   everything else                  → WEB_UPSTREAM (the Next.js app; it serves
 #                                      /api/* as its same-origin proxy to the
 #                                      API, so the API itself is not public;
 #                                      provider webhooks and payout callbacks
@@ -24,11 +33,16 @@
 #
 # Client address: with no `trusted_proxies`, Caddy trusts no client and
 # REPLACES any client-supplied X-Forwarded-For with the address it saw (its
-# default; asserted end to end in docker/README.md). X-Real-IP is overwritten
-# with the same address and Forwarded is removed, so no header a shopper
-# sends can choose the address the redirect hashes into clicks.context.ip_hash
-# (api and redirect run with TRUST_PROXY=loopback,uniquelocal, i.e. they trust
-# this proxy on the compose network and nothing else).
+# default; asserted end to end in docker/README.md and by the Linode
+# installer's rehearsal). X-Real-IP is overwritten with the same address and
+# Forwarded is removed, so no header a shopper sends can choose the address
+# the redirect hashes into clicks.context.ip_hash (api and redirect run with
+# TRUST_PROXY=loopback,uniquelocal: they trust this proxy, which reaches them
+# from the compose network's private gateway, and nothing else).
+#
+# Admin API: off. With host networking it would listen on the server's
+# localhost:2019; nothing here reloads Caddy at run time (a changed Caddyfile
+# is applied by restarting the edge, which the installer does).
 #
 # Logs: no access log is configured (Caddy writes none unless asked), and the
 # default log — startup, certificates, errors — drops the client address and
@@ -39,6 +53,7 @@
 # open item).
 {
 	email "{$ACME_EMAIL}"
+	admin off
 
 	log default {
 		output stderr
@@ -67,6 +82,8 @@
 }
 
 {$EDGE_ADDRESS} {
+	{$EDGE_BIND}
+
 	header {
 		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options "nosniff"
@@ -81,7 +98,7 @@
 	redir @www https://{$SITE_HOST}{uri} permanent
 
 	handle /r/* {
-		reverse_proxy redirect:3001 {
+		reverse_proxy {$REDIRECT_UPSTREAM:redirect:3001} {
 			import proxy_headers
 		}
 	}
@@ -91,7 +108,7 @@
 		request_body {
 			max_size 4MB
 		}
-		reverse_proxy web:3000 {
+		reverse_proxy {$WEB_UPSTREAM:web:3000} {
 			import proxy_headers
 		}
 	}
