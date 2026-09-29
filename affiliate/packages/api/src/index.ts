@@ -8,6 +8,7 @@ import { offersRoutes } from './routes/offers.js';
 import { linksRoutes } from './routes/links.js';
 import { integrationsRoutes } from './routes/integrations.js';
 import { csvUploadsRoutes } from './routes/csv-uploads.js';
+import { amazonReportsRoutes } from './routes/amazon-reports.js';
 import { earningsRoutes } from './routes/earnings.js';
 import { payoutsRoutes } from './routes/payouts.js';
 import { programmesRoutes } from './routes/programmes.js';
@@ -51,6 +52,7 @@ export async function buildApp(opts: { logStream?: { write(line: string): void }
   await app.register(linksRoutes);
   await app.register(integrationsRoutes);
   await app.register(csvUploadsRoutes);
+  await app.register(amazonReportsRoutes);
   await app.register(earningsRoutes);
   await app.register(payoutsRoutes);
   await app.register(programmesRoutes);

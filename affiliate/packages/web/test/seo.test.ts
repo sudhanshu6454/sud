@@ -9,6 +9,7 @@ import {
   OG_IMAGE_PATH,
   PRE_LAUNCH_ROBOTS,
   ROBOTS_DISALLOW,
+  ROBOTS_DISALLOW_TRACKED_LINKS,
   SITEMAP_PATHS,
   isTestLabelledTitle,
   pageMetadata,
@@ -207,8 +208,9 @@ describe('robots.txt (SITE_INDEXING=on)', () => {
     expect(rules).toHaveLength(1);
     expect(rules[0]!.userAgent).toBe('*');
     expect(rules[0]!.allow).toEqual(['/', '/apple-icon.png']);
-    expect(rules[0]!.disallow).toEqual(['/app', '/brand', '/agency', '/admin', '/join', '/login', '/api', '/dev', '/saved']);
-    expect([...ROBOTS_DISALLOW]).toEqual(rules[0]!.disallow);
+    expect(rules[0]!.disallow).toEqual(['/app', '/brand', '/agency', '/admin', '/join', '/login', '/api', '/dev', '/saved', '/r/']);
+    // The web's own areas, then the redirect's tracked links (not a web route).
+    expect([...ROBOTS_DISALLOW, ROBOTS_DISALLOW_TRACKED_LINKS]).toEqual(rules[0]!.disallow);
   });
 
   it('app/robots.ts reads SITE_URL and SITE_INDEXING per request', () => {
@@ -245,8 +247,8 @@ describe('robots.txt (SITE_INDEXING=on)', () => {
   });
 
   it('never disallows a public page', () => {
-    const disallow = [...ROBOTS_DISALLOW];
-    for (const path of ['/', '/shop', '/looks/x', '/contact', '/terms', '/privacy']) {
+    const disallow = [...ROBOTS_DISALLOW, ROBOTS_DISALLOW_TRACKED_LINKS];
+    for (const path of ['/', '/shop', '/looks/x', '/contact', '/terms', '/privacy', '/robots.txt', '/sitemap.xml']) {
       // Robots rules are prefixes: nothing public may start with a disallowed one.
       expect(disallow.some((d) => path.startsWith(d)), path).toBe(false);
     }

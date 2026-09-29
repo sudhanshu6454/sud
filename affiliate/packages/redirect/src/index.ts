@@ -4,8 +4,13 @@ import Redis from 'ioredis';
 import { Queue } from 'bullmq';
 import { createHash, createHmac, randomUUID } from 'node:crypto';
 import {
+  AMAZON_PREVIEW_PAGE,
+  amazonRouteParams,
   apiError,
   buildEnvelope,
+  isAmazonAcceptedPlatform,
+  isLinkPreviewCrawler,
+  isSpeculativeRequest,
   parseTrustProxy,
   requestLogFields,
   type TrustProxySetting,
@@ -32,6 +37,27 @@ export { requestLogFields };
  *      (error log) rather than breaking the user journey.
  *   6. 302 to destination_url with the subid query param set to click_id
  *      (only when the click was persisted).
+ *
+ * Amazon.in Associates routes (the route payload carries `set_params`,
+ * `strip_params`, `subid_field: null` and `crawler_guard`, built by
+ * `amazonRouteParams` in @paparazzi/shared, both at mint time and in the DB
+ * fallback below): the destination is the stored canonical
+ * https://www.amazon.in/dp/<ASIN>; `tag`, `ascsubtag` and `subid` are
+ * removed, `tag` is set to the placement's tracking ID (else the account's
+ * store ID), and NO click id is ever added (LR: "Under no circumstances may
+ * you associate any sub-tag with a specific end user of your site"). The tag
+ * is applied even when the click could not be persisted (fail-open keeps the
+ * merchant's attribution). Automated clients (named link-preview crawlers,
+ * generic bot / crawler / headless / HTTP-library user agents, no user agent
+ * at all), prefetch / prerender / preview requests and HEAD requests get the
+ * preview page instead (HTTP 200, no click row, no tagged URL anywhere):
+ * Amazon forbids creating Sessions "by way of a robot or software program"
+ * (PR 27) and pages opened "other than as a result of the customer clicking"
+ * (PR 25) — a heuristic, counsel to confirm. A route whose Amazon account is
+ * disabled, whose property lost its owner_operated verification or approval,
+ * or whose property is on a platform Amazon links may not go on, serves the
+ * paused page (`route_block`).
+ * Every /r/ response carries `X-Robots-Tag: noindex, nofollow`.
  *
  * Tenant scoping: the token is a 128-bit unguessable bearer secret with a
  * global unique constraint, so the route lookup is by token alone (documented
@@ -88,10 +114,120 @@ interface RouteCache {
   programme_status: string;
   offer_status: string;
   fresh_until?: string | null;
-  subid_field?: string;
+  /**
+   * Query param carrying the click id. Absent = 'subid' (every payload
+   * written before Amazon existed); null = no click id on the destination
+   * (every Amazon route).
+   */
+  subid_field?: string | null;
+  /** Params removed from the destination before `set_params` (Amazon: tag, ascsubtag, subid). */
+  strip_params?: string[];
+  /** Params set on the destination, replacing any value already there (Amazon: tag). */
+  set_params?: Record<string, string>;
+  /** Automated clients, prefetches and HEAD requests get the preview page (Amazon routes). */
+  crawler_guard?: boolean;
+  /** Set when the route must not redirect (serves the paused page); e.g. 'amazon_account_disabled'. */
+  route_block?: string | null;
   org_id: string;
   link_id: string;
 }
+
+/** The redirect's own row shape for the DB fallback (exported for tests). */
+export interface RouteRow {
+  link_id: string;
+  org_id: string;
+  destination_url: string;
+  allowed_hosts: string[] | null;
+  programme_status: string;
+  offer_status: string;
+  /** timestamptz: pg returns string, pg-mem returns Date — both Date-parseable. */
+  fresh_until: string | Date | null;
+  /** Amazon Associates account of the offer's programme (null for every other programme). */
+  amazon_account_id?: string | null;
+  amazon_account_status?: string | null;
+  amazon_store_id?: string | null;
+  /** The link placement's own tracking ID, when one is mapped. */
+  amazon_placement_tracking_id?: string | null;
+  property_status?: string | null;
+  property_platform?: string | null;
+  /** Id of a live owner_operated verification of the placement's property, if any. */
+  owner_verification_id?: string | null;
+}
+
+/**
+ * Route payload from the DB row (exported for tests). For an Amazon programme
+ * the tag and the click-id rule come from `amazonRouteParams`, the same
+ * function POST /v1/links uses to warm the cache.
+ */
+export function routeFromRow(row: RouteRow): RouteCache {
+  const route: RouteCache = {
+    destination_url: row.destination_url,
+    allowed_hosts: row.allowed_hosts ?? [],
+    programme_status: row.programme_status,
+    offer_status: row.offer_status,
+    // Normalise to ISO text: the cache is JSON-serialised for Redis, and
+    // pg-mem returns timestamptz as Date while pg returns string.
+    fresh_until: row.fresh_until instanceof Date ? row.fresh_until.toISOString() : row.fresh_until,
+    subid_field: 'subid',
+    org_id: row.org_id,
+    link_id: row.link_id,
+  };
+  if (!row.amazon_account_id) return route;
+
+  const params = amazonRouteParams({
+    storeId: String(row.amazon_store_id ?? ''),
+    placementTrackingId: row.amazon_placement_tracking_id ?? null,
+  });
+  let block: string | null = null;
+  if (row.amazon_account_status !== 'active' || !row.amazon_store_id) block = 'amazon_account_disabled';
+  else if (row.property_status !== 'approved') block = 'property_not_approved';
+  else if (!row.owner_verification_id) block = 'property_not_owner_operated';
+  else if (!isAmazonAcceptedPlatform(row.property_platform)) block = 'property_platform_not_accepted';
+  return {
+    ...route,
+    subid_field: params.subid_field,
+    strip_params: params.strip_params,
+    set_params: params.set_params,
+    crawler_guard: params.crawler_guard,
+    route_block: block,
+  };
+}
+
+/**
+ * The DB fallback: one query across the route graph, by token alone (see
+ * the file docstring). The Amazon joins are LEFT joins that match nothing
+ * for any other programme; each is keyed to the link's own organisation.
+ * The verification join keeps only live owner_operated rows, so a duplicate
+ * row can only repeat the same answer (`limit 1`).
+ */
+export const ROUTE_SQL = `select l.id as link_id, l.org_id as org_id,
+            o.offer_url as destination_url,
+            pc.allowed_domains as allowed_hosts,
+            p.status as programme_status,
+            o.status as offer_status,
+            o.fresh_until as fresh_until,
+            aa.id as amazon_account_id,
+            aa.status as amazon_account_status,
+            aa.store_id as amazon_store_id,
+            t.tracking_id as amazon_placement_tracking_id,
+            pr.status as property_status,
+            pr.platform as property_platform,
+            v.id as owner_verification_id
+       from links l
+       join offers o on o.id = l.offer_id
+       join programmes p on p.id = o.programme_id
+       join placements pl on pl.id = l.placement_id and pl.org_id = l.org_id
+       join properties pr on pr.id = pl.property_id and pr.org_id = l.org_id
+       left join programme_capabilities pc on pc.programme_id = p.id
+       left join amazon_associates_accounts aa on aa.programme_id = p.id and aa.org_id = l.org_id
+       left join amazon_tracking_ids t
+              on t.account_id = aa.id and t.placement_id = l.placement_id and t.org_id = l.org_id
+       left join verifications v
+              on v.property_id = pl.property_id and v.org_id = l.org_id
+             and v.method = 'owner_operated' and v.verified_at is not null
+             and (v.expires_at is null or v.expires_at > now())
+      where l.token = $1 and l.status = 'active'
+      limit 1`;
 
 const TOKEN_RE = /^[0-9a-f]{32}$/;
 
@@ -128,6 +264,19 @@ export function hashClientAddress(ip: string, key: string | null): string {
     : createHash('sha256').update(ip).digest('hex');
 }
 
+/**
+ * What an automated client (or a prefetch, or a HEAD request) gets for an
+ * Amazon route: no click row, no redirect, and no tagged URL anywhere in the
+ * page. The words are @paparazzi/shared AMAZON_PREVIEW_PAGE (drafts pending
+ * counsel: they are what link cards show under every post).
+ */
+const PREVIEW_HTML = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="robots" content="noindex, nofollow"><title>${AMAZON_PREVIEW_PAGE.title}</title></head>
+<body style="font-family:sans-serif;max-width:36rem;margin:4rem auto;padding:0 1rem">
+<h1>${AMAZON_PREVIEW_PAGE.heading}</h1>
+<p>${AMAZON_PREVIEW_PAGE.body}</p>
+</body></html>`;
+
 const PAUSED_HTML = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>Link paused</title></head>
 <body style="font-family:sans-serif;max-width:36rem;margin:4rem auto;padding:0 1rem">
@@ -150,45 +299,11 @@ async function loadRoute(pool: Pool, token: string, req: FastifyRequest): Promis
   // 2) DB fallback — single query across the route graph.
   // NOTE: links.token is globally unique, so this lookup is by token alone;
   // the row's org_id scopes every subsequent write (see file docstring).
-  const { rows } = await pool.query<{
-    link_id: string;
-    org_id: string;
-    destination_url: string;
-    allowed_hosts: string[] | null;
-    programme_status: string;
-    offer_status: string;
-    /** timestamptz: pg returns string, pg-mem returns Date — both Date-parseable. */
-    fresh_until: string | Date | null;
-  }>(
-    `select l.id as link_id, l.org_id as org_id,
-            o.offer_url as destination_url,
-            pc.allowed_domains as allowed_hosts,
-            p.status as programme_status,
-            o.status as offer_status,
-            o.fresh_until as fresh_until
-       from links l
-       join offers o on o.id = l.offer_id
-       join programmes p on p.id = o.programme_id
-       left join programme_capabilities pc on pc.programme_id = p.id
-      where l.token = $1 and l.status = 'active'
-      limit 1`,
-    [token],
-  );
+  const { rows } = await pool.query<RouteRow>(ROUTE_SQL, [token]);
   const row = rows[0];
   if (!row) return null;
 
-  const route: RouteCache = {
-    destination_url: row.destination_url,
-    allowed_hosts: row.allowed_hosts ?? [],
-    programme_status: row.programme_status,
-    offer_status: row.offer_status,
-    // Normalise to ISO text: the cache is JSON-serialised for Redis, and
-    // pg-mem returns timestamptz as Date while pg returns string.
-    fresh_until: row.fresh_until instanceof Date ? row.fresh_until.toISOString() : row.fresh_until,
-    subid_field: 'subid',
-    org_id: row.org_id,
-    link_id: row.link_id,
-  };
+  const route = routeFromRow(row);
 
   // Best-effort cache rebuild.
   try {
@@ -203,6 +318,8 @@ async function loadRoute(pool: Pool, token: string, req: FastifyRequest): Promis
 async function handleRedirect(pool: Pool, ipHashKey: string | null, req: FastifyRequest, reply: FastifyReply) {
   const requestId = randomUUID();
   const token = (req.params as { token?: string }).token ?? '';
+  // /r/ is a redirect, never a page to index (brief §1.5); set on every answer.
+  reply.header('x-robots-tag', 'noindex, nofollow');
 
   if (!TOKEN_RE.test(token)) {
     return reply.code(404).send(apiError('NOT_FOUND', 'Unknown link', requestId));
@@ -215,7 +332,8 @@ async function handleRedirect(pool: Pool, ipHashKey: string | null, req: Fastify
 
   // 3) Eligibility — paused programme/offer/stale offer serves the paused page.
   const fresh = !route.fresh_until || new Date(route.fresh_until).getTime() > Date.now();
-  if (route.programme_status !== 'active' || route.offer_status !== 'active' || !fresh) {
+  if (route.programme_status !== 'active' || route.offer_status !== 'active' || !fresh || route.route_block) {
+    if (route.route_block) req.log.warn({ token, reason: route.route_block }, 'route blocked; serving the paused page');
     return reply.code(200).type('text/html').send(PAUSED_HTML);
   }
 
@@ -231,6 +349,19 @@ async function handleRedirect(pool: Pool, ipHashKey: string | null, req: Fastify
     req.log.warn({ token, hostname: target.hostname }, 'redirect blocked: hostname not in allowed_hosts');
     return reply.code(403).send(apiError('PROGRAMME_NOT_APPROVED', 'Destination not permitted', requestId));
   }
+
+  // 4b) Amazon: automated clients, prefetches and HEAD never create a click or see the tagged URL.
+  if (
+    route.crawler_guard &&
+    (req.method === 'HEAD' || isSpeculativeRequest(req.headers) || isLinkPreviewCrawler(req.headers['user-agent']))
+  ) {
+    return reply.code(200).type('text/html').header('cache-control', 'no-store').send(PREVIEW_HTML);
+  }
+
+  // Destination params (Amazon): strip, then set. Applied whether or not the
+  // click persists below, so the merchant's own attribution never fails open.
+  for (const name of route.strip_params ?? []) target.searchParams.delete(name);
+  for (const [name, value] of Object.entries(route.set_params ?? {})) target.searchParams.set(name, value);
 
   // 5) Click persistence + event enqueue. Fail-open on persistence failure:
   // redirect anyway WITHOUT click_id (no subid param), with observable loss.
@@ -261,9 +392,12 @@ async function handleRedirect(pool: Pool, ipHashKey: string | null, req: Fastify
     req.log.error({ err, token, click_id: clickId }, 'click persistence failed; redirecting without click_id (event loss)');
   }
 
-  // 6) 302 — subid only when the click was actually persisted.
-  if (persisted) {
-    target.searchParams.set(route.subid_field || 'subid', clickId);
+  // 6) 302 — the click id only when the click was actually persisted, and
+  // only when the route carries a click-id param at all (legacy payloads
+  // without the key: 'subid'; Amazon: never).
+  const subidField = route.subid_field === undefined ? 'subid' : route.subid_field;
+  if (persisted && subidField) {
+    target.searchParams.set(subidField, clickId);
   }
   return reply.code(302).header('location', target.toString()).send();
 }

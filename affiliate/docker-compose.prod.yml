@@ -185,6 +185,14 @@ services:
       RETENTION_CONVERSION_RAW_DAYS: ${RETENTION_CONVERSION_RAW_DAYS:-365}
       RETENTION_OUTBOX_DAYS: ${RETENTION_OUTBOX_DAYS:-365}
       RETENTION_CRON: ${RETENTION_CRON:-0 3 * * *}
+      # Amazon Creators API (product prices for Amazon.in Associates offers).
+      # SECRETS, optional: empty = no price refresh; Amazon offers show no price
+      # and links / conversions work as before. The hourly job still drops
+      # prices older than 1 hour (packages/workers/src/amazon/refresh.ts).
+      AMAZON_CREATORS_CREDENTIAL_ID: ${AMAZON_CREATORS_CREDENTIAL_ID:-}
+      AMAZON_CREATORS_CREDENTIAL_SECRET: ${AMAZON_CREATORS_CREDENTIAL_SECRET:-}
+      AMAZON_CREATORS_CREDENTIAL_VERSION: ${AMAZON_CREATORS_CREDENTIAL_VERSION:-3.2}
+      AMAZON_REFRESH_CRON: ${AMAZON_REFRESH_CRON:-17 * * * *}
       LOG_LEVEL: ${LOG_LEVEL:-info}
     depends_on:
       migrate:
@@ -214,6 +222,10 @@ services:
       # web_placement_id from seed-network.
       WEB_API_TOKEN: ${WEB_API_TOKEN:-}
       WEB_PLACEMENT_ID: ${WEB_PLACEMENT_ID:-}
+      # "on" = the site takes part in Amazon.in Associates: every page's footer
+      # carries Amazon's Associate statement. Anything else (the default) = no
+      # such line. Set by deploy/linode/amazon.sh setup.
+      AMAZON_ASSOCIATE: ${AMAZON_ASSOCIATE:-off}
       # Canonical URLs, og:url, robots.txt and the sitemap.
       SITE_URL: ${SITE_URL:-https://${SITE_HOST:-afflino.com}}
       # "on" opens the site to search engines. Anything else (the default,

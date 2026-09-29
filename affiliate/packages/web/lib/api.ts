@@ -324,7 +324,14 @@ export function linkErrorMessage(code: ApiCode): string {
 
 /* ---------- suspense queue ops (v1, operator console) ---------- */
 
-export type SuspenseReasonCode = 'CLICK_REF_UNMATCHED' | 'NO_CLICK_REF';
+/** The API's reason codes (docs/openapi.yaml SuspenseItem.reason_code; the last four: Amazon.in Associates' tracking IDs). */
+export type SuspenseReasonCode =
+  | 'CLICK_REF_UNMATCHED'
+  | 'NO_CLICK_REF'
+  | 'TRACKING_ID_UNMAPPED'
+  | 'TRACKING_ID_IS_STORE_DEFAULT'
+  | 'TRACKING_ID_MAPPED_AFTER_SALE'
+  | 'ATTRIBUTION_CONFLICT';
 
 export interface SuspenseItem {
   id: string;
@@ -333,6 +340,8 @@ export interface SuspenseItem {
   provider_account_id: string;
   source_transaction_id: string;
   returned_click_ref: string | null;
+  /** The tracking ID the provider reported (Amazon.in Associates); absent from older APIs. */
+  returned_tracking_ref?: string | null;
   currency: string;
   eligible_value_minor: number;
   commission_minor: number;
@@ -356,7 +365,8 @@ export interface SuspenseListResponse {
 export interface SuspenseRetryResponse {
   id: string;
   attributed: boolean;
-  click_id?: string;
+  click_id?: string | null;
+  placement_id?: string | null;
   reason?: SuspenseReasonCode;
 }
 

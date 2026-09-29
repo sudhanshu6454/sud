@@ -88,3 +88,37 @@
   cached while paused cannot keep serving the paused page until TTL expiry.
 - The service sets no cookies and reads none; denying consent changes
   nothing observable on this path (covered by the phase-3 acceptance test).
+
+## Amazon.in Associates routes (2026-09-29)
+
+- The route payload may carry `strip_params`, `set_params`, `crawler_guard`, `route_block` and
+  `subid_field: null` (built by `amazonRouteParams` in @paparazzi/shared, identically at mint
+  and in the DB fallback). A payload without `subid_field` (every one written before) keeps
+  `subid`; an explicit null adds no click id at all.
+- For Amazon: `tag`, `ascsubtag` and `subid` are removed, `tag` = the link placement's tracking
+  ID (else the account's store ID) is set, and no click id is ever added — sub-tags are off and
+  cannot be turned on (LR: "Under no circumstances may you associate any sub-tag with a
+  specific end user of your site"; the setting was removed on review, 2026-09-29). The tag is
+  set before the click insert, so the fail-open 302 keeps it.
+- The DB fallback now also joins the link's placement, its property, the Amazon account, the
+  placement's tracking ID and a live `owner_operated` verification (LEFT joins, each keyed to
+  the link's org). A disabled account, a property no longer approved or no longer
+  owner-operated, or a property on a platform Amazon links may not go on (anything but
+  Facebook, Instagram and web: `isAmazonAcceptedPlatform`) serves the paused page (logged with
+  the reason).
+  A verification change has no invalidation hook: a cached route keeps redirecting for up to
+  600 s (mint) / 300 s (rebuild).
+- **Automated clients, prefetches and HEAD** (Amazon routes only): a 200 HTML page with no
+  click row and no Amazon URL in it (its words: `AMAZON_PREVIEW_PAGE` in @paparazzi/shared,
+  drafts pending counsel — link cards show them under every post). PR 27 bars creating
+  Sessions on the Amazon Site "by way of a robot or software program"; PR 25 bars Amazon pages
+  opened "other than as a result of the customer clicking". Matched: `LINK_PREVIEW_CRAWLER_RE`
+  (named previewers and crawlers, generic `bot` (not `CUBOT` phones) / `crawl` / `spider` /
+  `scrap` / `preview` / `headless` tokens, curl, wget, python-requests, Go, okhttp, Java,
+  Apache HttpClient, libwww, axios, node-fetch, undici, …), a missing or empty user agent, and
+  `isSpeculativeRequest` (`Sec-Purpose: prefetch` / `prefetch;prerender`, `Purpose:
+  prefetch`, `X-Purpose: preview`, `X-Moz: prefetch`). In-app browsers are people and are not
+  matched. A heuristic, counsel to confirm; a bot that sends a browser's user agent still gets
+  the 302.
+- Every `/r/` response carries `X-Robots-Tag: noindex, nofollow` (OA §7 excludes fees on
+  Redirecting Links shown in organic search results).

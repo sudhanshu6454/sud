@@ -14,17 +14,28 @@ Everything here runs from this directory; nothing outside it is needed.
 ## Verified state (2026-09-29)
 
 - `pnpm typecheck` clean on all 5 packages (`packages/*`)
-- **679/679 tests green across 37 test files** (`./node_modules/.bin/vitest run`:
-  api 136, redirect 10, shared 15, workers 15, web 503)
+- **784/784 tests green across 45 test files** (`./node_modules/.bin/vitest run`:
+  api 199, redirect 10, shared 28, workers 24, web 523; re-run 2026-09-29 after
+  the Amazon review fixes)
 - Demo: **51/51 assertions** on pg-mem (`tsx scripts/demo-money-loop.ts`) **and
   51/51 on a real PostgreSQL 16.13** (`DEMO_TARGET=postgres`, scratch database
   `paparazzi_demo_<8 hex>` created and dropped, no shims) — link → click →
   conversion → attribution → ledger posting → 50% reversal → payout batch →
   maker-checker → payout, **including payout-failure handling** (unknown outcome →
   blind retry refused 409 → status query → informed retry → paid, no double payout)
-- Migrations `0001`–`0005` apply on a fresh Postgres 16 and are recorded in
-  `schema_migrations`; a second run is a no-op (`0 migration(s) applied, 5 already
-  applied`); `--status` and `--baseline` work
+- **Amazon report imports under concurrency, on real PostgreSQL 16.13**
+  (`pnpm race:pg`, `scripts/amazon-import-race.ts`, scratch database
+  `paparazzi_demo_race_<8 hex>` created and dropped; also in CI): 10 rounds × 6
+  concurrent return files against one 160.00 sale reverse exactly 16000 paise
+  each (before the fix: up to 5×), the publisher's liability on them 0, never
+  below; 10 concurrent pairs of one row at 160.00 vs 999.00 give exactly one
+  202 and one 409 each (before: both accepted in 9 of 10); books balanced
+- Migrations `0001`–`0006` apply on a fresh Postgres 16 and are recorded in
+  `schema_migrations`; a second run is a no-op (`0 migration(s) applied, 6 already
+  applied`); `--status` and `--baseline` work; `0006_amazon_associates.sql` also
+  applies on top of a database migrated to 0005 and seeded like production
+  (`1 migration(s) applied, 5 already applied`, every row count unchanged, a
+  second network seed byte-identical; re-run after the review fixes)
 - `db/seed.ts` and `db/seed-network.ts --with-demo-programme` run on real Postgres;
   the network seed is idempotent (identical row counts and byte-identical JSON on
   a second run), keeps operator status changes, and refuses (rolling back) to take
@@ -51,8 +62,9 @@ Everything here runs from this directory; nothing outside it is needed.
   TEST network looks live → `mint-links.mjs` mints → the look page carries the
   tracked link → `GET /r/{token}` → 302 with `subid`, no `set-cookie` → one
   `clicks` row → workers log `click.observed` (`docker/README.md`, smoke test,
-  re-run 2026-09-29 with the network seed, again through the edge, and again
-  after the review fixes with the 413 and upstream-down 502 probes)
+  re-run 2026-09-29 with the network seed, again through the edge, again
+  after the review fixes with the 413 and upstream-down 502 probes, and again
+  verbatim after the Amazon review fixes, every observed line unchanged)
 - **Production deploy shape for afflino.com** (2026-09-29): the edge
   (`caddy:2-alpine` + `docker/Caddyfile`) is the only public listener;
   `docker-compose.prod.yml` + `docker-compose.single-host.yml` (Postgres 16 +
@@ -101,6 +113,48 @@ Everything here runs from this directory; nothing outside it is needed.
   networking** (sees real IPv4 and IPv6 client addresses, so afflino.com
   gets an AAAA record; `docker/ASSUMPTIONS.md` item 19). Not run on the
   real Linode; no real certificate, GoDaddy API call or IPv6 test.
+- **Amazon.in Associates** (2026-09-29; the owner's "lets integrate amazon
+  affiliate now"; re-verified after two independent reviews' fixes): built
+  config-driven with TEST values only and **not on afflino.com** until the
+  owner runs `docs/runbooks/deploy.md` §1A with the real account. Links
+  `afflino.com/r/<token>` for the owner's own Facebook / Instagram / web
+  properties only (`owner_operated`, 403 `PROPERTY_NOT_OWNER_OPERATED`
+  otherwise, no setting allows third parties; Snapchat / Telegram 403
+  `PROPERTY_FORBIDDEN`) → 302 to `https://www.amazon.in/dp/<ASIN>?tag=<the
+  page's tracking ID>`, never a click id (no `subid`, no `ascsubtag`, no
+  setting for one), no cookie, `X-Robots-Tag: noindex, nofollow`; automated
+  clients (named previewers, generic bot / HTTP-library user agents, none),
+  prefetches and HEAD get a preview page; the earnings download imported as
+  conversions attributed by tracking ID, one import at a time per account,
+  return reversals atomic, an unmatched return applied by the owner's
+  choice (`returns`); the CSV / webhook adapters refuse Amazon's programme
+  and account (422); the shop's Amazon copy ("Buy on Amazon.in", OA §10's
+  statement always first, a price only from the product API within 1 h with
+  "(as of … IST)" and Amazon's disclaimer, else "See price on Amazon.in";
+  "You complete the purchase on Amazon.in; Amazon.in's terms apply.";
+  "Affiliate links: Yes" on Amazon looks). The owner's steps are one line
+  each (`deploy/linode/amazon.sh keys | template | setup | offers | links |
+  shop | import | returns | check | pause | resume`, hidden prompts,
+  ShellCheck 0.11.0 / 0.9.0 clean; `setup` turns the footer statement on;
+  `links` and `shop` refuse while `/privacy` is the stub), rehearsed end to
+  end on the installer's stack in test mode with the prompts fed from
+  standard input, both privacy refusals shown and then skipped with the
+  test-only setting (`deploy/linode/README.md` "What was checked"; what each
+  step printed: `docs/runbooks/deploy.md` §1A). The backend end to end on a
+  production-shaped scratch database (tsx api + redirect, Redis 7): setup
+  (TEST values refused under production; Snapchat / Telegram rows and an
+  "alexa" tracking ID refused) → links (6, `post_label` on each) → `/r/` 302
+  `…/dp/B0DEMO0001?tag=demo-ig-21`, one click, 64-character IP hash; curl /
+  python-requests / Go / HeadlessChrome / previewers / prefetch / HEAD → 200
+  preview, no click → import (2 by tracking ID, 2 suspense:
+  `TRACKING_ID_UNMAPPED`, `TRACKING_ID_MAPPED_AFTER_SALE`) → ledger balanced,
+  11200 / 4800 at 70/30 → 3 re-imports deduped → a changed fee 409, nothing
+  written → the return: IG sale at 5600 / 2400 → an ambiguous return listed,
+  `apply-return` applied once (2800 off the publisher), re-run and re-import
+  deduped → the CSV and webhook adapters 422 → books INR 51984 / 51984. Every
+  Amazon / counsel question is open (`docs/action-tracker.md` "Amazon.in
+  Associates", `docs/counsel-briefing.md` §9); nothing here is a compliance
+  claim.
 - The CI workflow `afflino` (`.github/workflows/afflino.yml`, runs on changes
   under `affiliate/`) runs the frozen install, typecheck, vitest, both demos, the
   web build and the real-Postgres migrate + seeds; no run has been observed from
@@ -113,10 +167,11 @@ not at the repo root, so the scripts that need it are given with the api package
 copy.
 
 ```bash
-./node_modules/.bin/vitest run                                        # tests (669)
+./node_modules/.bin/vitest run                                        # tests (784)
 pnpm typecheck                                                        # 5 packages
 ./packages/api/node_modules/.bin/tsx scripts/demo-money-loop.ts       # demo on pg-mem (51 assertions)
 DATABASE_URL=postgresql://paparazzi:changeme@127.0.0.1:5432/paparazzi DEMO_TARGET=postgres ./packages/api/node_modules/.bin/tsx scripts/demo-money-loop.ts   # same demo on real Postgres (scratch DB, dropped)
+DATABASE_URL=postgresql://paparazzi:changeme@127.0.0.1:5432/paparazzi ./packages/api/node_modules/.bin/tsx scripts/amazon-import-race.ts   # Amazon imports under concurrency (pnpm race:pg; scratch DB, dropped)
 docker compose up -d postgres redis                                   # real Postgres + Redis (dev machine)
 DATABASE_URL=postgresql://paparazzi:changeme@127.0.0.1:5432/paparazzi node db/migrate.mjs             # apply pending migrations
 DATABASE_URL=postgresql://paparazzi:changeme@127.0.0.1:5432/paparazzi node db/migrate.mjs --status    # applied / pending
@@ -126,7 +181,8 @@ WEB_HOST=shop.example.com DATABASE_URL=postgresql://paparazzi:changeme@127.0.0.1
 pnpm --filter @paparazzi/web build                                    # Next standalone build
 node scripts/load/redirect-soak.js --smoke                            # load smoke (needs a real deployment for meaning)
 JWT_SECRET=ci STUB_WEBHOOK_SECRET=ci POSTGRES_PASSWORD=ci docker compose -f docker-compose.prod.yml -f docker-compose.single-host.yml config -q   # compose check (as CI)
-shellcheck deploy/linode/*.sh                                         # the Linode scripts (CI; not installed in this sandbox)
+shellcheck deploy/linode/*.sh                                         # the Linode scripts (CI; 0.11.0 and 0.9.0 were run by hand for the 2026-09-29 changes)
+DATABASE_URL=postgresql://paparazzi:changeme@127.0.0.1:5432/paparazzi ./packages/api/node_modules/.bin/tsx packages/api/src/cli/amazon.ts status   # the Amazon operator CLI (setup | offers | template | links | import-report | returns | apply-return | status | pause | resume)
 ```
 
 The owner's one line, as root on the Linode (install and every update;
@@ -142,7 +198,7 @@ throwaway `AFFLINO_PROJECT`, scratch `AFFLINO_ENV_FILE` /
 `AFFLINO_BACKUP_DIR`; in this sandbox an `AFFLINO_EXTRA_COMPOSE_FILE`
 with `NODE_IMAGE: local/node22-alpine-ca` build args), then `down -v`.
 
-Notes: `pnpm demo`, `pnpm demo:pg`, `pnpm seed`, `pnpm seed:network` call the api
+Notes: `pnpm demo`, `pnpm demo:pg`, `pnpm race:pg`, `pnpm seed`, `pnpm seed:network` call the api
 package's `tsx` (`./packages/api/node_modules/.bin/tsx`); the root has none.
 `pnpm install --frozen-lockfile` **works** (the earlier "known-broken" note is
 obsolete; CI runs it). `packageManager` pins pnpm 9.12.0 and the Dockerfiles'
@@ -159,7 +215,24 @@ runs and the docker smoke test.
   (`routes/csv-uploads.ts`) are thin adapters over `ingestConversionEvent`.
   `src/finance.ts` (ledger posting), `src/payout-rail.ts` (fake rail + unknown-
   outcome guard), `src/idempotency.ts`. `scripts/mint-dev-token.mjs` (JWT stub)
-  and `scripts/mint-links.mjs` ship in the api image.
+  and `scripts/mint-links.mjs` ship in the api image. **Amazon.in Associates**
+  (`src/amazon/`, 2026-09-29): the Amazon earnings report
+  (`routes/amazon-reports.ts`, `POST /v1/integrations/amazon-associates/reports`,
+  and the CLI's `import-report`) is a third thin adapter over the same money
+  path (`src/amazon/report-format.ts` the column table, layout to confirm with
+  a real export; `report-import.ts`: one import at a time per account, a
+  session advisory lock; returns reversed atomically,
+  `insertReversalWithinRemainder`; unmatched returns applied by the
+  operator's choice, `src/amazon/returns.ts`); the CSV and webhook adapters
+  refuse the Amazon programme and account (422); attribution by tracking ID
+  (`resolveAttribution` in `conversion-ingest.ts`: the ONE placement the ID is
+  mapped to, the mapping older than the sale; `conversions.placement_id`,
+  never with `click_id`); the ledger walks placement → campaign → publisher
+  with the same contract lookup and snapshot as a click (`finance.ts`).
+  `src/cli/amazon.ts` (`dist/cli/amazon.js` in the image: setup, offers,
+  template, links, import-report, returns, apply-return, status, pause,
+  resume; `links` and the kill switch go through the API's own routes
+  in-process, `src/amazon/links.ts`).
 - **Catalogue endpoints** (`routes/looks.ts`, the consumer shop's read path):
   `GET /v1/looks` (published, paginated; each item carries `source_page`,
   `sponsored`, `cover_url`, `item_count`) and `GET /v1/looks/:id?placement_id=`
@@ -167,13 +240,22 @@ runs and the docker smoke test.
   fresh_until > now() AND programmes.status='active'`, cheapest wins, and — only
   with a `placement_id` — the existing active `links` row as `{token, url}`).
   `offers.offer_url` is never selected; the consumer only ever gets the tracked
-  `/r/{token}` URL or `null`. Visibility is 404-only: another org's look, a
+  `/r/{token}` URL or `null`. The offer carries `connector`, and a programme
+  with a price age limit (Amazon: 1 h) returns `price_minor` / `price_as_of`
+  only for a product-API price inside it, else null and `stock_status`
+  `unknown` (`src/offer-price.ts`). Visibility is 404-only: another org's look, a
   non-published look for any role but `editor`/`network_admin`, and a
   `placement_id` outside the org are all `404 NOT_FOUND`. `url` is built by
   `src/redirect-url.ts` (`REDIRECT_BASE_URL` + `/r/` + token), shared with
   `POST /v1/links`. Tests: `test/catalogue.test.ts`.
 - `packages/redirect` — standalone `GET /r/{token}` click service. Persists click
-  records binding `click_id → placement`; sets **no cookies**; Redis route cache
+  records binding `click_id → placement`; sets **no cookies**; for an Amazon
+  programme it strips `tag` / `ascsubtag` / `subid`, sets `tag` to the
+  placement's tracking ID (else the store ID) and never adds a click id,
+  answers automated clients, prefetches and HEAD with the preview page,
+  serves the paused page for a disabled account or a property that is not
+  approved, not owner-operated or not on Facebook / Instagram / web, and
+  `X-Robots-Tag: noindex, nofollow` on every `/r/` response; Redis route cache
   (600 s on mint, 300 s on rebuild; the kill switch deletes a programme's
   entries after its commit and again 2 s later, `routes/programmes.ts`);
   fail-open (302 without `subid` if the click
@@ -186,7 +268,10 @@ runs and the docker smoke test.
   records the address (`requestLogFields`). Under `NODE_ENV=production` api,
   redirect and workers refuse to boot without `REDIS_URL`.
 - `packages/workers` — BullMQ workers: click events, provider events, ledger
-  mirror, outbox, suspense retry, retention purge (`src/retention/`).
+  mirror, outbox, suspense retry, retention purge (`src/retention/`), and the
+  hourly Amazon price job (`src/amazon/`: drops prices older than 1 h; with
+  Creators API credentials, `AMAZON_CREATORS_*`, refreshes them, backs off on
+  429 / 401 / 403, reactivates an offer Amazon lists again).
 - `packages/web` — Next.js 14.2, the **Afflino** web app built to the design
   handover (tokens `app/globals.css`, self-hosted Archivo, primitives
   `components/ui`, shells `components/shell`; route map with artboard ids and
@@ -224,8 +309,23 @@ runs and the docker smoke test.
   `API_BASE` (not a `rewrites()` entry — those are frozen at build). Every
   catalogue fetch is `revalidate: 60`; pages are `force-dynamic`. The merchant CTA
   is `<a href="{link.url}" rel="sponsored nofollow noopener">` or a visibly
-  disabled control; no raw merchant URL exists in the bundle.
-- `db/migrations/` — `0001_core.sql` → `0005_looks_web.sql`, append-only;
+  disabled control; no raw merchant URL exists in the bundle. Amazon offers
+  (`offer.connector`, `components/shop/model.ts` `offerCopy`; web
+  ASSUMPTIONS 79–85): "Buy on Amazon.in", OA §10's Associate statement near
+  the CTA, "See price on Amazon.in" or the API's price with "(as of … IST)" and
+  Amazon's disclaimer / attribution line (`lib/site-copy.ts` `AMAZON_IN`: Amazon's
+  own text pinned; the labels, the purchase note and the look's "Affiliate
+  links" fact drafts pending counsel); the statement always first (an
+  operator's disclosure only after it); no Amazon price in the wishlist;
+  `AMAZON_ASSOCIATE=on` (runtime, set by `amazon.sh setup`) puts the
+  statement in every footer; robots.txt disallows `/r/`; `/privacy` is a
+  `StubPage` (`data-document-status="stub"`), which `amazon.sh links` /
+  `shop` refuse to go past.
+- `db/migrations/` — `0001_core.sql` → `0006_amazon_associates.sql` (the
+  Associates account — no sub-tag or third-party column — tracking ID → one
+  placement, nullable / time-limited offer prices with `stale_reason`,
+  `conversions.placement_id`; 0006 was edited in place during review before
+  it was ever committed or applied outside scratch databases), append-only;
   `db/migrate.mjs` records files in `schema_migrations` (`--status`,
   `--baseline`); `db/seed.ts` (demo graph), `db/seed-network.ts` (the in-house
   publisher network from a network file — `--network` / `NETWORK_FILE`, default
@@ -251,7 +351,8 @@ runs and the docker smoke test.
   the env contract is `.env.prod.example`, the procedure
   `docs/runbooks/deploy.md` (rollback §3 = `git checkout afflino-previous`
   + `up -d --build`), the one-command install / update
-  `deploy/linode/install.sh` (`deploy/linode/README.md`). api and redirect
+  `deploy/linode/install.sh` (`deploy/linode/README.md`); the owner's Amazon
+  steps `deploy/linode/amazon.sh` (§1A of the runbook). api and redirect
   trust X-Forwarded-For from loopback and private-range peers
   (`TRUST_PROXY=loopback,uniquelocal`): only the stack's own containers
   and Docker's proxy for the 127.0.0.1 ports, through which the
@@ -263,6 +364,13 @@ runs and the docker smoke test.
 
 1. **Money is integer minor units with explicit currency.** Never floats, never
    implicit currency, never rounding on ingest (CSV decimals are rejected).
+   The one decimal input is a provider file that prints money as decimals
+   (the Amazon earnings report's rupees): converted to paise exactly from the
+   digits (`@paparazzi/shared` `parseDecimalMinorUnits`, BigInt, no fraction
+   or exactly two fraction digits — `160` and `160.00` are both 16000,
+   `160.5` and `160.005` are refused — Western or Indian grouping), anything
+   else refuses the whole file; the product API's prices likewise (no exact
+   conversion → no price).
 2. **Ledger is double-entry, balanced, append-only.** Every posting debits =
    credits per currency; corrections are mirror adjustment entries, never
    updates/deletes. `packages/shared` owns this math.
@@ -275,6 +383,14 @@ runs and the docker smoke test.
 6. **Never guess attribution.** Unmapped `returned_click_ref` → suspense queue.
    Suspense retry only binds when the click actually exists; `NULL` refs are
    rejected, no fuzzy matching — enforced in code (`routes/suspense.ts`).
+   The second basis (2026-09-29, Amazon) is exact too: a reported tracking ID
+   attributes only to the ONE placement it is mapped to, when the mapping is
+   older than the sale and the placement's campaign is the programme's; the
+   store ID, an unknown ID, a younger mapping or a click whose tag disagrees
+   → suspense with the reason stored (`TRACKING_ID_IS_STORE_DEFAULT`,
+   `TRACKING_ID_UNMAPPED`, `TRACKING_ID_MAPPED_AFTER_SALE`,
+   `ATTRIBUTION_CONFLICT`). Mappings are append-only (the setup never remaps a
+   tracking ID); suspense = `click_id IS NULL AND placement_id IS NULL`.
 7. **Maker-checker on payouts.** Approver cannot be preparer, cannot approve own
    batch (403, tested). Payout eligibility: approved + collected + return-hold
    cleared + payee checks.
@@ -283,7 +399,11 @@ runs and the docker smoke test.
    transfer row (tested — no double payout).
 9. **Unsupported merchants stay untracked.** Link guards return
    `PROGRAMME_NOT_APPROVED` / `OFFER_STALE` / `PROPERTY_FORBIDDEN` /
-   `PUBLISHER_NOT_ACTIVE`; minting is blocked at the redirect join too.
+   `PUBLISHER_NOT_ACTIVE` / `PROPERTY_NOT_OWNER_OPERATED` (Amazon: the owner's
+   tag only on the owner's own properties, PR 9, with no setting to allow
+   third parties; only Facebook / Instagram / web properties); minting is
+   blocked at the redirect join too. Amazon rows are written only by the
+   Amazon report path (the CSV / webhook adapters refuse them).
 10. **Dispute resolution never posts ledger entries.** A ticket can never create a
     payable sale (enforced in code).
 11. **Demo/seed data is always TEST-labeled** (`Demo-` / `demo.` / `txn-demo-*` /
@@ -305,7 +425,7 @@ runs and the docker smoke test.
   hot-path arithmetic (clicks/s, `clicks` growth, cache, replicas, the web) and
   what is still unmeasured
 - `docs/threat-model.md` — trust boundaries, mitigations cited to code/tests,
-  10 residual risks, pentest scope input
+  12 residual risks, pentest scope input
 - `docs/pentest-scope.md`, `docs/runbooks/` (deploy, backup-restore, alerts,
   incidents), `docs/monitoring/alerts.yaml`
 - `docs/infrastructure-recommendation.md` — the owner's Linode decision and the
@@ -342,7 +462,13 @@ runs and the docker smoke test.
 - No merchant programme exists. The only programme anywhere is the TEST "Demo
   Network Programme" from `db/seed-network.ts --with-demo-programme`
   (`shop.example.com`); the payout rail is the stub. Real ones are human-gated
-  (`docs/action-tracker.md`).
+  (`docs/action-tracker.md`). Amazon.in Associates is built but needs the
+  owner's account (§1A) and counsel's privacy notice on `/privacy` (its
+  `links` / `shop` steps refuse until then); its layout of the earnings
+  download is unconfirmed (no sample), nothing records Amazon's payments as
+  merchant settlements, so no Amazon earning becomes payable, and product-API
+  prices will likely stop after the API's first 30 days (the build links
+  `/dp/<ASIN>?tag=`, not the API's own links; `docs/capacity-plan.md`).
 - CSV upload takes inline `csv_text` (2 MB cap) — production needs
   multipart/object-storage ingestion.
 - Retention defaults are 365-day placeholders; counsel sets real windows.

@@ -63,7 +63,10 @@ const item = (over: Partial<LookItem>): LookItem => ({
   price_minor: 499900,
   currency: 'INR',
   freshness: '2026-09-30T10:00:00.000Z',
+  priceAsOf: null,
   stock: 'in_stock',
+  connector: 'stub-network',
+  disclosure: null,
   linkUrl: null,
   ...over,
 });

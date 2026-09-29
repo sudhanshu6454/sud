@@ -2,8 +2,9 @@
  * Suspense queue read model.
  *
  * Conversions whose returned_click_ref matched NO click are stored with
- * click_id = NULL. They surface here for HUMAN review by finance/publisher
- * operations.
+ * click_id = NULL (and, since 0006, placement_id = NULL: no tracking-ID
+ * mapping attributed them either). They surface here for HUMAN review by
+ * finance/publisher operations.
  *
  * ######################################################################
  * # POLICY: this queue requires HUMAN review. NEVER auto-attribute.     #
@@ -38,7 +39,8 @@ export interface SuspenseItem {
 }
 
 /**
- * List unattributed conversions (click_id IS NULL, not declined), newest first.
+ * List unattributed conversions (click_id IS NULL, placement_id IS NULL, not
+ * declined), newest first.
  * Intended for the finance operations review UI / daily operating queue.
  */
 export async function listSuspenseQueue(
@@ -61,6 +63,7 @@ export async function listSuspenseQueue(
      from conversions
      where org_id = $1
        and click_id is null
+       and placement_id is null
        and status <> 'declined'
      order by received_at desc
      limit $2`,

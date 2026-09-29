@@ -19,8 +19,16 @@ export interface SavedItem {
   brand: string;
   model: string;
   merchant: string | null;
+  /** The price when saved; always null for a time-limited price (see priceNotStored). */
   price_minor: number | null;
   currency: string | null;
+  /**
+   * true when the offer's price may not be kept (an Amazon.in offer: a
+   * product-API price may be shown for 1 hour, stored for 24 hours at most,
+   * OA §11), so none
+   * was stored and /saved sends the shopper to the product page for it.
+   */
+  priceNotStored?: boolean;
   savedAt: string;
 }
 
@@ -67,7 +75,9 @@ export function toggleSaved(entry: Omit<SavedItem, 'savedAt'>): boolean {
     writeSaved(list);
     return false;
   }
-  list.push({ ...entry, savedAt: new Date().toISOString() });
+  // A time-limited price is never written, whatever the caller passed.
+  const stored = entry.priceNotStored ? { ...entry, price_minor: null } : entry;
+  list.push({ ...stored, savedAt: new Date().toISOString() });
   writeSaved(list);
   return true;
 }

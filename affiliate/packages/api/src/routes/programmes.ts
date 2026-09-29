@@ -60,11 +60,13 @@ export function __lastRouteCacheSecondDelete(): Promise<void> | null {
  * stays the source of truth: without Redis, or if a delete fails, the
  * redirect falls back to a DB read and still serves the correct (paused)
  * page; the failure is only logged. This is the documented Redis dependency
- * of the kill switch (see API ASSUMPTIONS.md).
+ * of the kill switch (see API ASSUMPTIONS.md). Also used by the Amazon setup
+ * CLI (src/amazon/setup.ts) when a placement gets its tracking ID or the
+ * account's settings change, so a cached route never keeps the old tag.
  */
-async function deleteRouteKeys(
+export async function deleteRouteKeys(
   tokens: string[],
-  log?: FastifyRequest['log'],
+  log?: Pick<FastifyRequest['log'], 'warn'>,
 ): Promise<{ tokens: number; deleted: number; redisAvailable: boolean }> {
   const client = redis() as unknown as RouteCacheClient | null;
   if (!client) {

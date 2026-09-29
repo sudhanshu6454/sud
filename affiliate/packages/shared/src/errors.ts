@@ -8,6 +8,9 @@ export const ERROR_CODES = [
   'OFFER_STALE',
   'PROPERTY_FORBIDDEN',
   'PUBLISHER_NOT_ACTIVE',
+  // 403: the programme only allows properties the operator owns (an owner_operated
+  // verification), e.g. Amazon.in Associates (PR 9: links only on "your site").
+  'PROPERTY_NOT_OWNER_OPERATED',
   'NOT_FOUND',
   'VALIDATION_ERROR',
   'UNAUTHORIZED',

@@ -44,11 +44,26 @@ export interface LookItem {
   /** true when a live offer exists; false → "Not available right now" (no price, no CTA). */
   available: boolean;
   merchant: string | null;
+  /**
+   * null for an item without a live offer, AND for a live offer whose price
+   * may not be shown (Amazon: no product-API price younger than 1 hour —
+   * the API already nulls it; the page then says "See price on Amazon.in").
+   */
   price_minor: number | null;
   currency: string | null;
-  /** ISO timestamp of offer.fresh_until (when the price stops being trusted). */
+  /** ISO timestamp of offer.fresh_until (when the offer stops being linkable). */
   freshness: string | null;
+  /**
+   * ISO time the shown price was read from the merchant's product API
+   * (offer.price_as_of); null when there is no such time. A price with a
+   * time is shown with it ("as of … IST") and is never stored (/saved).
+   */
+  priceAsOf: string | null;
   stock: Stock | null;
+  /** The offer's programme connector (offer.connector: 'amazon-associates', …); null without a live offer. */
+  connector: string | null;
+  /** The programme's own disclosure statement (offer.disclosure); null when it has none. */
+  disclosure: string | null;
   /** Tracked redirect URL (`{REDIRECT_BASE_URL}/r/{token}`) or null when no link is minted yet. */
   linkUrl: string | null;
 }

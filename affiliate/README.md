@@ -203,6 +203,77 @@ server, the load soak and counsel's decisions
 ([`docs/pilot-checklist.md`](docs/pilot-checklist.md),
 [`docs/runbooks/deploy.md`](docs/runbooks/deploy.md) §7).
 
+## Amazon.in Associates (the in-house network)
+
+**Status (2026-09-29): built and rehearsed with TEST values; not on
+afflino.com yet.** Nothing changes on the live site until the owner re-runs
+the install line and then the steps below with the real account. Nothing here
+claims the setup meets Amazon's terms: the open questions (Amazon's word on
+the `/r/` redirect, the disclosure wording, every "Amazon.in" string, the
+1-hour vs 24-hour price window, the privacy notice, the report layout, tax)
+are rows of
+[`docs/action-tracker.md`](docs/action-tracker.md) ("Amazon.in Associates")
+and [`docs/counsel-briefing.md`](docs/counsel-briefing.md) §9.
+
+What it does: the owner's own pages (the in-house network's Facebook pages
+and Instagram accounts, and afflino.com — never its Snapchat or Telegram
+accounts: Amazon does not accept them) post `https://afflino.com/r/<token>`
+links; the redirect answers a plain `302` to
+`https://www.amazon.in/dp/<ASIN>?tag=<that page's tracking ID>` (no cookie,
+never a per-click id, `X-Robots-Tag: noindex, nofollow`; link-preview
+crawlers, other software, prefetches and HEAD get a preview page). The shop
+shows Amazon products in looks with "Buy on Amazon.in", Amazon's statement
+"As an Amazon Associate I earn from qualifying purchases." (always first near
+the button, and in every footer from the `setup` step on), and a price only
+when Amazon's product API supplied it within the last hour, with "(as of …
+IST)" and Amazon's disclaimer — otherwise "See price on Amazon.in". The
+monthly Earnings download is imported as conversions, each attributed to its
+page by the tracking ID (the same ledger, contract split and suspense queue
+as a click; returns reverse their sale; a return that matches no single sale
+waits for the owner's `returns` step). Only the owner's pages ever get
+Amazon links: Amazon allows the tag on "your site" only (PR 9), so
+third-party creators cannot be offered Amazon under the owner's account, and
+nothing in the build can allow it. Posting links and switching the shop on
+wait for counsel's privacy notice on `/privacy` (OA §5): `links` and `shop`
+refuse while it is the stub.
+
+**Which pages**: one tracking ID per page and links only for pages that have
+one — afflino.com plus up to 99 pages, within Amazon's "limit of 100 Tracking
+IDs per associate account" (a shared ID could not tell the pages' sales
+apart). More pages need more IDs from Associates Customer Service.
+
+The owner's lines, as root on the Linode, in order (details, the Mac lines and
+what each prints: [`docs/runbooks/deploy.md`](docs/runbooks/deploy.md) §1A):
+
+| Step | Line |
+|---|---|
+| Update | `bash <(curl -fsSL https://raw.githubusercontent.com/sudhanshu6454/sud/refs/heads/claude/nifty-pasteur-flrulw/affiliate/deploy/linode/install.sh)` |
+| Settings (hidden prompts: the Store ID, optionally the Creators API id and secret; the in-house share in percent), then the update line again | `bash /opt/afflino/affiliate/deploy/linode/amazon.sh keys` |
+| A starting tracking-ID file of every Facebook / Instagram / web page (optional) | `bash /opt/afflino/affiliate/deploy/linode/amazon.sh template` |
+| The files `/etc/afflino/amazon/tracking-ids.csv` and `asins.csv` | from the Mac (Spotlight) or pasted: `mkdir -p /etc/afflino/amazon && cat > /etc/afflino/amazon/tracking-ids.csv` |
+| Programme, account, pages, tracking IDs; the footer statement | `bash /opt/afflino/affiliate/deploy/linode/amazon.sh setup` |
+| Products (and the shop's looks) | `bash /opt/afflino/affiliate/deploy/linode/amazon.sh offers` |
+| Links → `/etc/afflino/amazon/links.csv` (after the privacy notice is published) | `bash /opt/afflino/affiliate/deploy/linode/amazon.sh links` |
+| The shop (after the privacy notice is published) | `bash /opt/afflino/affiliate/deploy/linode/amazon.sh shop` |
+| Import every new earnings download in `/etc/afflino/amazon/reports/` | `bash /opt/afflino/affiliate/deploy/linode/amazon.sh import` |
+| Returns the import could not match (pick the sale; only when `import` says so) | `bash /opt/afflino/affiliate/deploy/linode/amazon.sh returns` |
+| Check (counts, one link's `Location`) | `bash /opt/afflino/affiliate/deploy/linode/amazon.sh check` |
+| Kill switch / back | `bash /opt/afflino/affiliate/deploy/linode/amazon.sh pause` / `… resume` |
+
+**What the owner must supply** (none of it is in this repository): the Store
+ID of an approved account (3 qualifying sales in 180 days); afflino.com and
+every page that will carry links on the account's website list, owned by the
+account holder; the tracking IDs (≤ 100, none with an Amazon mark such as
+"amazon", "kindle", "alexa", "prime" — Amazon's list is non-exhaustive), one
+per page; the disclosure line in every page's bio; counsel's privacy notice on
+`/privacy`; the in-house share of
+Amazon's fee; the ASINs with the owner's own product words and looks; a real
+Earnings download with a returned item (the layout is undocumented); later
+the Creators API credentials (Amazon: after 10 sales in 30 days); Amazon's
+written word on the `/r/` redirect; counsel on the §9 items and the
+accountant on GST / TDS; and how Amazon's payments are to be recorded as
+merchant settlements (until then no Amazon earning becomes payable).
+
 ## Deploying afflino.com
 
 What the installer (above) deploys: the shape, rehearsed end to end on one
@@ -602,6 +673,48 @@ payout rail, retention windows, secrets management).
   manifest) and `scripts/restore.sh` (scratch-DB drill with row-count and
   ledger-balance checks); production guards and open infra questions in
   [scripts/ASSUMPTIONS.md](scripts/ASSUMPTIONS.md).
+
+## Integration notes (2026-09-29, Amazon.in Associates)
+
+The owner asked for Amazon Associates on amazon.in for the in-house network. Built
+config-driven with TEST values only (store ID `demo-21`, tracking IDs `demo-*-21`, ASINs
+`B0DEMO…`); nothing reaches afflino.com until the owner re-runs the install line and then runs
+the steps of "Amazon.in Associates (the in-house network)" above with the real values (owner
+inputs: `packages/api/ASSUMPTIONS.md`, "Amazon.in Associates").
+
+- **Migration** `db/migrations/0006_amazon_associates.sql` (additive; `db/README.md`): the
+  Associates account per org, tracking IDs mapped to exactly one placement, nullable /
+  time-limited offer prices, `conversions.placement_id` (attribution without a click).
+- **Links**: Amazon offers only for placements the setup declared, on Facebook / Instagram / web
+  properties (403 `PROPERTY_FORBIDDEN` otherwise) with an `owner_operated` verification (403
+  `PROPERTY_NOT_OWNER_OPERATED` otherwise; no setting allows third parties); the stored URL is
+  `https://www.amazon.in/dp/<ASIN>` with no tag; the redirect adds `tag=<the placement's
+  tracking ID, else the store ID>` and never a click id (no cookie, keyed IP hash, fail-open and
+  the kill switch unchanged; automated clients, prefetches and HEAD get a preview page).
+- **Money**: `POST /v1/integrations/amazon-associates/reports` (and the CLI `import-report`)
+  reads the earnings download through one column table (layout to confirm with a real export),
+  exact paise, stable keys; tracking ID → the one mapped placement → the same ledger / contract
+  logic as a click; unknown / shared / too-new tracking IDs → suspense; returns → reversals
+  (atomic; one import at a time per account; `pnpm race:pg` proves it on real Postgres), an
+  unmatched return → the owner's choice (`returns` / `apply-return`). The CSV and webhook
+  adapters refuse Amazon's programme and account (422).
+- **CLI** in the api image: `node dist/cli/amazon.js setup | offers | template | links |
+  import-report | returns | apply-return | status | pause | resume` (`packages/api/src/cli/amazon.ts`,
+  `src/amazon/links.ts`: links and the kill switch go through the API's own routes
+  in-process). **Prices**: the workers' hourly Creators API refresh (credentials optional,
+  `AMAZON_CREATORS_*`), shown for 1 hour; without it Amazon offers show no price, and prices
+  will likely stop after the API's first 30 days (`docs/capacity-plan.md`).
+- **Shop** (`packages/web`, ASSUMPTIONS items 79–85): Amazon offers (by `offer.connector`) say
+  "Buy on Amazon.in" on the tracked link, carry the Associate statement (OA §10, verbatim,
+  always first), show "See price on Amazon.in" or an API price with "(as of … IST)", Amazon's
+  disclaimer and attribution line; "You complete the purchase on Amazon.in; Amazon.in's terms
+  apply."; "Affiliate links: Yes" instead of "Sponsored: No" on Amazon looks; no stock without a
+  price; the wishlist keeps no Amazon price; the footer statement behind `AMAZON_ASSOCIATE=on`;
+  robots.txt disallows `/r/`; no Amazon URL in the
+  sources or the build. Offers files may name a `look`, which is how products reach `/shop`.
+- **Ops**: `deploy/linode/amazon.sh` (the owner's one-line steps, hidden prompts on standard
+  input, ShellCheck clean), `docs/runbooks/deploy.md` §1A, rehearsed on the installer's stack in
+  test mode (`deploy/linode/README.md` "What was checked").
 
 ## Integration notes (2026-09-29, the Afflino web app)
 

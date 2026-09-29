@@ -159,7 +159,11 @@ the six TEST properties into the real organisation
 
 `mint-dev-token.mjs` is the dev-grade JWT stub (the API trusts its claims
 verbatim until the IdP lands); `mint-links.mjs` mints one tracked link per live
-offer for a placement (`--dry-run` to preview). With the network seed's JSON
+offer for a placement (`--dry-run` to preview). The Amazon.in Associates
+operator CLI ships compiled, `node dist/cli/amazon.js setup | offers |
+template | links | import-report | status | pause | resume`
+(`packages/api/src/cli/amazon.ts`); on the Linode it is driven by
+`deploy/linode/amazon.sh` (`docs/runbooks/deploy.md` §1A). With the network seed's JSON
 saved as `seed-network.json` (see the smoke test) and `JWT_SECRET` in the
 environment, a read-only token for the shop (the dev stub; `--ttl 365d` so it
 outlives the default 8 h, rotated with `JWT_SECRET`), an owner token, and — once
@@ -298,10 +302,15 @@ docker rm -f -v pz-edge pz-web pz-workers pz-redirect pz-api pz-redis pz-db && d
 ```
 
 Observed on the last run (2026-09-29, verbatim, all five `:test` images
-rebuilt from this tree — last for Facebook in the network seed and the
-removal of a same-day pre-launch notice; `caddy:2-alpine` = Caddy v2.11.4):
+rebuilt from this tree — last after the review fixes of the Amazon.in
+Associates integration (migration 0006 without the sub-tag / third-party
+columns, the import lock, the operator's returns step, the privacy gate);
+`caddy:2-alpine` = Caddy v2.11.4; every observed line below unchanged). The TEST programme here is not an Amazon one, so the shop
+and the redirect answer exactly as before; the Amazon path (the tag, no
+`subid`, "Buy on Amazon.in", the report import) is rehearsed on the
+installer's stack (`deploy/linode/README.md` "What was checked"):
 
-- migrate: `5 migration(s) applied, 0 already applied`; `seed.ts` succeeds;
+- migrate: `6 migration(s) applied, 0 already applied`; `seed.ts` succeeds;
   `seed-network: 6 properties from /app/db/network.example.yaml, shop host afflino.com, with TEST demo programme`.
 - `/healthz` on 3100 (api) and 3101 (redirect), `/api/healthz` on 3200 (web
   proxy) and through the edge → `{"ok":true}` each.
@@ -338,7 +347,9 @@ removal of a same-day pre-launch notice; `caddy:2-alpine` = Caddy v2.11.4):
   (re-run 2026-09-29 after the `handle_errors` change; before it the 502
   carried `Server: Caddy` and no security header).
 - workers log: `workers started`, `outbox relay started`, `retention repeat
-  scheduled`, `outbox batch published`, `click.observed`.
+  scheduled`, `amazon refresh repeat scheduled` (the hourly Amazon price job;
+  it does nothing without an Amazon programme), `outbox batch published`,
+  `click.observed`.
 - The last line removed the seven containers with their anonymous volumes (`-v`: the Postgres, Redis and Caddy images declare volumes; before 2026-09-29 the line left them behind) and the network.
 
 The sandbox that ran this build cannot reach the npm registry without an extra

@@ -5,11 +5,13 @@
  * every figure below (audience reach, upfront cost, payout cycle, plan
  * prices and network fees, TDS rate and section, validation windows, minimum
  * withdrawal, default agency share) came from the design handover as a
- * placeholder and is now the owner's confirmed figure. The one exception is
- * CREATOR_DISCLOSURE_LINE at the bottom, which is wording, not a figure, and
- * still waits for counsel. test/site-copy.test.ts pins the confirmed values,
- * so a change is deliberate. Import them from here; never restate them in a
- * page.
+ * placeholder and is now the owner's confirmed figure. The exceptions are
+ * CREATOR_DISCLOSURE_LINE, which is wording, not a figure, and still waits
+ * for counsel, and AMAZON_IN at the bottom, which is Amazon's own mandated
+ * text (quoted) plus two button labels that wait for counsel.
+ * test/site-copy.test.ts (AMAZON_IN: test/amazon-shop.test.ts) pins the
+ * values, so a change is deliberate. Import them from here; never restate
+ * them in a page.
  */
 
 /**
@@ -83,3 +85,55 @@ export const DEFAULT_AGENCY_SHARE_PCT = 15;
  * ASCI influencer guidelines.
  */
 export const CREATOR_DISCLOSURE_LINE = '#ad — I earn a commission if you buy through this link.';
+
+/**
+ * Amazon.in Associates copy (the shop's Amazon offers, the site footer).
+ * Sources: the policy brief of 2026-09-29, quoting Amazon's own pages — the
+ * amazon.in Associates Operating Agreement ("OA") and help topics (the api
+ * package's ASSUMPTIONS.md, "Amazon.in Associates", has the references; no
+ * Amazon URL is written anywhere in the web). test/amazon-shop.test.ts pins
+ * each string, so a change is deliberate.
+ *
+ * - `associateStatement` is Amazon's own mandated text, VERBATIM (OA §10:
+ *   "You must clearly and prominently state the following, or any
+ *   substantially similar statement …"). Not our wording; nothing to
+ *   draft. Shown near every Amazon call to action and, once the owner turns
+ *   AMAZON_ASSOCIATE on, in the site footer ("identify yourself on your Site
+ *   as an Amazon Associate", help GPXFHVYZMTGPUMPE). Whether it is also
+ *   enough under the ASCI guidelines is counsel's question
+ *   (docs/counsel-briefing.md).
+ * - `priceDisclaimer` and `contentAttribution` are OA §11's templates,
+ *   VERBATIM except for the bracketed choice Amazon leaves to the Associate:
+ *   "[relevant Amazon Site(s), as applicable]" → "Amazon.in" (OA: "“Amazon
+ *   Site” means the www.amazon.in site") and "[IN THIS APPLICATION or ON
+ *   THIS SITE, as applicable]" → "ON THIS SITE".
+ * - `pricePrefix` follows OA §11's example ("Amazon.in Price: Rs.3500 (as of
+ *   13/07/2013 14:11 IST - Details)"); the amount is formatted as every
+ *   other price on the site (₹3,500).
+ * - DRAFT PENDING COUNSEL SIGN-OFF: `ctaLabel` and `noPriceLabel`. The brief
+ *   asks for "a "Buy on Amazon.in" CTA" (PR 20: no confusion about the site
+ *   on which the order happens), but the amazon.in Trademark Guidelines page
+ *   rendered empty, so the nominative use of "Amazon.in" in a button label
+ *   is counsel's (docs/action-tracker.md, "Trademarks").
+ * - DRAFT PENDING COUNSEL SIGN-OFF: `purchaseNote` (the item page's line
+ *   under the button) and `affiliateLinksFact` (the look page's fact in
+ *   place of "Sponsored: No"). The purchase note says only where the
+ *   purchase happens, never who delivers or takes returns (a third-party
+ *   seller's listing is not Amazon's: LR, no "inaccurate, overbroad,
+ *   deceptive or otherwise misleading claims about any Product, the Amazon
+ *   Site, or any of our policies").
+ */
+export const AMAZON_IN = {
+  connector: 'amazon-associates',
+  associateStatement: 'As an Amazon Associate I earn from qualifying purchases.',
+  ctaLabel: 'Buy on Amazon.in',
+  noPriceLabel: 'See price on Amazon.in',
+  pricePrefix: 'Amazon.in Price',
+  priceDisclaimer:
+    'Product prices and availability are accurate as of the date/time indicated and are subject to change. Any price and availability information displayed on Amazon.in at the time of purchase will apply to the purchase of this product.',
+  contentAttribution:
+    'CERTAIN CONTENT THAT APPEARS ON THIS SITE COMES FROM AMAZON SELLER SERVICES PRIVATE LIMITED. THIS CONTENT IS PROVIDED ‘AS IS’ AND IS SUBJECT TO CHANGE OR REMOVAL AT ANY TIME.',
+  purchaseNote: "You complete the purchase on Amazon.in; Amazon.in's terms apply.",
+  affiliateLinksFactLabel: 'Affiliate links',
+  affiliateLinksFact: 'Yes (we earn from qualifying purchases)',
+} as const;

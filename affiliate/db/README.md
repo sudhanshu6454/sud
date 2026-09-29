@@ -4,7 +4,8 @@ Postgres schema and migration runner for the Paparazzi Affiliate Commerce Platfo
 
 ## Layout
 
-- `migrations/` — SQL migrations, applied **in lexical order** (`0001_core.sql`, `0002_money_loop.sql`, …).
+- `migrations/` — SQL migrations, applied **in lexical order** (`0001_core.sql`, `0002_money_loop.sql`, …,
+  `0006_amazon_associates.sql`).
 - `migrate.mjs` — applies `migrations/*.sql` in lexical order, one transaction per file, and
   records each file in `schema_migrations` (see "Migration tracking"). Exports
   `runMigrations(databaseUrl, opts)`; CLI flags `--status` and `--baseline`.
@@ -183,6 +184,42 @@ WEB_HOST=shop.example.com DATABASE_URL=postgresql://paparazzi:changeme@127.0.0.1
 
 The `yaml` parser and the `pg` driver are borrowed from `packages/api/node_modules` via
 `createRequire`, like `migrate.mjs`; no new dependency at the repo root.
+
+## Amazon.in Associates (0006)
+
+`0006_amazon_associates.sql` is additive (new tables, nullable columns, checks every existing row
+satisfies; no triggers, so pg-mem runs it too). Verified 2026-09-29 on PostgreSQL 16.13: 0001–0006
+on a fresh database (a second run: `0 migration(s) applied, 6 already applied`), and 0006 on top
+of a database migrated to 0005 and seeded like production (`seed-network.ts` with a TEST network
+file under `NODE_ENV=production`, no demo programme): `1 migration(s) applied, 5 already
+applied`, every row count unchanged, and a second network seed printing byte-identical output.
+
+- `amazon_associates_accounts` — the Associates account behind an Amazon programme: one per
+  organisation and marketplace, one per programme. `store_id` (the default tracking ID, never an
+  attribution basis), `account_ref` (= `conversions.provider_account_id` of its report rows,
+  `amazon-associates:<store id>`), `marketplace_host`, `disclosure_text`, `status`,
+  `api_paused_until` (the workers' product-API back-off after a 429 / 401 / 403). There is no
+  sub-tag and no third-party column: no click id ever goes on an Amazon URL (LR: "Under no
+  circumstances may you associate any sub-tag with a specific end user"), and links go on
+  owner-operated properties only (PR 9) — nothing can switch either on.
+- `amazon_tracking_ids` — a tracking ID → exactly one placement (unique per account both ways),
+  `effective_from` (when the mapping began; earlier report rows are not attributed by it).
+- `offers.price_minor` may be NULL (a price that may not be shown), with `price_as_of` (when the
+  product API gave it; a check: no time without a price), `merchant_item_ref` (the ASIN) and
+  `stale_reason` (`merchant_not_accessible`: Amazon's product API reported the item gone; the
+  offers CLI keeps such an offer stale unless `--reactivate`);
+  `programme_capabilities.price_max_age_hours` (1 for Amazon — the Creators API's "Offers | 1
+  hour", stricter than OA §11's 24 hours; NULL = the rule before 0006).
+- `conversions.placement_id` (attributed through a tracking-ID mapping, never together with
+  `click_id` — a check), `returned_tracking_ref`, `item_ref` (the ASIN) and `suspense_reason`.
+
+The rows are written by the api image's CLI, not by a seed in this directory:
+`node dist/cli/amazon.js setup | offers | template | links | import-report | returns |
+apply-return | status | pause | resume` (`packages/api/src/cli/amazon.ts`; on the Linode through
+`deploy/linode/amazon.sh`,
+`docs/runbooks/deploy.md` §1A; `offers` also writes the shop's looks for rows with a `look`;
+real values in files on the server; the TEST fixtures are
+`packages/api/test/fixtures/amazon-*.example.*`, refused under `NODE_ENV=production`).
 
 ## In-process demo (sandbox — no Docker/Postgres/Redis needed)
 

@@ -4,6 +4,7 @@
  * test/shop.test.ts exercises them directly.
  */
 import { timeAgo } from '../../lib/format';
+import { AMAZON_IN } from '../../lib/site-copy';
 import type { LookItem, LookSummary, Match, Stock } from '../../lib/types';
 
 /* ---------- grid: categories, search, sort ---------- */
@@ -117,6 +118,132 @@ export function matchTag(match: Match | null): { label: string; tone: TagTone } 
 /** Out of stock is the one stock state that is emphasised (accent-700 text). */
 export function stockIsOut(stock: Stock | null): boolean {
   return stock === 'out_of_stock';
+}
+
+/**
+ * The stock status worth showing: 'unknown' (an Amazon offer whose
+ * availability may not be shown, or one never refreshed) is no fact, so it
+ * is not shown at all.
+ */
+export function shownStock(item: Pick<LookItem, 'available' | 'stock'>): Stock | null {
+  if (!item.available || !item.stock || item.stock === 'unknown') return null;
+  return item.stock;
+}
+
+/* ---------- merchant copy: Amazon.in vs the rest ---------- */
+
+/** A live offer of an Amazon.in Associates programme. */
+export function isAmazonOffer(item: Pick<LookItem, 'available' | 'connector'>): boolean {
+  return item.available && item.connector === AMAZON_IN.connector;
+}
+
+export interface OfferCopy {
+  /** The call to action's label. */
+  ctaLabel: string;
+  /** Shown instead of a price for a live offer without one. */
+  noPriceLabel: string;
+  /** The label over the price. */
+  priceLabel: string;
+  /** Shown beside a time-stamped price (null = none). */
+  priceDisclaimer: string | null;
+  /** Programme disclosures shown near the call to action (deduplicated, in order). */
+  disclosures: string[];
+  /** Amazon's attribution line, whenever Amazon product-API content (a price) is shown. */
+  contentAttribution: string | null;
+  /** The line under the item page's button: where the purchase happens. */
+  purchaseNote: string;
+}
+
+/**
+ * The disclosures of an Amazon offer: OA §10's statement ALWAYS, first and
+ * verbatim, then whatever the operator's programme disclosure adds to it
+ * (the setup refuses a disclosure without the statement, so only the rest
+ * is shown; it never replaces the statement).
+ */
+function amazonDisclosures(disclosure: string | null | undefined): string[] {
+  const extra = (disclosure ?? '').replace(AMAZON_IN.associateStatement, '').trim();
+  return extra ? [AMAZON_IN.associateStatement, extra] : [AMAZON_IN.associateStatement];
+}
+
+/**
+ * What the shop says around an offer. Amazon.in (lib/site-copy.ts AMAZON_IN):
+ * "Buy on Amazon.in", "See price on Amazon.in" when no API price younger than
+ * 1 hour exists (the API nulls it), "Amazon.in Price" with its "as of … IST"
+ * time, the price disclaimer and the attribution line when one does, OA
+ * §10's Associate statement always (the programme's own disclosure only
+ * after it), and where the purchase happens. Other merchants keep the shop's
+ * generic copy.
+ */
+export function offerCopy(
+  item: Pick<LookItem, 'available' | 'connector' | 'merchant' | 'price_minor' | 'currency' | 'priceAsOf' | 'disclosure'>,
+): OfferCopy {
+  const priced = hasPrice(item);
+  const stamped = priced && item.priceAsOf !== null;
+  if (isAmazonOffer(item)) {
+    return {
+      ctaLabel: AMAZON_IN.ctaLabel,
+      noPriceLabel: AMAZON_IN.noPriceLabel,
+      priceLabel: AMAZON_IN.pricePrefix,
+      priceDisclaimer: stamped ? AMAZON_IN.priceDisclaimer : null,
+      disclosures: amazonDisclosures(item.disclosure),
+      contentAttribution: stamped ? AMAZON_IN.contentAttribution : null,
+      purchaseNote: AMAZON_IN.purchaseNote,
+    };
+  }
+  return {
+    ctaLabel: 'View at merchant',
+    noPriceLabel: item.merchant ? `See the current price at ${item.merchant}` : 'See the current price at the merchant',
+    priceLabel: 'Price',
+    priceDisclaimer: null,
+    disclosures: item.available && item.disclosure?.trim() ? [item.disclosure.trim()] : [],
+    contentAttribution: null,
+    purchaseNote:
+      item.merchant && item.available
+        ? `Payment, delivery and returns are handled by ${item.merchant}.`
+        : 'Payment, delivery and returns are handled by the merchant.',
+  };
+}
+
+/**
+ * The look page's last fact. A look with Amazon (affiliate) items does not
+ * say "Sponsored: No" — every product on it is a commissioned link — but
+ * "Affiliate links: Yes (we earn from qualifying purchases)" (help
+ * GPXFHVYZMTGPUMPE: "a legally compliant disclosure with your links"; the
+ * ASCI reading is counsel's). Other looks keep their sponsorship fact.
+ */
+export function lookRelationshipFact(
+  look: { sponsored: boolean },
+  items: ReadonlyArray<Pick<LookItem, 'available' | 'connector'>>,
+): [string, string] {
+  if (items.some((i) => i.connector === AMAZON_IN.connector)) {
+    return [AMAZON_IN.affiliateLinksFactLabel, AMAZON_IN.affiliateLinksFact];
+  }
+  return ['Sponsored', look.sponsored ? 'Yes' : 'No'];
+}
+
+/** Every item's programme disclosures and attribution lines, once each, in item order (the look page's panel). */
+export function lookDisclosures(items: ReadonlyArray<Parameters<typeof offerCopy>[0]>): { disclosures: string[]; attributions: string[] } {
+  const disclosures: string[] = [];
+  const attributions: string[] = [];
+  for (const i of items) {
+    const c = offerCopy(i);
+    for (const d of c.disclosures) if (!disclosures.includes(d)) disclosures.push(d);
+    if (c.contentAttribution && !attributions.includes(c.contentAttribution)) attributions.push(c.contentAttribution);
+  }
+  return { disclosures, attributions };
+}
+
+/**
+ * The price a wishlist entry may keep: none for a time-limited price (one
+ * with a product-API time, and every Amazon offer — a product-API price may
+ * be shown for 1 hour, OA §11 lets one be stored for 24 hours at most), else
+ * the live price.
+ */
+export function storablePrice(
+  item: Pick<LookItem, 'available' | 'connector' | 'price_minor' | 'priceAsOf'>,
+): { price_minor: number | null; priceNotStored: boolean } {
+  if (item.priceAsOf !== null || isAmazonOffer(item)) return { price_minor: null, priceNotStored: true };
+  return { price_minor: item.available ? item.price_minor : null, priceNotStored: false };
 }
 
 /* ---------- the merchant call to action ---------- */

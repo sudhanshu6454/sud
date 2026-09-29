@@ -6,11 +6,13 @@ import { authed, requireAuth, requireRole } from '../middleware.js';
 import { idempotencyCheck } from '../idempotency.js';
 import {
   ingestConversionEvent,
+  isAmazonReportPath,
   type ConversionIngestInput,
   type IngestLog,
   type IngestOutcome,
 } from '../conversion-ingest.js';
 import { ok, parseOr400 } from './_helpers.js';
+import { parseCsv } from '../delimited.js';
 
 const CsvUploadBody = z.object({
   provider_account_id: z.string().min(1).max(200),
@@ -58,66 +60,6 @@ interface ParsedRow {
   providerStatus: string;
   providerRevision: number;
   occurredAt: string;
-}
-
-/**
- * Minimal RFC-4180 CSV parser (no dependencies):
- * - fields separated by `,`; a field wrapped in `"` may contain commas,
- *   newlines, and `""` (escaped quote);
- * - LF and CRLF both terminate records;
- * - a leading UTF-8 BOM is stripped.
- *
- * Throws on an unterminated quoted field.
- */
-function parseCsv(text: string): string[][] {
-  const s = text.startsWith('\uFEFF') ? text.slice(1) : text;
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let field = '';
-  let inQuotes = false;
-  let i = 0;
-  while (i < s.length) {
-    const c = s[i] as string;
-    if (inQuotes) {
-      if (c === '"') {
-        if (s[i + 1] === '"') {
-          field += '"';
-          i += 2;
-        } else {
-          inQuotes = false;
-          i += 1;
-        }
-      } else {
-        field += c;
-        i += 1;
-      }
-    } else if (c === '"') {
-      inQuotes = true;
-      i += 1;
-    } else if (c === ',') {
-      row.push(field);
-      field = '';
-      i += 1;
-    } else if (c === '\r' || c === '\n') {
-      if (c === '\r' && s[i + 1] === '\n') i += 1;
-      row.push(field);
-      field = '';
-      rows.push(row);
-      row = [];
-      i += 1;
-    } else {
-      field += c;
-      i += 1;
-    }
-  }
-  if (inQuotes) throw new Error('unterminated quoted field');
-  // Trailing content after the last newline (a file not ending in \n still
-  // holds a record); a file that ends WITH \n leaves nothing behind.
-  if (field !== '' || row.length > 0) {
-    row.push(field);
-    rows.push(row);
-  }
-  return rows;
 }
 
 /** A record where every cell is blank/whitespace carries no data. */
@@ -343,6 +285,16 @@ export async function csvUploadsRoutes(app: FastifyInstance): Promise<void> {
         throw new AppError(
           'VALIDATION_ERROR',
           `Programme '${body.programme_id}' is not active (status '${programme.status}'); CSV settlement uploads require an active programme`,
+          422,
+        );
+      }
+      // Amazon.in Associates rows come only through its own report import
+      // (exact returns, its own keys); this adapter may neither rewrite them
+      // nor claim their keys in advance.
+      if (await isAmazonReportPath(orgId, { programmeId: body.programme_id, providerAccountId: body.provider_account_id })) {
+        throw new AppError(
+          'VALIDATION_ERROR',
+          'Amazon.in Associates conversions are imported only through POST /v1/integrations/amazon-associates/reports (the programme or provider_account_id is Amazon\'s)',
           422,
         );
       }

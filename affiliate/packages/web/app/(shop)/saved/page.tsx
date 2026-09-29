@@ -18,6 +18,7 @@ const keyOf = (s: Pick<SavedItem, 'lookId' | 'itemId'>) => `${s.lookId}:${s.item
  * Wishlist. Entries live in localStorage (`saved-items`) with the look id,
  * item id and display data captured when saved; the price shown is the one
  * at save time, so the page says so and links back to the live item page.
+ * A time-limited price (Amazon.in) is never stored: that entry says so.
  * Skeleton rows until the browser has read the list; "Nothing saved yet"
  * with "Browse the shop →" when it is empty. Entries saved from the TEST
  * demo catalogue (non-uuid look ids) put the Demo data badge on the page.
@@ -111,7 +112,9 @@ export default function SavedPage() {
                   <span className={styles.meta}>From the look {s.lookTitle}</span>
                 </span>
                 <span className={styles.price}>
-                  {s.price_minor !== null && s.currency ? (
+                  {s.priceNotStored ? (
+                    <span className={styles.meta}>Price not stored — open the product for it</span>
+                  ) : s.price_minor !== null && s.currency ? (
                     <span className={styles.amount}>{formatMoney(s.price_minor, s.currency)}</span>
                   ) : (
                     <span className={styles.meta}>No live offer when saved</span>

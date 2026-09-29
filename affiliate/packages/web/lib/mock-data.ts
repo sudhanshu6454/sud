@@ -176,7 +176,10 @@ function toItem(p: MockProduct): LookItem {
     price_minor: available ? p.price_minor : null,
     currency: available ? 'INR' : null,
     freshness: available ? p.freshness : null,
+    priceAsOf: null,
     stock: available ? p.stock : null,
+    connector: null,
+    disclosure: null,
     linkUrl: null,
   };
 }

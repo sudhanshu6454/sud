@@ -34,6 +34,7 @@ const EXPECTED_ROUTES: Array<{ method: HttpMethod; url: string }> = [
   { method: 'POST', url: '/v1/integrations/:connector/events' },
   { method: 'POST', url: '/v1/integrations/stub-network/payout-callback' },
   { method: 'POST', url: '/v1/integrations/csv/uploads' },
+  { method: 'POST', url: '/v1/integrations/amazon-associates/reports' },
   { method: 'GET', url: '/v1/suspense' },
   { method: 'POST', url: '/v1/suspense/:id/retry' },
   { method: 'POST', url: '/v1/suspense/:id/review' },

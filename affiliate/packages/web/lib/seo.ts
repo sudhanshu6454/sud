@@ -93,6 +93,15 @@ export function pageMetadata(path: string, title?: string): Metadata {
 export const ROBOTS_DISALLOW = ['/app', '/brand', '/agency', '/admin', '/join', '/login', '/api', '/dev', '/saved'] as const;
 
 /**
+ * The tracked links, /r/{token}: served on the same host by the redirect
+ * service (not a web route; the redirect also answers X-Robots-Tag: noindex).
+ * No crawler should follow one: an Amazon.in link would create a Session on
+ * the Amazon Site "by way of a robot" (Participation Requirements 27), and
+ * Amazon excludes fees for Redirecting Links shown in organic search (OA §7).
+ */
+export const ROBOTS_DISALLOW_TRACKED_LINKS = '/r/';
+
+/**
  * robots.txt. Open (`indexing`): the public site is allowed, the areas above
  * are not, and the sitemap is named. Pre-launch: `Disallow: /` for every
  * crawler and no sitemap line.
@@ -108,7 +117,7 @@ export function robotsFor(base: string, indexing: boolean): MetadataRoute.Robots
         // "/app" is a prefix and would also match /apple-icon.png; the longer
         // Allow wins (RFC 9309 §2.2.2, longest match).
         allow: ['/', '/apple-icon.png'],
-        disallow: [...ROBOTS_DISALLOW],
+        disallow: [...ROBOTS_DISALLOW, ROBOTS_DISALLOW_TRACKED_LINKS],
       },
     ],
     sitemap: `${base}/sitemap.xml`,

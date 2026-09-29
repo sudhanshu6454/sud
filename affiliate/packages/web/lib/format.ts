@@ -89,6 +89,24 @@ export function freshnessLabel(freshUntilIso: string, now: Date = new Date()): s
   return `Price valid for ${window} — check current price at merchant`;
 }
 
+/** India Standard Time: UTC+05:30 all year (no daylight saving), so the offset is fixed. */
+const IST_OFFSET_MS = 330 * 60_000;
+
+/**
+ * The time stamp Amazon asks for beside a product-API price (Operating
+ * Agreement §11, whose example reads "Amazon.in Price: Rs.3500 (as of
+ * 13/07/2013 14:11 IST - Details)"): "as of 29/09/2026 14:11 IST", always
+ * with the date, in India Standard Time. null for a missing or invalid time.
+ */
+export function priceAsOfLabel(iso: string | null): string | null {
+  if (!iso) return null;
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return null;
+  const d = new Date(t + IST_OFFSET_MS);
+  const p2 = (n: number) => String(n).padStart(2, '0');
+  return `as of ${p2(d.getUTCDate())}/${p2(d.getUTCMonth() + 1)}/${d.getUTCFullYear()} ${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())} IST`;
+}
+
 export function stockLabel(stock: Stock): string {
   switch (stock) {
     case 'in_stock':

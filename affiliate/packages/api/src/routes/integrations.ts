@@ -7,6 +7,7 @@ import { authed, requireAuth, requireRole, type Tenant } from '../middleware.js'
 import { idempotencyCheck } from '../idempotency.js';
 import {
   ingestConversionEvent,
+  isAmazonReportPath,
   mapProviderStatus,
   type ConversionIngestInput,
   type IngestOutcome,
@@ -18,6 +19,9 @@ import { postPayoutEntriesForBatch } from '../finance.js';
 import { ok, parseOr400 } from './_helpers.js';
 
 const CONNECTOR_ALLOWLIST = ['stub-network'] as const;
+
+const AMAZON_ONLY_BY_REPORT =
+  "Amazon.in Associates conversions and returns are written only by its report import (POST /v1/integrations/amazon-associates/reports; an unmatched return: the Amazon CLI's apply-return)";
 
 const ProviderEventBody = z.object({
   kind: z.enum(['conversion', 'reversal']).default('conversion'),
@@ -89,6 +93,10 @@ export async function integrationsRoutes(app: FastifyInstance): Promise<void> {
       }
 
       const body = parseOr400(ProviderEventBody, req.body);
+      // Amazon.in Associates rows come only through its own report import.
+      if (await isAmazonReportPath(tenant.org_id, { providerAccountId: body.provider_account_id })) {
+        throw new AppError('VALIDATION_ERROR', AMAZON_ONLY_BY_REPORT, 422);
+      }
       if (body.kind === 'reversal') {
         return handleReversal(req, reply, tenant, connector, body);
       }
@@ -199,6 +207,10 @@ async function handleConversionEvent(
         422,
       );
     }
+    if (err instanceof Error && err.message === 'CONVERSION_PROGRAMME_CONNECTOR_MISMATCH') {
+      // e.g. a returned_click_ref of a click on an Amazon link.
+      throw new AppError('VALIDATION_ERROR', AMAZON_ONLY_BY_REPORT, 422);
+    }
     throw err;
   }
 
@@ -248,6 +260,9 @@ async function handleReversal(
   if (!original) {
     throw new AppError('NOT_FOUND', 'Original conversion not found for this reversal', 404);
   }
+  if (await isAmazonReportPath(orgId, { programmeId: original.programme_id })) {
+    throw new AppError('VALIDATION_ERROR', AMAZON_ONLY_BY_REPORT, 422);
+  }
 
   const remainder = await unreversedRemainderForReversal(orgId, original.id, original.commission_minor);
   if (reversalMinor > remainder) {
@@ -294,10 +309,10 @@ async function findConversionForReversal(
   providerAccountId: string,
   sourceTransactionId: string,
   lineId: string | null,
-): Promise<{ id: string; commission_minor: string } | null> {
-  const { rows } = await tenantQuery<{ id: string; commission_minor: string }>(
+): Promise<{ id: string; commission_minor: string; programme_id: string } | null> {
+  const { rows } = await tenantQuery<{ id: string; commission_minor: string; programme_id: string }>(
     orgId,
-    `select id, commission_minor::text as commission_minor
+    `select id, commission_minor::text as commission_minor, programme_id
        from conversions
       where org_id = $1
         and provider_account_id = $2

@@ -48,13 +48,16 @@ jobs:
       # end-to-end money loop on pg-mem (51 assertions)
       - run: ./packages/api/node_modules/.bin/tsx scripts/demo-money-loop.ts
       - run: pnpm --filter @paparazzi/web build
-      # the real thing: migrations 0001-0005, the demo seed, the in-house network seed
+      # the real thing: migrations 0001-0006, the demo seed, the in-house network seed
       # (db/network.example.yaml, TEST data) with the TEST programme
       - run: node db/migrate.mjs
       - run: ./packages/api/node_modules/.bin/tsx db/seed.ts
       - run: ./packages/api/node_modules/.bin/tsx db/seed-network.ts --with-demo-programme
       # the same money loop on a scratch database created on the CI Postgres and dropped at exit
       - run: DEMO_TARGET=postgres ./packages/api/node_modules/.bin/tsx scripts/demo-money-loop.ts
+      # Amazon.in Associates report imports running at the same time (returns never reverse more
+      # than the sale earned; a changed amount never lands twice), on its own scratch database
+      - run: ./packages/api/node_modules/.bin/tsx scripts/amazon-import-race.ts
       # the production compose files interpolate with only their required variables
       # (managed databases; single host, as the Linode installer runs it; the plain-HTTP
       # edge rehearsal), and the edge's Caddyfile is valid in both of its modes (HTTPS for

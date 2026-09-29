@@ -165,3 +165,43 @@ environment, not code.
    counts per class per org and writes nothing — no payload changes, no
    outbox deletes, no audit rows. Intended for verifying windows before the
    first real run.
+
+## Amazon offer refresh (2026-09-29)
+
+1. **Product API = the Creators API** (`src/amazon/creators-api.ts`): PA-API 5 is retired
+   (Amazon's page: "deprecated and is being replaced by the Creators API"). OAuth 2.0 client
+   credentials; India uses credential version 3.2 and `https://api.amazon.co.uk/auth/o2/token`;
+   the API host is `https://creatorsapi.amazon`, `POST /catalog/v1/getItems` with
+   `x-marketplace: www.amazon.in` and the body's `marketplace` + `partnerTag`. The requested
+   `resources` names and the per-item error shape are TO CONFIRM against Amazon's SDK (the
+   documented examples are US-only and inconsistent: `itemsResult` / `itemResults`, both read).
+2. **Eligibility**: the API needs final acceptance and 10 qualifying sales in 30 days, and is
+   lost after 30 days without one. The integration does not depend on it: without credentials
+   (or on 401/403) no price is shown, and links and conversions work.
+   **The allowance after the first 30 days**: Amazon starts an account at "8640 TPD for the
+   first 30-day period", then grants "one TPD for every five cents … of shipped item revenue
+   generated via the use of Creators API" — revenue through the API's own links, kept unedited.
+   This build redirects to `/dp/<ASIN>?tag=` instead, so that revenue will be about zero and
+   **prices will likely stop after the first 30 days** (`docs/capacity-plan.md`). **Back-off**
+   (`amazon_associates_accounts.api_paused_until`): a 429 pauses the account's refresh until
+   `retryAfterSeconds` when Amazon gives it, else until the next UTC day (Amazon does not say
+   when its day starts); a 401 / 403 until the next UTC day; other failures stop only the run
+   (`pauseUntil`, `nextUtcDay`).
+3. **Prices are exact**: `displayAmount` text and the numeric `amount` read through its shortest
+   decimal text must agree; anything else (a third decimal, another currency) → no price. Never
+   float arithmetic.
+4. **Freshness**: hourly (`AMAZON_REFRESH_CRON`, default `17 * * * *`), oldest price first, at
+   most 300 requests a run (7200 a day < the 8640 Amazon starts an account with, for its first
+   30 days), ≥ 1.1 s apart (1 TPS). Prices older than **1 hour** (`AMAZON_PRICE_MAX_AGE_HOURS`:
+   the Creators API's "Offers | 1 hour", stricter than OA §11's "up to 24 hours"; the conflict
+   is counsel's) are dropped every run, credentials or not, and the API hides one as soon as it
+   is older. So at most ~3,000 ASINs keep a price at a time (300 × 10). An item Amazon returns
+   pushes `fresh_until` to now + 30 days (`AMAZON_OFFER_TTL_DAYS`); an item Amazon explicitly
+   reports as not accessible makes the offer `stale` with `stale_reason`
+   `merchant_not_accessible` (its links serve the paused page). Such offers are asked again
+   on later runs and come back (`active`, the reason cleared) when Amazon returns the item;
+   re-listing one with the offers CLI keeps it stale unless `--reactivate`.
+5. **Nothing else is fetched**: no titles, images, reviews or search; no scraping.
+6. The ledger mirror (`src/ledger-mirror.ts`) does not know `conversions.placement_id`: Amazon
+   conversions never enter through the provider-events queue (they come from the report import
+   in the api). The suspense read model (`src/suspense.ts`) does: `placement_id IS NULL`.

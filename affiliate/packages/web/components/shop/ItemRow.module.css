@@ -90,3 +90,21 @@
     padding: 20px 0;
   }
 }
+
+/* A live offer without a price to show ("See price on Amazon.in"): the
+   price slot's 14px meta line, ink on the page, no emphasis. */
+.noPrice {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-neutral-800);
+}
+
+/* The programme's disclosure right under its call to action (Amazon: the
+   Associate statement), the freshness line's 12px type. */
+.disclosure {
+  margin: calc(var(--space-1) * -1) 0 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--color-neutral-700);
+}

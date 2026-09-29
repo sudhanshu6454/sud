@@ -151,6 +151,55 @@ snapshots, a managed-Redis setting), a backlog also costs disk. Aggregation into
 is still a TODO in that worker; when it lands it will add per-click
 database work and must be sized then.
 
+### Amazon.in Associates (2026-09-29)
+
+What the integration adds to the numbers above, all bounded by Amazon's own
+limits rather than by traffic:
+- **The redirect**: per Amazon click, one user-agent regex (link-preview
+  crawlers get a preview page, no `clicks` row) and a query-string rewrite
+  of the destination; no extra query on a cache hit. Crawler hits on Amazon
+  links therefore no longer grow `clicks`.
+- **Links**: one row per (page with its own tracking ID) × product. Amazon
+  caps tracking IDs at 100 per account, so at most 100 × the ASIN count
+  (100 × 500 ASINs = 50,000 `links` rows, 50,000 possible `route:*` keys,
+  each written only when its link is minted or first clicked). Minting runs
+  one `POST /v1/links` per new pair, in process (`amazon.sh links`).
+- **Prices**: the workers' hourly job asks Amazon's Creators API for at most
+  300 requests × 10 ASINs per run (`AMAZON_REFRESH_MAX_REQUESTS`), at least
+  1.1 s apart, oldest price first; a price is shown for **one hour** (the
+  Creators API's "Offers | 1 hour", stricter than OA §11's 24 hours,
+  `AMAZON_PRICE_MAX_AGE_HOURS`). While Amazon's starting allowance holds —
+  "one request per second (one TPS) and a cumulative daily maximum of 8640
+  requests per day", i.e. 360 requests an hour — at most ~3,000 ASINs (300 ×
+  10) keep a price at any time; the rest show "See price on Amazon.in". A
+  run takes up to ~6 minutes at 1.1 s per request, so the last ASINs of a
+  run can go priceless for a few minutes before they are re-read.
+  **That allowance lasts 30 days.** Amazon: "8640 TPD for the first 30-day
+  period"; after it, "one TPD for every five cents or one TPS (up to a
+  maximum of ten TPS) for every $4320 of shipped item revenue generated via
+  the use of Creators API", with "For correct attribution of shipped item
+  revenue please ensure that you … retain all the URL parameters that the
+  API returns" and "Do not edit any of the URL parameters". This build does
+  not use the API's links: it redirects to `/dp/<ASIN>?tag=<the page's
+  tracking ID>` (one link per page, the tag the only attribution; the API's
+  links are made for one partner tag per call). So the shipped revenue that
+  earns API allowance will be about zero, and **prices will likely stop
+  after the first 30 days**: the allowance collapses, calls answer `429
+  ThrottleException`, and the shop falls back to "See price on Amazon.in"
+  (links and conversions are unaffected). The workers do not hammer it: a
+  429 pauses the account's refresh until the error's `retryAfterSeconds`,
+  else until the next UTC day (Amazon does not say when its day starts); a
+  401 / 403 (e.g. `AssociateNotEligible` after 30 days without referred
+  sales) until the next UTC day (`amazon_associates_accounts.api_paused_until`).
+  Keeping prices would mean switching to the API's own links (GetItems per
+  tracking ID, the vended `detailPageURL` cached for at most a day and
+  redirected to unmodified) — an owner / engineering decision
+  (`docs/action-tracker.md`, "Product API access").
+- **Reports**: one monthly Earnings download, aggregated per item and day by
+  Amazon; the API route caps a report at 2 MB (`MAX_REPORT_BYTES`), the CLI
+  reads the file whole. Unmeasured: the size of a real month's download for
+  the in-house network (no sample yet).
+
 ## 4. The consumer web (`packages/web`)
 
 - Every catalogue fetch carries `next: { revalidate: 60 }`

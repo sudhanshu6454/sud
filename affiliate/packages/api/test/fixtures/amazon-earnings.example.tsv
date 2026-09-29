@@ -1,0 +1,6 @@
+Fee-Earnings report 2026-10-01 to 2026-10-02 (TEST fixture: layout to confirm with a real export)
+Category	Name	ASIN	Seller	Tracking ID	Date Shipped	Price(Rs.)	Items Shipped	Returns	Revenue(Rs.)	Ad Fees(Rs.)	Device Type Group
+Home	Demo Kettle	B0DEMO0001	Demo Seller	demo-ig-21	2026-10-01	1000.00	1	0	1000.00	160.00	PHONE
+Home	Demo Mug	B0DEMO0002	Demo Seller	demo-fb-21	2026-10-02	499.00	2	0	998.00	79.84	DESKTOP
+Home	Demo Kettle	B0DEMO0001	Demo Seller	demo-unknown-21	2026-10-02	1000.00	1	0	1000.00	160.00	PHONE
+Home	Demo Mug	B0DEMO0002	Demo Seller	demo-fb-21	2026-09-20	499.00	1	0	499.00	39.92	PHONE

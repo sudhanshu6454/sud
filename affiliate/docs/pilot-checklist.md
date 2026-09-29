@@ -1,10 +1,11 @@
 # Pre-pilot checklist
 
 What is built and proven in this sandbox vs what still needs engineering or a
-human before the pilot. Last verified test run (2026-09-29): **669/669 green
-across 35 files** (`./node_modules/.bin/vitest run`: api 126, redirect 10,
-shared 15, workers 15, web 503; the earlier figures of 57, 94, 133, 558, 587,
-612, 616 and 660 are stale). Legend: ✅ verified in this repo · ⏳ not done — needs
+human before the pilot. Last verified test run (2026-09-29): **784/784 green
+across 45 files** (`./node_modules/.bin/vitest run`: api 199, redirect 10,
+shared 28, workers 24, web 523, with the Amazon.in Associates build after its
+review fixes; the earlier figures of 57, 94, 133, 558, 587, 612, 616, 660,
+669 and 768 are stale). Legend: ✅ verified in this repo · ⏳ not done — needs
 engineering work · 👤 needs a human (see
 [EXTERNAL DEPENDENCIES](#external-dependencies) and the
 [action tracker](./action-tracker.md)).
@@ -22,7 +23,7 @@ has seen real merchants, real money, real traffic or a real host.
   `packageManager` pin, used locally, in CI and in the images
   ([`docker/README.md`](../docker/README.md) "pnpm version policy"). The old
   "known-broken" note is obsolete.
-- ✅ `vitest run` green — 669 tests in 35 files: ledger math
+- ✅ `vitest run` green — 784 tests in 45 files: ledger math
   ([`packages/shared/src/ledger.test.ts`](../packages/shared/src/ledger.test.ts)),
   money-loop API incl. idempotency ×10, revision ordering, suspense,
   reversals, payout gates, maker-checker
@@ -320,6 +321,15 @@ and acceptance criteria.
   programme in any database is the TEST "Demo Network Programme" that
   `db/seed-network.ts --with-demo-programme` creates (`shop.example.com`).
   *A machine cannot sign commercial terms with a merchant.*
+- 👤 Amazon.in Associates (2026-09-29): built and rehearsed with TEST values
+  (`docs/runbooks/deploy.md` §1A); the owner's account, website list,
+  tracking IDs, bio disclosures, counsel's privacy notice on `/privacy`
+  (`amazon.sh links` and `shop` refuse until it is published), a real
+  earnings download, Amazon's word on the `/r/` redirect and counsel's §9
+  items are open — every one is a row of
+  the [action tracker](./action-tracker.md) ("Amazon.in Associates").
+  *Only the owner can join Amazon's programme; only Amazon and counsel can
+  answer its open questions.*
 - 👤 Channel exports: fresh 28/90-day audience + content-vertical exports
   from pilot publishers, on file before contracting. For the in-house
   network this is the owner's own platform analytics; the "12 billion views"

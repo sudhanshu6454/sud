@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { newDb, type IMemoryDb } from 'pg-mem';
+import { DataType, newDb, type IMemoryDb } from 'pg-mem';
 
 /**
  * pg-mem test-database factory.
@@ -217,6 +217,40 @@ export function createTestDb(opts: { rollback?: boolean } = {}): TestDatabase {
     returns: 'uuid',
     impure: true,
     implementation: () => randomUUID(),
+  });
+
+  // Advisory locks (the Amazon report import runs one file at a time per
+  // account, src/amazon/report-import.ts): pg-mem has none, so they are
+  // emulated database-wide with a set of held keys — enough for the tests to
+  // hold a lock and see a second import refused. No session semantics.
+  const heldLocks = new Set<number>();
+  db.public.registerFunction({
+    name: 'hashtext',
+    args: [DataType.text],
+    returns: DataType.integer,
+    implementation: (t: string) => {
+      let h = 0;
+      for (let i = 0; i < t.length; i += 1) h = (Math.imul(h, 31) + t.charCodeAt(i)) | 0;
+      return h;
+    },
+  });
+  db.public.registerFunction({
+    name: 'pg_try_advisory_lock',
+    args: [DataType.integer],
+    returns: DataType.bool,
+    impure: true,
+    implementation: (k: number) => {
+      if (heldLocks.has(k)) return false;
+      heldLocks.add(k);
+      return true;
+    },
+  });
+  db.public.registerFunction({
+    name: 'pg_advisory_unlock',
+    args: [DataType.integer],
+    returns: DataType.bool,
+    impure: true,
+    implementation: (k: number) => heldLocks.delete(k),
   });
 
   const files = readdirSync(MIGRATIONS_DIR)

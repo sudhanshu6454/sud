@@ -22,7 +22,8 @@ interface Balance {
  *
  * The four lifecycle states are kept visually separate (per the brief):
  * - pending:   publisher share of conversions still awaiting provider
- *              approval (status='pending'), attributed via the click chain.
+ *              approval (status='pending'), attributed via the click chain
+ *              or a tracking-ID placement (conversions.placement_id).
  * - approved:  net `publisher_liability` balance from posted ledger entries.
  * - collected: merchant cash actually received for the publisher's
  *              eligible earnings, allocated pro-rata per (programme, currency)
@@ -76,6 +77,24 @@ export async function earningsRoutes(app: FastifyInstance): Promise<void> {
         where c.org_id = $1 and ca.publisher_id = $2 and c.status = 'pending'`,
       [publisherId],
     );
+    // Pending conversions attributed through a tracking-ID mapping (no click;
+    // Amazon.in Associates): placement → campaign, programme = the conversion's.
+    const pendingByPlacement = await tenantQuery<{
+      currency: string;
+      commission_minor: string;
+      publisher_id: string;
+      programme_id: string;
+    }>(
+      orgId,
+      `select c.currency as currency, c.commission_minor::text as commission_minor,
+              ca.publisher_id as publisher_id, c.programme_id as programme_id
+         from conversions c
+         join placements pl  on pl.id = c.placement_id    and pl.org_id = $1
+         join campaigns ca   on ca.id = pl.campaign_id    and ca.org_id = $1
+        where c.org_id = $1 and ca.publisher_id = $2 and c.status = 'pending'
+          and c.click_id is null and ca.programme_id = c.programme_id`,
+      [publisherId],
+    );
     const latestContracts = await tenantQuery<{
       publisher_id: string;
       programme_id: string;
@@ -93,7 +112,7 @@ export async function earningsRoutes(app: FastifyInstance): Promise<void> {
     for (const ct of latestContracts.rows) {
       if (!bpsByProgramme.has(ct.programme_id)) bpsByProgramme.set(ct.programme_id, ct.publisher_share_bps);
     }
-    for (const pc of pendingConvs.rows) {
+    for (const pc of [...pendingConvs.rows, ...pendingByPlacement.rows]) {
       const bps = bpsByProgramme.get(pc.programme_id) ?? 10000;
       bucket(pc.currency).pending += Math.floor((Number(pc.commission_minor) * bps) / 10000);
     }

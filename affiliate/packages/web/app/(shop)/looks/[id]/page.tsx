@@ -7,7 +7,7 @@ import { BackBar } from '@/components/shop/BackBar';
 import { Cover } from '@/components/shop/Cover';
 import { Facts } from '@/components/shop/Facts';
 import { ItemRow } from '@/components/shop/ItemRow';
-import { productCount, publishedLabel } from '@/components/shop/model';
+import { lookDisclosures, lookRelationshipFact, productCount, publishedLabel } from '@/components/shop/model';
 import styles from '@/components/shop/detail.module.css';
 import { EmptyState, Eyebrow, PageHeader, Tag } from '@/components/ui';
 import { getLook, lookOrMiss } from '@/lib/catalogue';
@@ -41,7 +41,10 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
  * facts beside "Shop this look" — the disclosure panel and one row per
  * product with its match tag, price, merchant, freshness, stock and the
  * tracked "View at merchant →" link (or its disabled / unavailable states).
- * Live GET /v1/looks/:id?placement_id=; TEST demo data + badge on fallback.
+ * Amazon.in items say "Buy on Amazon.in" and carry the Associate statement
+ * (also in the panel); a product-API price adds Amazon's attribution line
+ * under the list. Live GET /v1/looks/:id?placement_id=; TEST demo data +
+ * badge on fallback.
  */
 export default async function LookDetailPage({ params }: Params) {
   const result = await getLook(params.id);
@@ -51,6 +54,9 @@ export default async function LookDetailPage({ params }: Params) {
 
   const published = publishedLabel(look.publishedAt);
   const count = productCount(look.items.length);
+  // The programmes' own statements (Amazon.in: the Associate statement) and
+  // Amazon's attribution line when a product-API price is shown, once each.
+  const { disclosures, attributions } = lookDisclosures(look.items);
 
   return (
     <>
@@ -101,7 +107,7 @@ export default async function LookDetailPage({ params }: Params) {
                 ['Category', look.category ?? 'Not set'],
                 ['Products', count],
                 ...(published ? ([['Published', published.replace(/^Published /, '')]] as [string, string][]) : []),
-                ['Sponsored', look.sponsored ? 'Yes' : 'No'],
+                lookRelationshipFact(look, look.items),
               ]}
             />
           </div>
@@ -114,7 +120,7 @@ export default async function LookDetailPage({ params }: Params) {
             </h2>
             <Eyebrow as="span">{count}</Eyebrow>
           </div>
-          <Disclosure />
+          <Disclosure lines={disclosures} />
           {look.items.length === 0 ? (
             <div className={styles.empty}>
               <EmptyState title="No products yet." action={{ label: 'Browse the shop', href: '/shop' }}>
@@ -128,6 +134,11 @@ export default async function LookDetailPage({ params }: Params) {
               ))}
             </ul>
           )}
+          {attributions.map((a) => (
+            <p key={a} className={styles.note}>
+              {a}
+            </p>
+          ))}
         </section>
       </div>
     </>

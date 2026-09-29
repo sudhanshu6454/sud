@@ -670,3 +670,94 @@ instead).
     so the note, its component and its copy were removed; the pages show the
     confirmed figures, and `test/site-copy.test.ts` pins them. Opening the
     site to search engines stays the owner's switch (items 74–77).
+
+## Amazon.in Associates in the shop (2026-09-29)
+
+79. **What an Amazon offer looks like** (`components/shop/model.ts`
+    `offerCopy`, `ItemRow`, the item page). The API tells the shop an offer
+    is Amazon's by `offer.connector === 'amazon-associates'`
+    (`lib/site-copy.ts` `AMAZON_IN.connector`), never by the merchant's name.
+    Then: the call to action reads "Buy on Amazon.in" (the brief: "a "Buy on
+    Amazon.in" CTA"; PR 20: no confusion about where the order happens) and
+    is still only the tracked `/r/{token}` link, or the disabled control
+    without one; the Associate statement ("As an Amazon Associate I earn
+    from qualifying purchases.", OA §10, verbatim) sits right under it and
+    in the look / item page's disclosure panel, beside the shop's own line —
+    always, and first: the programme's own disclosure from the API is shown
+    only after it, minus the statement if it repeats it
+    (`amazonDisclosures`), so an operator's text can never replace it; the
+    item page says "You complete the purchase on Amazon.in; Amazon.in's
+    terms apply." (`AMAZON_IN.purchaseNote`; it used to say "Payment,
+    delivery and returns are handled by Amazon.in", wrong for third-party
+    sellers' listings — LR: no misleading claims about Amazon's policies);
+    a look with Amazon items shows "Affiliate links: Yes (we earn from
+    qualifying purchases)" where other looks show "Sponsored"
+    (`lookRelationshipFact`: "Sponsored: No" beside commissioned links
+    could read as "no paid relationship"). The two button labels, the
+    purchase note and the look fact are drafts pending counsel (the
+    amazon.in Trademark Guidelines page renders empty); the statement, the
+    disclaimer and the attribution line are Amazon's own text, pinned by
+    `test/amazon-shop.test.ts`.
+80. **Prices only as the API sends them.** The API returns `price_minor`
+    only when Amazon's product API supplied it less than 1 hour ago (the
+    Creators API's "Offers | 1 hour"; OA §11's 24 hours is the outer limit),
+    with `price_as_of`; otherwise null, and then `stock_status`
+    `unknown` too (availability is under the same rule). The shop never
+    computes or keeps a price itself: with one it shows "Amazon.in Price",
+    the amount, "(as of DD/MM/YYYY HH:MM IST)" (`lib/format.ts`
+    `priceAsOfLabel`, fixed UTC+05:30, always with the date — OA §11's
+    example: "Amazon.in Price: Rs.3500 (as of 13/07/2013 14:11 IST -
+    Details)") and Amazon's price disclaimer adjacent (OA §11 allows
+    "adjacent or via a link or popup"; adjacent was chosen, so no "Details"
+    link), plus OA §11's attribution line under the list; without one it
+    shows "See price on Amazon.in" in the price's place and no stock. The
+    freshness line ("Price valid for …", from `fresh_until`) is not shown
+    for a time-stamped price: `fresh_until` is how long the offer stays
+    linkable (30 days), not how long its price is good. The page cache
+    (`revalidate: 60`) can show a price up to 60 s after the API stopped
+    returning it, i.e. at most 1 h 1 min after Amazon supplied it.
+81. **The wishlist keeps no Amazon price** (`storablePrice`,
+    `lib/saved.ts`). An Amazon entry is saved with `price_minor: null` and
+    `priceNotStored: true` — `toggleSaved` drops a price even if one is
+    passed — and `/saved` says "Price not stored — open the product for it".
+    Entries saved before 2026-09-29 are unchanged (no Amazon offer existed).
+82. **The footer statement is the owner's switch** (`lib/site.ts`
+    `amazonAssociate`, `components/shell/MarketingFooter.tsx`).
+    `AMAZON_ASSOCIATE=on` (server runtime) adds the Associate statement to
+    every marketing and shop page's footer (help GPXFHVYZMTGPUMPE: "identify
+    yourself on your Site as an Amazon Associate"); anything else shows none,
+    so the site never claims to be an Associate before the account exists.
+    `deploy/linode/amazon.sh setup` turns it on (and restarts the web) as
+    soon as the account is set up, shop placement or not; `links` and
+    `shop` refuse while it is off.
+    The app areas' shell has no footer and shows no Amazon offer.
+83. **No Amazon URL anywhere in the web.** The API never returns
+    `offer_url`; no source file under `app/`, `components/` or `lib/`
+    names an amazon.in host, a `/dp/` path, a short `amzn` link or Amazon's
+    image host (a test scans them; the production build's output was
+    grepped too, 2026-09-29: none). The shop draws no Amazon image: a look
+    of Amazon products gets the gradient placeholder (OA §11: images may
+    not be stored).
+84. **`/r/` in robots.txt.** With `SITE_INDEXING=on`, robots.txt also
+    disallows `/r/` (`ROBOTS_DISALLOW_TRACKED_LINKS`, separate from the web's
+    own areas because the redirect serves it): a crawler must not follow a
+    tagged Amazon link (PR 27), and the redirect answers `X-Robots-Tag:
+    noindex, nofollow` itself.
+85. **What is still demo or open.** The demo catalogue has no Amazon item
+    (demo data never names a real merchant; the Amazon rendering is covered
+    by `test/amazon-shop.test.ts` and was checked on the rehearsal stack);
+    the privacy page does not yet carry OA §5's third-party cookie
+    disclosure (counsel, `docs/action-tracker.md`): it is `StubPage`, which
+    carries `data-document-status="stub"` (`STUB_MARKER`), and
+    `deploy/linode/amazon.sh links` / `shop` refuse while the served
+    `/privacy` carries it; the look's cover for Amazon products is the
+    placeholder.
+86. **Suspense rows from Amazon** (`lib/api.ts`, `components/admin/suspenseModel.ts`).
+    `SuspenseReasonCode` has the API's four tracking-ID codes
+    (`TRACKING_ID_UNMAPPED`, `TRACKING_ID_IS_STORE_DEFAULT`,
+    `TRACKING_ID_MAPPED_AFTER_SALE`, `ATTRIBUTION_CONFLICT`) with
+    sentence-case labels, the item carries `returned_tracking_ref`, the
+    row shows "tracking ID: <id>" when there is no click ref, and "Retry
+    attribution" is allowed with either reference (the API retries against
+    both, exact matches only). A test pins the labels against
+    `docs/openapi.yaml`'s enum.

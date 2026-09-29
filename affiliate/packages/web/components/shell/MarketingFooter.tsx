@@ -1,8 +1,13 @@
 import Link from 'next/link';
-import { siteName } from '../../lib/site';
+import { amazonAssociate, siteName } from '../../lib/site';
+import { AMAZON_IN } from '../../lib/site-copy';
 import styles from './MarketingFooter.module.css';
 
-/** "© 2026 Afflino · Made in India" · Terms · Privacy · Contact (1b). */
+/**
+ * "© 2026 Afflino · Made in India" · Terms · Privacy · Contact (1b). With
+ * AMAZON_ASSOCIATE=on, Amazon's Associate statement follows on its own line
+ * (lib/site.ts amazonAssociate).
+ */
 export function MarketingFooter() {
   const year = new Date().getFullYear();
   return (
@@ -23,6 +28,7 @@ export function MarketingFooter() {
           Contact
         </Link>
       </nav>
+      {amazonAssociate() ? <p className={styles.associate}>{AMAZON_IN.associateStatement}</p> : null}
     </footer>
   );
 }

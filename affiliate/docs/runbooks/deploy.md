@@ -6,7 +6,8 @@ host (`docker-compose.prod.yml` + `docker-compose.single-host.yml`, the edge
 terminating TLS) and, run again, updates it. **Nothing has been deployed to
 the Linode or to afflino.com from this repository yet**; the installer was
 rehearsed in the sandbox (`deploy/linode/README.md` "What was checked"), §1R
-is the stack rehearsal.
+is the stack rehearsal. §1A (added 2026-09-29) is the owner's Amazon.in
+Associates steps, `deploy/linode/amazon.sh`, rehearsed the same way.
 
 Conventions for every command below: run as root on the Linode. Each command
 is one complete line with nothing to fill in. The paths are the installer's:
@@ -35,7 +36,7 @@ changes (settings belong in the environment file).
       4 GB plan (see §6 for the sizing caveat). The installer refuses a
       server that already runs other Docker compose projects.
 - [ ] The release commit is green in CI (workflow `afflino`: typecheck,
-      vitest — 669 tests in 35 files on 2026-09-29 — both demos, the web
+      vitest — 768 tests in 45 files on 2026-09-29 — both demos, the web
       build, compose config, ShellCheck on `deploy/linode/*.sh`).
 - [ ] `docs/runbooks/dependency-review.md` re-run for the release; no
       unaddressed high/critical findings.
@@ -285,6 +286,403 @@ tracked links are minted for them. Rehearsed on 2026-09-29 with the
 owner's Meta exports (322 Facebook pages, 82 Instagram accounts), on a
 scratch Postgres 16 database and on the installer's stack in test mode:
 404 approved properties plus the shop's own, twice, with identical output.
+
+## 1A. Amazon.in Associates
+
+What this sets up: tracked links `https://afflino.com/r/<token>` for the
+owner's **own** Facebook pages, Instagram accounts and afflino.com that
+send a shopper to `https://www.amazon.in/dp/<ASIN>?tag=<that page's
+tracking ID>` with a plain 302 (no cookie, never a per-click id on Amazon's
+URL), Amazon products in the shop with Amazon's wording, and the monthly
+earnings download from Associates Central imported as conversions, each
+attributed to its page by the tracking ID. Built and rehearsed with TEST
+values only (store ID `demo-21`, tracking IDs `demo-*-21`, ASINs
+`B0DEMO…`); the real values are the owner's and live only on the server, in
+`/etc/afflino/afflino.env` and `/etc/afflino/amazon/`. **Nothing here says
+the setup meets Amazon's terms.** It follows the Operating Agreement ("OA"),
+the Participation ("PR") and Linking ("LR") Requirements as quoted in the
+policy brief of 2026-09-29 (`packages/api/ASSUMPTIONS.md`, "Amazon.in
+Associates"); the questions only Amazon or counsel can answer are rows of
+`docs/action-tracker.md` ("Amazon.in Associates") and items of
+`docs/counsel-briefing.md` §9.
+
+### What you need first (on Amazon's side and counsel's; none of it is in this repository)
+
+- An **amazon.in Associates account** (Associates Central) and its **Store
+  ID**, which ends in `-21`. Amazon reviews the account after sign-up:
+  "we require at least three [qualified sales] within the first 180 days",
+  or the application is withdrawn.
+- **Your website list** (Associates Central → Account Settings → Edit your
+  website list) naming afflino.com and the exact URL of every Facebook page
+  and Instagram account that will carry links. Amazon: "Your application
+  must clearly list your social media page’s exact URL"; the pages must be
+  "established, with a substantive number of organic followers/likes (in
+  most cases, at least 500)", "publicly available" with "at least 10
+  posts"; Facebook fan / open group pages, "excluding personal pages"; "You
+  must own your website." Links carrying your tag may only appear on "your
+  site" (PR 9), so **creators outside the in-house network never get Amazon
+  links** (the API refuses them, `PROPERTY_NOT_OWNER_OPERATED`, and nothing
+  can switch that off).
+- **Only Facebook, Instagram and afflino.com.** Amazon: "We currently only
+  accept the following social networks: Facebook (including open group
+  pages and fan pages, but excluding personal pages), Instagram, Twitter,
+  YouTube, Tik Tok, and Twitch.tv". The in-house network's Snapchat and
+  Telegram accounts (and WhatsApp) are not on that list: `template` leaves
+  them out, `setup` refuses them and the API refuses a link for them. The
+  network has no YouTube channel today; one can be added to the build when
+  you list it with Amazon.
+- **Tracking IDs**, created in Associates Central: one per page
+  that will carry links, and one for afflino.com. "There is a limit of 100
+  Tracking IDs per associate account". None may contain an Amazon mark (PR
+  12): the setup refuses "amazon", "kindle" and their misspellings, and
+  alexa, echo, prime, prime video, audible, fire tv / firestick, imdb,
+  zappos, whole foods — **Amazon's list of its marks is non-exhaustive**,
+  so check each ID against Amazon's own list too.
+- **The disclosure in every page's About / bio**: "As an Amazon Associate I
+  earn from qualifying purchases." (OA §10; help: "For social media
+  user-generated content, this statement must be associated with your
+  account"). The site shows it by itself (step 4).
+- **The privacy notice, from counsel, published on afflino.com/privacy.**
+  OA §5: you must disclose "how you collect, use, store, and disclose data
+  collected from visitors, including … that third parties (including us
+  and other advertisers) may … place or recognize cookies on visitors’
+  browsers". The redirect already stores a keyed hash of each clicker's
+  address and the user agent. `/privacy` is a stub today, and **`links` and
+  `shop` refuse to run while it is** (they read the page: the stub carries
+  `data-document-status="stub"`). Counsel's text goes into the web app's
+  privacy page and ships with the update line; then both steps run.
+- Optional, later: **Creators API credentials** (a credential ID and a
+  secret, version 3.2 for India; "Only the primary account owner … can sign
+  up", and of the secret Amazon warns "It will only be displayed once during
+  creation": enter it at `keys` right away). Amazon grants them only after
+  final acceptance and "at least 10 qualifying sales within the past 30
+  days". Without them nothing shows a price ("See price on Amazon.in");
+  links and earnings work the same. **Expect prices to stop after the
+  first 30 days**: Amazon grants "8640 TPD for the first 30-day period",
+  after that "one TPD for every five cents … of shipped item revenue
+  generated via the use of Creators API" — revenue through the API's own
+  links, which this build does not use (it links `/dp/<ASIN>?tag=`, see
+  `docs/capacity-plan.md`). The workers then back off (a 429 pauses the
+  refresh until Amazon's `retryAfterSeconds` or the next day) and the shop
+  shows "See price on Amazon.in"; nothing else depends on it.
+
+### Which pages get links (the choice)
+
+**One tracking ID per page, and links only for pages that have one.** With
+Amazon's limit of 100 tracking IDs, that is afflino.com plus up to 99 pages:
+pick the Facebook pages and Instagram accounts with the most followers that
+meet Amazon's thresholds above and are on your website list. Why not share
+one tracking ID among several pages, or post on every page under the Store
+ID: Amazon's report names the tracking ID of each sale and nothing else about
+where it came from (no click id: Amazon forbids a sub-tag tied to a specific
+shopper "under no circumstances", LR), so a sale under a shared ID or the
+Store ID cannot be tied to one page and would wait in the suspense queue for
+a human (the system never guesses attribution). A page without its own
+tracking ID therefore gets **no** links (`links` skips it and says so). For
+more than 100 pages, ask Associates Customer Service for more tracking IDs
+("If you have further requirements, please contact Associates Customer
+Service") and add rows later: mappings are only ever added, never changed.
+
+### The steps
+
+As root on the Linode unless a step says "on your Mac". Each line is
+complete; the values you type go into hidden prompts or into files, never
+onto a command line. Every step can be re-run safely.
+
+1. **Update** (the Amazon steps ship with the code):
+   ```sh
+   bash <(curl -fsSL https://raw.githubusercontent.com/sudhanshu6454/sud/refs/heads/claude/nifty-pasteur-flrulw/affiliate/deploy/linode/install.sh)
+   ```
+2. **Settings**: the Store ID (hidden prompt), the in-house network's share
+   of Amazon's fee in percent (it sets the first contract: the publisher
+   "Afflino in-house network" is credited that share of every fee, the
+   platform the rest — both are you; a change later needs a new contract
+   version, `POST /v1/contracts`), and optionally the Creators API
+   credential ID and secret (hidden). Nothing is printed but the names of
+   the keys it set. Then the update line again, so the workers read the new
+   settings:
+   ```sh
+   bash /opt/afflino/affiliate/deploy/linode/amazon.sh keys
+   bash <(curl -fsSL https://raw.githubusercontent.com/sudhanshu6454/sud/refs/heads/claude/nifty-pasteur-flrulw/affiliate/deploy/linode/install.sh)
+   ```
+3. **The two files.**
+   - `tracking-ids.csv` — one row per page on your website list:
+     `platform,account,tracking_id`, where `platform` and `account` are the
+     network's own (Facebook pages by page ID, Instagram by handle, `web`
+     by host name). A starting file with every Facebook page, Instagram
+     account and web property of the network and its URL (so you recognise
+     each) is one line away; copy it to your Mac, keep only your pages,
+     write one tracking ID per row, and save it as CSV under the same name
+     (Numbers: File → Export To → CSV; Excel: CSV UTF-8):
+     ```sh
+     bash /opt/afflino/affiliate/deploy/linode/amazon.sh template
+     ```
+     on your Mac:
+     ```sh
+     scp root@afflino.com:/etc/afflino/amazon/tracking-ids.template.csv ~/Downloads/afflino-amazon-tracking-ids.csv
+     ```
+   - `asins.csv` — the products: `asin_or_url,brand,model,category,look`.
+     `asin_or_url` is the ASIN or the amazon.in product URL (any
+     `/dp/<ASIN>` form; short `amzn` links are refused, nothing here opens
+     Amazon's pages). `brand`, `model` and `category` are **your own
+     words** (Amazon's product text may be kept for 24 hours at most, OA
+     §11). `look` (optional) groups products into a look of the shop under
+     that title; rows without one get links for your pages only. For
+     example (TEST values):
+     ```
+     asin_or_url,brand,model,category,look
+     B0DEMO0001,Demo Brand,Demo Kettle,Home,Demo Kitchen picks
+     https://www.amazon.in/Demo-Mug/dp/B0DEMO0002/,Demo Brand,Demo Mug,Home,Demo Kitchen picks
+     ```
+   Put both on the server, **from your Mac** (Spotlight finds the newest
+   `afflino-amazon-tracking-ids.csv` and `afflino-amazon-asins.csv` wherever
+   they are saved):
+   ```sh
+   ssh root@afflino.com 'mkdir -p /etc/afflino/amazon' && for n in tracking-ids asins; do f=$(mdfind -name "afflino-amazon-$n" 2>/dev/null | grep -E '\.csv$' | while IFS= read -r p; do printf '%s\t%s\n' "$(stat -f %m "$p")" "$p"; done | sort -n | tail -1 | cut -f2-); if [ -n "$f" ]; then echo "copying $f"; scp "$f" "root@afflino.com:/etc/afflino/amazon/$n.csv"; else echo "no afflino-amazon-$n.csv found on this Mac"; fi; done
+   ```
+   or type (paste) each on the Linode, ending with Enter and then Ctrl-D:
+   ```sh
+   mkdir -p /etc/afflino/amazon && cat > /etc/afflino/amazon/tracking-ids.csv
+   mkdir -p /etc/afflino/amazon && cat > /etc/afflino/amazon/asins.csv
+   ```
+4. **The programme and the account** (merchant "Amazon.in", programme
+   "Amazon.in Associates", the account with your Store ID, one campaign, one
+   placement per row of `tracking-ids.csv`, the first contract, the
+   tracking-ID mappings; all in one transaction), and **the Associate
+   statement in every page's footer** from then on ("As an Amazon Associate
+   I earn from qualifying purchases.", `AMAZON_ASSOCIATE=on`; the web
+   restarts once):
+   ```sh
+   bash /opt/afflino/affiliate/deploy/linode/amazon.sh setup
+   ```
+   It refuses, writing nothing, a changed Store ID, a tracking ID mapped to
+   another page before, a second tracking ID for a page, the Store ID as a
+   page's tracking ID, a page that is not yours (no `owner_operated`
+   verification), a Snapchat / Telegram / other page Amazon does not
+   accept, a malformed or trademark-bearing ID, and TEST values. **Run it
+   before you post**: a mapping counts from the moment it is made, so a
+   sale dated earlier waits in suspense (`TRACKING_ID_MAPPED_AFTER_SALE`).
+5. **The products**:
+   ```sh
+   bash /opt/afflino/affiliate/deploy/linode/amazon.sh offers
+   ```
+   Offers are created without a price, linkable for 30 days (re-running
+   extends it; the price refresh extends it for every product Amazon still
+   lists). A product Amazon's product API reported not accessible stays
+   paused when you list it again (the step says which); the price refresh
+   brings it back when Amazon lists it again.
+6. **The links**, one per (page with its own tracking ID) × product, minted
+   through the API with every guard; the sheet goes to
+   `/etc/afflino/amazon/links.csv` (`platform,account,tracking_id,asin,
+   brand,model,look,post_label,link_url`). It refuses to run until the
+   privacy notice is published (above) and the footer statement is on
+   (step 4). Then copy the sheet to your Mac:
+   ```sh
+   bash /opt/afflino/affiliate/deploy/linode/amazon.sh links
+   ```
+   on your Mac:
+   ```sh
+   scp root@afflino.com:/etc/afflino/amazon/links.csv ~/Downloads/afflino-amazon-links.csv
+   ```
+   Post each page's own `link_url` on that page only (a link carries its
+   page's tracking ID), and start every post with its `post_label`
+   (`#ad · Buy on Amazon.in`: the link-level disclosure and the fact that
+   the link goes to Amazon.in; the exact wording and placement under the
+   ASCI guidelines is counsel's, pending). What every post needs, as Amazon
+   words it:
+   - a disclosure near the link ("as simple as "(paid link)", "#ad", or
+     "#CommissionsEarned"", placed "near any affiliate link") — the
+     `post_label`;
+   - a clear statement that the link goes to Amazon.in (PR 20; LR: no link
+     that makes it "unclear that you are linking to an Amazon Site");
+   - **no prices** (a post cannot be refreshed; a product-API price may be
+     shown for an hour, OA §11 caps any at 24 hours) and **no Amazon
+     product images** (OA §11: images may not be stored or altered);
+   - **no Amazon customer reviews or star ratings** (PR 28);
+   - no inaccurate or misleading claim about a product, Amazon.in or its
+     policies (LR: "You must not make inaccurate, overbroad, deceptive or
+     otherwise misleading claims"); never "dupe", "fake" or "faux" next to
+     a brand (help GER4LUCFFTZJ2FDC);
+   - a limited-time promotion mentioned only until it ends: **delete or
+     edit the post on or before its end date** (LR: "You must remove from
+     your site any links and related references to limited time promotions
+     on or before the expiration date");
+   - no coupon codes (help GUPDNS3EVD952D97), cashback or other incentive
+     for using the link (PR 14), and never a note that proceeds go to a
+     charity (help G4J8JEGHNV5ERKLT);
+   - never in emails, PDFs, print or QR codes (help: "not permitted to be
+     used in emails, offline promotions or in any offline manner"), never
+     on Snapchat, Telegram or WhatsApp, never as a paid-ad landing page (PR
+     13); no buying through your own links (OA §7);
+   - no press release or public announcement about joining the programme
+     (OA §10: "You will not issue any press release or make any other
+     public communication with respect to … your participation in the
+     Program").
+7. **The shop**: points the shop at its Amazon placement
+   (`WEB_PLACEMENT_ID`) and gives it its read-only token (`WEB_API_TOKEN`,
+   minted in the api container, never printed), then restarts the web. The
+   same privacy-notice condition as step 6:
+   ```sh
+   bash /opt/afflino/affiliate/deploy/linode/amazon.sh shop
+   ```
+   From then on `/shop` shows the live looks (the Amazon looks from
+   `asins.csv`) instead of the TEST demo looks. Each Amazon product shows
+   "See price on Amazon.in" — or, once the Creators API supplies a price,
+   "Amazon.in Price", the amount, "(as of DD/MM/YYYY HH:MM IST)" and
+   Amazon's price disclaimer, for one hour at most (the Creators API's
+   "Offers | 1 hour"; OA §11's 24 hours is the outer limit, the conflict is
+   counsel's, §9) — the "Buy on Amazon.in" button (the tracked link only),
+   the Associate statement (always, first), "You complete the purchase on
+   Amazon.in; Amazon.in's terms apply." (draft pending counsel), and on the
+   look "Affiliate links: Yes (we earn from qualifying purchases)" where
+   other looks say "Sponsored".
+8. **Earnings**: once a month, after the month has ended, download the
+   **Earnings** report for that month from Associates Central's reports
+   (Amazon: "the various values are separated by tabs") and copy it to the
+   server **from your Mac**
+   (the newest file whose name contains "Earnings"; rename it
+   `afflino-amazon-earnings.tsv` if Spotlight finds none):
+   ```sh
+   f=$(mdfind -name Earnings 2>/dev/null | grep -Ei '\.(tsv|csv|txt)$' | while IFS= read -r p; do printf '%s\t%s\n' "$(stat -f %m "$p")" "$p"; done | sort -n | tail -1 | cut -f2-); if [ -n "$f" ]; then echo "copying $f"; ssh root@afflino.com 'mkdir -p /etc/afflino/amazon/reports' && scp "$f" root@afflino.com:/etc/afflino/amazon/reports/; else echo "no earnings report found on this Mac"; fi
+   ```
+   then on the Linode:
+   ```sh
+   bash /opt/afflino/affiliate/deploy/linode/amazon.sh import
+   ```
+   Every file in `/etc/afflino/amazon/reports/` is imported once (oldest
+   first) and moves to `reports/imported/`; a refused file stays, with the
+   reason. **The download's layout is not documented by Amazon**: until a
+   real download has been checked (send one, with a returned item in it),
+   the first import may be refused with "unknown layout" — nothing is
+   written then. A row imported before with other amounts refuses the whole
+   file (409, nothing written: the system never rewrites an amount), which
+   is why each month is downloaded once, after it is over ("Your Earnings
+   Report is current as of the previous day"). Imports of one account run
+   one at a time (a second one waits, then is refused with nothing
+   written). Returns reverse their one matching sale; a return that
+   matches none or several is listed and not applied — the next step.
+9. **Returns the import could not match** (only when `import` said some
+   "matched no single sale"): each is listed with the sales it could belong
+   to (date, what is left to reverse, how it was attributed); type the
+   number of the right one (look it up in Associates Central's order
+   reports), or press Enter to leave it. The choice is applied once under
+   the import's own id: running this again, or importing the same report
+   again, changes nothing.
+   ```sh
+   bash /opt/afflino/affiliate/deploy/linode/amazon.sh returns
+   ```
+10. **Check**:
+    ```sh
+    bash /opt/afflino/affiliate/deploy/linode/amazon.sh check
+    ```
+    It prints the counts (pages and tracking IDs, offers, looks, links,
+    clicks, conversions by tracking ID / in suspense by reason) and asks the
+    redirect for one link once without following it (one click row, user
+    agent `afflino-check`; nothing reaches Amazon). Expect `HTTP/1.1 302
+    Found`, `location: https://www.amazon.in/dp/<ASIN>?tag=<that page's
+    tracking ID>`, `x-robots-tag: noindex, nofollow` and no `set-cookie`.
+    Software (link previews, crawlers, `curl`, headless browsers, a missing
+    user agent), prefetches and `HEAD` get a preview page instead: no click
+    row and no tagged URL (PR 27, a heuristic counsel is to confirm).
+
+**Stopping it** (Amazon asks, or anything looks wrong): the kill switch,
+the same as §4's, for the Amazon programme. Every Amazon link serves the
+paused page at once (no redirect, no click) and no link can be minted until
+it is resumed:
+```sh
+bash /opt/afflino/affiliate/deploy/linode/amazon.sh pause
+bash /opt/afflino/affiliate/deploy/linode/amazon.sh resume
+```
+
+**Changing things later**: a new page → a new row (with its new tracking
+ID) in `tracking-ids.csv`, then `setup` and `links` again (new links for
+the new page only). New products → new rows in `asins.csv`, then `offers`
+and `links`. A product Amazon no longer lists is marked stale by the price
+refresh (its links serve the paused page); it stays paused when listed
+again and comes back when Amazon's product API lists it again. The Creators
+API credentials → `keys` again and the update line.
+
+**Rehearsed 2026-09-29** (again after the review fixes) on the installer's
+stack in test mode (`deploy/linode/README.md` "What was checked": a
+throwaway project, the TEST example network seeded, TEST values fed to the
+prompts from standard input, then `down -v`). What each step printed, with
+the TEST values (yours will show your own IDs and counts):
+- `keys`: `set in /etc/afflino/afflino.env (root:root 0600): AMAZON_STORE_ID
+  AMAZON_PUBLISHER_SHARE_BPS` — no value in the output; the update line after
+  it changed no container. A Store ID with "alexa" in it: `STOPPED: that
+  Store ID contains an Amazon trademark (amazon, kindle, alexa, echo, prime,
+  audible, fire tv, imdb, …) … nothing changed`.
+- `template`: `amazon: template of 4 owner-operated Facebook / Instagram /
+  web properties (0 with a tracking ID already) … left out (Amazon links
+  never go there): 1 youtube, 1 snapchat, 1 telegram`, one row per page with
+  its URL.
+- `setup`: under the image's `NODE_ENV=production` the TEST values are refused
+  (`REFUSING under NODE_ENV=production: TEST values (demo-21, demo-shop-21,
+  demo-ig-21) are fixtures, not a real account`, nothing written); a
+  Snapchat row: `platform 'snapchat' cannot carry Amazon links …`, nothing
+  written; with the test-only override: `3 declared page(s): 3 with their
+  own tracking ID, 0 on the store ID; 3 tracking ID(s) added now`, the shop's
+  placement, and `set in /etc/afflino/afflino.env: AMAZON_ASSOCIATE; the web
+  runs with it (healthy): every page's footer shows the Associate
+  statement` (the home page: 0 statements before, the statement after); a
+  second run `0 tracking ID(s) added now` and `every page's footer already
+  shows the Associate statement`.
+- `offers`: `2 offer(s): 2 new, 2 active; no prices until the product API
+  supplies them` and `look 'Demo Kitchen picks': published, 2 product(s)
+  added`.
+- `links` and `shop` while `/privacy` was the stub: `STOPPED: afflino.com/privacy
+  is still the stub page. Amazon requires a privacy notice … nothing was
+  changed` (no link minted, no sheet written). With the test-only
+  `AFFLINO_AMAZON_SKIP_PRIVACY_CHECK=1`: `links for 3 placement(s) with their
+  own tracking ID × 2 live offer(s): minted 6, existing 0, failed 0`, every
+  row `…,#ad · Buy on Amazon.in,https://afflino.com/r/<token>`; again:
+  `minted 0, existing 6`, a byte-identical sheet; `shop`: `set in
+  /etc/afflino/afflino.env: WEB_PLACEMENT_ID WEB_API_TOKEN`, the web healthy
+  again, `/shop` switched from the "Demo data" looks to `Demo Kitchen
+  picks`; the look page showed "See price on Amazon.in", "Buy on Amazon.in"
+  on `<a href="https://afflino.com/r/<token>" rel="sponsored nofollow
+  noopener"`, the Associate statement, "Affiliate links: Yes (we earn from
+  qualifying purchases)" and no "Sponsored" fact, no amazon.in URL,
+  `noindex, nofollow` (TEST look); the item page "You complete the purchase
+  on Amazon.in; Amazon.in's terms apply." and no "Payment, delivery and
+  returns are handled by".
+- `GET /r/<token>` through the edge: `HTTP/1.1 302 Found`, `Location:
+  https://www.amazon.in/dp/B0DEMO0002?tag=demo-shop-21` (the Instagram page's
+  link: `tag=demo-ig-21`), `X-Robots-Tag: noindex, nofollow`,
+  `strict-origin-when-cross-origin`, no `set-cookie`, one click row;
+  `facebookexternalhit`, `curl/8.5.0`, `HeadlessChrome`, no user agent,
+  `Sec-Purpose: prefetch;prerender` and `HEAD` → `200`, the preview page
+  ("A link to a product on Amazon.in"), no click, no tagged URL.
+- `import`: the TEST earnings report → `4 row(s): shipped 4 new (2 by
+  tracking ID, 0 by click, 2 to suspense)` (an unknown tracking ID, and a sale
+  dated before its mapping), moved to `reports/imported/`; the same file again
+  → `0 new … 4 already imported`; a file with a changed fee → `CONFLICT: 2
+  row(s) were imported before with different amounts; amounts are never
+  rewritten, nothing was imported`, the conversion and ledger counts
+  unchanged, the file left in place; the TEST return → `returns 1 applied`;
+  a second sale of the same product and page and then a return that could
+  be either → `returns 0 applied, 0 already applied, 1 matched no single
+  sale … the returns step lists each with its possible sales`.
+- `returns`: `return 1: 2026-10-05, tracking ID demo-ig-21, ASIN B0DEMO0001,
+  fee to reverse INR 40.00 (AMBIGUOUS)` with `1) the sale of 2026-10-01 …
+  INR 80.00 left to reverse` and `2) the sale of 2026-10-03 … INR 160.00
+  left to reverse`; `2` typed → `applied: that sale is reversed by the fee,
+  the ledger mirrored`; run again → `no unmatched return`. Ledger balanced
+  (`INR 51984 / 51984`); the in-house publisher credited `19588` paise.
+- `check`: `conversions 5 {"approved": 5}: by tracking ID 3, by click 0, in
+  suspense 2 {"TRACKING_ID_MAPPED_AFTER_SALE": 1, "TRACKING_ID_UNMAPPED": 1}`
+  and the `302` / `location … tag=demo-shop-21` / `x-robots-tag` lines.
+- `pause`: `paused; cached routes cleared: 6`, the link → `200` (paused page),
+  `links` refused; `resume` → `302` again; `audit_log`:
+  `amazon.return_applied, programme.pause, programme.resume`. The update
+  line afterwards changed nothing (same containers, same environment-file
+  hash).
+
+Not checked (needs the real account): Amazon accepting the links and the
+redirect, a real earnings download, the Creators API (the workers were never
+given credentials in the rehearsal), a published privacy notice (the
+rehearsal skipped that check with its test-only setting after showing both
+refusals).
 
 ## 1R. Rehearsal without DNS or certificates
 
@@ -586,10 +984,16 @@ container.
 ## 7. What stays demo on the live site, and what is still pre-launch
 
 On afflino.com after the install, honestly labelled:
-- **No merchant programme exists.** The shop shows labelled TEST demo looks
-  ("Demo data" badge) from the web's own demo data until a real network
-  file and a real programme exist; with §1 step 6 it shows the network
-  seed's TEST looks, whose links go to `shop.example.com`.
+- **No merchant programme exists** until the owner runs §1A (Amazon.in
+  Associates) with the real account. The shop shows labelled TEST demo looks
+  ("Demo data" badge) from the web's own demo data until then; with §1 step 6
+  it shows the network seed's TEST looks, whose links go to
+  `shop.example.com`; after §1A's `shop` step it shows the Amazon looks.
+  Amazon prices appear only once Amazon grants the Creators API (10
+  qualifying sales in 30 days) and its keys are set; Amazon's payments are
+  not recorded as merchant settlements by anything yet, so no Amazon
+  earning becomes payable in the system (the payout rail is the stub
+  anyway).
 - **Stub authentication**: `/login` is a paste-a-token dev page for the JWT
   stub; there are no accounts, no OTP (`/join`'s OTP accepts any 6 digits),
   no KYC / PAN check. Tokens can only be minted on the server (they need
@@ -609,7 +1013,10 @@ signature verification; rate limiting (none on `/r/{token}`, the API or the
 edge); a Content-Security-Policy; monitoring and alerts; off-server backups
 and a restore drill on the server; the load soak; counsel's decisions
 (retention windows, the keyed IP hash under DPDP, hosting jurisdiction);
-contracted merchant programmes and a real payout rail.
+contracted merchant programmes and a real payout rail; for Amazon.in, the
+owner's and counsel's rows in `docs/action-tracker.md` ("Amazon.in
+Associates": the account's approval and website list, Amazon's word on the
+`/r/` redirect, the disclosure wording, a real earnings download).
 
 ## PENDING (production-only, cannot be checked in the sandbox)
 

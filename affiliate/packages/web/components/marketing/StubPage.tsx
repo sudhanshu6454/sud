@@ -17,10 +17,18 @@ export interface StubPageProps {
  * the marketing site's type: accent eyebrow, 48px title, 18px body, in the
  * 40px marketing gutters. It says what is missing and never stands in for
  * the document itself.
+ *
+ * `data-document-status="stub"` (STUB_MARKER) marks the page as not yet the
+ * document: deploy/linode/amazon.sh `links` and `shop` refuse while /privacy
+ * carries it (OA §5: the privacy notice must say what third parties,
+ * Amazon included, may place on or read from visitors' browsers), so Amazon
+ * cannot go live before counsel's notice is published in its place.
  */
+export const STUB_MARKER = 'data-document-status="stub"';
+
 export function StubPage({ eyebrow, title, children, action }: StubPageProps) {
   return (
-    <section className={styles.stub} aria-labelledby="stub-title">
+    <section className={styles.stub} aria-labelledby="stub-title" data-document-status="stub">
       <Eyebrow tone="accent" tracking="wide">
         {eyebrow}
       </Eyebrow>

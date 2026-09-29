@@ -21,3 +21,9 @@
   line-height: 1.5;
   color: var(--color-neutral-800);
 }
+
+/* A programme's own statement under the shop's line (Amazon.in's Associate
+   statement): the same copy, 8px apart. */
+.more {
+  margin-top: var(--space-2);
+}

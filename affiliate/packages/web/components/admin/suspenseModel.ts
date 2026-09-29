@@ -40,6 +40,10 @@ export function suspenseQuery(f: SuspenseFilters, limit = 100): string {
 export const SUSPENSE_REASON_LABELS: Record<SuspenseReasonCode, string> = {
   CLICK_REF_UNMATCHED: 'Click ref unmatched',
   NO_CLICK_REF: 'No click ref',
+  TRACKING_ID_UNMAPPED: 'Tracking ID not mapped',
+  TRACKING_ID_IS_STORE_DEFAULT: 'Store ID, no page',
+  TRACKING_ID_MAPPED_AFTER_SALE: 'Tracking ID mapped after the sale',
+  ATTRIBUTION_CONFLICT: 'Click and tracking ID disagree',
 };
 
 export function suspenseReasonLabel(code: string): string {
@@ -49,7 +53,22 @@ export function suspenseReasonLabel(code: string): string {
   return words ? words[0]!.toUpperCase() + words.slice(1) : code;
 }
 
-/** Why "Retry attribution" cannot run on a row ('' when it can). */
-export function retryBlockedReason(returnedClickRef: string | null): string {
-  return returnedClickRef ? '' : 'No click reference on this row, so there is nothing to retry against.';
+/**
+ * Why "Retry attribution" cannot run on a row ('' when it can): the API
+ * retries against a click reference or a reported tracking ID (Amazon), and
+ * refuses a row with neither (422).
+ */
+export function retryBlockedReason(returnedClickRef: string | null, returnedTrackingRef: string | null = null): string {
+  if (returnedClickRef || returnedTrackingRef) return '';
+  return 'No click reference or tracking ID on this row, so there is nothing to retry against.';
+}
+
+/** The row's reference as shown: the click ref, else the tracking ID (Amazon), else none. */
+export function suspenseRefLabel(item: { returned_click_ref: string | null; returned_tracking_ref?: string | null }): {
+  kind: 'ref' | 'tracking ID';
+  value: string | null;
+} {
+  if (item.returned_click_ref) return { kind: 'ref', value: item.returned_click_ref };
+  if (item.returned_tracking_ref) return { kind: 'tracking ID', value: item.returned_tracking_ref };
+  return { kind: 'ref', value: null };
 }

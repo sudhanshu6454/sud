@@ -1,6 +1,6 @@
 # deploy/linode — afflino.com on the owner's Linode
 
-Four bash scripts, run as root on the Linode (Ubuntu 24.04 recommended;
+Five bash scripts, run as root on the Linode (Ubuntu 24.04 recommended;
 Ubuntu 22.04 and Debian 12 accepted). The server needs nothing installed
 first: no make, no node, no dig; bash, curl and python3 come with the image.
 The procedure around them (DNS, checks, rollback, the kill-switch drill) is
@@ -13,6 +13,7 @@ README.md "Deploying afflino.com on Linode".
 | `backup.sh` | `pg_dump` inside the postgres container → `/var/backups/afflino/afflino-<UTC time>-<kind>.sql.gz` (0600, checked, the 14 newest of each kind kept); run daily at 02:30 UTC by `afflino-backup.timer` |
 | `restore.sh` | Default: restores the newest dump into a scratch database and checks it (migrations, tables, row counts, the ledger balanced per currency), the live database untouched. `--replace-live`: after you type `REPLACE`, takes a pre-restore backup, loads the dump into a staging database (a failed load changes nothing), then swaps it in while web, api, redirect and workers are stopped for a few seconds, and clears the redirect's route cache in Redis (`route:*`) before starting them again |
 | `godaddy-dns.sh` | Optional, needs GoDaddy API access: sets `A @` and `AAAA @` for afflino.com to this server, keeps the `www` CNAME, prints before / after. Two hidden prompts — a personal access token (Enter at the secret prompt: `Bearer`) or an API key and its secret (`sso-key`); never stored |
+| `amazon.sh` | The owner's Amazon.in Associates steps (`docs/runbooks/deploy.md` §1A), one argument each: `keys` (hidden prompts: the Store ID, optionally the Creators API id and secret; the in-house share in percent; written to `/etc/afflino/afflino.env`, never printed), `template` (Facebook / Instagram / web pages only), `setup` (and `AMAZON_ASSOCIATE=on`, the web restarted), `offers`, `links` (→ `/etc/afflino/amazon/links.csv`; refused while `/privacy` is the stub), `shop` (`WEB_PLACEMENT_ID`, the shop's token minted in the api container, the web restarted; the same privacy condition), `import` (every new earnings download in `/etc/afflino/amazon/reports/`), `returns` (the returns an import could not match: a numbered choice each), `check` (counts and one `/r/` link's `Location`), `pause` / `resume` (the programme's kill switch). Each runs the api image's Amazon CLI (`node dist/cli/amazon.js`) with the files mounted read-only; nothing secret reaches a command line |
 
 The owner's lines (each one complete, as root on the Linode):
 
@@ -21,7 +22,11 @@ bash <(curl -fsSL https://raw.githubusercontent.com/sudhanshu6454/sud/refs/heads
 bash /opt/afflino/affiliate/deploy/linode/godaddy-dns.sh
 bash /opt/afflino/affiliate/deploy/linode/backup.sh manual
 bash /opt/afflino/affiliate/deploy/linode/restore.sh
+bash /opt/afflino/affiliate/deploy/linode/amazon.sh keys
 ```
+
+(`amazon.sh`'s other steps, in order, and the lines on the Mac:
+`docs/runbooks/deploy.md` §1A.)
 
 The first line is also the update: run it again whenever the branch has new
 commits. It keeps every value in the environment file, stops (changing
@@ -90,7 +95,66 @@ note, once the file has it). `godaddy-dns.sh` also takes
 `GODADDY_API_SECRET` (an empty secret = a personal access token; never type
 a real key on a command line). Each script's header lists its own.
 
+`amazon.sh` takes `AFFLINO_DIR`, `AFFLINO_ENV_FILE`, `AFFLINO_PROJECT`,
+`AFFLINO_EDGE_TEST`, `AFFLINO_EXTRA_COMPOSE_FILE` as above, plus
+`AFFLINO_AMAZON_DIR` (instead of `/etc/afflino/amazon`),
+`AFFLINO_REDIRECT_URL` (where `check` asks the redirect, default
+`http://127.0.0.1:3001`), `AFFLINO_WEB_URL` (where `links` / `shop` read
+`/privacy`, default `http://127.0.0.1:3002`),
+`AFFLINO_AMAZON_ALLOW_TEST_VALUES=1` (the CLI runs with
+`NODE_ENV=development`, so it accepts the TEST values `demo-21`, `B0DEMO…`
+that it refuses under the image's `NODE_ENV=production`) and
+`AFFLINO_AMAZON_SKIP_PRIVACY_CHECK=1` (`links` / `shop` run while `/privacy`
+is the stub); its prompts read standard input, so a rehearsal pipes the
+TEST answers in.
+
 ## What was checked (2026-09-29, in the sandbox)
+
+**`amazon.sh`, after the review fixes of the Amazon.in Associates build**
+(2026-09-29, ShellCheck 0.11.0 and 0.9.0 clean): `install.sh` with its
+test-only settings on a throwaway project (`afflino-amz3`, `IMAGE_TAG=test`,
+the sandbox's CA compose file) — build, `6 migration(s) applied, 0 already
+applied`, api, redirect and web healthy — then the TEST example network
+seeded, and every step of `docs/runbooks/deploy.md` §1A run through the
+script with TEST values, the prompts fed from standard input. `keys`: no
+value in the output, the environment file still `root:root 0600`; a Store
+ID with "alexa" in it refused, nothing changed; the update line afterwards
+changed no container (same ids, start times, image ids and file hash).
+`template`: 4 pages (Facebook, Instagram, the two web properties), the
+network's YouTube, Snapchat and Telegram accounts left out and counted.
+`setup`: refused under the image's `NODE_ENV=production` for the TEST
+values, and for a Snapchat row, nothing written; then with
+`AFFLINO_AMAZON_ALLOW_TEST_VALUES=1` accepted, `AMAZON_ASSOCIATE=on` set
+and the web restarted healthy (the home page's footer: no statement before,
+the statement after); a second run added nothing. `offers`: 2 offers, 1
+look. `links` and `shop` refused while `/privacy` was the stub page
+("afflino.com/privacy is still the stub page …", no link minted); with
+`AFFLINO_AMAZON_SKIP_PRIVACY_CHECK=1`: `links` 6 minted, every row with
+`#ad · Buy on Amazon.in`; again 0 minted, 6 existing, a byte-identical
+sheet; `shop` switched `/shop` to the Amazon look ("See price on
+Amazon.in", "Buy on Amazon.in", the statement, "Affiliate links: Yes (we
+earn from qualifying purchases)", no "Sponsored" fact, "You complete the
+purchase on Amazon.in; Amazon.in's terms apply.", no amazon.in URL in the
+HTML). `GET /r/<token>` through the edge: 302 to
+`https://www.amazon.in/dp/B0DEMO0002?tag=demo-shop-21`, `X-Robots-Tag:
+noindex, nofollow`, no cookie; `facebookexternalhit`, `curl/8.5.0`,
+`HeadlessChrome`, no user agent, `Sec-Purpose: prefetch;prerender` and
+HEAD got the preview page (200, no click, no tagged URL). `import`: the
+TEST earnings report 4 rows (2 by tracking ID, 2 to suspense); again: 4
+already imported; a changed fee refused (409) with nothing written; the
+TEST return applied; an ambiguous return listed as unmatched, then
+`returns` offered its two candidate sales and applied the one typed (`2`),
+and a second `returns` found nothing left; the ledger balanced (INR 51984 /
+51984). `check` → 302 with the shop page's tag; `pause` → the paused page,
+`links` refused; `resume` → 302 again. The update line at the end changed
+nothing. Then `down -v`: no container, volume or network of the project
+left. Output: `docs/runbooks/deploy.md` §1A, "Rehearsed 2026-09-29".
+
+**Before the review fixes** (the first Amazon rehearsal, project
+`afflino-amz`): the same steps without the privacy gate, the returns step
+or the platform limit; superseded by the run above.
+
+**Earlier (the installer itself):**
 
 Re-checked after the review fixes (the latest script versions):
 

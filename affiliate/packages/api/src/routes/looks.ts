@@ -4,6 +4,7 @@ import { AppError } from '@paparazzi/shared';
 import { tenantQuery } from '../db.js';
 import { authed, requireAuth } from '../middleware.js';
 import { redirectLinkUrl } from '../redirect-url.js';
+import { displayablePrice, displayableStock } from '../offer-price.js';
 import { ok, parseOr400 } from './_helpers.js';
 
 // ---------------------------------------------------------------------------
@@ -84,7 +85,11 @@ interface LiveOfferRow {
   programme_id: string;
   merchant_id: string;
   merchant_name: string;
-  price_minor: string | number;
+  price_minor: string | number | null;
+  price_as_of: string | Date | null;
+  price_max_age_hours: number | null;
+  disclosure_text: string | null;
+  connector: string;
   currency: string;
   stock_status: string;
   fresh_until: string | Date;
@@ -99,19 +104,28 @@ function toIso(value: string | Date | null): string | null {
 /**
  * The live offer for a variant: offer active + fresh AND its programme
  * active (a paused programme's offers are not shoppable). Several live
- * offers → the cheapest, ties broken by id. `offer_url` is deliberately NOT
- * in the select list.
+ * offers → the cheapest, ties broken by id; an offer without a price (an
+ * Amazon offer before or after its price's hour) sorts last. `offer_url`
+ * is deliberately NOT in the select list. The price shown is
+ * displayablePrice (src/offer-price.ts), and so is the stock status
+ * (displayableStock: availability is under the same age limit);
+ * `disclosure_text` is the programme's own disclosure (Amazon: the Operating
+ * Agreement's statement) and `connector` tells the shop which merchant copy
+ * to show (Amazon: "Buy on Amazon.in", the price disclaimer).
  */
 const LIVE_OFFER_SQL = `
-  select o.id, o.programme_id, o.merchant_id, m.name as merchant_name,
-         o.price_minor::text as price_minor, o.currency, o.stock_status, o.fresh_until
+  select o.id, o.programme_id, o.merchant_id, m.name as merchant_name, pr.connector as connector,
+         o.price_minor::text as price_minor, o.price_as_of, o.currency, o.stock_status, o.fresh_until,
+         pc.price_max_age_hours as price_max_age_hours, aa.disclosure_text as disclosure_text
     from offers o
     join programmes pr on pr.id = o.programme_id and pr.org_id = $1
     join merchants m on m.id = o.merchant_id and m.org_id = $1
+    left join programme_capabilities pc on pc.programme_id = o.programme_id
+    left join amazon_associates_accounts aa on aa.programme_id = o.programme_id and aa.org_id = $1
    where o.org_id = $1 and o.variant_id = $2
      and o.status = 'active' and o.fresh_until > now()
      and pr.status = 'active'
-   order by o.price_minor asc, o.id asc
+   order by o.price_minor asc nulls last, o.id asc
    limit 1`;
 
 export async function looksRoutes(app: FastifyInstance): Promise<void> {
@@ -255,23 +269,30 @@ export async function looksRoutes(app: FastifyInstance): Promise<void> {
       let offer: {
         id: string;
         programme_id: string;
+        connector: string;
         merchant: { id: string; name: string };
-        price_minor: number;
+        price_minor: number | null;
+        price_as_of: string | null;
         currency: string;
         stock_status: string;
         fresh_until: string;
+        disclosure: string | null;
       } | null = null;
       let link: { token: string; url: string } | null = null;
 
       if (offerRow) {
+        const price = displayablePrice(offerRow);
         offer = {
           id: offerRow.id,
           programme_id: offerRow.programme_id,
+          connector: offerRow.connector,
           merchant: { id: offerRow.merchant_id, name: offerRow.merchant_name },
-          price_minor: Number(offerRow.price_minor),
+          price_minor: price.price_minor,
+          price_as_of: price.price_as_of,
           currency: offerRow.currency,
-          stock_status: offerRow.stock_status,
+          stock_status: displayableStock(offerRow, price),
           fresh_until: toIso(offerRow.fresh_until) as string,
+          disclosure: offerRow.disclosure_text ?? null,
         };
         if (placement) {
           const linkRes = await tenantQuery<{ token: string }>(

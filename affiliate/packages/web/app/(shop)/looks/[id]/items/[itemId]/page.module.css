@@ -40,6 +40,16 @@
   font-weight: 600;
 }
 
+/* A live offer without a price to show ("See price on Amazon.in"): 18px /
+   700 in the price's place, so the slot never reads as empty. */
+.noPrice {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 18px;
+  line-height: 1.4;
+}
+
 .unavailableNote {
   margin: 0;
   font-size: 14px;

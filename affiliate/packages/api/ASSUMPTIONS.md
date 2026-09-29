@@ -391,3 +391,215 @@ other agents) — flag anything that looks wrong to the owning agent.
   so the API's public surface is `https://afflino.com/api/v1/...` through the web's proxy
   (provider webhooks and payout callbacks included). Port 3000 is published on 127.0.0.1 only.
 
+
+## Amazon.in Associates (2026-09-29, 0006)
+
+The owner's request: Amazon Associates for amazon.in on the in-house network. Built config-driven
+with TEST values only; the policy brief of 2026-09-29 (Amazon's own pages: Operating Agreement
+"OA", Participation "PR" and Linking Requirements "LR", help topics, Creators API docs) is the
+source. Where the brief found nothing, the conservative behaviour is built and the question is
+listed for the owner / counsel below.
+
+**What exists**
+- `amazon_associates_accounts` (one per org and marketplace; one per programme) and
+  `amazon_tracking_ids` (tracking ID → exactly one placement, unique per account, append-only by
+  convention). Code: `src/amazon/` (account reads, setup, offers, report format + import),
+  `src/cli/amazon.ts` (`setup`, `offers`, `import-report`; ships as `dist/cli/amazon.js` in the
+  api image), `routes/amazon-reports.ts`, `src/offer-price.ts`.
+- **Links** (`routes/links.ts`): generally, the offer must belong to the named programme and the
+  placement must be the named property's, in a campaign of that property's publisher (before,
+  the four ids were never cross-checked). For an Amazon programme: the account must be active,
+  the placement must be in a campaign of the programme (only properties the setup declared have
+  one), the property must be on Facebook, Instagram or the owner's website (403
+  `PROPERTY_FORBIDDEN`; Amazon's accepted networks do not include Snapchat, Telegram or
+  WhatsApp; `AMAZON_ACCEPTED_PLATFORMS` in `@paparazzi/shared`), the placement's property needs
+  a live `owner_operated` verification — always: there is no setting that allows third parties
+  (403 `PROPERTY_NOT_OWNER_OPERATED`; PR 9 / OA §16: the tag only on "your site", never on a
+  creator's) — and the offer URL must be exactly `https://www.amazon.in/dp/<ASIN>` — the
+  stored URL never carries a tag.
+- **Attribution** (`conversion-ingest.ts` `resolveAttribution`, also used by the suspense
+  retry): a known click → the click path, but with a reported tracking ID the click's own tag
+  must agree (else `ATTRIBUTION_CONFLICT`, suspense; the report import passes no click ref —
+  no click id is ever put on an Amazon URL — so for Amazon rows this is the generic rule only);
+  no known click → the ONE placement
+  the tracking ID is mapped to, when the mapping began on or before the row's date (report rows
+  are dated by day: `occurred_at` = the start of that IST day) and the placement's campaign is
+  the programme's → `conversions.placement_id` (click_id stays NULL; a check forbids both).
+  The ledger then walks placement → campaign → publisher with the conversion's programme, and
+  the same latest-approved-contract lookup and snapshot as a click (`finance.ts`); earnings
+  (pending), disputes and the eligible-earnings fallback learned the same path. The store ID
+  (every unmapped placement's tag) is never an attribution basis
+  (`TRACKING_ID_IS_STORE_DEFAULT`); an unknown one is `TRACKING_ID_UNMAPPED`; a mapping younger
+  than the sale is `TRACKING_ID_MAPPED_AFTER_SALE`. The reason is stored in
+  `conversions.suspense_reason`; suspense = `click_id IS NULL AND placement_id IS NULL`.
+- **Mappings are prospective**: a mapping made today attributes rows dated tomorrow onwards; the
+  CLI cannot backdate one. Historical rows (or the first day's) land in suspense, where a human
+  decides. Deliberate: nothing proves which property earned a sale before the mapping existed.
+- **Report import** (`src/amazon/report-format.ts`, `report-import.ts`): header-driven, the
+  column aliases in ONE table (`EARNINGS_COLUMNS`), **layout to confirm with a real export**
+  (Amazon documents the on-screen columns and "tab-separated" downloads, not the download's
+  layout, order ids, date or decimal formats). Money: exact 2-decimal rupee strings → paise with
+  BigInt (`@paparazzi/shared` `parseDecimalMinorUnits`); anything else (`12.5`, `12.505`,
+  `₹12.00`, `1e3`) refuses the whole file. Dates: ISO or month names only; `09/10/2026`
+  (day/month order undocumented) refuses the file. Keys: `provider_account_id` =
+  `amazon-associates:<store id>`, `source_transaction_id` =
+  `amzn-earn:<date>:<ASIN>:<sha256 of tracking ID, ASIN, date, seller, device, link type,
+  price, sub-tag>` (first 32 hex), `line_id` `shipped`; revision 0, status approved (an
+  Earnings row is a shipped item; the programme's returns window holds payouts). Commission =
+  Amazon's Ad Fees as reported, never recomputed (fee schedule exclusions are Amazon's).
+  Two rows with one identity in a file → 422. A row imported before with other amounts → 409,
+  nothing written (the machine never rewrites an amount). Returns (negative fees) reverse the
+  ONE approved sale of the same account, tracking ID, ASIN and currency, dated on or before the
+  return, whose unreversed commission covers it; adjustment id =
+  sha256-uuid('provider-return:' + account_ref + ':' + return key) so a re-import is a no-op;
+  the insert is atomic (`insertReversalWithinRemainder`: the conversion row locked `for
+  update`, the insert re-checks that the reversals stay within the commission); none or
+  several candidates → `unmatched_returns` + outbox `conversion.return_unmatched`, nothing
+  applied — the operator picks the ONE sale with the CLI's `returns` / `apply-return`
+  (`src/amazon/returns.ts`; `amazon.sh returns`): the return's identity and amount come from
+  that event, never typed in; the sale must be an approved conversion of the same account,
+  tracking ID, ASIN and currency that covers the fee; the same deterministic id, so a re-run or
+  a later import of the return does nothing; audit `amazon.return_applied`. (The generic
+  kind=reversal is NOT the remedy: the webhook refuses Amazon rows, below.) A return with a
+  zero fee is skipped.
+  **One import at a time per account**: the whole import (pre-pass and writes) holds a
+  session-level `pg_advisory_lock` keyed by org and account_ref (taken with
+  `pg_try_advisory_lock` on a dedicated connection, retried for up to 30 s with the connection
+  handed back between tries, else 409 with nothing written). A real-Postgres race of
+  2026-09-29 (six concurrent return files reversed up to 5× a sale's commission; a pair of
+  imports of one row with different amounts both landed in 9 of 10 pairs) is
+  `scripts/amazon-import-race.ts` (`pnpm race:pg`, CI): 10/10 rounds exact after the fix. With
+  the lock disabled on purpose, the atomic insert alone still kept the reversals exact, and
+  the pair test failed 10/10 — each guard covers its own case.
+  **Only this path writes Amazon rows**: `POST /v1/integrations/csv/uploads` with the Amazon
+  programme or an Amazon account_ref, and `POST /v1/integrations/:connector/events` with an
+  Amazon account_ref (conversion or reversal), a reversal of an Amazon conversion, or a click
+  ref that resolves to the Amazon programme → 422 (`isAmazonReportPath`); the shared ingest
+  also refuses a non-Amazon connector on them (`CONVERSION_PROGRAMME_CONNECTOR_MISMATCH`).
+  Before, an editor could decline an imported sale (auto-reversal) or claim future
+  `amzn-earn:*` keys through the CSV connector.
+  XML downloads are refused with a message (not built). The Orders report (unshipped items) is
+  not imported: pending Amazon orders are not money yet.
+- **Prices** (`src/offer-price.ts`): `programme_capabilities.price_max_age_hours` (1 for
+  Amazon: the Creators API's cache table, "Offers | 1 hour", is stricter than OA §11's "up to
+  24 hours"; the conflict is counsel's, `docs/counsel-briefing.md` §9) → only a price with
+  `price_as_of` inside the limit is returned; otherwise
+  `price_minor` is null (GET /v1/looks/:id, GET /v1/offers). Amazon offers are created with no
+  price; only the workers' Creators API refresh sets one. No images, titles or reviews are
+  stored (the product copy is the operator's own words).
+- **Setup CLI** refusals (nothing written): a changed store ID, a remapped tracking ID, a second
+  tracking ID for a placement, the store ID as a mapping, a property that is not approved or not
+  owner-operated, a property on a platform other than Facebook / Instagram / web, a tracking ID
+  that is not `<letters/digits/hyphens>-21` or contains a proprietary term (amazon, kindle and
+  misspellings; alexa, echo, prime, prime video, audible, fire tv, firestick, imdb, zappos,
+  whole foods — OA §7's list of Amazon's marks is non-exhaustive, the owner checks the rest;
+  PR 12), a `--disclosure` without OA §10's statement word for word, a first contract without
+  `--publisher-share-bps`, and TEST values (`demo…`, `B0DEMO…`) under `NODE_ENV=production`.
+  The properties file is required and is the whole declaration (the `--all-owner-operated`
+  shortcut was removed: it declared pages regardless of the Associates website list); the
+  removed flags (`--all-owner-operated`, `--third-party-publishers-allowed`,
+  `--subtag-approval-ref`, `--subtag-param`) are refused with their reason.
+  Status of the programme and the account are set on insert only. The setup's one cross-org
+  read: a store ID already registered by another organisation is refused (operator CLI only). After COMMIT the cached
+  routes of links whose tag may have changed are deleted (now and 2 s later, the kill switch's
+  `deleteRouteKeys`); without Redis they expire within 600 s and a sale in that window carries
+  the old tag → suspense, never the wrong placement.
+- **Sub-tags: never a click id.** LR — "Upon your request but subject to our approval, we may
+  issue you additional “sub-tag” Associate IDs … Under no circumstances may you associate any
+  sub-tag with a specific end user of your site (e.g., you may not dynamically assign sub-tags
+  to users as they arrive on your site …)". A per-click id is exactly that, so approval cannot
+  make it allowed: `amazonRouteParams` always sets `subid_field: null`, the redirect strips
+  `ascsubtag` and `subid`, and 0006 has no sub-tag columns (the setting, its approval
+  reference and its CLI flags were removed on review, 2026-09-29). Should Amazon ever issue
+  fixed sub-tag IDs, they would be one fixed value per placement (on `amazon_tracking_ids`,
+  applied through `set_params`) — not built. A report's sub-tag column is kept as evidence
+  (`conversions.raw`) only. `ascsubtag` itself is not documented on any amazon.in page.
+- **Offers Amazon reported not accessible** stay stale when re-listed (`offers.stale_reason`
+  `merchant_not_accessible`, written by the workers' refresh): `offers` counts them in
+  `kept_not_accessible` and changes nothing unless `--reactivate`; the refresh reactivates one
+  when Amazon returns the item again.
+
+**Added for the shop and the owner's server steps (2026-09-29, stage 2)**
+- **Catalogue**: the look item's offer carries `connector` (the programme's;
+  the shop's Amazon copy keys on `amazon-associates`) and, for a programme
+  with a price age limit, `stock_status` `unknown` whenever the price is not
+  shown (`displayableStock`, `src/offer-price.ts`; LR: "prices and
+  availability"); `GET /v1/offers` applies the same rule.
+- **Offers file, `look` column** (`src/amazon/offers.ts`): rows naming a look
+  go into one published look per title (placeholder cover: an `owned` asset
+  with no public URL; no category, no source page, not sponsored; status on
+  insert only; items only ever added). The shop shows products only inside
+  looks, so this is how an Amazon product reaches `/shop`. A look is found by
+  title in the org, so an existing look of that title gets the items.
+- **CLI `template` / `links` / `status` / `pause` / `resume`**
+  (`src/amazon/links.ts`, `src/cli/amazon.ts`). `links` mints through
+  `POST /v1/links` itself (Fastify `inject` in the CLI process, a 30-minute
+  `network_admin` token signed with `JWT_SECRET` that never leaves the
+  process), one link per (declared placement **with its own tracking ID**) ×
+  (live Amazon offer); placements that carry the store ID are skipped
+  (their sales could never be attributed — the store ID is never an
+  attribution basis) and listed. Existing active links are reused (read
+  from the DB, org-scoped); a stale idempotency replay under the fixed key
+  `amazon-links:<placement>:<offer>` is retried once under a fresh key.
+  `pause` / `resume` call the kill-switch routes the same way, as the org's
+  first `network_admin` member (the audit row's actor must be a users row).
+  `status` counts with the suspense predicate and reason codes of
+  `routes/suspense.ts`.
+- **The choice of pages** (`docs/runbooks/deploy.md` §1A): one tracking ID
+  per page and links only for pages with one, i.e. afflino.com + up to 99
+  pages under Amazon's 100-ID limit. Grouping pages under a shared ID was
+  rejected: Amazon's report names only the tracking ID, and a shared ID
+  cannot name one placement (suspense).
+- **The owner's steps** are `deploy/linode/amazon.sh` (keys → the update
+  line → template → the two files → setup (which also turns on the footer's
+  Associate statement) → offers → links → shop → import → returns → check;
+  pause / resume), rehearsed on the installer's stack with TEST values (the
+  prompts fed from standard input; `deploy/linode/README.md`). `links` and
+  `shop` refuse while `/privacy` is the stub page (OA §5's privacy
+  disclosure) or the footer statement is off.
+- **The link sheet** carries `post_label` (`#ad · Buy on Amazon.in`,
+  `AMAZON_POST_LABEL`, a draft pending counsel): every post starts from the
+  link-level disclosure.
+
+**Open (owner / counsel), nothing concluded here**
+- Whether an afflino.com/r/<token> redirect (a "Redirecting Link", OA §7; PR 30 bars cloaking
+  the originating site) on the declared FB/IG pages is acceptable — ask Associates support in
+  writing. The redirect is a plain 302, never an interstitial, sends no `no-referrer`
+  (Caddy: `strict-origin-when-cross-origin`) and is `noindex`.
+- Whether the `/dp/<ASIN>?tag=` form (the Creators API's vended links are not used: they are
+  generated for one partner tag and "Alterations of any kind to vended links" lose attribution)
+  is what Amazon expects; the only amazon.in example is `/gp/product/<ASIN>/?tag=`. Its
+  consequence: the API allowance after the first 30 days follows "shipped item revenue
+  generated via the use of Creators API", i.e. its own links, so prices will likely stop then
+  (`docs/capacity-plan.md`; the workers back off on 429 / 401 / 403).
+- The 100-tracking-ID limit vs 404 properties: grouping loses per-page attribution (a shared
+  tracking ID cannot name one placement here, so grouped pages would earn into suspense).
+- A multi-merchant afflino.com vs the API's "principal purpose of advertising the Amazon Site";
+  no prices / Amazon images in social posts; ASCI disclosure wording; GST / TDS on Amazon's fees;
+  automated report download vs the Conditions of Use (import is manual).
+
+**What the owner must supply before real use** (none of it is in this repository)
+1. The amazon.in Store ID (`…-21`) of an account past final acceptance (3 qualifying sales in
+   180 days), with afflino.com and every FB/IG page that will carry links on its website list,
+   all owned or controlled by the account holder.
+2. The tracking IDs created in Associates Central (at most 100; none containing an Amazon mark:
+   "amazon", "kindle", "alexa", "echo", "prime", … — Amazon's list is non-exhaustive), each paired
+   with the ONE Facebook / Instagram / web property it belongs to, as the properties file
+   (`platform,account,tracking_id`; the platform / account of the network file; `amazon.sh
+   template` writes a starting file). Pages without one carry the store ID, get no links from
+   `amazon.sh links`, and any sale under the store ID lands in suspense.
+3. The in-house contract split (`--publisher-share-bps`) and, if not the defaults (60 / 30
+   days), the validation delay and returns window.
+4. The disclosure line in every page's bio / About ("As an Amazon Associate I earn from
+   qualifying purchases.", OA §10) — outside this system.
+5. The ASINs to feature, each with the owner's own brand / model / category words, and the
+   shop look each belongs to (the offers file's `look` column).
+6. A real earnings download (TSV, and XML if that is what is used), including a return row, so
+   `EARNINGS_COLUMNS` and the date / decimal handling can be confirmed.
+7. Creators API credentials (id, secret, version 3.2) once Amazon grants them (10 sales in 30
+   days), entered at a hidden prompt only; until then no prices are shown.
+8. Counsel's privacy notice on /privacy (OA §5: third parties, Amazon included, may place or
+   recognise cookies) — `amazon.sh links` and `shop` refuse until it replaces the stub.
+9. Amazon's written word on the /r/ redirect; counsel on the items listed above; the
+   accountant on GST / TDS; whether Amazon's payments are recorded as merchant settlements
+   (nothing writes `merchant_settlements` in production yet, so payouts stay capped at 0).

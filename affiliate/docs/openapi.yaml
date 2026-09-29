@@ -49,7 +49,10 @@ info:
 
     All money fields are **integer minor units** (paise for INR), never
     decimals. The CSV connector rejects values like `12.50` outright — money is
-    never rounded or truncated.
+    never rounded or truncated. The Amazon.in Associates report import reads
+    Amazon's rupee strings (`160.00`) and converts them to paise exactly, as
+    text (BigInt, no floats); a value that does not convert exactly (`160.5`,
+    `160.005`, `₹160.00`, `1.6e2`) refuses the whole file.
 
     ## Roles
 
@@ -73,6 +76,7 @@ info:
     | `OFFER_STALE` | offer not `active` or `fresh_until` passed (link minting) |
     | `PROPERTY_FORBIDDEN` | property not `approved` for this org |
     | `PUBLISHER_NOT_ACTIVE` | publisher onboarding not `active`; monetised link minting disabled |
+    | `PROPERTY_NOT_OWNER_OPERATED` | the programme (Amazon.in Associates) only allows the operator's own properties: the placement's property has no live `owner_operated` verification |
     | `NOT_FOUND` | unknown route, or resource not in this org |
     | `VALIDATION_ERROR` | zod/request validation failed (400) or semantic rejection (422) |
     | `UNAUTHORIZED` | missing/invalid/claim-deficient Bearer token |
@@ -169,6 +173,7 @@ components:
         - OFFER_STALE
         - PROPERTY_FORBIDDEN
         - PUBLISHER_NOT_ACTIVE
+        - PROPERTY_NOT_OWNER_OPERATED
         - NOT_FOUND
         - VALIDATION_ERROR
         - UNAUTHORIZED
@@ -281,22 +286,46 @@ components:
       description: |
         The live offer for the item's variant: `offers.status='active'`,
         `fresh_until` in the future AND the offer's programme `active`. The
-        cheapest qualifying offer wins (ties by id). **Never carries
-        `offer_url`** — the consumer only gets the tracked link.
-      required: [id, programme_id, merchant, price_minor, currency, stock_status, fresh_until]
+        cheapest qualifying offer wins (ties by id; an offer without a price
+        sorts last). **Never carries `offer_url`** — the consumer only gets
+        the tracked link.
+
+        `price_minor` is null when the price may not be shown: a programme
+        with a price age limit (`programme_capabilities.price_max_age_hours`;
+        Amazon.in Associates: 1 h, the Creators API's "Offers | 1 hour") shows only a price from the merchant's
+        product API that is younger than the limit, with its time in
+        `price_as_of`. Null means "see the current price at the merchant",
+        never zero. `stock_status` follows the same rule (availability is
+        under the same age limit): `unknown` whenever such a programme's price
+        is not shown. `disclosure` is the programme's own disclosure statement
+        (Amazon: "As an Amazon Associate I earn from qualifying purchases.");
+        `connector` names the programme's connector, so the shop can show the
+        merchant's own call to action and price disclaimer
+        (`amazon-associates`: "Buy on Amazon.in").
+      required: [id, programme_id, connector, merchant, price_minor, price_as_of, currency, stock_status, fresh_until, disclosure]
       properties:
         id: { $ref: '#/components/schemas/Uuid' }
         programme_id: { $ref: '#/components/schemas/Uuid' }
+        connector: { type: string, example: amazon-associates, description: "programmes.connector of the offer's programme (e.g. stub-network, amazon-associates)." }
         merchant:
           type: object
           required: [id, name]
           properties:
             id: { $ref: '#/components/schemas/Uuid' }
             name: { type: string, example: Demo Merchant }
-        price_minor: { $ref: '#/components/schemas/MinorUnits' }
+        price_minor:
+          oneOf:
+            - $ref: '#/components/schemas/MinorUnits'
+            - type: 'null'
+        price_as_of:
+          oneOf:
+            - $ref: '#/components/schemas/DateTime'
+            - type: 'null'
+          description: When the shown price was read from the merchant's product API (null for programmes without a price age limit, and whenever price_minor is null for one with a limit).
         currency: { $ref: '#/components/schemas/Currency' }
-        stock_status: { type: string, example: in_stock }
+        stock_status: { type: string, example: in_stock, description: 'in_stock | out_of_stock | preorder | unknown (an Amazon offer whose price is not shown: before any API refresh or after its hour)' }
         fresh_until: { $ref: '#/components/schemas/DateTime' }
+        disclosure: { type: string, nullable: true, description: "The programme's own disclosure statement, when it has one." }
     LookItem:
       type: object
       description: One `look_items` row; items are ordered by `created_at` then `id`.
@@ -354,13 +383,21 @@ components:
             - type: 'null'
     Offer:
       type: object
-      required: [id, variant_id, programme_id, merchant_id, price_minor, currency, stock_status, offer_url]
+      required: [id, variant_id, programme_id, merchant_id, price_minor, price_as_of, currency, stock_status, offer_url]
+      description: price_minor / price_as_of / stock_status follow the same display rule as LookItemOffer.
       properties:
         id: { $ref: '#/components/schemas/Uuid' }
         variant_id: { $ref: '#/components/schemas/Uuid' }
         programme_id: { $ref: '#/components/schemas/Uuid' }
         merchant_id: { $ref: '#/components/schemas/Uuid' }
-        price_minor: { $ref: '#/components/schemas/MinorUnits' }
+        price_minor:
+          oneOf:
+            - $ref: '#/components/schemas/MinorUnits'
+            - type: 'null'
+        price_as_of:
+          oneOf:
+            - $ref: '#/components/schemas/DateTime'
+            - type: 'null'
         currency: { $ref: '#/components/schemas/Currency' }
         stock_status: { type: string, example: in_stock }
         offer_url: { type: string, format: uri }
@@ -416,6 +453,7 @@ components:
         provider_account_id: { type: string }
         source_transaction_id: { type: string }
         returned_click_ref: { type: string, nullable: true }
+        returned_tracking_ref: { type: string, nullable: true, description: The tracking ID the provider reported (Amazon.in Associates). }
         currency: { $ref: '#/components/schemas/Currency' }
         eligible_value_minor: { $ref: '#/components/schemas/MinorUnits' }
         commission_minor: { $ref: '#/components/schemas/MinorUnits' }
@@ -425,8 +463,17 @@ components:
         raw: { description: Raw provider event payload, for human evidence review. }
         reason_code:
           type: string
-          enum: [CLICK_REF_UNMATCHED, NO_CLICK_REF]
-          description: Derived — NO_CLICK_REF when no reference was returned, else CLICK_REF_UNMATCHED.
+          enum: [CLICK_REF_UNMATCHED, NO_CLICK_REF, TRACKING_ID_UNMAPPED, TRACKING_ID_IS_STORE_DEFAULT, TRACKING_ID_MAPPED_AFTER_SALE, ATTRIBUTION_CONFLICT]
+          description: |
+            From data only. The reason the ingest path stored, when it stored
+            one: TRACKING_ID_UNMAPPED (no mapping for the reported tracking
+            ID), TRACKING_ID_IS_STORE_DEFAULT (the account's store ID, shared
+            by every unmapped placement), TRACKING_ID_MAPPED_AFTER_SALE (the
+            mapping began after the row's date), ATTRIBUTION_CONFLICT (a
+            known click whose own tag disagrees with the reported tracking
+            ID). Otherwise derived: CLICK_REF_UNMATCHED when a click
+            reference was returned, TRACKING_ID_UNMAPPED when only a tracking
+            ID was, else NO_CLICK_REF.
         reviewed_at: { $ref: '#/components/schemas/DateTime', nullable: true }
         reviewed_by: { type: string, nullable: true }
         review_note: { type: string, nullable: true }
@@ -536,7 +583,7 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorEnvelope' }
     Forbidden:
-      description: '403 — role not allowed (FORBIDDEN), or a link-guard rejection (PROPERTY_FORBIDDEN, PROGRAMME_NOT_APPROVED, PUBLISHER_NOT_ACTIVE).'
+      description: '403 — role not allowed (FORBIDDEN), or a link-guard rejection (PROPERTY_FORBIDDEN, PROGRAMME_NOT_APPROVED, PUBLISHER_NOT_ACTIVE, PROPERTY_NOT_OWNER_OPERATED).'
       headers:
         X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
       content:
@@ -769,6 +816,33 @@ paths:
         - offer destination host must be in the programme's `allowed_domains` →
           `403 PROGRAMME_NOT_APPROVED` (no unearnable link is ever minted)
         - placement must belong to the org → `404 NOT_FOUND`
+        - the offer must belong to `programme_id` → `403 PROGRAMME_NOT_APPROVED`
+        - the placement must be `property_id`'s, in a campaign of that
+          property's own publisher → `403 PROPERTY_FORBIDDEN`
+
+        Amazon.in Associates programmes (an Associates account behind the
+        programme) add:
+        - the account must be active → `403 PROGRAMME_NOT_APPROVED`
+        - the placement must be in a campaign FOR this programme (the setup
+          CLI creates one per property declared to Amazon) →
+          `403 PROPERTY_FORBIDDEN`
+        - the placement's property must be on a platform Amazon links may go
+          on (Facebook, Instagram, the operator's own website; never
+          Snapchat or Telegram) → `403 PROPERTY_FORBIDDEN`
+        - the placement's property needs a live `owner_operated`
+          verification (Amazon PR 9: links carrying the tag only on "your
+          site"; no setting allows third parties) →
+          `403 PROPERTY_NOT_OWNER_OPERATED`
+        - the stored offer URL must be exactly
+          `https://www.amazon.in/dp/<ASIN>` (no tag, no query) →
+          `403 PROGRAMME_NOT_APPROVED`
+        The redirect then sends `https://www.amazon.in/dp/<ASIN>?tag=<the
+        placement's tracking ID, else the store ID>` and never a click id
+        (no `subid`, no `ascsubtag`: Amazon's Linking Requirements forbid a
+        sub-tag tied to a specific end user); automated clients (named
+        link-preview crawlers, generic bot / HTTP-library user agents, no
+        user agent), prefetch / prerender / preview requests and HEAD
+        requests get a preview page (no click, no tagged URL).
 
         The latest approved contract version (effective_from arrived) is pinned
         onto the link when one exists. Side effects: warms Redis `route:{token}`
@@ -816,10 +890,13 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           description: |
-            Role not allowed (`FORBIDDEN`), property not approved
-            (`PROPERTY_FORBIDDEN`), publisher not onboarded
-            (`PUBLISHER_NOT_ACTIVE`), programme not active or offer host not
-            allow-listed (`PROGRAMME_NOT_APPROVED`).
+            Role not allowed (`FORBIDDEN`), property not approved or the
+            placement not the property's own (`PROPERTY_FORBIDDEN`),
+            publisher not onboarded (`PUBLISHER_NOT_ACTIVE`), programme not
+            active, offer of another programme or offer host not allow-listed
+            (`PROGRAMME_NOT_APPROVED`), a property that is not the operator's
+            own on an owner-operated-only programme
+            (`PROPERTY_NOT_OWNER_OPERATED`).
           headers:
             X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
           content:
@@ -847,7 +924,10 @@ paths:
       description: |
         Provider conversion notifications for the stub-network connector
         (`connector` path param allow-list: `stub-network`; anything else is
-        `404 NOT_FOUND`).
+        `404 NOT_FOUND`). A `provider_account_id` of an Amazon.in Associates
+        account, a reversal of an Amazon conversion, or a click ref of an
+        Amazon link is `422 VALIDATION_ERROR` (Amazon rows come only through
+        `POST /v1/integrations/amazon-associates/reports`).
 
         **kind=conversion** (default) runs the shared ingestion state machine
         (`src/conversion-ingest.ts`) — the same money path the CSV connector uses:
@@ -1023,7 +1103,10 @@ paths:
         File-based merchant settlement import (brief §8). The CSV is POSTed
         inline as a plain string — no multipart (2 MB cap; a deliberate
         sandbox choice). The uploader names `programme_id`, which must exist
-        in the org and be `active` (`404` / `422` otherwise).
+        in the org and be `active` (`404` / `422` otherwise). An Amazon.in
+        Associates programme, or a `provider_account_id` that is an Amazon
+        account's, is `422 VALIDATION_ERROR`: those rows come only through
+        `POST /v1/integrations/amazon-associates/reports`.
 
         Every row goes through the SAME conversion pipeline as the provider
         webhook: idempotency on `(provider_account_id, source_transaction_id,
@@ -1135,15 +1218,188 @@ paths:
                       - { row: 2, reason: "commission_minor must be an integer in minor units (no decimals); got '12.50'" }
                       - { row: 3, reason: "provider_status must be one of approved|pending|declined|reversed; got 'bogus'" }
         '500': { $ref: '#/components/responses/InternalError' }
+  /v1/integrations/amazon-associates/reports:
+    post:
+      tags: [Integrations]
+      summary: Import an Amazon.in Associates earnings report
+      description: |
+        The Associates Central earnings download (tab-separated, or
+        comma-separated), POSTed inline as text (2 MB cap, like the CSV
+        connector). **Layout to confirm with a real export**: Amazon's pages
+        document the report but not the download's columns; the header is
+        read by name through ONE alias table
+        (`packages/api/src/amazon/report-format.ts`, `EARNINGS_COLUMNS`):
+        required Tracking ID, ASIN, Date Shipped (or Dispatched), Items
+        Shipped (or Dispatched), Revenue, Ad Fees (or Earnings); optional
+        Returns, Price, Seller, Name, Category, Device Type Group, link type,
+        sub-tag. A title line above the header, a BOM and quoted fields are
+        handled; an unknown layout, the XML download, another currency, a
+        non-exact amount, an ambiguous date (09/10/2026) or a row mixing
+        shipped and returned values refuses the whole file (`422`, nothing
+        written, `errors: [{row, reason}]`, `row` = 1-based file line).
+
+        Each shipped row goes through the one money path
+        (`ingestConversionEvent`): `provider_account_id` = the account's
+        `amazon-associates:<store id>`, `source_transaction_id` =
+        `amzn-earn:<date>:<ASIN>:<hash of the row's identifying fields>`,
+        `line_id` `shipped`, approved at revision 0, eligible value = Revenue,
+        commission = Ad Fees (Amazon's figure, never recomputed). Attribution:
+        the ONE placement the tracking ID is mapped to (mapping begun on or
+        before the row's date), else suspense with the reason (a report's
+        sub-tag column is kept as evidence only: no click id is ever put on
+        an Amazon URL). Each return row (negative fees) reverses the ONE
+        approved sale of the same tracking ID and ASIN dated on or before it
+        whose unreversed commission covers it, with a deterministic
+        adjustment id, atomically (the conversion row is locked and the
+        insert re-checks the remainder); none or several → reported in
+        `unmatched_returns`, nothing applied (the operator picks the sale
+        with the Amazon CLI's `apply-return`, `amazon.sh returns`, under the
+        same deterministic id). A re-import of the same file changes
+        nothing; a row imported before with different amounts refuses the
+        whole file (`409 CONFLICT`, nothing written). One import at a time
+        per account: while another import of the same account runs (up to
+        30 s), `409 CONFLICT`, nothing written.
+
+        The generic adapters never write this path: `POST
+        /v1/integrations/csv/uploads` with the Amazon programme or the
+        account's `provider_account_id`, and `POST
+        /v1/integrations/{connector}/events` with that `provider_account_id`
+        (conversion or reversal) or a click ref of an Amazon link, answer
+        `422 VALIDATION_ERROR`.
+
+        Roles: `network_admin`, `editor`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [filename, report_text]
+              properties:
+                account_id: { $ref: '#/components/schemas/Uuid', description: The Associates account; optional when the organisation has exactly one. }
+                filename: { type: string, minLength: 1, maxLength: 255 }
+                report_text: { type: string, minLength: 1, description: The downloaded report as text; 2 MB max. }
+            examples:
+              earnings:
+                value:
+                  filename: earnings-2026-09-TEST.tsv
+                  report_text: "Fee-Earnings reports (TEST)\nCategory\tName\tASIN\tSeller\tTracking ID\tDate Shipped\tPrice(Rs.)\tItems Shipped\tReturns\tRevenue(Rs.)\tAd Fees(Rs.)\tDevice Type Group\nHome\tDemo Kettle\tB0DEMO0001\tDemo Seller\tdemo-ig-21\t2026-09-20\t1000.00\t1\t0\t1000.00\t160.00\tPHONE\n"
+      responses:
+        '202':
+          description: Report imported.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            X-Idempotent-Replay: { $ref: '#/components/headers/X-Idempotent-Replay' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        type: object
+                        required: [filename, account_id, account_ref, programme_id, layout, rows_received, shipped, returns, skipped_zero, results, unmatched_returns]
+                        properties:
+                          filename: { type: string }
+                          account_id: { $ref: '#/components/schemas/Uuid' }
+                          account_ref: { type: string, example: 'amazon-associates:demo-21' }
+                          programme_id: { $ref: '#/components/schemas/Uuid' }
+                          layout:
+                            type: object
+                            properties:
+                              delimiter: { type: string, enum: [tab, comma] }
+                              header_row: { type: integer }
+                              columns: { type: object, additionalProperties: { type: string }, description: canonical field → the header text it was read from }
+                          rows_received: { type: integer }
+                          shipped:
+                            type: object
+                            properties:
+                              created: { type: integer }
+                              deduped: { type: integer }
+                              attributed_click: { type: integer }
+                              attributed_tracking_id: { type: integer }
+                              suspense: { type: integer }
+                          returns:
+                            type: object
+                            properties:
+                              applied: { type: integer }
+                              deduped: { type: integer }
+                              unmatched: { type: integer }
+                          skipped_zero: { type: integer }
+                          results:
+                            type: array
+                            items:
+                              type: object
+                              required: [row, kind, outcome]
+                              properties:
+                                row: { type: integer }
+                                kind: { type: string, enum: [shipped, return, zero] }
+                                outcome: { type: string, enum: [created, deduped, status_changed, auto_reversed, applied, unmatched, skipped] }
+                                conversion_id: { $ref: '#/components/schemas/Uuid' }
+                                adjustment_id: { $ref: '#/components/schemas/Uuid' }
+                                status: { $ref: '#/components/schemas/InternalConversionStatus' }
+                                attributed_by: { type: string, enum: [click, tracking_id], nullable: true }
+                                ledger: { $ref: '#/components/schemas/LedgerDisposition' }
+                                reason: { type: string }
+                          unmatched_returns:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                row: { type: integer }
+                                tracking_id: { type: string }
+                                asin: { type: string }
+                                date: { type: string, format: date }
+                                fee_minor: { type: integer, description: The row's (negative) fee in paise. }
+                                reason: { type: string, enum: [NO_CANDIDATE, AMBIGUOUS] }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: A row was imported before with different amounts (`CONFLICT`); nothing was written. `errors` names the rows.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ErrorEnvelope'
+                  - type: object
+                    required: [errors]
+                    properties:
+                      errors:
+                        type: array
+                        items: { $ref: '#/components/schemas/RowError' }
+        '422':
+          description: The file was refused (`VALIDATION_ERROR`); nothing was written. `errors` says why, per row (`row` = 1-based line of the file; 0 = file-level).
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ErrorEnvelope'
+                  - type: object
+                    required: [errors]
+                    properties:
+                      errors:
+                        type: array
+                        items: { $ref: '#/components/schemas/RowError' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /v1/suspense:
     get:
       tags: [Suspense]
       summary: List unattributed conversions
       description: |
         Finance/ops queue: conversions with `click_id IS NULL` and
-        `status <> 'declined'`, org-scoped. `reason_code` is derived:
-        `NO_CLICK_REF` when no reference was returned, else
-        `CLICK_REF_UNMATCHED`. Ordered by `received_at` desc.
+        `placement_id IS NULL` (no click, no tracking-ID placement) and
+        `status <> 'declined'`, org-scoped. `reason_code`: see SuspenseItem.
+        Ordered by `received_at` desc.
 
         Roles: `finance_operator`, `finance_approver`, `network_admin`.
       parameters:
@@ -1201,9 +1457,14 @@ paths:
         Binds `click_id` ONLY when the provider-returned click reference
         EXACTLY matches an existing click row (`clicks.click_id =
         conversions.returned_click_ref`) — exact equality, never LIKE, never a
-        heuristic. A NULL reference is `422` (nothing deterministic to retry
-        against). A no-match retry leaves the row untouched (no audit, no
-        outbox). A successful bind writes `audit_log` and emits
+        heuristic. For a row that carries a provider-reported tracking ID
+        (Amazon.in Associates) the same rules as ingest apply
+        (`resolveAttribution`): a known click whose own tag agrees, else the
+        ONE placement that tracking ID is mapped to (mapping begun on or
+        before the sale) → `placement_id`. A row with neither reference is
+        `422` (nothing deterministic to retry against). A no-match retry
+        leaves the row untouched (no audit, no outbox) and says why
+        (`reason`). A successful bind writes `audit_log` and emits
         `suspense.attributed`; ledger posting happens downstream off that event,
         never in this endpoint.
 
@@ -1231,8 +1492,12 @@ paths:
                         properties:
                           id: { $ref: '#/components/schemas/Uuid' }
                           attributed: { type: boolean }
-                          click_id: { $ref: '#/components/schemas/Uuid', description: Present when attributed=true. }
-                          reason: { type: string, enum: [CLICK_REF_UNMATCHED], description: Present when attributed=false. }
+                          click_id: { $ref: '#/components/schemas/Uuid', description: Present when attributed=true through a click. }
+                          placement_id: { $ref: '#/components/schemas/Uuid', description: Present when attributed=true through a tracking-ID mapping. }
+                          reason:
+                            type: string
+                            enum: [CLICK_REF_UNMATCHED, TRACKING_ID_UNMAPPED, TRACKING_ID_IS_STORE_DEFAULT, TRACKING_ID_MAPPED_AFTER_SALE, ATTRIBUTION_CONFLICT]
+                            description: Present when attributed=false.
               examples:
                 bound:
                   value:

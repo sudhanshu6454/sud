@@ -2,7 +2,7 @@
 
 Date: 2026-09-22. Scope: the sandbox codebase at this repo root (API, redirect
 service, workers, the web app — creator / brand / agency areas, admin, shop —
-DB migrations; web paths updated 2026-09-29 for the Afflino rebuild; the edge, TRUST_PROXY and IP_HASH_KEY added 2026-09-29). Grounded in code and
+DB migrations; web paths updated 2026-09-29 for the Afflino rebuild; the edge, TRUST_PROXY and IP_HASH_KEY added 2026-09-29; Amazon.in Associates added 2026-09-29: §1 items 5–5a, §3a, §3e, §4.12, §6.8). Grounded in code and
 tests as they exist today — every mitigation claim cites a file or test.
 Anything not implemented is marked **residual risk** (§4) or **open question**
 (§6); §5 is the proposed pentest scope.
@@ -55,9 +55,38 @@ Boundaries, in order of exposure:
    on payouts.
 5. **Webhook ingestion** — `POST /v1/integrations/:connector/events`
    (`routes/integrations.ts`, allowlisted to `stub-network`, roles
-   `network_admin`/`editor`) and `POST /v1/integrations/csv/uploads`
-   (`routes/csv-uploads.ts`, roles `network_admin`/`editor`). Both funnel
-   into one state machine (`src/conversion-ingest.ts`).
+   `network_admin`/`editor`), `POST /v1/integrations/csv/uploads`
+   (`routes/csv-uploads.ts`, roles `network_admin`/`editor`) and, since
+   2026-09-29, `POST /v1/integrations/amazon-associates/reports`
+   (`routes/amazon-reports.ts`, the same roles) plus the operator CLI's
+   `import-report` (`packages/api/src/cli/amazon.ts`, run on the server by
+   `deploy/linode/amazon.sh import`). All funnel into one state machine
+   (`src/conversion-ingest.ts`). The Amazon report is a file the owner
+   downloaded from Associates Central: nothing signs it (§4.12). Only the
+   report path writes Amazon rows: the CSV and webhook adapters answer 422
+   for the Amazon programme, an Amazon account's `provider_account_id`
+   (conversion or reversal) or a click ref of an Amazon link, and the
+   shared ingest refuses a non-Amazon connector on them
+   (`CONVERSION_PROGRAMME_CONNECTOR_MISMATCH`), so a generic upload can
+   neither reverse an imported sale nor claim a future report key (review
+   finding of 2026-09-29, reproduced then fixed; tested in
+   `packages/api/test/amazon-report.test.ts`). One report import runs at a
+   time per account (a session advisory lock, `src/amazon/report-import.ts`),
+   and a return's reversal is inserted atomically (the conversion row
+   locked, the remainder re-checked in the insert): concurrent imports once
+   reversed up to 5× a sale's commission and landed a changed amount twice;
+   `scripts/amazon-import-race.ts` (`pnpm race:pg`, CI) proves both on real
+   Postgres.
+5a. **Amazon's product API, outbound** (`packages/workers/src/amazon/`,
+   since 2026-09-29): the workers call Amazon's Creators API with the
+   owner's credentials (`AMAZON_CREATORS_CREDENTIAL_ID` / `_SECRET` in
+   `/etc/afflino/afflino.env`, root 0600, passed to the workers only;
+   entered at `amazon.sh keys`' hidden prompts). Only a price, its time and
+   the stock status are written back (money parsed exactly from the
+   decimal text; anything else → no price), shown for one hour at most. A
+   429 pauses the account's refresh until Amazon's `retryAfterSeconds` (else
+   the next UTC day), a 401 / 403 until the next UTC day
+   (`amazon_associates_accounts.api_paused_until`).
 6. **Workers/queues** (BullMQ on Redis): `provider-events`,
    `click-events`, `reconciliation`, `retention`. Not directly reachable
    from the internet; they trust the envelope hash and DB, not the caller.
@@ -123,6 +152,22 @@ Boundaries, in order of exposure:
   its error log drops the address and request headers.
   Unknown/paused tokens serve a static paused page (200, `text/html`, no
   user input → no reflected XSS surface).
+- **Amazon.in destinations (2026-09-29)** — for an Amazon programme the
+  stored offer URL is exactly `https://www.amazon.in/dp/<ASIN>` (checked at
+  mint); the redirect strips `tag`, `ascsubtag` and `subid` and sets `tag`
+  to the placement's tracking ID (else the store ID), so a stale tag or a
+  per-click id never rides along — and **no click id is ever added** (LR:
+  "Under no circumstances may you associate any sub-tag with a specific end
+  user"; the sub-tag setting was removed on review). The tag survives a
+  failed click insert (fail-open). Named link-preview crawlers, generic
+  bot / crawler / headless / HTTP-library user agents, a missing user
+  agent, prefetch / prerender / preview requests and `HEAD` get the preview
+  page (no click, no tagged URL; PR 25 / 27), every `/r/` response says
+  `X-Robots-Tag: noindex, nofollow`, robots.txt disallows `/r/` when the site
+  is open to search engines. The account's `status`, the property's approval,
+  its `owner_operated` verification and its platform (Facebook, Instagram or
+  web only) are re-checked on the DB fallback: any of them failing serves the
+  paused page. Tested: `packages/api/test/amazon-links.test.ts`.
 - **DoS (D)** — Redis route cache (300s TTL) absorbs the hot path; DB is
   the fallback. Token regex rejects junk before any I/O. _Residual:_ no
   rate limiting observed on `/r/:token` — cache-miss floods hit Postgres
@@ -244,7 +289,20 @@ Both shapes run through **one** state machine (`ingestConversionEvent`).
 offer destination host in programme `allowed_domains` (else 403). Token
 HMAC uses `route_signature` — **dev-grade: reuses `JWT_SECRET`**
 (`links.ts:33`, TODO: KMS-managed key). Tested in `phase3.test.ts`
-(link-creation guards section).
+(link-creation guards section). Since 2026-09-29, for every programme: the
+offer must belong to the named programme and the placement to the named
+property, in a campaign of that property's own publisher (before, the four
+ids were not cross-checked). For an Amazon programme also: the account
+active, the placement in the programme's own campaign (only pages the setup
+declared have one), the property on Facebook, Instagram or the owner's
+website (403 `PROPERTY_FORBIDDEN` for Snapchat, Telegram and the rest), the
+property with a live `owner_operated` verification — always: no setting
+allows third parties (403 `PROPERTY_NOT_OWNER_OPERATED`; PR 9) — and the
+canonical `/dp/<ASIN>` URL (tested:
+`packages/api/test/amazon-links.test.ts`). The operator's link sheet
+(`amazon.sh links`) mints through this same route in-process
+(`packages/api/src/amazon/links.ts`), as a short-lived `network_admin`
+token that never leaves the process.
 
 ### 3f. Workers / queues (`packages/workers/src`)
 
@@ -340,6 +398,35 @@ HMAC uses `route_signature` — **dev-grade: reuses `JWT_SECRET`**
     in the sandbox; IPv6 follows from the edge owning the socket and is not
     tested there.)
 
+12. **Amazon.in Associates (2026-09-29).** (a) The Store ID and tracking
+    IDs are public by nature (every Amazon URL the redirect sends carries
+    one): anyone can craft an amazon.in URL with the owner's tag outside
+    this system, and Amazon holds the account responsible for traffic it
+    "authorizes, assists, encourages, or facilitates" (OA §16); the defence
+    is the owner watching Amazon's Tracking ID and Link-Type reports. (b)
+    The earnings report is an unsigned file: whoever can run `amazon.sh
+    import` (root on the server) or holds a `network_admin` / `editor`
+    token can create approved conversions and ledger entries. Mitigations:
+    the role gate, idempotent keys, a changed amount refused (409, nothing
+    written), maker-checker on payouts, and payout eligibility capped by
+    collected cash (no `merchant_settlements` are written for Amazon yet,
+    so nothing becomes payable). (c) The shop's `WEB_API_TOKEN` minted by
+    `amazon.sh shop` is the 365-day JWT stub (read-only role), and the
+    Creators API secret sits in plain text in the 0600 environment file:
+    no secret manager (§6.5). (d) The automated-client list is a
+    heuristic (named previewers, generic bot / crawl / spider / preview /
+    headless tokens, HTTP libraries, no user agent, prefetch headers): a
+    bot that sends a browser's user agent still creates a click and an
+    Amazon session (PR 27). (e) The `/r/` redirect itself is a
+    "Redirecting Link" (OA §7) whose acceptability is Amazon's call
+    (`docs/action-tracker.md`, "The `/r/` redirect"). (f) The operator's
+    explicit reversal (`POST /v1/integrations/:connector/events`
+    kind=reversal) and the provider auto-reversal still read the remainder
+    and insert in two steps: only the Amazon return path (import and
+    `apply-return`) takes the conversion row lock; concurrent generic
+    reversals of one conversion remain a pre-existing gap (they cannot reach
+    Amazon rows).
+
 ## 5. Proposed pentest scope
 
 **In scope**
@@ -405,3 +492,9 @@ HMAC uses `route_signature` — **dev-grade: reuses `JWT_SECRET`**
    (HMAC-SHA256 with `IP_HASH_KEY`) personal data; who holds the key; may it
    ever rotate; how long may the hashes be kept (`RETENTION_CLICK_CONTEXT_DAYS`)?
    And may any log carry client addresses (today none does by default)?
+8. **Amazon.in Associates** (owner / counsel, `docs/counsel-briefing.md` §9,
+   `docs/action-tracker.md`): Amazon's written word on the `/r/` redirect;
+   whether an unsigned, owner-downloaded report is an acceptable basis for
+   ledger entries until Amazon offers something better (no reporting API was
+   found); who may run `amazon.sh import`; where the Creators API secret
+   lives once a secret manager exists.

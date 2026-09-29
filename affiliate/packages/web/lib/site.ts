@@ -50,3 +50,16 @@ export function siteUrl(): string {
 export function siteIndexing(): boolean {
   return process.env.SITE_INDEXING?.trim().toLowerCase() === 'on';
 }
+
+/**
+ * AMAZON_ASSOCIATE=on (server runtime, read per request): the site takes part
+ * in Amazon.in Associates, so every page's footer carries Amazon's Associate
+ * statement (OA §10; help GPXFHVYZMTGPUMPE: "identify yourself on your Site
+ * as an Amazon Associate"). Anything else — the default — shows no such
+ * line: the site must not claim to be an Associate before it is one. The
+ * owner's server steps turn it on (docs/runbooks/deploy.md, "Amazon.in
+ * Associates"); docker-compose.prod.yml passes ${AMAZON_ASSOCIATE:-off}.
+ */
+export function amazonAssociate(): boolean {
+  return process.env.AMAZON_ASSOCIATE?.trim().toLowerCase() === 'on';
+}

@@ -82,3 +82,21 @@ are identifiers, not secrets, so the fallback is acceptable.
 
 - New error code `PUBLISHER_NOT_ACTIVE` (403): `POST /v1/links` when the
   publisher's onboarding state machine has not reached `active`.
+
+## Amazon.in Associates (2026-09-29)
+
+- New error code `PROPERTY_NOT_OWNER_OPERATED` (403): `POST /v1/links` for a programme that only
+  allows the operator's own properties (Amazon.in Associates: always; no setting allows third
+  parties) when the placement's property has no live `owner_operated` verification.
+- `parseDecimalMinorUnits` (`src/money-parse.ts`): the one place decimal money text becomes
+  minor units — exact (BigInt over the digits), exactly `fractionDigits` fraction digits or none,
+  Western or Indian grouping, no symbols / exponents / rounding. Invariant 1 unchanged: no float
+  ever holds money. The CSV connector still refuses decimals outright.
+- `src/amazon.ts`: the Amazon rules both the api and the redirect need (canonical
+  `/dp/<ASIN>` URL, tracking-ID format and the proprietary-term rule — amazon / kindle and
+  misspellings plus alexa, echo, prime, prime video, audible, fire tv, firestick, imdb, zappos,
+  whole foods from OA §7's non-exhaustive list of marks — the accepted platforms (Facebook,
+  Instagram, web), `amazonRouteParams` (never a click id), the price window (1 hour), the
+  automated-client list and the prefetch test, and the pinned drafts for counsel: the post
+  label and the preview page's words). String matching only: this package compiles without
+  Node's types (the image build has none), so no `URL` global.

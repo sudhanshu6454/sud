@@ -23,6 +23,7 @@ import { ResponsiveTable, StackRow } from '@/components/admin/ResponsiveTable';
 import {
   EMPTY_SUSPENSE_FILTERS as EMPTY_FILTERS,
   retryBlockedReason,
+  suspenseRefLabel,
   suspenseQuery as buildQuery,
   suspenseReasonLabel,
   type SuspenseFilters as Filters,
@@ -209,7 +210,7 @@ export function SuspenseQueue() {
   const money = (minor: number, item: SuspenseItem) => formatMoneyExact(minor, item.currency);
 
   const actions = (item: SuspenseItem) => {
-    const blocked = retryBlockedReason(item.returned_click_ref);
+    const blocked = retryBlockedReason(item.returned_click_ref, item.returned_tracking_ref ?? null);
     const blockedId = `retry-blocked-${item.id}`;
     return (
     <>
@@ -218,7 +219,7 @@ export function SuspenseQueue() {
           size="xs"
           disabled={demo || busyId === item.id || Boolean(blocked)}
           aria-describedby={blocked ? blockedId : undefined}
-          title={blocked ? undefined : 'Re-check the click reference against clicks'}
+          title={blocked ? undefined : 'Re-check the click reference or tracking ID (exact matches only)'}
           onClick={() => onRetry(item)}
         >
           {busyId === item.id ? '…' : 'Retry attribution'}
@@ -265,7 +266,7 @@ export function SuspenseQueue() {
           <div className={styles.txn}>{item.source_transaction_id}</div>
           <div className={styles.muted}>{item.provider_account_id}</div>
           <div className={styles.muted}>
-            ref: <span className={styles.mono}>{item.returned_click_ref ?? <em>none</em>}</span>
+            {suspenseRefLabel(item).kind}: <span className={styles.mono}>{suspenseRefLabel(item).value ?? <em>none</em>}</span>
           </div>
           {rawToggle(item)}
         </>
@@ -334,8 +335,8 @@ export function SuspenseQueue() {
             {item.programme_name} · {item.provider_status} · order {money(item.eligible_value_minor, item)}
           </div>
           <div>
-            {item.provider_account_id} · ref:{' '}
-            <span className={styles.mono}>{item.returned_click_ref ?? <em>none</em>}</span>
+            {item.provider_account_id} · {suspenseRefLabel(item).kind}:{' '}
+            <span className={styles.mono}>{suspenseRefLabel(item).value ?? <em>none</em>}</span>
           </div>
           <div>Received {received(item)}</div>
           <div className={styles.phoneReviewed}>Reviewed: {reviewed(item)}</div>

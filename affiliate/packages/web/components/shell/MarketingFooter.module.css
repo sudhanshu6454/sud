@@ -11,6 +11,13 @@
   border-top: 2px solid var(--color-divider);
 }
 
+/* Amazon's Associate statement (AMAZON_ASSOCIATE=on): its own full-width
+   line under the copyright and the legal links, the footer's 13px type. */
+.associate {
+  flex-basis: 100%;
+  margin: 0;
+}
+
 .link {
   color: inherit;
   text-decoration: none;

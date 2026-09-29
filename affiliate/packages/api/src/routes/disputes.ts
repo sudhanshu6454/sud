@@ -120,6 +120,20 @@ export async function disputesRoutes(app: FastifyInstance): Promise<void> {
           [body.conversion_id],
         );
         chainPublisherId = chain.rows[0]?.publisher_id ?? null;
+        if (!chainPublisherId) {
+          // Attributed through a tracking-ID mapping (no click): placement → campaign.
+          const viaPlacement = await tenantQuery<{ publisher_id: string }>(
+            orgId,
+            `select ca.publisher_id as publisher_id
+               from conversions c
+               join placements pl  on pl.id = c.placement_id   and pl.org_id = $1
+               join campaigns ca   on ca.id = pl.campaign_id   and ca.org_id = $1
+              where c.id = $2 and c.org_id = $1
+              limit 1`,
+            [body.conversion_id],
+          );
+          chainPublisherId = viaPlacement.rows[0]?.publisher_id ?? null;
+        }
       }
 
       let publisherId: string | null = chainPublisherId;

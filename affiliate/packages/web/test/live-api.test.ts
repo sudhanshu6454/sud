@@ -4,7 +4,16 @@
  * gave is told apart from an API that could not be reached.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { suspenseQuery, suspenseReasonLabel, retryBlockedReason, EMPTY_SUSPENSE_FILTERS } from '../components/admin/suspenseModel';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import {
+  suspenseQuery,
+  suspenseReasonLabel,
+  suspenseRefLabel,
+  retryBlockedReason,
+  EMPTY_SUSPENSE_FILTERS,
+  SUSPENSE_REASON_LABELS,
+} from '../components/admin/suspenseModel';
 import { ApiError, apiFetch, fallbackKind, fallbackNotice, isUnreachable, withDemoFallback } from '../lib/api';
 import { MISMATCH_NOTICE, NO_PUBLISHER_NOTICE, PUBLISHER_NOT_FOUND_NOTICE, loadLiveEarnings } from '../lib/earnings';
 import { IdempotencyKeys, randomKey } from '../lib/idempotency';
@@ -172,7 +181,26 @@ describe('suspense queue (/admin/suspense)', () => {
     expect(suspenseReasonLabel('CLICK_REF_UNMATCHED')).toBe('Click ref unmatched');
     expect(suspenseReasonLabel('NO_CLICK_REF')).toBe('No click ref');
     expect(suspenseReasonLabel('SOMETHING_NEW')).toBe('Something new');
-    expect(retryBlockedReason(null)).toMatch(/No click reference/);
+    expect(retryBlockedReason(null)).toMatch(/No click reference or tracking ID/);
     expect(retryBlockedReason('click-ref-1')).toBe('');
+    // Amazon rows carry a tracking ID instead of a click reference: retryable.
+    expect(retryBlockedReason(null, 'demo-ig-21')).toBe('');
+    expect(suspenseRefLabel({ returned_click_ref: null, returned_tracking_ref: 'demo-ig-21' })).toEqual({ kind: 'tracking ID', value: 'demo-ig-21' });
+    expect(suspenseRefLabel({ returned_click_ref: 'c1', returned_tracking_ref: 'demo-ig-21' })).toEqual({ kind: 'ref', value: 'c1' });
+    expect(suspenseRefLabel({ returned_click_ref: null })).toEqual({ kind: 'ref', value: null });
+  });
+
+  it('labels every reason code the API can send (docs/openapi.yaml SuspenseItem.reason_code), in sentence case', () => {
+    const spec = readFileSync(join(__dirname, '..', '..', '..', 'docs', 'openapi.yaml'), 'utf8');
+    const m = /reason_code:\s*\n\s*type: string\s*\n\s*enum: \[([^\]]+)\]/.exec(spec);
+    expect(m).not.toBeNull();
+    const codes = m![1]!.split(',').map((c) => c.trim());
+    expect(codes).toHaveLength(6);
+    expect(Object.keys(SUSPENSE_REASON_LABELS).sort()).toEqual([...codes].sort());
+    expect(suspenseReasonLabel('TRACKING_ID_UNMAPPED')).toBe('Tracking ID not mapped');
+    expect(suspenseReasonLabel('TRACKING_ID_IS_STORE_DEFAULT')).toBe('Store ID, no page');
+    expect(suspenseReasonLabel('TRACKING_ID_MAPPED_AFTER_SALE')).toBe('Tracking ID mapped after the sale');
+    expect(suspenseReasonLabel('ATTRIBUTION_CONFLICT')).toBe('Click and tracking ID disagree');
+    for (const label of Object.values(SUSPENSE_REASON_LABELS)) expect(label[0]).toBe(label[0]!.toUpperCase());
   });
 });

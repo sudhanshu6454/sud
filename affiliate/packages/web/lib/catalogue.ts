@@ -57,11 +57,18 @@ export interface LookItemRow {
   offer: {
     id: string;
     programme_id: string;
+    /** programmes.connector (e.g. 'amazon-associates'); absent from an API before 2026-09-29. */
+    connector?: string | null;
     merchant: { id: string; name: string };
-    price_minor: number;
+    /** null when the price may not be shown (Amazon: no API price younger than 1 h). */
+    price_minor: number | null;
+    /** When the price was read from the merchant's product API; null / absent without one. */
+    price_as_of?: string | null;
     currency: string;
     stock_status: string;
     fresh_until: string;
+    /** The programme's own disclosure statement; null / absent without one. */
+    disclosure?: string | null;
   } | null;
   link: { token: string; url: string } | null;
 }
@@ -105,10 +112,14 @@ export function mapLookItem(row: LookItemRow): LookItem {
     evidence: row.evidence ?? null,
     available: offer !== null,
     merchant: offer ? offer.merchant.name : null,
-    price_minor: offer ? offer.price_minor : null,
+    price_minor: offer && typeof offer.price_minor === 'number' && Number.isFinite(offer.price_minor) ? offer.price_minor : null,
     currency: offer ? offer.currency : null,
     freshness: offer ? offer.fresh_until : null,
+    // The time only travels with the price it belongs to.
+    priceAsOf: offer && typeof offer.price_minor === 'number' ? (offer.price_as_of ?? null) : null,
     stock: offer ? offer.stock_status : null,
+    connector: offer ? (offer.connector ?? null) : null,
+    disclosure: offer ? (offer.disclosure ?? null) : null,
     // Only ever the tracked redirect URL; the API never returns offer_url.
     linkUrl: offer && row.link ? row.link.url : null,
   };

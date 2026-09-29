@@ -200,3 +200,17 @@ the one known driver difference.
     `backup.sh`, then README.md's `scripts/restore.sh "$(ls -t ./backups/*.dump | head -1)"`,
     ends `RESULT: PASS (3 passed, 0 failed)` with `DATABASE_URL` and with `PG*` variables. This
     is a local run, not the real-Postgres drill the pilot checklist still asks for.
+
+## 2026-09-29 — Amazon.in Associates review fixes
+
+22. **`scripts/amazon-import-race.ts` (`pnpm race:pg`) is the concurrency proof pg-mem cannot
+    give.** It creates `paparazzi_demo_race_<8 hex>` on the `DATABASE_URL` server (dropped at
+    the end, also on failure; only that prefix is ever dropped), migrates it with
+    `db/migrate.mjs`, seeds a TEST organisation (one owner-operated Instagram page, `demo-21` /
+    `demo-ig-21`, `B0RACE…` ASINs) and runs the api's own `importAmazonEarningsReport`
+    concurrently: 10 rounds of 6 return files against one sale (exactly its commission
+    reversed, the publisher's liability never below 0) and 10 pairs of one row with different
+    fees (one 202 and one 409 each), then `checkBooksBalanced`. CI runs it after `demo:pg`.
+    With the import lock disabled on purpose the pair check fails 10/10 while the returns
+    stay exact (the atomic reversal insert on its own), so each guard is shown to cover its
+    own case. Refuses `NODE_ENV=production`.

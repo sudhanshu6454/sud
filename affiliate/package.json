@@ -13,6 +13,7 @@
   "scripts": {
     "demo": "./packages/api/node_modules/.bin/tsx scripts/demo-money-loop.ts",
     "demo:pg": "DEMO_TARGET=postgres ./packages/api/node_modules/.bin/tsx scripts/demo-money-loop.ts",
+    "race:pg": "./packages/api/node_modules/.bin/tsx scripts/amazon-import-race.ts",
     "dev:db": "docker compose up -d postgres redis",
     "migrate": "node db/migrate.mjs",
     "migrate:status": "node db/migrate.mjs --status",

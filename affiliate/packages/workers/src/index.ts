@@ -15,6 +15,11 @@
  *   RETENTION_CLICK_CONTEXT_DAYS / RETENTION_CONVERSION_RAW_DAYS /
  *   RETENTION_OUTBOX_DAYS         Retention windows in days (default 365 each).
  *   RETENTION_CRON                BullMQ cron pattern for the purge (default '0 3 * * *').
+ *   AMAZON_CREATORS_CREDENTIAL_ID / _SECRET / _VERSION
+ *                                 Amazon Creators API credentials (secrets; unset = no price
+ *                                 refresh, Amazon prices stay hidden). _TOKEN_URL / _API_BASE override
+ *                                 the endpoints. AMAZON_REFRESH_CRON (default '17 * * * *'),
+ *                                 AMAZON_REFRESH_MAX_REQUESTS (300), AMAZON_OFFER_TTL_DAYS (30).
  *
  * Run: pnpm --filter @paparazzi/workers dev   (tsx src/index.ts)
  */
@@ -24,7 +29,7 @@ import type { Redis } from 'ioredis';
 import { Pool } from 'pg';
 import { createClickEventsWorker } from './workers/click-events';
 import { createProviderEventsWorker } from './workers/provider-events';
-import { createFeedsWorker } from './workers/feeds';
+import { createFeedsWorker, scheduleFeedsRepeat } from './workers/feeds';
 import { createReconciliationWorker } from './workers/reconciliation';
 import { createRetentionWorker, scheduleRetentionRepeat } from './workers/retention';
 import {
@@ -66,7 +71,7 @@ async function main(): Promise<void> {
   const workers: Worker[] = [
     createClickEventsWorker(workerConnections[0]),
     createProviderEventsWorker(pool, workerConnections[1]),
-    createFeedsWorker(workerConnections[2]),
+    createFeedsWorker(pool, workerConnections[2]),
     createReconciliationWorker(pool, workerConnections[3]),
     createRetentionWorker(pool, workerConnections[4]),
   ];
@@ -75,6 +80,9 @@ async function main(): Promise<void> {
 
   // Daily retention purge (BullMQ repeatable; deduped on re-register).
   await scheduleRetentionRepeat();
+  // Hourly Amazon offer refresh: expires prices older than 1 h; refreshes
+  // them only with Creators API credentials (src/amazon/refresh.ts).
+  await scheduleFeedsRepeat();
 
   log('info', 'workers started', {
     queues: [...ALL_QUEUE_NAMES],

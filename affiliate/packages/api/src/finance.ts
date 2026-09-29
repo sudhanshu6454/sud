@@ -47,6 +47,11 @@ export interface ConversionRow {
   programme_id: string;
   /** clicks.id (PK) — NULL for suspense/unknown-attribution conversions. */
   click_id: string | null;
+  /**
+   * placements.id when attributed through a tracking-ID mapping instead of a
+   * click (Amazon.in Associates; never together with click_id).
+   */
+  placement_id?: string | null;
   currency: string;
   /** bigint from pg arrives as a string. */
   commission_minor: string;
@@ -100,6 +105,10 @@ async function insertLedgerDrafts(db: DbClient, drafts: DraftInput[]): Promise<v
  *
  * Publisher resolution walks the attribution chain:
  *   conversion.click_id → clicks → links → placements → campaigns.publisher_id
+ * or, for a conversion attributed through a tracking-ID mapping (no click):
+ *   conversion.placement_id → placements → campaigns.publisher_id
+ * — the same chain from its second hop — with the programme being the
+ * conversion's own, which must also be the campaign's.
  *
  * Unknown attribution stays unknown: when conversion.click_id is NULL
  * (suspense) we NEVER guess a publisher — the conversion is logged and
@@ -114,27 +123,38 @@ export async function postLedgerForConversion(
   db: DbClient,
   conversion: ConversionRow,
 ): Promise<'posted' | 'skipped'> {
-  if (!conversion.click_id) {
+  let hop: { publisher_id: string; programme_id: string } | undefined;
+  if (conversion.click_id) {
+    const chain = await db.query<{
+      publisher_id: string;
+      programme_id: string;
+    }>(
+      `select ca.publisher_id as publisher_id, o.programme_id as programme_id
+         from clicks cl
+         join links l        on l.id = cl.link_id       and l.org_id = $1
+         join placements pl on pl.id = l.placement_id  and pl.org_id = $1
+         join campaigns ca  on ca.id = pl.campaign_id  and ca.org_id = $1
+         join offers o      on o.id = l.offer_id       and o.org_id = $1
+        where cl.id = $2 and cl.org_id = $1
+        limit 1`,
+      [conversion.org_id, conversion.click_id],
+    );
+    hop = chain.rows[0];
+  } else if (conversion.placement_id) {
+    const chain = await db.query<{ publisher_id: string; programme_id: string }>(
+      `select ca.publisher_id as publisher_id, ca.programme_id as programme_id
+         from placements pl
+         join campaigns ca on ca.id = pl.campaign_id and ca.org_id = $1
+        where pl.id = $2 and pl.org_id = $1 and ca.programme_id = $3
+        limit 1`,
+      [conversion.org_id, conversion.placement_id, conversion.programme_id],
+    );
+    hop = chain.rows[0];
+  } else {
     // Suspense conversion: unattributable by policy. No ledger entries.
     return 'skipped';
   }
-
-  const chain = await db.query<{
-    publisher_id: string;
-    programme_id: string;
-  }>(
-    `select ca.publisher_id as publisher_id, o.programme_id as programme_id
-       from clicks cl
-       join links l        on l.id = cl.link_id       and l.org_id = $1
-       join placements pl on pl.id = l.placement_id  and pl.org_id = $1
-       join campaigns ca  on ca.id = pl.campaign_id  and ca.org_id = $1
-       join offers o      on o.id = l.offer_id       and o.org_id = $1
-      where cl.id = $2 and cl.org_id = $1
-      limit 1`,
-    [conversion.org_id, conversion.click_id],
-  );
-  const hop = chain.rows[0];
-  if (!hop) return 'skipped'; // click chain broken; do not invent attribution
+  if (!hop) return 'skipped'; // chain broken; do not invent attribution
 
   // Latest approved contract for this publisher+programme whose
   // effective_from has arrived (null = effective immediately). New contract
@@ -310,13 +330,14 @@ export async function computeEligibleEarnings(
     commission_minor: string;
     contract_version_id: string | null;
     click_id: string | null;
+    placement_id: string | null;
     /** timestamptz: pg returns string, pg-mem returns Date — both Date-parseable. */
     occurred_at: string | Date;
     returns_window_days: number;
   }>(
     `select c.id, c.programme_id, c.currency,
             c.commission_minor::text as commission_minor,
-            c.contract_version_id, c.click_id,
+            c.contract_version_id, c.click_id, c.placement_id,
             c.occurred_at,
             p.returns_window_days as returns_window_days
        from conversions c
@@ -362,13 +383,29 @@ export async function computeEligibleEarnings(
     );
     for (const r of chain.rows) chainBy.set(r.click_pk, r.publisher_id);
   }
+  // Same fallback for conversions attributed through a tracking-ID mapping.
+  const placementBy = new Map<string, string>(); // placement pk → publisher_id
+  const needPlacement = mature.filter((c) => !c.contract_version_id && !c.click_id && c.placement_id);
+  if (needPlacement.length > 0) {
+    const placementIds = [...new Set(needPlacement.map((c) => c.placement_id as string))];
+    const viaPlacement = await db.query<{ placement_pk: string; publisher_id: string }>(
+      `select pl.id as placement_pk, ca.publisher_id as publisher_id
+         from placements pl
+         join campaigns ca on ca.id = pl.campaign_id and ca.org_id = $1
+        where pl.org_id = $1 and pl.id in ${inPlaceholders(placementIds.length, 2)}`,
+      [orgId, ...placementIds],
+    );
+    for (const r of viaPlacement.rows) placementBy.set(r.placement_pk, r.publisher_id);
+  }
+  const fallbackPublisher = (c: { click_id: string | null; placement_id: string | null }): string | undefined =>
+    c.click_id ? chainBy.get(c.click_id) : c.placement_id ? placementBy.get(c.placement_id) : undefined;
   const latestBy = new Map<string, { publisher_id: string; publisher_share_bps: number }>();
   {
     // One query per (publisher, programme) pair — portable across Postgres
     // and pg-mem (avoids multi-argument unnest); the pair count is bounded
     // by the unattributed-conversion count.
-    const pairs = needChain
-      .map((c) => [chainBy.get(c.click_id as string), c.programme_id] as const)
+    const pairs = [...needChain, ...needPlacement]
+      .map((c) => [fallbackPublisher(c), c.programme_id] as const)
       .filter((p): p is readonly [string, string] => typeof p[0] === 'string');
     const uniq = [...new Map(pairs.map((p) => [`${p[0]}|${p[1]}`, p] as const)).values()];
     for (const [publisherId, programmeId] of uniq) {
@@ -421,8 +458,8 @@ export async function computeEligibleEarnings(
     if (snap) {
       publisherId = snap.publisher_id;
       bps = snap.publisher_share_bps;
-    } else if (c.click_id) {
-      const viaChain = chainBy.get(c.click_id);
+    } else if (c.click_id || c.placement_id) {
+      const viaChain = fallbackPublisher(c);
       if (viaChain) {
         publisherId = viaChain;
         const latest = latestBy.get(`${viaChain}|${c.programme_id}`);
