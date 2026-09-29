@@ -1,0 +1,9 @@
+.box {
+  background: #faf7ef;
+  border: 1px solid #e5dcc3;
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.82rem;
+  color: #5b5340;
+  line-height: 1.45;
+}

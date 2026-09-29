@@ -1,0 +1,132 @@
+.hero {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: 0.75rem;
+  margin-bottom: 1rem;
+  overflow: hidden;
+}
+
+.sponsored {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  background: rgba(17, 17, 17, 0.85);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+}
+
+.kicker {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #777;
+  margin-bottom: 0.25rem;
+}
+
+.title {
+  margin-bottom: 0.25rem;
+}
+
+.attr {
+  font-size: 0.9rem;
+  color: #555;
+}
+
+.disclosureWrap {
+  margin: 1rem 0;
+}
+
+.sectionTitle {
+  margin: 1.25rem 0 0.75rem;
+}
+
+.productList {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.productCard {
+  border: 1px solid #e5e5e5;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  background: #fff;
+}
+
+.productTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.badgeExact,
+.badgeSimilar {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+}
+
+.badgeExact {
+  background: #e7f6ec;
+  color: #14703c;
+  border: 1px solid #bfe6cc;
+}
+
+.badgeSimilar {
+  background: #eef2ff;
+  color: #3b4fd8;
+  border: 1px solid #ccd4f8;
+}
+
+.productName {
+  font-weight: 700;
+  color: #1a1a1a;
+  text-decoration: none;
+}
+
+.productName:hover {
+  text-decoration: underline;
+}
+
+.priceRow {
+  margin-top: 0.25rem;
+}
+
+.price {
+  font-weight: 800;
+  font-size: 1.05rem;
+  margin-right: 0.5rem;
+}
+
+.merchant {
+  font-size: 0.88rem;
+  color: #666;
+}
+
+.freshness {
+  font-size: 0.78rem;
+  color: #777;
+  margin-top: 0.3rem;
+}
+
+.cta {
+  display: block;
+  text-align: center;
+  margin-top: 0.75rem;
+  padding: 0.7rem;
+  background: #111;
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+  border-radius: 0.6rem;
+}

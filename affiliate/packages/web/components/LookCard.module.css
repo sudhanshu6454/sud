@@ -1,0 +1,48 @@
+.card {
+  display: block;
+  border: 1px solid #e5e5e5;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  text-decoration: none;
+  color: inherit;
+  background: #fff;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.card:active {
+  transform: scale(0.99);
+}
+
+.media {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  width: 100%;
+}
+
+.sponsored {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  background: rgba(17, 17, 17, 0.85);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+}
+
+.body {
+  padding: 0.75rem 1rem 1rem;
+}
+
+.title {
+  font-size: 1rem;
+  margin-bottom: 0.15rem;
+}
+
+.meta {
+  font-size: 0.82rem;
+  color: #666;
+}

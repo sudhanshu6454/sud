@@ -1,0 +1,158 @@
+# Monitoring alert definitions — Paparazzi Affiliate Commerce Platform
+#
+# Status: DEFINED, NOT WIRED. These definitions are provider-agnostic so they
+# can be wired to CloudWatch (Option A, AWS ap-south-1) or the DO equivalent
+# (Option B, blr1) — see docs/infrastructure-recommendation.md § Monitoring.
+# "Wiring these to the real monitoring stack" is PENDING INFRA. Do not treat
+# any alert below as live until the wiring ticket is closed and each alert is
+# proven by a synthetic trigger (fire drill).
+#
+# Metric naming: logical names used across docs/runbooks/*. The infra owner
+# maps each `metric` to a CloudWatch metric / log filter / Route 53 health
+# check at wiring time. Suggested CloudWatch mappings are in comments.
+#
+# Each alert: name, metric/signal, threshold, evaluation window, severity,
+# runbook link, and the operator page route (SNS topic -> email/Slack).
+# Thresholds are justified in docs/runbooks/alerts.md.
+
+version: 1
+defaults:
+  owner: on-call-engineer
+  notify: sns:paparazzi-alerts  # -> email + Slack webhook at wiring time
+
+alerts:
+  - name: click-volume-drop
+    description: >
+      Attributed-click throughput falls far below the normal baseline — the
+      money loop's input has stopped. Fail-open redirect design means a full
+      redirect outage converts to unattributable traffic (later suspense),
+      not errors, so volume is the primary detection signal.
+    metric: rate(click_observed_events_total[1m])
+      # CloudWatch mapping: custom metric `ClickObserved` published by the
+      # redirect service, or: `SELECT COUNT(*) FROM clicks WHERE
+      # observed_at > now() - interval '1m'` scraped by a Lambda/cron.
+    threshold: "drop > 50% vs same weekday-hour trailing 4-week baseline"
+    evaluation_window: 10m
+    severity: critical
+    runbook: docs/runbooks/tracking-outage.md
+    notes: >
+      Baseline comparison is weekday-hour aware (weekend evenings spike in
+      fashion/paparazzi content). During pilot with no 4-week history, use
+      the fixed floor: < 10 clicks/10m during 08:00–23:00 IST.
+
+  - name: redirect-5xx-rate
+    description: >
+      The redirect service is erroring on the public click path. Small 5xx
+      blips are expected around deploys; a sustained rate means the hot path
+      is broken and publishers are losing attributable clicks.
+    metric: sum(rate(redirect_requests_total{status=~"5.."}[5m])) / sum(rate(redirect_requests_total[5m]))
+      # CloudWatch mapping: ALB `HTTPCode_Target_5XX_Count` / `RequestCount`
+      # on the redirect target group.
+    threshold: "> 1% over 5 minutes"
+    evaluation_window: 5m
+    severity: critical
+    runbook: docs/runbooks/tracking-outage.md
+
+  - name: redirect-p95-latency
+    description: >
+      The click path is slow. Load bar is p95 < 150 ms
+      (scripts/load/redirect-soak.js); 500 ms is the alert line where user
+      drop-off and downstream timeout risk materialise.
+    metric: histogram_quantile(0.95, redirect_request_duration_seconds)
+      # CloudWatch mapping: ALB `TargetResponseTime` p95 on the redirect
+      # target group.
+    threshold: "p95 > 500 ms sustained"
+    evaluation_window: 10m
+    severity: warning
+    runbook: docs/runbooks/tracking-outage.md
+
+  - name: redirect-canary-failure
+    description: >
+      Hourly synthetic probe mints a canary link and follows it. Catches
+      silent failures the volume alert can miss (e.g. 302s that lost the
+      subid, or cache-poisoned paused pages).
+    metric: canary_redirect_check{result="fail"}
+      # Mapping: Route 53 health check or a cron Lambda hitting
+      # GET /r/{canary_token}; fail if not a 302 to the expected host
+      # within 2 s.
+    threshold: ">= 1 failed check"
+    evaluation_window: 1 check (hourly cadence)
+    severity: critical
+    runbook: docs/runbooks/tracking-outage.md
+
+  - name: webhook-event-backlog
+    description: >
+      Provider conversion events are arriving late or erroring — attribution
+      and the ledger are delayed. Lag, not count, is the signal: idempotent
+      redelivery means a burst of duplicates is safe, but stale events stall
+      settlement and publisher statements.
+    metric: max(conversion_event_lag_seconds)  # received_at - occurred_at
+      # Plus: 5xx rate on POST /v1/integrations/:connector/events
+      # (ALB `HTTPCode_Target_5XX_Count` on the API target group).
+    threshold: "lag > 30 min OR ingestion 5xx rate > 1% over 5 min"
+    evaluation_window: 15m
+    severity: warning   # critical if lag > 2h
+    runbook: docs/runbooks/tracking-outage.md
+
+  - name: settlement-gap
+    description: >
+      A programme has approved, commissionable conversions in the last 14
+      days but zero `merchant_settlements` rows in the same window. The
+      platform cannot pay publishers out of uncollected cash, so this is the
+      earliest signal of merchant non-payment.
+    metric: >
+      per (programme): approved_liability_14d - settled_cash_14d
+      # SQL source of truth:
+      #   approved liability: SUM(commission) FROM conversions (approved,
+      #     last 14d) JOIN ledger attribution; settled cash: SUM(amount)
+      #   FROM merchant_settlements (last 14d). Publish as a daily custom
+      #   metric, e.g. via the workers reconciliation job.
+    threshold: "gap > 0 AND programme has >= 1 approved conversion in window"
+    evaluation_window: 1d  # daily batch evaluation
+    severity: warning  # critical if gap persists > 15 days / past cure period
+    runbook: docs/runbooks/merchant-nonpayment.md
+
+  - name: collected-cash-ratio-drop
+    description: >
+      Companion to settlement-gap: per (programme, currency), collected cash
+      vs approved publisher liability is falling — payout batches are being
+      capped by `computeCollectedAllocation` while eligible earnings grow.
+      Catches partial/slow payment, where settlement-gap (a binary) stays
+      quiet.
+    metric: collected_cash / approved_publisher_liability per (programme, currency)
+    threshold: "< 20% at payout-prepare time, 2 consecutive cycles"
+    evaluation_window: per payout cycle
+    severity: warning
+    runbook: docs/runbooks/merchant-nonpayment.md
+
+  - name: books-balanced-sweep
+    description: >
+      Scheduled double-entry integrity sweep: for every (org, currency),
+      SUM(debit) == SUM(credit) over ledger_entries (same check as
+      `assertBooksBalancedOrThrow` in packages/api/src/finance.ts, which
+      gates payout prepare with 409 LEDGER_IMBALANCE). Any imbalance is a
+      data-corruption event, not a business event.
+    metric: >
+      per (org_id, currency): abs(sum(debit_minor) - sum(credit_minor))
+      # Source: checkBooksBalanced() in packages/shared/src/ledger.ts,
+      # run as a scheduled worker job (BullMQ repeatable or cron Lambda)
+      # hourly; publish 0/1 gauge `ledger_imbalance_detected`.
+    threshold: "any imbalance != 0"
+    evaluation_window: 1h  # hourly sweep
+    severity: critical
+    runbook: docs/runbooks/alerts.md#books-balanced-sweep  # interim; dedicated runbook is a gap
+    notes: >
+      If this fires, payouts are already blocked by the 409 gate. Do NOT
+      "fix" by hand-posting ledger entries — ledger is append-only; find the
+      corrupt writer (likely a code bug in a ledger builder, not data
+      entry) and page engineering. A dedicated ledger-imbalance runbook is
+      still to be written; until then the procedure in alerts.md applies.
+
+# --- PENDING INFRA (wiring checklist, not alerts) ---
+# 1. Provision the notification channel (SNS topic + email + Slack webhook).
+# 2. Implement the custom-metric publishers: ClickObserved counter,
+#    conversion lag gauge, daily settlement-gap metric, hourly ledger sweep.
+# 3. Create CloudWatch alarms (Option A) or DO alerts (Option B) from this
+#    file; Route 53 health checks for the canary + /health endpoints.
+# 4. Fire-drill each alert once (synthetic trigger) before pilot launch and
+#    record the drill dates here.

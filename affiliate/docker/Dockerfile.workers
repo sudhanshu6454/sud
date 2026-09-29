@@ -1,0 +1,21 @@
+# First-cut production image for @paparazzi/workers. See Dockerfile.api notes.
+FROM node:20-alpine AS build
+RUN corepack enable && corepack prepare pnpm@9 --activate
+WORKDIR /app
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY packages/workers/package.json packages/workers/
+COPY packages/shared/package.json packages/shared/
+RUN pnpm install --frozen-lockfile
+COPY tsconfig.base.json ./
+COPY packages/shared packages/shared
+COPY packages/workers packages/workers
+RUN pnpm --filter @paparazzi/workers typecheck && \
+    pnpm --filter @paparazzi/workers exec tsc -p tsconfig.json
+
+FROM node:20-alpine AS runtime
+ENV NODE_ENV=production
+WORKDIR /app
+COPY --from=build /app/packages/workers/dist ./dist
+COPY --from=build /app/packages/workers/package.json ./
+COPY --from=build /app/node_modules ./node_modules
+CMD ["node", "dist/index.js"]

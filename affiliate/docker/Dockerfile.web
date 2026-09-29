@@ -1,0 +1,21 @@
+# First-cut production image for @paparazzi/web (Next.js standalone).
+# NEXT_PUBLIC_API_BASE is baked at build time via build arg.
+FROM node:20-alpine AS build
+RUN corepack enable && corepack prepare pnpm@9 --activate
+WORKDIR /app
+ARG NEXT_PUBLIC_API_BASE
+ENV NEXT_PUBLIC_API_BASE=$NEXT_PUBLIC_API_BASE
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY packages/web/package.json packages/web/
+RUN pnpm install --frozen-lockfile
+COPY packages/web packages/web
+RUN pnpm --filter @paparazzi/web build
+
+FROM node:20-alpine AS runtime
+ENV NODE_ENV=production
+WORKDIR /app
+COPY --from=build /app/packages/web/.next/standalone ./
+COPY --from=build /app/packages/web/.next/static ./packages/web/.next/static
+COPY --from=build /app/packages/web/public ./packages/web/public
+EXPOSE 3000
+CMD ["node", "packages/web/server.js"]

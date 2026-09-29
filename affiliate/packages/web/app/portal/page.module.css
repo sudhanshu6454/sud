@@ -1,0 +1,167 @@
+.heading {
+  margin-bottom: 0.25rem;
+}
+
+.sub {
+  color: #555;
+  font-size: 0.92rem;
+  margin-bottom: 0.75rem;
+}
+
+.error {
+  color: #991b1b;
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  border-radius: 0.6rem;
+  padding: 0.6rem 0.9rem;
+  font-size: 0.88rem;
+  margin-bottom: 0.75rem;
+}
+
+.cardGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+  margin-bottom: 1.5rem;
+}
+
+@media (min-width: 560px) {
+  .cardGrid {
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+  }
+}
+
+.card {
+  border: 1px solid #e2e2e2;
+  border-radius: 0.75rem;
+  padding: 0.75rem 0.85rem;
+  background: #fff;
+}
+
+.cardLabel {
+  font-size: 0.75rem;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 0.2rem;
+}
+
+.cardValue {
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.cardDemo {
+  font-size: 0.7rem;
+  color: #b45309;
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-top: 0.15rem;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.sectionHead .sectionTitle {
+  margin: 0;
+}
+
+.sectionTitle {
+  margin: 0 0 0.75rem;
+}
+
+.tableWrap {
+  overflow-x: auto;
+  border: 1px solid #e2e2e2;
+  border-radius: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  min-width: 560px;
+}
+
+.table th,
+.table td {
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid #eee;
+}
+
+.table th {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #666;
+  background: #fafafa;
+}
+
+.table tr:last-child td {
+  border-bottom: 0;
+}
+
+.status {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  text-transform: capitalize;
+}
+
+.pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.approved {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.reversed {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.hint {
+  font-size: 0.78rem;
+  color: #888;
+  margin-bottom: 1.5rem;
+}
+
+.navRow {
+  display: grid;
+  gap: 0.6rem;
+}
+
+@media (min-width: 560px) {
+  .navRow {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.navCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  border: 1px solid #e2e2e2;
+  border-radius: 0.75rem;
+  padding: 0.9rem 1rem;
+  text-decoration: none;
+  color: #1a1a1a;
+}
+
+.navCard span {
+  font-size: 0.85rem;
+  color: #666;
+}

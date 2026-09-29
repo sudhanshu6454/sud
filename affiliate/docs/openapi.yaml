@@ -1,0 +1,1957 @@
+openapi: 3.1.0
+info:
+  title: Paparazzi Affiliate Commerce Platform — v1 API
+  version: 1.0.0
+  description: |
+    Public v1 API for the Paparazzi Affiliate Commerce Platform (looks, offers,
+    links, integrations, earnings, payouts, programmes, publishers, disputes,
+    contracts, suspense).
+
+    This spec is generated from the real route handlers in
+    `packages/api/src/routes/*.ts` — it documents only endpoints the code
+    registers. There is no `GET /v1/links` (links are minted, then resolved
+    by the redirect service at `GET /r/{token}`).
+
+    ## Authentication (temporary stub)
+
+    All `/v1/*` endpoints require a Bearer JWT (`Authorization: Bearer <token>`).
+    Expected claims: `sub`, `org_id`, `role`. **The JWT verification in
+    `src/middleware.ts` (`requireAuth`) is a temporary stub: it trusts the
+    token's claims verbatim and must be replaced by a production identity
+    provider** with membership validation (`memberships` table), issuer /
+    audience / expiry policy. `GET /healthz` is the only unauthenticated route.
+
+    ## Envelopes
+
+    - Success: `{ "data": <payload>, "request_id": "<uuid>" }` (`ok()` helper).
+    - Error: `{ "error": { "code": "<ERROR_CODE>", "message": "..." }, "request_id": "<uuid>" }`.
+    - Every response carries an `X-Request-Id` header echoing `request_id`.
+    - Error `code` is always one of the `ErrorCode` enum values
+      (`packages/shared/src/errors.ts`); clients should branch on `code`,
+      never on message text.
+
+    ## Idempotency
+
+    POST routes that mutate money or state accept an optional `Idempotency-Key`
+    header. The first response (status + body) for a key is stored per-org and
+    replayed verbatim on retry with `X-Idempotent-Replay: true`; 5xx responses
+    are never stored. `POST /v1/payout-batches` additionally keys the batch row
+    itself: a conflict returns the existing batch with `200 { ..., "deduped": true }`.
+
+    ## Tenant scoping
+
+    Every query is tenant-scoped via `org_id` (`tenantQuery` in `src/db.ts`:
+    `$1` is always the caller's `org_id`, and unscoped SQL throws). There are
+    no cross-org reads or writes. A resource belonging to another org reads as
+    `404 NOT_FOUND`, never as a leak.
+
+    ## Money
+
+    All money fields are **integer minor units** (paise for INR), never
+    decimals. The CSV connector rejects values like `12.50` outright — money is
+    never rounded or truncated.
+
+    ## Roles
+
+    Minimal hard-coded role matrix (`requireRole` in `src/middleware.ts`;
+    full RBAC is a TODO):
+    - `network_admin` — kill switch, contract approval, onboarding, callbacks.
+    - `editor` — content + provider-webhook operations.
+    - `publisher_owner` — publisher-facing writes (links, disputes, onboarding application).
+    - `finance_operator` — prepare/disburse payout batches, suspense ops.
+    - `finance_approver` — approve payout batches (maker-checker: the preparer
+      cannot approve their own batch → `403 FORBIDDEN`), suspense ops.
+
+    A wrong role yields `403 FORBIDDEN`; a missing/invalid token yields
+    `401 UNAUTHORIZED`.
+
+    ## Error codes
+
+    | code | typical meaning |
+    |---|---|
+    | `PROGRAMME_NOT_APPROVED` | programme not `active`, or offer URL host not in programme `allowed_domains` |
+    | `OFFER_STALE` | offer not `active` or `fresh_until` passed (link minting) |
+    | `PROPERTY_FORBIDDEN` | property not `approved` for this org |
+    | `PUBLISHER_NOT_ACTIVE` | publisher onboarding not `active`; monetised link minting disabled |
+    | `NOT_FOUND` | unknown route, or resource not in this org |
+    | `VALIDATION_ERROR` | zod/request validation failed (400) or semantic rejection (422) |
+    | `UNAUTHORIZED` | missing/invalid/claim-deficient Bearer token |
+    | `FORBIDDEN` | role not allowed, or maker-checker violation |
+    | `CONFLICT` | state transition invalid, or reversal exceeds unreversed remainder |
+    | `RATE_LIMITED` | reserved — no rate limiter is wired in this build |
+    | `UPSTREAM_UNAVAILABLE` | reserved — provider upstream failure |
+    | `LEDGER_IMBALANCE` | books don't balance for (org, currency) at payout prepare |
+    | `TRANSFER_STATUS_UNKNOWN` | payout rail could not determine a transfer's state |
+    | `INTERNAL` | unexpected failure (message not leaked) |
+servers:
+  - url: http://localhost:3000
+    description: Local dev (`API_PORT`, default 3000)
+security:
+  - bearerAuth: []
+tags:
+  - name: System
+    description: Liveness probe.
+  - name: Catalog
+    description: Published looks and live offers.
+  - name: Links
+    description: Tracked redirect link minting with guards.
+  - name: Integrations
+    description: Provider webhooks (stub-network) and the CSV merchant connector.
+  - name: Suspense
+    description: Finance/ops queue for unattributed conversions.
+  - name: Payouts
+    description: Payout batch lifecycle with maker-checker.
+  - name: Earnings
+    description: Per-publisher lifecycle balances.
+  - name: Programmes
+    description: Programme kill switch (pause/resume).
+  - name: Publishers
+    description: Publisher onboarding state machine.
+  - name: Disputes
+    description: Missing-commission / support tickets.
+  - name: Contracts
+    description: Publisher–programme contract versioning.
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        TEMPORARY STUB — `requireAuth` in `src/middleware.ts` verifies the JWT
+        signature against `JWT_SECRET` and trusts the `sub`, `org_id`, `role`
+        claims verbatim. Replace with a production IdP (membership validation,
+        issuer/audience/expiry policy) before pilot.
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 200
+      description: |
+        Optional idempotency key. First response per (key, org) is stored and
+        replayed with `X-Idempotent-Replay: true`; 5xx is never stored.
+    PathId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    PathProviderRef:
+      name: providerRef
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 200
+        example: stub-9f2c1ab4-…
+  headers:
+    X-Request-Id:
+      description: Echoes the envelope `request_id` for log correlation.
+      schema:
+        type: string
+        format: uuid
+    X-Idempotent-Replay:
+      description: Present (`true`) when the body is a replay of a stored idempotent response.
+      schema:
+        type: string
+        enum: ['true']
+  schemas:
+    ErrorCode:
+      type: string
+      enum:
+        - PROGRAMME_NOT_APPROVED
+        - OFFER_STALE
+        - PROPERTY_FORBIDDEN
+        - PUBLISHER_NOT_ACTIVE
+        - NOT_FOUND
+        - VALIDATION_ERROR
+        - UNAUTHORIZED
+        - FORBIDDEN
+        - CONFLICT
+        - RATE_LIMITED
+        - UPSTREAM_UNAVAILABLE
+        - LEDGER_IMBALANCE
+        - TRANSFER_STATUS_UNKNOWN
+        - INTERNAL
+      description: Canonical codes from `packages/shared/src/errors.ts`.
+    ErrorEnvelope:
+      type: object
+      required: [error, request_id]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              $ref: '#/components/schemas/ErrorCode'
+            message:
+              type: string
+        request_id:
+          type: string
+          format: uuid
+    SuccessEnvelope:
+      type: object
+      required: [data, request_id]
+      properties:
+        data: {}
+        request_id:
+          type: string
+          format: uuid
+      description: Shape of every 2xx body; `data` is operation-specific.
+    Uuid:
+      type: string
+      format: uuid
+    MinorUnits:
+      type: integer
+      minimum: 0
+      description: Integer minor units (paise for INR). Never decimals.
+    Currency:
+      type: string
+      minLength: 3
+      maxLength: 3
+      example: INR
+      description: ISO 4217 code; stored uppercase.
+    DateTime:
+      type: string
+      format: date-time
+    Role:
+      type: string
+      enum: [network_admin, editor, publisher_owner, finance_operator, finance_approver]
+    InternalConversionStatus:
+      type: string
+      enum: [received, pending, approved, declined]
+    LedgerDisposition:
+      type: string
+      enum: [posted, skipped]
+      description: |
+        `posted` — ledger entries were written; `skipped` — conversion left
+        unposted (unattributed click or no approved contract; never guessed).
+    # ---- domain models ----
+    Look:
+      type: object
+      required: [id, title, locale, category]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        title: { type: string }
+        locale: { type: string, example: en-IN }
+        category: { type: string, example: street-style }
+        published_at: { $ref: '#/components/schemas/DateTime', nullable: true }
+    Offer:
+      type: object
+      required: [id, variant_id, programme_id, merchant_id, price_minor, currency, stock_status, offer_url]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        variant_id: { $ref: '#/components/schemas/Uuid' }
+        programme_id: { $ref: '#/components/schemas/Uuid' }
+        merchant_id: { $ref: '#/components/schemas/Uuid' }
+        price_minor: { $ref: '#/components/schemas/MinorUnits' }
+        currency: { $ref: '#/components/schemas/Currency' }
+        stock_status: { type: string, example: in_stock }
+        offer_url: { type: string, format: uri }
+    Link:
+      type: object
+      required: [token, url]
+      properties:
+        token:
+          type: string
+          description: Opaque redirect token; HMAC-SHA256 signed at mint.
+          example: 9f2c1ab4e5d64f7a8b9c0d1e2f3a4b5c
+        url:
+          type: string
+          format: uri
+          description: Click URL served by the redirect service.
+          example: http://localhost:3001/r/9f2c1ab4e5d64f7a8b9c0d1e2f3a4b5c
+    ConversionEvent:
+      type: object
+      required: [provider_account_id, source_transaction_id]
+      properties:
+        kind:
+          type: string
+          enum: [conversion, reversal]
+          default: conversion
+        provider_account_id: { type: string, minLength: 1, maxLength: 200 }
+        source_transaction_id: { type: string, minLength: 1, maxLength: 200 }
+        line_id: { type: string, maxLength: 200 }
+        returned_click_ref: { type: string, maxLength: 200, description: Matched against clicks.click_id; unknown stays suspense, never guessed. }
+        currency: { $ref: '#/components/schemas/Currency' }
+        eligible_value_minor: { $ref: '#/components/schemas/MinorUnits' }
+        commission_minor: { $ref: '#/components/schemas/MinorUnits' }
+        provider_status: { type: string, maxLength: 50, example: approved }
+        occurred_at: { $ref: '#/components/schemas/DateTime' }
+        provider_revision: { type: integer, minimum: 0, default: 0 }
+        reversal_commission_minor:
+          type: integer
+          exclusiveMinimum: 0
+          description: Required when kind=reversal.
+        reason: { type: string, maxLength: 500 }
+      description: |
+        kind=conversion requires currency, eligible_value_minor,
+        commission_minor, provider_status, occurred_at. kind=reversal requires
+        reversal_commission_minor. Dedupe on
+        (provider_account_id, source_transaction_id, line_id); a repeat at the
+        same or lower provider_revision returns 200 `{deduped: true}`.
+    SuspenseItem:
+      type: object
+      required: [id, programme_id, programme_name, provider_account_id, source_transaction_id, currency, eligible_value_minor, commission_minor, provider_status, status, reason_code]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        programme_id: { $ref: '#/components/schemas/Uuid' }
+        programme_name: { type: string }
+        provider_account_id: { type: string }
+        source_transaction_id: { type: string }
+        returned_click_ref: { type: string, nullable: true }
+        currency: { $ref: '#/components/schemas/Currency' }
+        eligible_value_minor: { $ref: '#/components/schemas/MinorUnits' }
+        commission_minor: { $ref: '#/components/schemas/MinorUnits' }
+        provider_status: { type: string }
+        status: { $ref: '#/components/schemas/InternalConversionStatus' }
+        received_at: { $ref: '#/components/schemas/DateTime' }
+        raw: { description: Raw provider event payload, for human evidence review. }
+        reason_code:
+          type: string
+          enum: [CLICK_REF_UNMATCHED, NO_CLICK_REF]
+          description: Derived — NO_CLICK_REF when no reference was returned, else CLICK_REF_UNMATCHED.
+        reviewed_at: { $ref: '#/components/schemas/DateTime', nullable: true }
+        reviewed_by: { type: string, nullable: true }
+        review_note: { type: string, nullable: true }
+    EarningsBalance:
+      type: object
+      required: [pending, approved, collected, payable]
+      properties:
+        pending: { $ref: '#/components/schemas/MinorUnits', description: Publisher share of conversions still awaiting provider approval. }
+        approved: { $ref: '#/components/schemas/MinorUnits', description: Net publisher_liability from posted ledger entries. }
+        collected: { $ref: '#/components/schemas/MinorUnits', description: Merchant cash received, pro-rata allocated from merchant_settlements. Never exceeds remitted cash. }
+        payable: { $ref: '#/components/schemas/MinorUnits', description: Amounts already allocated to live (non-failed/cancelled) payout batches. }
+      description: All values integer minor units, per currency. Suspense (unattributed) conversions are excluded everywhere.
+    PayoutBatch:
+      type: object
+      required: [id, currency, status]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        currency: { $ref: '#/components/schemas/Currency' }
+        status:
+          type: string
+          enum: [pending_approval, approved, processing, paid, failed, cancelled]
+        prepared_by: { type: string, nullable: true }
+        approved_by: { type: string, nullable: true }
+    PayoutItem:
+      type: object
+      required: [publisher_id, amount_minor]
+      properties:
+        publisher_id: { $ref: '#/components/schemas/Uuid' }
+        amount_minor: { $ref: '#/components/schemas/MinorUnits' }
+    Transfer:
+      type: object
+      required: [id, provider_ref, status]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        provider_ref: { type: string, example: stub-9f2c1ab4-… }
+        status: { type: string, example: initiated }
+    OnboardingState:
+      type: string
+      enum: [application, identity_review, property_verification, programme_eligibility, contract, active]
+      description: Forward-only; one step at a time.
+    Publisher:
+      type: object
+      required: [id, legal_name, country, status, onboarding_state]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        legal_name: { type: string }
+        country: { type: string, minLength: 2, maxLength: 2, example: IN }
+        status: { type: string, example: pending }
+        onboarding_state: { $ref: '#/components/schemas/OnboardingState' }
+        created_at: { $ref: '#/components/schemas/DateTime' }
+    DisputeKind:
+      type: string
+      enum: [missing_commission, wrong_amount, unattributed_click, other]
+    DisputeStatus:
+      type: string
+      enum: [open, under_review, resolved, rejected]
+    Dispute:
+      type: object
+      required: [id, kind, subject, status]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        conversion_id: { $ref: '#/components/schemas/Uuid', nullable: true }
+        publisher_id: { $ref: '#/components/schemas/Uuid', nullable: true }
+        kind: { $ref: '#/components/schemas/DisputeKind' }
+        subject: { type: string }
+        claim_ref: { type: string, nullable: true, description: e.g. the merchant's order id, for missing_commission. }
+        status: { $ref: '#/components/schemas/DisputeStatus' }
+        evidence: { type: object, nullable: true, description: Free-form evidence object. Screenshots alone never create a payable sale. }
+        resolution_note: { type: string, nullable: true }
+        resolved_by: { type: string, nullable: true }
+        resolved_at: { $ref: '#/components/schemas/DateTime', nullable: true }
+        created_at: { $ref: '#/components/schemas/DateTime' }
+      description: A ticket NEVER creates a payable sale on its own.
+    Contract:
+      type: object
+      required: [id, publisher_id, programme_id, version, publisher_share_bps, status]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        publisher_id: { $ref: '#/components/schemas/Uuid' }
+        programme_id: { $ref: '#/components/schemas/Uuid' }
+        version: { type: integer, minimum: 1 }
+        publisher_share_bps: { type: integer, minimum: 0, maximum: 10000, example: 7000 }
+        payout_threshold_minor: { $ref: '#/components/schemas/MinorUnits' }
+        status: { type: string, enum: [draft, approved] }
+        effective_from: { $ref: '#/components/schemas/DateTime', nullable: true }
+        created_at: { $ref: '#/components/schemas/DateTime' }
+      description: New version = max+1, starts as draft. Ledger posting only considers approved contracts whose effective_from has arrived. Posted conversions keep their contract_version_id snapshot forever.
+    RowError:
+      type: object
+      required: [row, reason]
+      properties:
+        row: { type: integer, description: 1-based data-row number; 0 = file-level error. }
+        reason: { type: string }
+  responses:
+    BadRequest:
+      description: '400 — request failed validation (VALIDATION_ERROR).'
+      headers:
+        X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Unauthorized:
+      description: '401 — missing/invalid Bearer token or claims (UNAUTHORIZED).'
+      headers:
+        X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Forbidden:
+      description: '403 — role not allowed (FORBIDDEN), or a link-guard rejection (PROPERTY_FORBIDDEN, PROGRAMME_NOT_APPROVED, PUBLISHER_NOT_ACTIVE).'
+      headers:
+        X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    NotFound:
+      description: '404 — no route, unknown connector, or resource not in this org (NOT_FOUND).'
+      headers:
+        X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Conflict:
+      description: '409 — invalid state transition or over-reversal (CONFLICT), or imbalanced books (LEDGER_IMBALANCE).'
+      headers:
+        X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Unprocessable:
+      description: '422 — semantic rejection (VALIDATION_ERROR): stale offer (OFFER_STALE), no one above payout threshold, missing click reference on suspense retry, unresolved provider verification on dispute resolve, bad CSV rows.'
+      headers:
+        X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    InternalError:
+      description: '500 — unexpected failure (INTERNAL); message not leaked.'
+      headers:
+        X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+paths:
+  /healthz:
+    get:
+      tags: [System]
+      summary: Liveness probe
+      description: 'No authentication. Returns { ok: true } (raw body, no envelope).'
+      security: []
+      responses:
+        '200':
+          description: Service is up.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: boolean, example: true }
+
+  /v1/looks:
+    get:
+      tags: [Catalog]
+      summary: List published looks
+      description: Paginated list of published looks for the tenant. Any authenticated role may browse.
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: page_size
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: locale
+          in: query
+          schema: { type: string, minLength: 2, maxLength: 10 }
+        - name: category
+          in: query
+          schema: { type: string, minLength: 1, maxLength: 100 }
+      responses:
+        '200':
+          description: Paginated looks.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        type: object
+                        required: [items, page, page_size, total]
+                        properties:
+                          items: { type: array, items: { $ref: '#/components/schemas/Look' } }
+                          page: { type: integer, example: 1 }
+                          page_size: { type: integer, example: 20 }
+                          total: { type: integer, example: 132 }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /v1/offers:
+    get:
+      tags: [Catalog]
+      summary: List live offers
+      description: |
+        Only live offers: `status='active'` AND `fresh_until` in the future.
+        Stale or inactive offers are never served to publishers. Any authenticated role.
+      parameters:
+        - name: variant_id
+          in: query
+          schema: { $ref: '#/components/schemas/Uuid' }
+        - name: programme_id
+          in: query
+          schema: { $ref: '#/components/schemas/Uuid' }
+      responses:
+        '200':
+          description: Live offers (price in minor units).
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Offer' }
+              examples:
+                live:
+                  value:
+                    data:
+                      - id: 11111111-1111-4111-8111-111111111111
+                        variant_id: 22222222-2222-4222-8222-222222222222
+                        programme_id: 33333333-3333-4333-8333-333333333333
+                        merchant_id: 44444444-4444-4444-8444-444444444444
+                        price_minor: 249900
+                        currency: INR
+                        stock_status: in_stock
+                        offer_url: https://merchant.example/p/handloom-kurta?variant=42
+                    request_id: 9f2c1ab4-e5d6-4f7a-8b9c-0d1e2f3a4b5c
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /v1/links:
+    post:
+      tags: [Links]
+      summary: Mint a tracked redirect link
+      description: |
+        Mints a tracked redirect link for a placement+offer. Guards (all tenant-scoped):
+        - property must belong to the org and be `approved` → `403 PROPERTY_FORBIDDEN`
+        - publisher onboarding must be `active` → `403 PUBLISHER_NOT_ACTIVE`
+          (pending accounts can draft looks/placements but cannot monetise them)
+        - programme must be `active` → `403 PROGRAMME_NOT_APPROVED`
+        - offer must be `active` and fresh → `422 OFFER_STALE`
+        - offer destination host must be in the programme's `allowed_domains` →
+          `403 PROGRAMME_NOT_APPROVED` (no unearnable link is ever minted)
+        - placement must belong to the org → `404 NOT_FOUND`
+
+        The latest approved contract version (effective_from arrived) is pinned
+        onto the link when one exists. Side effects: warms Redis `route:{token}`
+        (best-effort) and appends a `link.created` outbox event. The token is
+        HMAC-SHA256 signed (dev-grade: reuses the JWT secret; TODO KMS key).
+
+        Roles: `publisher_owner`, `editor`, `network_admin`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [property_id, programme_id, offer_id, placement_id]
+              properties:
+                property_id: { $ref: '#/components/schemas/Uuid' }
+                programme_id: { $ref: '#/components/schemas/Uuid' }
+                offer_id: { $ref: '#/components/schemas/Uuid' }
+                placement_id: { $ref: '#/components/schemas/Uuid' }
+            examples:
+              mint:
+                value:
+                  property_id: aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
+                  programme_id: 33333333-3333-4333-8333-333333333333
+                  offer_id: 11111111-1111-4111-8111-111111111111
+                  placement_id: 55555555-5555-4555-8555-555555555555
+      responses:
+        '201':
+          description: Link minted.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            X-Idempotent-Replay: { $ref: '#/components/headers/X-Idempotent-Replay' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { $ref: '#/components/schemas/Link' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: |
+            Role not allowed (`FORBIDDEN`), property not approved
+            (`PROPERTY_FORBIDDEN`), publisher not onboarded
+            (`PUBLISHER_NOT_ACTIVE`), programme not active or offer host not
+            allow-listed (`PROGRAMME_NOT_APPROVED`).
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+              examples:
+                programme-paused:
+                  value:
+                    error: { code: PROGRAMME_NOT_APPROVED, message: 'Programme is not active' }
+                    request_id: 9f2c1ab4-e5d6-4f7a-8b9c-0d1e2f3a4b5c
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422':
+          description: 'Offer stale (`OFFER_STALE`).'
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /v1/integrations/{connector}/events:
+    post:
+      tags: [Integrations]
+      summary: Provider conversion/reversal webhook
+      description: |
+        Provider conversion notifications for the stub-network connector
+        (`connector` path param allow-list: `stub-network`; anything else is
+        `404 NOT_FOUND`).
+
+        **kind=conversion** (default) runs the shared ingestion state machine
+        (`src/conversion-ingest.ts`) — the same money path the CSV connector uses:
+        - Attribution: `returned_click_ref` is matched against `clicks.click_id`.
+          A miss is NOT an error — the conversion is stored with `click_id = NULL`
+          (suspense). Attribution is never guessed.
+        - Dedupe: `(provider_account_id, source_transaction_id, line_id)` is
+          unique (nulls-not-distinct). A repeat at the same or lower
+          `provider_revision` returns `200 { "deduped": true }`.
+        - Revision ordering: higher revisions update provider_status/revision;
+          `received/pending/declined → approved` posts the ledger (idempotent
+          entry keys) and snapshots `contract_version_id`. An approval is NEVER
+          downgraded — a higher-revision `pending` is logged and ignored, a
+          higher-revision `declined`/`reversed` creates a reversal adjustment
+          for the full remaining commission.
+        - Approved conversions that cannot be attributed or contracted are
+          logged and left unposted rather than posted against a guessed publisher.
+
+        **kind=reversal**: partial/full reversal of a recorded conversion.
+        `404` when the original is unknown; `409 CONFLICT` when
+        `reversal_commission_minor` exceeds the unreversed remainder. Posts
+        mirror entries snapshotting the ORIGINAL contract split.
+
+        Roles: `network_admin`, `editor` (machine-to-machine).
+      parameters:
+        - name: connector
+          in: path
+          required: true
+          schema: { type: string, enum: [stub-network] }
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ConversionEvent' }
+            examples:
+              conversion:
+                value:
+                  kind: conversion
+                  provider_account_id: stub-merchant-001
+                  source_transaction_id: txn-2026-09-20-0001
+                  returned_click_ref: clk_9f2c1ab4
+                  currency: INR
+                  eligible_value_minor: 249900
+                  commission_minor: 16000
+                  provider_status: approved
+                  occurred_at: 2026-09-20T10:15:30.000Z
+                  provider_revision: 1
+              reversal:
+                value:
+                  kind: reversal
+                  provider_account_id: stub-merchant-001
+                  source_transaction_id: txn-2026-09-20-0001
+                  reversal_commission_minor: 8000
+                  provider_revision: 2
+                  reason: customer return within window
+      responses:
+        '202':
+          description: Conversion created (or reversal recorded).
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            X-Idempotent-Replay: { $ref: '#/components/headers/X-Idempotent-Replay' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        type: object
+                        required: [conversion_id]
+                        properties:
+                          conversion_id: { $ref: '#/components/schemas/Uuid' }
+                          adjustment_id: { $ref: '#/components/schemas/Uuid', description: Present on reversal / auto_reversed. }
+                          status: { $ref: '#/components/schemas/InternalConversionStatus' }
+                          auto_reversed: { type: boolean }
+                          deduped: { type: boolean, example: true, description: Present on the 200 dedupe path. }
+                          ledger: { $ref: '#/components/schemas/LedgerDisposition' }
+              examples:
+                created:
+                  value:
+                    data: { conversion_id: 66666666-6666-4666-8666-666666666666, status: approved, ledger: posted }
+                    request_id: 9f2c1ab4-e5d6-4f7a-8b9c-0d1e2f3a4b5c
+        '200':
+          description: Deduped, status-changed, or auto-reversed (see `data` shape above).
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            X-Idempotent-Replay: { $ref: '#/components/headers/X-Idempotent-Replay' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { type: object }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422':
+          description: |
+            `VALIDATION_ERROR` — e.g. the conversion cannot be resolved to a
+            programme (no attributable click and no single active programme for
+            the connector), or a required field for the kind is missing.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /v1/integrations/stub-network/payout-callback:
+    post:
+      tags: [Integrations]
+      summary: Provider payout transfer callback
+      description: |
+        Stub-network payout rail callback: records the provider's outcome for
+        one transfer (`provider_ref`) and rolls the batch status up:
+        all `paid` → batch `paid` + ledger entries posted;
+        any `failed` → batch `failed`.
+        Roles: `network_admin`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider_ref, outcome]
+              properties:
+                provider_ref: { type: string, minLength: 1, maxLength: 200, example: stub-9f2c1ab4-… }
+                outcome: { type: string, enum: [paid, failed, unknown] }
+      responses:
+        '200':
+          description: Callback applied; batch rolled up.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            X-Idempotent-Replay: { $ref: '#/components/headers/X-Idempotent-Replay' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        type: object
+                        required: [provider_ref, outcome, payout_batch_id, batch_status, ledger]
+                        properties:
+                          provider_ref: { type: string }
+                          outcome: { type: string, enum: [paid, failed, unknown] }
+                          payout_batch_id: { $ref: '#/components/schemas/Uuid' }
+                          batch_status: { type: string, enum: [processing, paid, failed] }
+                          ledger: { type: string, enum: [posted, skipped, n/a] }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /v1/integrations/csv/uploads:
+    post:
+      tags: [Integrations]
+      summary: Upload merchant settlement CSV
+      description: |
+        File-based merchant settlement import (brief §8). The CSV is POSTed
+        inline as a plain string — no multipart (2 MB cap; a deliberate
+        sandbox choice). The uploader names `programme_id`, which must exist
+        in the org and be `active` (`404` / `422` otherwise).
+
+        Every row goes through the SAME conversion pipeline as the provider
+        webhook: idempotency on `(provider_account_id, source_transaction_id,
+        line_id)`, `provider_revision` ordering, unknown `returned_click_ref` →
+        suspense (`click_id` NULL), ledger posting on approved, same outbox events.
+
+        **All-or-nothing validation**: every row is validated before anything
+        is ingested. One bad row → `422 VALIDATION_ERROR` with per-row
+        `errors: [{row, reason}]` and zero inserts. `row` is the 1-based
+        data-row number (header not counted; blank lines skipped; `0` = file-level).
+
+        Columns (header required, case-insensitive, extra ignored, RFC-4180,
+        UTF-8, LF/CRLF): `source_transaction_id` (req), `line_id`,
+        `returned_click_ref`, `currency` (req, 3-letter), `eligible_value_minor`
+        (req, integer ≥ 0 — decimals rejected), `commission_minor` (req,
+        integer ≥ 0), `provider_status` (req: `approved|pending|declined|reversed`,
+        case-insensitive; `reversed` behaves as `declined` post-approval),
+        `provider_revision` (int ≥ 0, default 0), `occurred_at` (req, ISO 8601).
+
+        Roles: `network_admin`, `editor`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider_account_id, programme_id, filename, csv_text]
+              properties:
+                provider_account_id: { type: string, minLength: 1, maxLength: 200 }
+                programme_id: { $ref: '#/components/schemas/Uuid', description: The uploader names the programme (contrast the webhook path, which resolves it). }
+                filename: { type: string, minLength: 1, maxLength: 255 }
+                csv_text: { type: string, minLength: 1, description: Inline CSV text; 2 MB max. }
+            examples:
+              upload:
+                value:
+                  provider_account_id: direct-merchant-009
+                  programme_id: 33333333-3333-4333-8333-333333333333
+                  filename: settlement-2026-09-20.csv
+                  csv_text: "source_transaction_id,currency,eligible_value_minor,commission_minor,provider_status,occurred_at,returned_click_ref\ntxn-0001,INR,249900,16000,approved,2026-09-20T10:00:00.000Z,clk_9f2c1ab4\n"
+      responses:
+        '202':
+          description: File ingested; per-row outcomes returned.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            X-Idempotent-Replay: { $ref: '#/components/headers/X-Idempotent-Replay' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        type: object
+                        required: [filename, provider_account_id, programme_id, rows_received, created, deduped, status_changed, auto_reversed, results]
+                        properties:
+                          filename: { type: string }
+                          provider_account_id: { type: string }
+                          programme_id: { $ref: '#/components/schemas/Uuid' }
+                          rows_received: { type: integer }
+                          created: { type: integer }
+                          deduped: { type: integer }
+                          status_changed: { type: integer }
+                          auto_reversed: { type: integer }
+                          results:
+                            type: array
+                            items:
+                              type: object
+                              required: [row, outcome, conversion_id, status]
+                              properties:
+                                row: { type: integer }
+                                outcome: { type: string, enum: [created, deduped, status_changed, auto_reversed] }
+                                conversion_id: { $ref: '#/components/schemas/Uuid' }
+                                status: { $ref: '#/components/schemas/InternalConversionStatus' }
+                                ledger: { $ref: '#/components/schemas/LedgerDisposition' }
+                                auto_reversed: { type: boolean }
+                                adjustment_id: { $ref: '#/components/schemas/Uuid', nullable: true }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422':
+          description: |
+            `VALIDATION_ERROR` with top-level `errors: [{row, reason}]`
+            (the shared `ErrorCode` union has no CSV-specific code, so the
+            per-row detail rides in `errors`). Nothing was ingested.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ErrorEnvelope'
+                  - type: object
+                    required: [errors]
+                    properties:
+                      errors:
+                        type: array
+                        items: { $ref: '#/components/schemas/RowError' }
+              examples:
+                row-errors:
+                  value:
+                    error: { code: VALIDATION_ERROR, message: '2 row(s) failed validation; nothing was ingested' }
+                    request_id: 9f2c1ab4-e5d6-4f7a-8b9c-0d1e2f3a4b5c
+                    errors:
+                      - { row: 2, reason: "commission_minor must be an integer in minor units (no decimals); got '12.50'" }
+                      - { row: 3, reason: "provider_status must be one of approved|pending|declined|reversed; got 'bogus'" }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /v1/suspense:
+    get:
+      tags: [Suspense]
+      summary: List unattributed conversions
+      description: |
+        Finance/ops queue: conversions with `click_id IS NULL` and
+        `status <> 'declined'`, org-scoped. `reason_code` is derived:
+        `NO_CLICK_REF` when no reference was returned, else
+        `CLICK_REF_UNMATCHED`. Ordered by `received_at` desc.
+
+        Roles: `finance_operator`, `finance_approver`, `network_admin`.
+      parameters:
+        - name: connector
+          in: query
+          schema: { type: string, minLength: 1, maxLength: 100 }
+        - name: programme_id
+          in: query
+          schema: { $ref: '#/components/schemas/Uuid' }
+        - name: received_from
+          in: query
+          schema: { $ref: '#/components/schemas/DateTime' }
+        - name: received_to
+          in: query
+          schema: { $ref: '#/components/schemas/DateTime' }
+        - name: reviewed
+          in: query
+          schema: { type: string, enum: ['true', 'false'] }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Suspense page.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        type: object
+                        required: [items, limit, offset, total]
+                        properties:
+                          items: { type: array, items: { $ref: '#/components/schemas/SuspenseItem' } }
+                          limit: { type: integer, example: 100 }
+                          offset: { type: integer, example: 0 }
+                          total: { type: integer, example: 7 }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /v1/suspense/{id}/retry:
+    post:
+      tags: [Suspense]
+      summary: Re-run attribution for one suspense row
+      description: |
+        Binds `click_id` ONLY when the provider-returned click reference
+        EXACTLY matches an existing click row (`clicks.click_id =
+        conversions.returned_click_ref`) — exact equality, never LIKE, never a
+        heuristic. A NULL reference is `422` (nothing deterministic to retry
+        against). A no-match retry leaves the row untouched (no audit, no
+        outbox). A successful bind writes `audit_log` and emits
+        `suspense.attributed`; ledger posting happens downstream off that event,
+        never in this endpoint.
+
+        Roles: `finance_operator`, `finance_approver`, `network_admin`.
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Retry outcome.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            X-Idempotent-Replay: { $ref: '#/components/headers/X-Idempotent-Replay' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        type: object
+                        required: [id, attributed]
+                        properties:
+                          id: { $ref: '#/components/schemas/Uuid' }
+                          attributed: { type: boolean }
+                          click_id: { $ref: '#/components/schemas/Uuid', description: Present when attributed=true. }
+                          reason: { type: string, enum: [CLICK_REF_UNMATCHED], description: Present when attributed=false. }
+              examples:
+                bound:
+                  value:
+                    data: { id: 66666666-6666-4666-8666-666666666666, attributed: true, click_id: 77777777-7777-4777-8777-777777777777 }
+                    request_id: 9f2c1ab4-e5d6-4f7a-8b9c-0d1e2f3a4b5c
+                no-match:
+                  value:
+                    data: { id: 66666666-6666-4666-8666-666666666666, attributed: false, reason: CLICK_REF_UNMATCHED }
+                    request_id: 9f2c1ab4-e5d6-4f7a-8b9c-0d1e2f3a4b5c
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: '`CONFLICT` — already attributed (or raced).'
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '422':
+          description: '`VALIDATION_ERROR` — the conversion carries no provider-returned click reference; the platform never guesses a click.'
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /v1/suspense/{id}/review:
+    post:
+      tags: [Suspense]
+      summary: Mark a suspense row reviewed
+      description: |
+        Records the human's decision: writes only `reviewed_at`,
+        `reviewed_by`, `review_note` + one `audit_log` row. Review NEVER
+        changes `click_id` and NEVER posts ledger entries — it is bookkeeping,
+        not money movement.
+
+        Roles: `finance_operator`, `finance_approver`, `network_admin`.
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [note]
+              properties:
+                note:
+                  type: string
+                  minLength: 10
+                  maxLength: 2000
+                  description: Required evidence note — why the row stays unknown / what was checked.
+                  example: Checked provider dashboard for txn-0001; no click record exists for clk_9f2c1ab4. Leaving unattributed.
+      responses:
+        '200':
+          description: Review recorded.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            X-Idempotent-Replay: { $ref: '#/components/headers/X-Idempotent-Replay' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        type: object
+                        required: [id, reviewed_at, reviewed_by, review_note]
+                        properties:
+                          id: { $ref: '#/components/schemas/Uuid' }
+                          reviewed_at: { $ref: '#/components/schemas/DateTime' }
+                          reviewed_by: { type: string }
+                          review_note: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: '`CONFLICT` — already attributed; the review queue only tracks unattributed conversions.'
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /v1/payout-batches:
+    post:
+      tags: [Payouts]
+      summary: Prepare a payout batch
+      description: |
+        1. Gate: books must balance for (org, currency) → `409 LEDGER_IMBALANCE`.
+        2. Eligible earnings per publisher = publisher share of approved
+           conversions past the programme's returns window, minus reversal
+           adjustments, minus amounts already in live (non-failed/cancelled)
+           batches — then CAPPED by collected cash: per (programme, currency)
+           the `merchant_settlements` pool is allocated pro-rata by
+           eligible-earnings share.
+        3. Only publishers strictly above their payout threshold are included
+           (threshold = MAX `payout_threshold_minor` across the publisher's
+           approved contracts — conservative).
+        4. Creates the batch (`pending_approval`, `prepared_by` = caller) plus
+           `payout_items`. Row-level idempotency: on conflict the existing
+           batch is returned with `200 { ..., "deduped": true }`.
+
+        Nobody qualifying → `422 VALIDATION_ERROR`.
+        Roles: `finance_operator`, `finance_approver`, `network_admin`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currency]
+              properties:
+                currency: { $ref: '#/components/schemas/Currency' }
+            examples:
+              inr:
+                value: { currency: INR }
+      responses:
+        '201':
+          description: Batch prepared.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            X-Idempotent-Replay: { $ref: '#/components/headers/X-Idempotent-Replay' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: '#/components/schemas/PayoutBatch'
+                          - type: object
+                            required: [items]
+                            properties:
+                              items:
+                                type: array
+                                items: { $ref: '#/components/schemas/PayoutItem' }
+              examples:
+                prepared:
+                  value:
+                    data:
+                      id: 88888888-8888-4888-8888-888888888888
+                      currency: INR
+                      status: pending_approval
+                      prepared_by: 00000000-0000-0000-0000-000000000003
+                      items:
+                        - { publisher_id: 99999999-9999-4999-8999-999999999999, amount_minor: 11200 }
+                    request_id: 9f2c1ab4-e5d6-4f7a-8b9c-0d1e2f3a4b5c
+        '200':
+          description: Idempotent replay — the batch already existed for this key.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            X-Idempotent-Replay: { $ref: '#/components/headers/X-Idempotent-Replay' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: '#/components/schemas/PayoutBatch'
+                          - type: object
+                            required: [deduped]
+                            properties:
+                              deduped: { type: boolean, example: true }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: '`LEDGER_IMBALANCE` — books do not balance for (org, currency).'
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '422':
+          description: '`VALIDATION_ERROR` — no publisher is above their payout threshold.'
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /v1/payout-batches/{id}/approve:
+    post:
+      tags: [Payouts]
+      summary: Approve a payout batch
+      description: |
+        Maker-checker: the preparer cannot approve their own batch →
+        `403 FORBIDDEN`. Only `pending_approval` batches can be approved →
+        `409 CONFLICT` otherwise.
+        Roles: `finance_approver`, `network_admin`.
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Batch approved.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            X-Idempotent-Replay: { $ref: '#/components/headers/X-Idempotent-Replay' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { $ref: '#/components/schemas/PayoutBatch' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: '`FORBIDDEN` — wrong role, or you prepared this batch (maker-checker).'
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /v1/payout-batches/{id}/disburse:
+    post:
+      tags: [Payouts]
+      summary: Disburse a payout batch
+      description: |
+        Requires `approved` → `409` otherwise. Creates one `payout_transfers`
+        row per item (`provider_ref` `stub-<uuid>`, idempotency key
+        `transfer:<batch_id>:<publisher_id>`), hands them to the payout rail,
+        and moves the batch to `processing`. Re-calling while `processing` is
+        idempotent: transfer rows collapse on their idempotency key and the
+        rail skips transfers already past `initiated`. The rail can surface
+        `TRANSFER_STATUS_UNKNOWN`.
+        Roles: `finance_operator`, `network_admin`.
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Batch disbursing.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            X-Idempotent-Replay: { $ref: '#/components/headers/X-Idempotent-Replay' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        type: object
+                        required: [id, status, transfers]
+                        properties:
+                          id: { $ref: '#/components/schemas/Uuid' }
+                          status: { type: string, enum: [processing] }
+                          transfers:
+                            type: array
+                            items: { $ref: '#/components/schemas/Transfer' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422':
+          description: '`VALIDATION_ERROR` — batch has no items to disburse.'
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /v1/payout-transfers/{providerRef}/status-query:
+    post:
+      tags: [Payouts]
+      summary: Query a payout transfer's provider status
+      description: |
+        Asks the (fake) provider for one transfer's current status and records
+        `last_status_query_at`. A transfer stuck in `unknown` may only be
+        re-initiated within 5 minutes of a fresh status query — `POST
+        /v1/payout-batches/{id}/disburse` throws `TRANSFER_STATUS_UNKNOWN`
+        otherwise, so an ambiguous transfer can never be blind-retried into a
+        double payout.
+        Roles: `finance_operator`, `finance_approver`, `network_admin`.
+      parameters:
+        - $ref: '#/components/parameters/PathProviderRef'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Transfer status returned; query timestamp recorded.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            X-Idempotent-Replay: { $ref: '#/components/headers/X-Idempotent-Replay' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        type: object
+                        required: [provider_ref, status, last_status_query_at]
+                        properties:
+                          provider_ref: { type: string }
+                          status: { type: string, enum: [initiated, processing, paid, failed, unknown] }
+                          last_status_query_at: { type: string, format: date-time, nullable: true }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /v1/publisher/earnings:
+    get:
+      tags: [Earnings]
+      summary: Publisher lifecycle balances
+      description: |
+        Per-currency balances for one publisher. The four lifecycle states are
+        kept separate:
+        - `pending` — publisher share of conversions still awaiting provider approval, attributed via the click chain (latest approved contract share; 100% fallback when no approved contract exists).
+        - `approved` — net `publisher_liability` balance from posted ledger entries.
+        - `collected` — merchant cash actually received for the publisher's eligible earnings, pro-rata from `merchant_settlements` (same allocation `prepare()` caps payouts by).
+        - `payable` — amounts already in live (non-failed/cancelled) payout batches.
+
+        Suspense (unattributed) conversions are excluded everywhere.
+        Any authenticated role.
+      parameters:
+        - name: publisher_id
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/Uuid' }
+      responses:
+        '200':
+          description: Balances keyed by currency.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        type: object
+                        required: [publisher_id, balances]
+                        properties:
+                          publisher_id: { $ref: '#/components/schemas/Uuid' }
+                          balances:
+                            type: object
+                            additionalProperties: { $ref: '#/components/schemas/EarningsBalance' }
+                            example:
+                              INR: { pending: 16000, approved: 11200, collected: 9000, payable: 0 }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /v1/programmes/{id}/pause:
+    post:
+      tags: [Programmes]
+      summary: Pause a programme (kill switch)
+      description: |
+        Effective immediately: status → `paused`; new link creation is blocked
+        (`POST /v1/links` → `403 PROGRAMME_NOT_APPROVED`); in-flight redirect
+        cache entries (`route:{token}`) are invalidated (Redis best-effort —
+        the DB fallback keeps behaviour correct); existing links serve the
+        paused page; a `programme.paused` outbox event is emitted and the
+        action is written to `audit_log`. Idempotent: pausing an already-paused
+        programme returns 200 with the current state.
+        Roles: `network_admin`.
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Programme paused.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            X-Idempotent-Replay: { $ref: '#/components/headers/X-Idempotent-Replay' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        type: object
+                        required: [id, status, invalidated_routes, cache_deleted, redis_available]
+                        properties:
+                          id: { $ref: '#/components/schemas/Uuid' }
+                          status: { type: string, enum: [paused] }
+                          invalidated_routes: { type: integer, description: Route tokens considered for invalidation. }
+                          cache_deleted: { type: integer, description: Redis keys actually deleted. }
+                          redis_available: { type: boolean }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /v1/programmes/{id}/resume:
+    post:
+      tags: [Programmes]
+      summary: Resume a paused programme
+      description: |
+        `paused` → `active` (+ same route-cache invalidation, so a payload
+        cached while paused doesn't keep serving the paused page). Resuming a
+        non-paused programme is `409 CONFLICT`. Emits `programme.resumed` and
+        writes `audit_log`.
+        Roles: `network_admin`.
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Programme resumed.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            X-Idempotent-Replay: { $ref: '#/components/headers/X-Idempotent-Replay' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        type: object
+                        required: [id, status, invalidated_routes, cache_deleted, redis_available]
+                        properties:
+                          id: { $ref: '#/components/schemas/Uuid' }
+                          status: { type: string, enum: [active] }
+                          invalidated_routes: { type: integer }
+                          cache_deleted: { type: integer }
+                          redis_available: { type: boolean }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: '`CONFLICT` — only a paused programme can be resumed.'
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /v1/publishers:
+    post:
+      tags: [Publishers]
+      summary: Open a publisher application
+      description: |
+        Creates a publisher in onboarding state `application` (legacy `status`
+        `pending`) and emits `publisher.application_received`. Only publishers
+        in `active` may mint monetised links.
+        Roles: `publisher_owner`, `editor`, `network_admin`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [legal_name, country]
+              properties:
+                legal_name: { type: string, minLength: 1, maxLength: 300, example: Dashmani Media Pvt Ltd }
+                country: { type: string, minLength: 2, maxLength: 2, example: IN, description: Uppercased server-side. }
+      responses:
+        '201':
+          description: Application opened.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            X-Idempotent-Replay: { $ref: '#/components/headers/X-Idempotent-Replay' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { $ref: '#/components/schemas/Publisher' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /v1/publishers/{id}:
+    get:
+      tags: [Publishers]
+      summary: Get a publisher
+      description: Tenant-scoped read. Any authenticated role.
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: The publisher.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { $ref: '#/components/schemas/Publisher' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /v1/publishers/{id}/onboarding/advance:
+    post:
+      tags: [Publishers]
+      summary: Advance publisher onboarding
+      description: |
+        Moves onboarding forward exactly one step:
+        `application → identity_review → property_verification →
+        programme_eligibility → contract → active`. Skips are `409 CONFLICT`;
+        requesting the current state is a 200 no-op (`advanced: false`).
+        Transitions are forward-only in this build. Emits
+        `publisher.onboarding_state_changed` and writes `audit_log`.
+        Roles: `network_admin`.
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [state]
+              properties:
+                state: { $ref: '#/components/schemas/OnboardingState' }
+            examples:
+              next:
+                value: { state: identity_review }
+      responses:
+        '200':
+          description: State advanced (or already there).
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            X-Idempotent-Replay: { $ref: '#/components/headers/X-Idempotent-Replay' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        type: object
+                        required: [id, onboarding_state, advanced]
+                        properties:
+                          id: { $ref: '#/components/schemas/Uuid' }
+                          onboarding_state: { $ref: '#/components/schemas/OnboardingState' }
+                          advanced: { type: boolean }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: '`CONFLICT` — transition skips a step (states advance one at a time).'
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /v1/disputes:
+    post:
+      tags: [Disputes]
+      summary: Open a dispute ticket
+      description: |
+        Opens a ticket for a missing commission or related claim. It may
+        reference a known conversion (`wrong_amount` / `unattributed_click`) or
+        NO conversion at all (`missing_commission`: the publisher believes a
+        sale happened that the provider never reported — identified by
+        `claim_ref`, e.g. the merchant's order id). When a conversion is
+        named it must belong to this org (`404` otherwise); `publisher_id` is
+        derived from the conversion's click chain unless explicitly given.
+        A ticket NEVER creates a payable sale on its own.
+        Roles: `publisher_owner`, `editor`, `network_admin`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [subject]
+              properties:
+                conversion_id: { $ref: '#/components/schemas/Uuid' }
+                publisher_id: { $ref: '#/components/schemas/Uuid' }
+                kind: { $ref: '#/components/schemas/DisputeKind', default: missing_commission }
+                subject: { type: string, minLength: 1, maxLength: 300, example: Commission missing for order ORD-88412 }
+                claim_ref: { type: string, minLength: 1, maxLength: 200, example: ORD-88412 }
+                evidence: { type: object, description: Free-form evidence object. }
+            examples:
+              missing:
+                value:
+                  kind: missing_commission
+                  subject: Commission missing for order ORD-88412
+                  claim_ref: ORD-88412
+                  evidence: { order_screenshot: attached }
+      responses:
+        '201':
+          description: Ticket opened (status `open`); emits `dispute.opened`.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            X-Idempotent-Replay: { $ref: '#/components/headers/X-Idempotent-Replay' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { $ref: '#/components/schemas/Dispute' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    get:
+      tags: [Disputes]
+      summary: List disputes
+      description: Tenant-scoped list, newest first, with optional filters. Any authenticated role.
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/DisputeStatus' }
+        - name: kind
+          in: query
+          schema: { $ref: '#/components/schemas/DisputeKind' }
+        - name: publisher_id
+          in: query
+          schema: { $ref: '#/components/schemas/Uuid' }
+      responses:
+        '200':
+          description: Disputes.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Dispute' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /v1/disputes/{id}:
+    get:
+      tags: [Disputes]
+      summary: Get a dispute
+      description: Tenant-scoped read. Any authenticated role.
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: The dispute.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { $ref: '#/components/schemas/Dispute' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /v1/disputes/{id}/resolve:
+    post:
+      tags: [Disputes]
+      summary: Resolve a dispute
+      description: |
+        Outcome `resolved` requires `provider_verified: true` plus a resolution
+        note describing the provider-side evidence — "screenshots alone never
+        create a payable sale" is enforced in code (`422`), not just policy.
+        Resolving a missing-commission ticket does NOT post ledger entries:
+        the provider must re-report the conversion through the normal webhook
+        path (dedupe + revision ordering apply), or finance books a manual
+        correction. Emits `dispute.resolved` and writes `audit_log`.
+        Roles: `network_admin`, `editor`.
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [outcome, resolution_note, provider_verified]
+              properties:
+                outcome: { type: string, enum: [resolved, rejected] }
+                resolution_note: { type: string, minLength: 10, maxLength: 2000 }
+                provider_verified: { type: boolean, description: Must be true for outcome=resolved — the claim was checked against provider records. }
+            examples:
+              resolve:
+                value:
+                  outcome: resolved
+                  resolution_note: Provider confirmed txn-0001 at revision 2; commission re-reported via webhook.
+                  provider_verified: true
+      responses:
+        '200':
+          description: Dispute resolved/rejected.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            X-Idempotent-Replay: { $ref: '#/components/headers/X-Idempotent-Replay' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { $ref: '#/components/schemas/Dispute' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: '`CONFLICT` — dispute is already resolved or rejected.'
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '422':
+          description: '`VALIDATION_ERROR` — outcome=resolved requires provider_verified=true.'
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /v1/contracts:
+    post:
+      tags: [Contracts]
+      summary: Create a contract version (draft)
+      description: |
+        Creates a NEW version (draft) for a publisher+programme:
+        `version = max(existing) + 1`, and `effective_from` must not be earlier
+        than the previous version's (`409 CONFLICT` otherwise). Effective-dated:
+        ledger posting only considers approved contracts whose `effective_from`
+        is null or in the past. Emits `contract.version_created`.
+        Roles: `network_admin`, `editor`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [publisher_id, programme_id, publisher_share_bps, effective_from]
+              properties:
+                publisher_id: { $ref: '#/components/schemas/Uuid' }
+                programme_id: { $ref: '#/components/schemas/Uuid' }
+                publisher_share_bps: { type: integer, minimum: 0, maximum: 10000, example: 7000, description: Basis points of commission to the publisher (7000 = 70%). }
+                payout_threshold_minor: { $ref: '#/components/schemas/MinorUnits', default: 0 }
+                effective_from: { $ref: '#/components/schemas/DateTime' }
+            examples:
+              seventy-thirty:
+                value:
+                  publisher_id: 99999999-9999-4999-8999-999999999999
+                  programme_id: 33333333-3333-4333-8333-333333333333
+                  publisher_share_bps: 7000
+                  payout_threshold_minor: 50000
+                  effective_from: 2026-10-01T00:00:00.000Z
+      responses:
+        '201':
+          description: Draft contract version created.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            X-Idempotent-Replay: { $ref: '#/components/headers/X-Idempotent-Replay' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { $ref: '#/components/schemas/Contract' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: '`CONFLICT` — effective_from earlier than the previous version.'
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    get:
+      tags: [Contracts]
+      summary: List contract versions
+      description: Versions for a publisher+programme, newest first. Any authenticated role.
+      parameters:
+        - name: publisher_id
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/Uuid' }
+        - name: programme_id
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/Uuid' }
+      responses:
+        '200':
+          description: Contract versions.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Contract' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /v1/contracts/{id}/approve:
+    post:
+      tags: [Contracts]
+      summary: Approve a contract draft
+      description: |
+        Moves a draft to `approved`. Only drafts can be approved
+        (`409 CONFLICT` otherwise). Conversions already posted keep their
+        `contract_version_id` snapshot forever — a new version never rewrites
+        history. Emits `contract.approved` and writes `audit_log`.
+        Roles: `network_admin`.
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Contract approved.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            X-Idempotent-Replay: { $ref: '#/components/headers/X-Idempotent-Replay' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { $ref: '#/components/schemas/Contract' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }

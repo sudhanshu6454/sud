@@ -1,0 +1,16 @@
+.button {
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid #ccc;
+  border-radius: 999px;
+  background: #fff;
+  color: #333;
+  cursor: pointer;
+}
+
+.saved {
+  background: #111;
+  border-color: #111;
+  color: #fff;
+}

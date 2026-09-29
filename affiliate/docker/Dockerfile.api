@@ -1,0 +1,25 @@
+# First-cut production image for @paparazzi/api.
+# Builds the whole pnpm workspace, compiles the api package, and runs it.
+# Validate on the provisioned host before launch: docker build -f docker/Dockerfile.api .
+FROM node:20-alpine AS build
+RUN corepack enable && corepack prepare pnpm@9 --activate
+WORKDIR /app
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY packages/api/package.json packages/api/
+COPY packages/shared/package.json packages/shared/
+RUN pnpm install --frozen-lockfile
+COPY tsconfig.base.json ./
+COPY packages/shared packages/shared
+COPY packages/api packages/api
+RUN pnpm --filter @paparazzi/api typecheck && \
+    pnpm --filter @paparazzi/api exec tsc -p tsconfig.json
+
+FROM node:20-alpine AS runtime
+ENV NODE_ENV=production
+WORKDIR /app
+COPY --from=build /app/packages/api/dist ./dist
+COPY --from=build /app/packages/api/package.json ./
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/packages/api/node_modules ./node_modules_api
+EXPOSE 3000
+CMD ["node", "dist/index.js"]

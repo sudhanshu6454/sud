@@ -1,0 +1,5 @@
+source_transaction_id,line_id,returned_click_ref,currency,eligible_value_minor,commission_minor,provider_status,provider_revision,occurred_at
+csv-fixture-approved-1,line-1,click-csv-1,INR,100000,16000,approved,1,2026-09-20T10:00:00.000Z
+csv-fixture-pending-1,line-1,click-csv-1,INR,50000,8000,pending,1,2026-09-20T11:00:00.000Z
+csv-fixture-suspense-1,line-1,no-such-click-ref,INR,75000,12000,approved,1,2026-09-20T12:00:00.000Z
+csv-fixture-declined-1,line-1,"",INR,20000,3200,declined,1,2026-09-20T13:00:00.000Z

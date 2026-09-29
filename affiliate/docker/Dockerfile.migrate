@@ -1,0 +1,9 @@
+# One-shot migration runner.
+# db/migrate.mjs borrows `pg` from the api package's node_modules in the repo;
+# in this standalone image we install pg directly instead.
+# The ./db/ layout mirrors the repo so migrate.mjs finds ./db/migrations.
+FROM node:20-alpine AS runtime
+WORKDIR /app
+COPY db ./db
+RUN npm init -y >/dev/null 2>&1 && npm install pg --no-audit --no-fund
+CMD ["node", "db/migrate.mjs"]

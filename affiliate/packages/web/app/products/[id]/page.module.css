@@ -1,0 +1,126 @@
+.media {
+  aspect-ratio: 1 / 1;
+  border-radius: 0.75rem;
+  background: linear-gradient(135deg, #334155, #0ea5e9);
+  margin-bottom: 1rem;
+}
+
+.badgeExact,
+.badgeSimilar {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  margin-bottom: 0.5rem;
+}
+
+.badgeExact {
+  background: #e7f6ec;
+  color: #14703c;
+  border: 1px solid #bfe6cc;
+}
+
+.badgeSimilar {
+  background: #eef2ff;
+  color: #3b4fd8;
+  border: 1px solid #ccd4f8;
+}
+
+.title {
+  margin-bottom: 0.25rem;
+}
+
+.price {
+  font-size: 1.4rem;
+  font-weight: 800;
+  margin-bottom: 1rem;
+}
+
+.block {
+  margin-bottom: 1rem;
+}
+
+.label {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #777;
+  margin-bottom: 0.5rem;
+}
+
+.merchantRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.merchantName {
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.stockIn {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #14703c;
+}
+
+.stockOut {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #b91c1c;
+}
+
+.freshness {
+  font-size: 0.78rem;
+  color: #777;
+  margin-top: 0.25rem;
+}
+
+.sizeRow {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.size {
+  min-width: 3rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid #ccc;
+  border-radius: 0.5rem;
+  background: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.sizeActive {
+  background: #111;
+  border-color: #111;
+  color: #fff;
+}
+
+.cta {
+  display: block;
+  text-align: center;
+  margin-top: 0.5rem;
+  padding: 0.95rem;
+  background: #111;
+  color: #fff;
+  font-weight: 800;
+  font-size: 1.05rem;
+  text-decoration: none;
+  border-radius: 0.65rem;
+}
+
+.merchantNote {
+  text-align: center;
+  font-size: 0.85rem;
+  color: #666;
+  margin-top: 0.6rem;
+}
+
+.disclosureWrap {
+  margin-top: 1.25rem;
+}

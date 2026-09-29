@@ -1,0 +1,134 @@
+# Production-shaped compose for the pilot deployment.
+#
+# Assumes managed Postgres + managed Redis/Valkey (RDS / ElastiCache or
+# DigitalOcean Managed Databases) reached over the private network.
+# THERE ARE NO SECRETS IN THIS FILE — every sensitive value comes from the
+# environment (populated from the Secure Vault at deploy time; see
+# .env.prod.example and docs/credential-setup.md).
+#
+# First-cut Dockerfiles live in ./docker/. They are intentionally simple;
+# validate the image builds on the provisioned host before launch.
+#
+# Bring-up:
+#   set -a; source /run/secrets/paparazzi.env; set +a   # or your vault's inject step
+#   docker compose -f docker-compose.prod.yml up -d --build
+#   node db/migrate.mjs   # run once against DATABASE_URL before first boot
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    image: paparazzi/api:${IMAGE_TAG:-latest}
+    environment:
+      NODE_ENV: production
+      API_HOST: "0.0.0.0"
+      API_PORT: "3000"
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      REDIRECT_BASE_URL: ${REDIRECT_BASE_URL}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "3000:3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  redirect:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.redirect
+    image: paparazzi/redirect:${IMAGE_TAG:-latest}
+    environment:
+      NODE_ENV: production
+      REDIRECT_PORT: "3001"
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "3001:3001"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  workers:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.workers
+    image: paparazzi/workers:${IMAGE_TAG:-latest}
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
+      STUB_WEBHOOK_SECRET: ${STUB_WEBHOOK_SECRET:?STUB_WEBHOOK_SECRET is required}
+      RETENTION_CLICK_CONTEXT_DAYS: ${RETENTION_CLICK_CONTEXT_DAYS:-365}
+      RETENTION_CONVERSION_RAW_DAYS: ${RETENTION_CONVERSION_RAW_DAYS:-365}
+      RETENTION_OUTBOX_DAYS: ${RETENTION_OUTBOX_DAYS:-365}
+      RETENTION_CRON: ${RETENTION_CRON:-0 3 * * *}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.web
+      args:
+        NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE}
+    image: paparazzi/web:${IMAGE_TAG:-latest}
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "3002:3000"
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # One-shot migration runner. Runs `node db/migrate.mjs` against
+  # DATABASE_URL and exits; the app services wait for it to succeed.
+  migrate:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.migrate
+    image: paparazzi/migrate:${IMAGE_TAG:-latest}
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+    command: ["node", "db/migrate.mjs"]
+    restart: "no"

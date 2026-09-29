@@ -1,0 +1,17 @@
+{
+  "description": "Shared domain types, event envelope, error codes, connector interface, ledger math.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "main": "./src/index.ts",
+  "name": "@paparazzi/shared",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "types": "./src/index.ts",
+  "version": "0.1.0",
+  "devDependencies": {
+    "typescript": "^5.5.4"
+  }
+}
