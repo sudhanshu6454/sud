@@ -2,12 +2,13 @@
 
 ## 2026-09-29 — images that build and boot
 
-1. **Base + package manager.** `node:22-alpine` for every stage; pnpm 10.34.6
-   via corepack with `COREPACK_ENABLE_PROJECT_SPEC=0`, because `package.json`
-   still pins `packageManager: pnpm@9.12.0` and corepack would otherwise run
-   that version regardless of `corepack prepare`. Both versions were verified
-   to accept `pnpm-lock.yaml` under `--frozen-lockfile`; `PNPM_VERSION` and
-   `NODE_IMAGE` are build args so neither is hard-wired.
+1. **Base + package manager.** `node:22-alpine` for every stage; pnpm 9.12.0
+   via corepack, the same version `package.json` pins as `packageManager`,
+   which wrote `pnpm-lock.yaml` and which CI uses. `COREPACK_ENABLE_PROJECT_SPEC=0`
+   makes corepack honour the `PNPM_VERSION` build arg, so another version can be
+   tried without a Dockerfile edit (10.34.6 was also verified to accept the
+   lockfile under `--frozen-lockfile`). `PNPM_VERSION` and `NODE_IMAGE` are
+   build args so neither is hard-wired.
 2. **`@paparazzi/shared` at runtime.** The repo keeps `main: ./src/index.ts`
    (tsx and vitest read TypeScript). Inside the service images the package is
    compiled once to `packages/shared/dist` (+ `.d.ts`) and the image's copy of

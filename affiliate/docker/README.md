@@ -34,7 +34,7 @@ Build args (all optional):
 | Arg | Default | Meaning |
 |---|---|---|
 | `NODE_IMAGE` | `node:22-alpine` | Base image for every stage (use a mirror, or a derived image with an extra CA). |
-| `PNPM_VERSION` | `10.34.6` | pnpm used by the build stages (api, redirect, workers, web). |
+| `PNPM_VERSION` | `9.12.0` | pnpm used by the build stages (api, redirect, workers, web); matches `packageManager`. |
 | `NEXT_PUBLIC_API_BASE` | `/api` | web only; inlined into the browser bundle. `/api` = the same-origin proxy served by the web server; an absolute URL makes the browser call the API directly. |
 
 Measured on 2026-09-29 (`docker build --no-cache`, node 22.23.3 base = 238 MB as
@@ -83,17 +83,15 @@ straight back to the sources.
 
 ## pnpm version policy
 
-The build stages use `corepack prepare pnpm@${PNPM_VERSION}` with
-`COREPACK_ENABLE_PROJECT_SPEC=0`, so the version pinned in the Dockerfile is
-the one used even though `package.json` pins `packageManager: pnpm@9.12.0`
-(without that flag corepack would silently run 9.12.0 instead). Both 9.12.0
-and 10.34.6 were verified to accept the checked-in `pnpm-lock.yaml`
-(`lockfileVersion: '9.0'`) under `--frozen-lockfile`. pnpm 10 does not run
-dependency `postinstall` scripts unless allow-listed; the only one in this tree
-is esbuild's optional binary check, which the images do not need. When
-`packageManager` moves to pnpm 10, drop the flag or keep the two in step —
-`PNPM_VERSION` is a build arg, so no Dockerfile edit is needed to test another
-version.
+One pnpm everywhere: the `PNPM_VERSION` default is 9.12.0, the version
+`package.json` pins as `packageManager`, which wrote `pnpm-lock.yaml`
+(`lockfileVersion: '9.0'`) and which the CI job uses. The build stages run
+`corepack prepare pnpm@${PNPM_VERSION}` with `COREPACK_ENABLE_PROJECT_SPEC=0`,
+so the build arg wins over `packageManager` when someone tries another version
+(`--build-arg PNPM_VERSION=10.34.6` was verified to accept the lockfile too;
+pnpm 10 skips dependency `postinstall` scripts unless allow-listed, and the only
+one here is esbuild's optional binary check). When `packageManager` moves,
+move the `PNPM_VERSION` default with it.
 
 ## web
 

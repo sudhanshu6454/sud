@@ -58,7 +58,7 @@ against. Each links to its proof.
 | `db/seed.ts` and `db/seed-fleet.ts --with-demo-programme` on real Postgres; the fleet seed idempotent (identical counts and byte-identical JSON on a second run) | `db/README.md` "Fleet seed"; `scripts/ASSUMPTIONS.md` §11–13 |
 | The 51-assertion money loop on real Postgres 16 (`DEMO_TARGET=postgres`, `pnpm demo:pg`): scratch database `paparazzi_demo_<8 hex>` created and dropped, no pg-mem shims, no assertion changed vs pg-mem | `scripts/demo-money-loop.ts`, `scripts/ASSUMPTIONS.md` §14, `db/README.md` "The same demo on a real Postgres" |
 | The five Docker images build (`--no-cache`: 264 / 270 / 255 / 269 / 262 MB) and boot end to end: migrate → seeds → `/healthz` ×3 → shop renders five fleet looks live → `mint-links.mjs` mints → `GET /r/<token>` 302 with `subid`, no `set-cookie` → one `clicks` row → workers `click.observed` | `docker/README.md` "Smoke test", `docker/ASSUMPTIONS.md` |
-| `pnpm install --frozen-lockfile` passes (pnpm 9.12.0; 10.34.6 in the images) | `.github/workflows/ci.yml` job `affiliate`; `docker/README.md` "pnpm version policy" |
+| `pnpm install --frozen-lockfile` passes (pnpm 9.12.0 locally, in CI and in the images) | `.github/workflows/ci.yml` job `affiliate`; `docker/README.md` "pnpm version policy" |
 | 130/130 tests in 11 files; `pnpm typecheck` clean on 5 packages; `next build` OK | `docs/pilot-checklist.md` COMPLETED & VERIFIED |
 | Fleet wiring: root `docker-compose.yml` profile `affiliate`, `AFFILIATE_*` env, `make affiliate-*` targets, CI job defined (no run observed from the sandbox) | root `Makefile`, `.env.example`, `infra/gen_compose.py` |
 

@@ -467,7 +467,9 @@ through the same nginx-proxy + Let's Encrypt. **Off until `COMPOSE_PROFILES=affi
 
 Fill the `AFFILIATE PLATFORM` block of `.env` (the comments there say what each line is): the three
 hosts `AFFILIATE_WEB_HOST`, `AFFILIATE_LINK_HOST`, `AFFILIATE_API_HOST` (host only, A records pointing at
-this server; nginx-proxy issues the certificates once they resolve), then the profile and the secrets:
+this server; nginx-proxy issues the certificates once they resolve), then the profile and the secrets.
+Run the secrets line **once**: Postgres keeps the password its volume was created with, so a second run
+would lock the API out of its own database.
 
 ```bash
 sed -i 's/^COMPOSE_PROFILES=.*/COMPOSE_PROFILES=affiliate/' .env

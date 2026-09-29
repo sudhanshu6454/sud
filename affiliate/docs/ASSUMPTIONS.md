@@ -40,12 +40,13 @@ do not exist yet. Wiring the alerts to the monitoring stack is
 ## 4. Migrations are append-only; rollback means restore or compensate
 
 `db/migrate.mjs` applies `db/migrations/*.sql` in lexical order with no
-down-migrations and no applied-migration tracking table. The deploy
-runbook therefore defines rollback as: forward compensating migration
-(preferred) or pre-deploy snapshot restore (for corruption). This assumes
-snapshots are taken before every deploy and restores are drilled — both
-are **open** until the infra exists. Adding a `schema_migrations` table
-is recommended pre-launch.
+down-migrations. Since 2026-09-29 it records each applied file in
+`schema_migrations` (filename only, no checksum) and skips recorded files.
+The deploy runbook therefore defines rollback as: forward compensating
+migration (preferred) or pre-deploy snapshot restore (for corruption).
+This assumes snapshots are taken before every deploy and restores are
+drilled — both are **open** until the infra exists. Checksums are not
+tracked, so shipped migration files must never be edited.
 
 ## 5. The pentest assumes a cooperative, sandbox-only engagement
 

@@ -17,9 +17,10 @@ has seen real merchants, real money, real traffic or a real host.
 ## COMPLETED & VERIFIED
 
 - ✅ `pnpm typecheck` clean across all 5 packages.
-- ✅ `pnpm install --frozen-lockfile` passes (pnpm 9.12.0; the images also
-  build with pnpm 10.34.6 — [`docker/README.md`](../docker/README.md)
-  "pnpm version policy"). The old "known-broken" note is obsolete.
+- ✅ `pnpm install --frozen-lockfile` passes with pnpm 9.12.0, the
+  `packageManager` pin, used locally, in CI and in the images
+  ([`docker/README.md`](../docker/README.md) "pnpm version policy"). The old
+  "known-broken" note is obsolete.
 - ✅ `vitest run` green — 130 tests in 11 files: ledger math
   ([`packages/shared/src/ledger.test.ts`](../packages/shared/src/ledger.test.ts)),
   money-loop API incl. idempotency ×10, revision ordering, suspense,

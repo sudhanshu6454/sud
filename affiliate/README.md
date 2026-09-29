@@ -107,7 +107,7 @@ assertions as pg-mem, no shims ([`db/README.md`](db/README.md)).
 ## Setup
 
 Prerequisites: **Node 22** (`engines` ≥ 20), **pnpm 9.12.0** (`packageManager`;
-the images build with pnpm 10.34.6 and both accept the lockfile), **Docker**.
+CI and the images use the same version), **Docker**.
 
 ```sh
 pnpm install                 # already run at scaffold time; re-run after pulling

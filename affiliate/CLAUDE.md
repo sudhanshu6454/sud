@@ -25,8 +25,8 @@ platform's first publisher and its five sites are the first properties
   applied`); `--status` and `--baseline` work
 - `db/seed.ts` and `db/seed-fleet.ts --with-demo-programme` run on real Postgres;
   the fleet seed is idempotent (byte-identical JSON on a second run)
-- `pnpm install --frozen-lockfile` passes (pnpm 9.12.0 locally; 9.12.0 and 10.34.6
-  in the images)
+- `pnpm install --frozen-lockfile` passes (pnpm 9.12.0 locally, in CI and in the
+  images)
 - `pnpm --filter @paparazzi/web build` OK (all routes dynamic, standalone output)
 - The five images (`docker/Dockerfile.{api,redirect,workers,web,migrate}`) build
   (`--no-cache`: 264 / 270 / 255 / 269 / 262 MB) and boot end to end: migrate →
@@ -58,11 +58,11 @@ pnpm --filter @paparazzi/web build                                    # Next sta
 node scripts/load/redirect-soak.js --smoke                            # load smoke (needs a real deployment for meaning)
 ```
 
-Notes: `pnpm demo`, `pnpm demo:pg`, `pnpm seed`, `pnpm seed:fleet` exist in
-`package.json` but need `tsx` on PATH (`PATH=packages/api/node_modules/.bin:$PATH`).
+Notes: `pnpm demo`, `pnpm demo:pg`, `pnpm seed`, `pnpm seed:fleet` call the api
+package's `tsx` (`./packages/api/node_modules/.bin/tsx`); the root has none.
 `pnpm install --frozen-lockfile` **works** (the earlier "known-broken" note is
-obsolete; CI runs it). `packageManager` pins pnpm 9.12.0; the Dockerfiles build
-with pnpm 10.34.6 via corepack and both accept the lockfile. Vitest runs against
+obsolete; CI runs it). `packageManager` pins pnpm 9.12.0 and the Dockerfiles'
+`PNPM_VERSION` default is the same version. Vitest runs against
 **pg-mem**; the real-Postgres proofs are `DEMO_TARGET=postgres`, the migrate/seed
 runs and the docker smoke test.
 

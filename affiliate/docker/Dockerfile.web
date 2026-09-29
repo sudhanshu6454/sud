@@ -5,7 +5,7 @@
 # Runtime env (read per request, never baked): API_BASE, WEB_API_TOKEN,
 # WEB_PLACEMENT_ID, NEXT_PUBLIC_SITE_NAME — see packages/web/README.md and docker/README.md.
 ARG NODE_IMAGE=node:22-alpine
-ARG PNPM_VERSION=10.34.6
+ARG PNPM_VERSION=9.12.0
 
 # ── build: install web deps, next build (type-checks too) ──
 FROM ${NODE_IMAGE} AS build

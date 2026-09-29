@@ -9,7 +9,7 @@ user.** This runbook is the procedure to follow once they exist.
 ## 0. Preconditions (do not deploy without these)
 
 - [ ] `pnpm typecheck` and `pnpm test` green on the release commit
-      (94/94 tests; `pnpm demo` green).
+      (130/130 tests in 11 files; `pnpm demo` and `pnpm demo:pg` green).
 - [ ] `docs/runbooks/dependency-review.md` re-run for the release; no
       unaddressed high/critical findings.
 - [ ] Fresh database backup exists and is restorable (see
@@ -154,10 +154,13 @@ spliced into `DATABASE_URL`), `AFFILIATE_JWT_SECRET`,
 ## 2. Migration rollback policy
 
 **Migrations in this repo are append-only and forward-only — there are no
-down-migrations, and there is no applied-migration tracking table.**
-`db/migrate.mjs` re-applies `db/migrations/*.sql` in lexical order and
-will fail if a file's DDL was already applied (e.g. plain `CREATE TABLE`
-on re-run). Consequences:
+down-migrations.** `db/migrate.mjs` records every applied file in
+`schema_migrations` (filename, applied_at) inside the same transaction as
+the file itself, and skips recorded files on the next run, so a re-deploy
+is a no-op when nothing is pending. `node db/migrate.mjs --status` lists
+applied and pending files. A database created before tracking existed is
+recorded once with `node db/migrate.mjs --baseline` (only when its schema
+is already current). Consequences:
 
 - A **failed migration** leaves the database at the last fully-applied
   file (each file runs in its own transaction and rolls back on error).
@@ -176,11 +179,11 @@ on re-run). Consequences:
   forward-fixes for anything that does not corrupt the ledger; reserve
   snapshot restore for corruption or a migration that blocks the app
   from booting.
-- **Known gap:** without a `schema_migrations` tracking table, the
-  runner cannot skip already-applied files. Adding one (applied filename
-  + checksum) is recommended pre-launch so re-deploys and restores are
-  idempotent. Until then, deploy logs are the record of which files
-  applied.
+- **Known gap:** `schema_migrations` records filenames, not checksums,
+  so an edited shipped file would not be noticed. Never edit a shipped
+  migration; write a new numbered file instead. A restored snapshot
+  carries its own `schema_migrations` rows, so the runner applies exactly
+  the files the snapshot predates.
 
 ## 3. Rollback procedure (bad release)
 
@@ -250,6 +253,6 @@ programme).
 
 - Real snapshot restore drill against RDS (validates §2 end-to-end).
 - Route 53 / ALB health-check wiring for the canary programme.
-- `schema_migrations` tracking table (recommended pre-launch).
+- Checksums in `schema_migrations` (filenames are tracked; content is not).
 - CI gate running `pnpm audit`, typecheck, tests, and the load soak
   (`pnpm load:smoke`) on every release candidate.

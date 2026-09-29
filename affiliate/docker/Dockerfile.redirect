@@ -3,13 +3,13 @@
 #   docker build -f docker/Dockerfile.redirect -t paparazzi/redirect:latest .
 # See docker/README.md for the layout, the pnpm/shared decisions and the smoke test.
 ARG NODE_IMAGE=node:22-alpine
-ARG PNPM_VERSION=10.34.6
+ARG PNPM_VERSION=9.12.0
 
 # ── base: pnpm via corepack + workspace manifests (shared by build and prod-deps) ──
 FROM ${NODE_IMAGE} AS base
 ARG PNPM_VERSION
-# COREPACK_ENABLE_PROJECT_SPEC=0: use exactly PNPM_VERSION even though package.json
-# pins a packageManager; both accept the checked-in lockfile (see docker/README.md).
+# COREPACK_ENABLE_PROJECT_SPEC=0: use exactly PNPM_VERSION (default = the packageManager
+# pin in package.json, which wrote pnpm-lock.yaml; see docker/README.md).
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0 COREPACK_ENABLE_PROJECT_SPEC=0 CI=true
 RUN corepack enable && corepack prepare "pnpm@${PNPM_VERSION}" --activate
 WORKDIR /app
