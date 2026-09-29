@@ -21,7 +21,7 @@ from .instagram import GRAPH
 
 log = logging.getLogger(__name__)
 
-MAX_TAGS = 4                  # the source plus the two or three accounts the story is really about
+MAX_TAGS = 4                  # the three or four accounts the story is really about
 CACHE_DAYS = 30
 CACHE_SITE = "_instagram"     # site_notes rows under this key hold handle verdicts, shared by every site
 HANDLE = re.compile(r"^[a-z0-9._]{1,30}$")
@@ -83,11 +83,14 @@ def discover(anchor_uid: str, token: str, handle: str, timeout: int = 20) -> dic
 def verify(candidates, anchor_uid: str, token: str, state: State | None = None, limit: int = MAX_TAGS) -> list[str]:
     """The handles worth tagging, in the order given, capped, each verified or cached as verified.
 
-    `candidates` are the rewriter's Mention objects (name, kind, instagram). Publications come first
-    because attribution is the tag that is always warranted; brands next; people last.
+    `candidates` are the rewriter's Mention objects (name, kind, instagram). The publication the
+    story was sourced from is never tagged - readers do not follow us to see our sources credited,
+    and it crowds out the brands and people the post is actually about. Brands come first, people
+    last.
     """
-    order = {"publication": 0, "brand": 1, "person": 2}
-    ranked = sorted((c for c in candidates if getattr(c, "instagram", None)), key=lambda c: order.get(c.kind, 3))
+    order = {"brand": 0, "person": 1}
+    ranked = sorted((c for c in candidates if getattr(c, "instagram", None) and c.kind != "publication"),
+                    key=lambda c: order.get(c.kind, 2))
     out: list[str] = []
     for cand in ranked:
         if len(out) >= limit:

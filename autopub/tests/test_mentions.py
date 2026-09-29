@@ -36,22 +36,27 @@ def test_verify_keeps_only_accounts_that_exist_and_match_and_caches_the_verdict(
              Mention(name="Ghost Co", kind="brand", instagram="does_not_exist"),
              Mention(name="No handle", kind="brand", instagram=None)]
     got = m.verify(cands, "17", "t", state)
-    assert got == ["thedrum", "zomato"], "publication first, then the brand; the mismatch and the missing account are dropped"
-    assert sorted(looked_up) == ["does_not_exist", "impostor", "thedrum", "zomato"]
+    assert got == ["zomato"], "the publication is never tagged; the mismatch and the missing account are dropped"
+    assert sorted(looked_up) == ["does_not_exist", "impostor", "zomato"], "the publication is filtered before any lookup"
 
     looked_up.clear()
     again = m.verify(cands, "17", "t", state)
-    assert again == ["thedrum", "zomato"] and looked_up == [], "second time round every verdict comes from the cache"
+    assert again == ["zomato"] and looked_up == [], "second time round every verdict comes from the cache"
     assert json.loads(state.note(m.CACHE_SITE, "does_not_exist"))["ok"] is False
 
 
-def test_verify_caps_the_tags_and_ranks_publication_brand_person(monkeypatch):
+def test_the_source_publication_is_never_tagged(monkeypatch):
+    monkeypatch.setattr(m, "discover", lambda a, t, h, timeout=20: (_ for _ in ()).throw(AssertionError("must not look up a publication")))
+    cands = [Mention(name="Deadline", kind="publication", instagram="deadline")]
+    assert m.verify(cands, "17", "t", None) == []
+
+
+def test_verify_caps_the_tags_and_ranks_brand_before_person(monkeypatch):
     monkeypatch.setattr(m, "discover", lambda a, t, h, timeout=20: {"username": h, "name": h.replace("_", " ").title()})
     cands = [Mention(name=f"Person {i}", kind="person", instagram=f"person_{i}") for i in range(3)]
-    cands += [Mention(name="Brand One", kind="brand", instagram="brand_one"),
-              Mention(name="Paper Daily", kind="publication", instagram="paper_daily")]
+    cands += [Mention(name="Brand One", kind="brand", instagram="brand_one")]
     got = m.verify(cands, "17", "t", None)
-    assert got[:2] == ["paper_daily", "brand_one"] and len(got) == m.MAX_TAGS
+    assert got[0] == "brand_one" and len(got) == m.MAX_TAGS
 
 
 def test_bad_handles_are_never_sent_to_the_api(monkeypatch):

@@ -164,7 +164,7 @@ OUTPUT_SCHEMA: dict[str, Any] = {
         },
         "mentions": {
             "type": "array",
-            "description": "Up to 5 accounts genuinely central to this story, for tagging: the publication that reported it, the brands, companies or agencies it is about, and a person only when quoted or the subject. Never bystanders or competitors merely named in passing.",
+            "description": "Up to 5 accounts genuinely central to this story, for tagging: the brands, companies or agencies it is about, and a person only when quoted or the subject. Never the publication that reported it (we do not tag our sources), and never bystanders or competitors merely named in passing.",
             "items": {
                 "type": "object",
                 "additionalProperties": False,
@@ -210,7 +210,7 @@ You receive one news story from another publisher. Write an ORIGINAL curated art
 - Never mention that you are an AI or that this is a rewrite.
 - Captions must be platform-native, mention the key takeaway, and must not include any URL (the link is appended automatically where the platform supports it).
 - `story_frames` tells the article in 2 or 3 frames for Stories, where readers see only images: what happened with the facts and figures, why it matters, and what to do or what comes next. Each frame is a heading and 2-3 plain sentences. This is the whole article a story viewer gets, so carry the substance, not a teaser.
-- `mentions` lists who the story is about, for tagging: the reporting publication, the brands or companies it concerns, a person only when quoted or the subject. Give an Instagram username only when confident it is the real account; it is checked against the live account before use, so a guess costs nothing but an omission loses a tag.
+- `mentions` lists who the story is about, for tagging: the brands or companies it concerns, a person only when quoted or the subject. Never the publication that reported it - we do not tag our sources. Give an Instagram username only when confident it is the real account; it is checked against the live account before use, so a guess costs nothing but an omission loses a tag.
 - `hook` is the line set large on the Instagram card: 3-7 words that make a marketer stop, a claim or a tension rather than a summary; the headline runs beneath it. `caption_hook` is the caption's first line, the only one shown before "more": open a gap the caption then closes. Neither may be clickbait or promise what the piece does not deliver.
 - `mood` is the story's emotional register (upbeat, calm, serious or nostalgic); it picks the music under the reel, so a fine or a layoff must not be upbeat.
 - `steal` names one tactic the reader can reuse tomorrow, only when the story genuinely offers one; `debate` poses one question marketers would honestly argue about, with two short sides, only when the story raises one. Leave either out rather than force it.
