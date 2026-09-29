@@ -6,7 +6,7 @@
  * offers or placements, so the four ids are typed or pasted as uuids
  * (checked for shape, remembered in this browser for next time); the TEST
  * demo ids (lib/portal-demo.ts) are only offered as suggestions. A real
- * account uses its own ids (e.g. from db/seed-fleet.ts or the API).
+ * account uses its own ids (e.g. from db/seed-network.ts or the API).
  * mintLiveLink() (lib/links.ts) does the call, with one Idempotency-Key per
  * unchanged set of ids: a live result is the URL the API composed; an
  * unreachable API gives the labelled, untracked redirect.demo.invalid link;

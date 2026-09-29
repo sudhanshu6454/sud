@@ -1,0 +1,57 @@
+name: afflino
+# Afflino (affiliate/) is a standalone app with its own CI: this workflow runs only
+# when something under affiliate/ or this file changes.
+on:
+  push:
+    paths:
+      - "affiliate/**"
+      - ".github/workflows/afflino.yml"
+  pull_request:
+    paths:
+      - "affiliate/**"
+      - ".github/workflows/afflino.yml"
+jobs:
+  afflino:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: affiliate
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: paparazzi
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: paparazzi
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U paparazzi -d paparazzi"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://paparazzi:ci@localhost:5432/paparazzi
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: affiliate/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: affiliate/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: ./node_modules/.bin/vitest run
+      # end-to-end money loop on pg-mem (51 assertions)
+      - run: ./packages/api/node_modules/.bin/tsx scripts/demo-money-loop.ts
+      - run: pnpm --filter @paparazzi/web build
+      # the real thing: migrations 0001-0005, the demo seed, the in-house network seed
+      # (db/network.example.yaml, TEST data) with the TEST programme
+      - run: node db/migrate.mjs
+      - run: ./packages/api/node_modules/.bin/tsx db/seed.ts
+      - run: ./packages/api/node_modules/.bin/tsx db/seed-network.ts --with-demo-programme
+      # the same money loop on a scratch database created on the CI Postgres and dropped at exit
+      - run: DEMO_TARGET=postgres ./packages/api/node_modules/.bin/tsx scripts/demo-money-loop.ts

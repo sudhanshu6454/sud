@@ -18,7 +18,7 @@
     "migrate:status": "node db/migrate.mjs --status",
     "migrate:baseline": "node db/migrate.mjs --baseline",
     "seed": "./packages/api/node_modules/.bin/tsx db/seed.ts",
-    "seed:fleet": "./packages/api/node_modules/.bin/tsx db/seed-fleet.ts",
+    "seed:network": "./packages/api/node_modules/.bin/tsx db/seed-network.ts",
     "test": "vitest run",
     "typecheck": "pnpm -r --filter './packages/*' typecheck",
     "load:smoke": "node scripts/load/redirect-soak.js --smoke",

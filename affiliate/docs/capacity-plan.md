@@ -1,4 +1,4 @@
-# Capacity plan — the affiliate platform behind the Marketing Fleet
+# Capacity plan — Afflino's hot path at the owner's audience figure
 
 Dated 2026-09-29. Status: **a plan built on one owner-supplied figure and
 stated assumptions; nothing in it has been measured on real traffic.**
@@ -7,20 +7,22 @@ repository, or arithmetic from an assumption named in the same sentence.
 
 ## 1. The input figure
 
-The owner's figure is **about 12 billion views a month** across the fleet's
-five websites and their social accounts (Instagram, Facebook, X, LinkedIn,
-Pinterest, Telegram, Threads). It is the owner's figure, not a measurement
-made by anything in this repository; nothing here counts views.
+The owner's figure is **about 12 billion views a month**. It is the owner's
+figure, not a measurement made by anything in this repository; nothing here
+counts views, and no real network file is in the repository (the shipped one
+is TEST data). The owner's words were "our in-house views of 12b monthly".
+Which properties those views cover, and whether they are the audience of
+Afflino's in-house publisher network (the properties `db/seed-network.ts`
+registers from a network file), is **for the owner to confirm** (§7,
+`docs/action-tracker.md`). The arithmetic below takes the figure as given.
 
 Arithmetic on it:
 
 - 12 000 000 000 / (30 × 86 400 s) ≈ **4 630 views/s** on average.
-- Views are not the platform's load. Most of them are social impressions,
-  and on Instagram the caption link is plain text (the fleet's own README:
-  "image only, link as text"), so a tracked link can only be clicked from an
-  article page, a bio page, or a channel that renders links. The platform's
-  public hot path — `GET /r/{token}` on `packages/redirect` — only sees
-  **clicks on tracked links**.
+- Views are not the platform's load. Many of them are impressions on posts
+  that carry no clickable link, and a tracked link is only clicked where a
+  placement renders one. The platform's public hot path — `GET /r/{token}`
+  on `packages/redirect` — only sees **clicks on tracked links**.
 
 ## 2. What reaches the hot path
 
@@ -107,9 +109,9 @@ indexes (`db/migrations/0001_core.sql`: primary key, `click_id` unique,
 ### Redirect replicas and fail-open
 
 The redirect service is **stateless**: Redis and Postgres hold all state, so
-replicas can be added behind the proxy without coordination (the fleet's
-root `docker-compose.yml` runs one `affiliate_redirect`; scaling it is a
-`--scale` or a second host, and the connection arithmetic above applies).
+replicas can be added behind the proxy without coordination
+(`docker-compose.prod.yml` runs one `redirect`; scaling it is a `--scale` or
+a second host, and the connection arithmetic above applies).
 
 Its documented **fail-open** behaviour (`packages/redirect/README.md`): if
 the click insert or the queue add fails, the shopper is still 302'd to the
@@ -129,8 +131,8 @@ Redis is bounded). The worker (`packages/workers/src/workers/click-events.ts`)
 verifies the payload hash and logs; it does no database work, so its
 throughput is bound by Redis, not Postgres. At the estimated peak of 230
 jobs/s the queue is well within a single Redis, but a stalled worker lets
-the backlog grow without bound — the fleet compose runs Redis with
-`--appendonly yes`, so a backlog also costs disk. Aggregation into analytics
+the backlog grow without bound — with Redis persistence on (AOF or
+snapshots, a managed-Redis setting), a backlog also costs disk. Aggregation into analytics
 is still a TODO in that worker; when it lands it will add per-click
 database work and must be sized then.
 
@@ -147,8 +149,8 @@ database work and must be sized then.
   that is not done. The infrastructure recommendation says "no CDN at pilot".
 - Target from the pilot checklist: **p75 LCP ≤ 2.5 s** on the PWA. Nothing
   has measured it. Cover images are plain `<img>` tags from
-  `assets.public_url`; the fleet seed's cover assets are storage keys
-  (`demo/fleet/<key>.jpg`), so on the seeded shop `cover_url` is null, the
+  `assets.public_url`; the network seed's cover assets are storage keys
+  (`demo/network/<key>.jpg`), so on the seeded shop `cover_url` is null, the
   gradient placeholder renders, and there is no image LCP element to
   measure yet.
 - The shop's own token is server-side only (`WEB_API_TOKEN`) and the
@@ -175,30 +177,25 @@ minutes) and would need re-tuning on day one, and the `click-volume-drop`
 alert is the one that detects fail-open loss, so it must be wired before
 any real placement carries traffic (`docs/ASSUMPTIONS.md` §2–3).
 
-## 6. What the fleet's Linode can host
+## 6. Where it runs
 
-The fleet runs on one **4 GB Linode** (`g6-standard-2`, `infra/linode/
-provision.sh`). Its root `docker-compose.yml` already keeps eleven
-containers up — `proxy`, `acme`, `db` (MariaDB), five WordPress sites,
-`autopub`, `openseo`, `pulse_worker` — and the `affiliate` profile adds six
-long-lived ones (`affiliate_db` Postgres 16, `affiliate_redis`,
-`affiliate_api`, `affiliate_redirect`, `affiliate_workers`, `affiliate_web`)
-plus the one-shot `affiliate_migrate`. No service sets a memory limit.
-Assuming ≈ 150 MB resident per Node service, the four Node services take
-≈ 600 MB before Postgres (default `shared_buffers` 128 MB plus connections)
-and Redis; nothing has been measured on the host.
-
-Verdict: the Linode is a **pilot host** — it is where the first real
-placements, the smoke test and the soak can run against real Postgres and
-Redis on the same box as the sites that send the clicks. It is not the
-production shape: that is `docs/infrastructure-recommendation.md` (managed
-Postgres and Redis, separate compute, a load balancer, monitoring), and the
-20×–200× gap between that document's pilot assumption and the owner's
-figure means its instance sizes must be revisited with a measured CTR in
-hand, not extrapolated from this page.
+Nothing is provisioned. The deployment shape is `docker-compose.prod.yml`
+(api, redirect, workers, web and the one-shot migrate against managed
+Postgres and Redis), and the hosting proposal — AWS ap-south-1 or
+DigitalOcean blr1, managed Postgres and Redis, separate compute, a load
+balancer, monitoring — is `docs/infrastructure-recommendation.md`, which
+still needs the owner's approval. Its instance sizes were chosen for
+"≤ 10k redirect hits/day"; the 20×–200× gap between that assumption and the
+owner's figure (§2) means they must be revisited with a measured CTR in
+hand, not extrapolated from this page. No service in
+`docker-compose.prod.yml` sets a memory limit; assuming ≈ 150 MB resident
+per Node service, the four Node services take ≈ 600 MB per host before any
+headroom, and nothing has been measured.
 
 ## 7. What we do not know yet
 
+- Which properties the owner's "in-house views of 12b monthly" cover, and
+  whether that is the audience Afflino's in-house network will reach (§1).
 - The real click-through on a shoppable placement (no placement has served
   real traffic; 0.05 %–0.5 % is an assumption).
 - How much of the 12 billion is web page views versus social impressions
@@ -206,12 +203,12 @@ hand, not extrapolated from this page.
 - The bot and crawler share of hits on `/r/{token}` (each is a `clicks`
   row today; there is no rate limiting on the redirect — open in
   `docs/pilot-checklist.md`).
-- The Redis hit ratio and the Postgres insert latency on the Linode's disk
-  under load (the soak has never run).
-- The web's render cost per page and whether nginx-proxy in front of it
-  adds measurable latency.
+- The Redis hit ratio and the Postgres insert latency under load on the
+  chosen hosting (the soak has never run, and hosting is not chosen).
+- The web's render cost per page and whether the load balancer or reverse
+  proxy in front of it adds measurable latency.
 - Whether a CDN will front the shop, and with what cache headers.
 - Counsel's retention windows: the 365-day placeholder for `clicks.context`
   sets the table's size as much as traffic does.
 - Whether the soak gate (500 rps, p95 < 150 ms, error rate < 0.1 %) passes
-  at all on the fleet host.
+  at all on the infrastructure that is eventually provisioned.

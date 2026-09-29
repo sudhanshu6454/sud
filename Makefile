@@ -1,9 +1,9 @@
-.PHONY: help compose up down logs init plugins run check sources status test provision affiliate-up affiliate-down affiliate-logs affiliate-migrate affiliate-seed affiliate-test
+.PHONY: help compose up down logs init plugins run check sources status test provision
 
 PY ?= python3
 
 help:            ## show this help
-	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
 
 compose:         ## regenerate docker-compose.yml from autopub/config/sites.yaml
 	$(PY) infra/gen_compose.py
@@ -41,24 +41,3 @@ test:            ## run the unit tests locally
 
 provision:       ## create the Linode, set DNS, deploy (run from your laptop)
 	./infra/linode/provision.sh
-
-# ---- affiliate platform (affiliate/): profile "affiliate", off until COMPOSE_PROFILES=affiliate in .env ----
-AFFILIATE_SERVICES = affiliate_db affiliate_redis affiliate_migrate affiliate_api affiliate_redirect affiliate_workers affiliate_web
-
-affiliate-up:      ## build + start the affiliate platform (migrations run first)
-	docker compose --profile affiliate up -d --build $(AFFILIATE_SERVICES)
-
-affiliate-down:    ## stop + remove only the affiliate containers (data volumes are kept)
-	docker compose --profile affiliate rm --stop --force $(AFFILIATE_SERVICES)
-
-affiliate-logs:    ## follow the affiliate API / redirect / workers / web logs
-	docker compose --profile affiliate logs -f --tail=200 affiliate_api affiliate_redirect affiliate_workers affiliate_web
-
-affiliate-migrate: ## apply pending affiliate migrations (idempotent)
-	docker compose --profile affiliate run --rm affiliate_migrate node db/migrate.mjs
-
-affiliate-seed:    ## seed the fleet as the first publisher + TEST demo programme (prints web_placement_id)
-	docker compose --profile affiliate run --rm affiliate_migrate ./node_modules/.bin/tsx db/seed-fleet.ts --with-demo-programme
-
-affiliate-test:    ## run the affiliate unit tests locally
-	cd affiliate && ./node_modules/.bin/vitest run

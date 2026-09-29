@@ -1,0 +1,43 @@
+# Afflino in-house publisher network: the properties db/seed-network.ts registers.
+#
+# TEST DATA ONLY. Every account below is a "demo" placeholder and every url is on
+# a reserved example.com subdomain (RFC 2606); none of them is a real account or a
+# real platform URL. This is the seed's default network file, and the seed
+# refuses it under NODE_ENV=production. For a real
+# deployment, write your own file in the same shape and pass it with
+# --network <path> or NETWORK_FILE (docker-compose.prod.yml documents the mount).
+#
+# Fields (all required, nothing else allowed):
+#   key       unique, 1-40 of [a-z0-9-]; used in the placement key network-<key>-<channel>
+#   name      unique display name, at most 80 characters; the demo look is titled "Demo look — <name>"
+#   platform  instagram | youtube | snapchat | telegram | web
+#   account   the handle (instagram, youtube, snapchat, telegram) or the bare hostname (web)
+#   url       https URL of the property; for web its host must equal the account
+#
+# A url outside the reserved example names is seeded with a warning on stderr.
+properties:
+  - key: demo-ig
+    name: Demo Instagram
+    platform: instagram
+    account: demo.afflino
+    url: https://instagram.example.com/demo.afflino
+  - key: demo-yt
+    name: Demo YouTube
+    platform: youtube
+    account: demo.afflino
+    url: https://youtube.example.com/demo.afflino
+  - key: demo-snap
+    name: Demo Snapchat
+    platform: snapchat
+    account: demo.afflino
+    url: https://snapchat.example.com/demo.afflino
+  - key: demo-tg
+    name: Demo Telegram
+    platform: telegram
+    account: demo_afflino
+    url: https://telegram.example.com/demo_afflino
+  - key: demo-web
+    name: Demo Web
+    platform: web
+    account: demo-web.example.com
+    url: https://demo-web.example.com

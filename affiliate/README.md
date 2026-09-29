@@ -7,102 +7,188 @@ ledger; merchants own checkout.
 > Foundation scaffold (weeks 3–6 core product). No real merchant credentials,
 > no production secrets, no real money movement.
 
-## In this repository: the Marketing Fleet's affiliate site
+## Running Afflino
 
-This directory is the affiliate platform of the Marketing Fleet — the five
-WordPress sites defined in `../autopub/config/sites.yaml`. The fleet is the
-platform's first publisher and its sites are the first properties; the
-mapping, exactly as `db/seed-fleet.ts` creates it (idempotent, one
-transaction):
+**What it is.** Afflino is a standalone website and app: an India-first
+affiliate network with a marketing site, onboarding, creator / brand /
+agency / admin areas and a consumer shop at `/shop`, on top of this
+platform's API, click redirect, workers and Postgres ledger. It runs from
+this directory alone — its own dev stack (`docker-compose.yml`: Postgres 16 +
+Redis 7), production stack (`docker-compose.prod.yml`), images (`docker/`) and
+CI workflow (`.github/workflows/afflino.yml` at the repository root, run on
+changes under `affiliate/`).
 
-| Fleet | Platform rows |
+**The in-house publisher network.** Afflino runs its own publisher network
+beside the creators and publishers who sign up through `/join`.
+`db/seed-network.ts` registers it from a **network file** (YAML; per property
+`key`, `name` (at most 80 characters), `platform` = `instagram` | `youtube` |
+`snapchat` | `telegram` | `web`, `account` = handle or hostname, `url`). The default,
+[`db/network.example.yaml`](db/network.example.yaml), is TEST data only (five
+"Demo …" properties on reserved `example.com` names); `--network <path>` or
+`NETWORK_FILE` points the seed at the operator's own file. What it creates
+(idempotent, one transaction):
+
+| Input | Platform rows |
 |---|---|
-| The fleet, owner-operated | organisation `marketing-fleet` ("Marketing Fleet"); publisher "Marketing Fleet (in-house)", `approved` / `active` — it skips the onboarding state machine because it *is* the operator ([`scripts/ASSUMPTIONS.md`](scripts/ASSUMPTIONS.md) §11) |
-| marketingmentalist.in · crazy4marketing.com · marketingjunkies.in · screenstat.in · filmybuff.com | one `web` property each (`approved`, `owner_operated` verification, canonical `https://<domain>`); with `--with-demo-programme` one placement each (`fleet-<key>-web`, channel `web_article`) and one published TEST look each ("Demo look — <site>") |
-| The shop (`AFFILIATE_WEB_HOST`) | a sixth `web` property and the placement `fleet-shop-web` (channel `shop_web`); its id is printed as `web_placement_id` and becomes `WEB_PLACEMENT_ID` |
-| Owner / finance / admin logins | `publisher_owner`, `finance_operator`, `finance_approver`, `network_admin` at `<role>@marketing-fleet.invalid` (RFC 2606) until `FLEET_OWNER_EMAIL` / `FLEET_OPERATOR_EMAIL` / `FLEET_APPROVER_EMAIL` / `FLEET_ADMIN_EMAIL` supply real addresses |
+| — | organisation `afflino` ("Afflino"); publisher "Afflino in-house network", `approved` / `active` — it skips the onboarding state machine because it *is* the operator ([`scripts/ASSUMPTIONS.md`](scripts/ASSUMPTIONS.md) §11) |
+| each network-file entry | one property (`platform`, `account` as `external_account_id`, `url` as canonical URL; `approved`, `owner_operated` verification); with `--with-demo-programme` one placement `network-<key>-<channel>` and one published TEST look "Demo look — <name>" |
+| `WEB_HOST` / `--web-host` (the shop's host) | the shop's own `web` property and, with `--with-demo-programme`, the placement `network-shop-web` (channel `shop_web`); its id is printed as `web_placement_id` and becomes `WEB_PLACEMENT_ID` |
+| `SEED_OWNER_EMAIL` / `SEED_OPERATOR_EMAIL` / `SEED_APPROVER_EMAIL` / `SEED_ADMIN_EMAIL` | the `publisher_owner`, `finance_operator`, `finance_approver`, `network_admin` logins; `<role>@afflino.invalid` (RFC 2606) until set |
 
 Only the rows behind `--with-demo-programme` are TEST data ("Demo Merchant
-(fleet sandbox)", "Demo Fleet Programme", `shop.example.com`, one offer at
+(network sandbox)", "Demo Network Programme", `shop.example.com`, one offer at
 149900 minor); **no real merchant programme exists** — those are human-gated
-in [`docs/action-tracker.md`](docs/action-tracker.md). The flag refuses
-`NODE_ENV=production`.
+in [`docs/action-tracker.md`](docs/action-tracker.md). Under
+`NODE_ENV=production` the seed refuses the flag and the example network file.
+Re-runs never lift a suspension, pause, revocation or withdrawal, and the
+seed refuses (rolling back) to take over a property or placement another
+organisation owns ([`db/README.md`](db/README.md) "Network
+seed", including the network file's validation rules).
 
-**On the fleet server** nothing here is run directly: the platform is part of
-the fleet's generated root `docker-compose.yml` (services `affiliate_db`,
-`affiliate_redis`, `affiliate_migrate`, `affiliate_api`, `affiliate_redirect`,
-`affiliate_workers`, `affiliate_web`, all behind the `affiliate` profile),
-configured by the `AFFILIATE_*` block of the root `.env`, driven by
-`docker compose --profile affiliate …` lines (the server has no `make` and
-no node; the root Makefile's `affiliate-up | affiliate-migrate |
-affiliate-seed | affiliate-logs | affiliate-down | affiliate-test` targets
-are the same lines for a machine that has `make`). The owner's steps, with
-every id and token derived by the previous line, are in the fleet
-`README.md` ("Affiliate platform") and
-[`docs/runbooks/deploy.md`](docs/runbooks/deploy.md) §1b. The
-five images are `docker/Dockerfile.{api,redirect,workers,web,migrate}`
-([`docker/README.md`](docker/README.md): build, layout, sizes, the recorded
-smoke test).
-
-**On a dev machine**, from this directory (Node 22, pnpm 9.12.0, a Postgres
-16 reachable as `postgresql://paparazzi:changeme@127.0.0.1:5432/paparazzi`):
+**Local development**, from this directory (Node 22, pnpm 9.12.0, Docker):
 
 ```sh
 pnpm install --frozen-lockfile
+docker compose up -d postgres redis
+cp .env.example .env
+set -a; . ./.env; set +a
+node db/migrate.mjs
+./packages/api/node_modules/.bin/tsx db/seed.ts
+WEB_HOST=shop.example.com ./packages/api/node_modules/.bin/tsx db/seed-network.ts --with-demo-programme
+```
+
+(`seed.ts` adds the separate TEST demo organisation — the same graph the
+money-loop demo seeds into its own database; `seed-network.ts` prints its
+JSON summary on stdout.) Then the dev servers,
+one terminal each with the same `.env` loaded — the API on 3000, the
+redirect on 3001 and the web on its own port, 3002, so it does not collide
+with the API:
+
+```sh
+pnpm --filter @paparazzi/api dev
+pnpm --filter @paparazzi/redirect dev
+pnpm --filter @paparazzi/workers dev
+PORT=3002 pnpm --filter @paparazzi/web dev
+```
+
+The web reads the API at `API_BASE` (default `http://localhost:3000`) and
+proxies the browser's `/api/*` calls there; open `http://localhost:3002/`
+(marketing site) and `http://localhost:3002/shop`. Without `WEB_API_TOKEN`
+the shop shows TEST demo looks with a "Demo data" badge; with one (below)
+it reads the seeded looks live. Checks:
+
+```sh
 pnpm typecheck
 ./node_modules/.bin/vitest run
-DATABASE_URL=postgresql://paparazzi:changeme@127.0.0.1:5432/paparazzi node db/migrate.mjs
-DATABASE_URL=postgresql://paparazzi:changeme@127.0.0.1:5432/paparazzi node db/migrate.mjs --status
-DATABASE_URL=postgresql://paparazzi:changeme@127.0.0.1:5432/paparazzi ./packages/api/node_modules/.bin/tsx db/seed.ts
-AFFILIATE_WEB_HOST=shop.example.com DATABASE_URL=postgresql://paparazzi:changeme@127.0.0.1:5432/paparazzi ./packages/api/node_modules/.bin/tsx db/seed-fleet.ts --with-demo-programme
 ./packages/api/node_modules/.bin/tsx scripts/demo-money-loop.ts
-DATABASE_URL=postgresql://paparazzi:changeme@127.0.0.1:5432/paparazzi DEMO_TARGET=postgres ./packages/api/node_modules/.bin/tsx scripts/demo-money-loop.ts
+DEMO_TARGET=postgres ./packages/api/node_modules/.bin/tsx scripts/demo-money-loop.ts
+pnpm --filter @paparazzi/web build
 ```
 
 (`tsx` is not at the repo root, hence the api package's copy; `pnpm demo`,
-`pnpm demo:pg`, `pnpm seed`, `pnpm seed:fleet` work once
-`packages/api/node_modules/.bin` is on `PATH`.) A database migrated before
-`schema_migrations` existed needs `node db/migrate.mjs --baseline` once —
-the plain run fails loudly on `0001` with a hint, by design
-([`db/README.md`](db/README.md)).
+`pnpm demo:pg`, `pnpm seed` and `pnpm seed:network` wrap the same lines.) A
+database migrated before `schema_migrations` existed needs
+`node db/migrate.mjs --baseline` once — the plain run fails loudly on `0001`
+with a hint, by design ([`db/README.md`](db/README.md)).
 
-**Environment** — the names the services read, and what the fleet compose
-maps them from:
-
-| Service env | Fleet `.env` | Meaning |
-|---|---|---|
-| `DATABASE_URL`, `REDIS_URL` | built from `AFFILIATE_DB_PASSWORD` (hex only) | Postgres / Redis of the affiliate stack |
-| `JWT_SECRET` | `AFFILIATE_JWT_SECRET` | signs API tokens (the dev stub) |
-| `STUB_WEBHOOK_SECRET` | `AFFILIATE_STUB_WEBHOOK_SECRET` | the stub connector's HMAC until a real feed lands |
-| `REDIRECT_BASE_URL` | `https://` + `AFFILIATE_LINK_HOST` | every tracked link is `<this>/r/<token>` |
-| `API_BASE` (web, server runtime) | fixed `http://affiliate_api:3000` | catalogue client and the `/api/*` proxy |
-| `WEB_API_TOKEN` (web, server-only) | `AFFILIATE_WEB_API_TOKEN` | read-only `publisher_analyst` bearer; never `NEXT_PUBLIC_`; missing → TEST demo data with a badge |
-| `WEB_PLACEMENT_ID` (web) | `AFFILIATE_WEB_PLACEMENT_ID` | the shop's placement; items carry tracked links only for it |
-| `NEXT_PUBLIC_API_BASE` (web, build arg) | fixed `/api` | browser calls go through the same-origin proxy |
-| `NEXT_PUBLIC_SITE_NAME` (web, runtime) | `AFFILIATE_SITE_NAME` | site name in titles, footer, manifest; default `Afflino` (a rename is a restart) |
-| `FLEET_SITES_YAML`, `AFFILIATE_WEB_HOST` (migrate) | `../autopub/config` mounted at `/app/config`; `AFFILIATE_WEB_HOST` | what `seed-fleet.ts` reads |
-| `RETENTION_*_DAYS`, `RETENTION_CRON` (workers) | `AFFILIATE_RETENTION_*` | 365-day placeholders, `0 3 * * *` |
-| `DEMO_TARGET`, `DEMO_DATABASE_URL` (dev only) | — | `postgres` runs the demo on a scratch database of the `DATABASE_URL` server |
-
-**Minting the shop's links** — consumers only see links that exist.
+**Minting the shop's links (dev)** — consumers only see links that exist.
 `packages/api/scripts/mint-links.mjs` (shipped in the api image) mints one
 tracked link per live offer for a placement, idempotently
 (`Idempotency-Key: mint-links:<placement>:<offer_id>`; re-runs are no-ops).
-Dev machine, against the API on 3000 with the fleet seed applied:
+Against the API on 3000 with the network seed applied, the shop's read-only
+token and a dry run of the links:
 
 ```sh
-cd packages/api && API_BASE=http://127.0.0.1:3000 API_TOKEN="$(JWT_SECRET=dev-only-change-me node scripts/mint-dev-token.mjs --org-id "$(PGPASSWORD=changeme psql -h 127.0.0.1 -U paparazzi -d paparazzi -tAc "select id from organisations where slug='marketing-fleet'")" --role publisher_owner)" node scripts/mint-links.mjs --placement "$(PGPASSWORD=changeme psql -h 127.0.0.1 -U paparazzi -d paparazzi -tAc "select id from placements where placement_key='fleet-shop-web'")" --dry-run
+JWT_SECRET=dev-only-change-me node packages/api/scripts/mint-dev-token.mjs --org-id "$(PGPASSWORD=changeme psql -h 127.0.0.1 -U paparazzi -d paparazzi -tAc "select id from organisations where slug='afflino'")" --role publisher_analyst --sub web-shop
+API_BASE=http://127.0.0.1:3000 API_TOKEN="$(JWT_SECRET=dev-only-change-me node packages/api/scripts/mint-dev-token.mjs --org-id "$(PGPASSWORD=changeme psql -h 127.0.0.1 -U paparazzi -d paparazzi -tAc "select id from organisations where slug='afflino'")" --role publisher_owner)" node packages/api/scripts/mint-links.mjs --placement "$(PGPASSWORD=changeme psql -h 127.0.0.1 -U paparazzi -d paparazzi -tAc "select id from placements where placement_key='network-shop-web'")" --dry-run
 ```
 
-Drop `--dry-run` to mint. The token is the JWT dev stub
-(`mint-dev-token.mjs`, default TTL 8 h) until an identity provider lands;
-the fleet-server form is in the fleet `README.md`.
+The first line prints the value for `WEB_API_TOKEN`; `web_placement_id` from
+the seed's JSON is `WEB_PLACEMENT_ID` (both for the web server's environment).
+Drop `--dry-run` to mint. The tokens are the JWT dev stub
+(`mint-dev-token.mjs`, default TTL 8 h) until an identity provider lands.
 
-**Real-Postgres demo** — the last line of the dev block above runs the
-51-assertion money loop on a scratch database `paparazzi_demo_<8 hex>`
-created on the `DATABASE_URL` server and dropped at exit (verified on
-PostgreSQL 16.13: 51 PASS, 0 FAIL, 0 scratch databases left). Same
-assertions as pg-mem, no shims ([`db/README.md`](db/README.md)).
+**Production shape.** [`docker-compose.prod.yml`](docker-compose.prod.yml)
+runs `api` (3000), `redirect` (3001), `workers` and `web` (3002) against
+**managed** Postgres and Redis supplied through the environment (no database
+containers), after a one-shot `migrate` service that applies pending
+migrations and exits; the app services wait for it. Every value comes from
+the environment ([`.env.prod.example`](.env.prod.example), filled in a vault
+or `/run/secrets/paparazzi.env`, never committed). Compose interpolates the
+whole file for every command and the web requires `WEB_API_TOKEN` and
+`WEB_PLACEMENT_ID`, which come from the database — so the **first deploy**
+migrates, seeds and mints with the images directly, from this directory.
+`WEB_HOST`, the shop's public hostname, must be set in that environment for
+it: without it the seed creates no shop placement and prints no
+`web_placement_id`, so `WEB_PLACEMENT_ID` comes out empty and compose refuses
+to start. Every `docker run` that carries a secret uses `--pull never`, so a
+missing local image fails instead of being pulled from a registry:
+
+```sh
+set -a; . /run/secrets/paparazzi.env; set +a
+docker build -f docker/Dockerfile.migrate -t "paparazzi/migrate:${IMAGE_TAG:-latest}" .
+docker build -f docker/Dockerfile.api -t "paparazzi/api:${IMAGE_TAG:-latest}" .
+docker run --rm --pull never -e DATABASE_URL "paparazzi/migrate:${IMAGE_TAG:-latest}"
+docker run --rm --pull never -e DATABASE_URL -e WEB_HOST "paparazzi/migrate:${IMAGE_TAG:-latest}" ./node_modules/.bin/tsx db/seed-network.ts --with-demo-programme > seed-network.json
+WEB_PLACEMENT_ID=$(grep -m1 '"web_placement_id"' seed-network.json | sed 's/.*: "\(.*\)".*/\1/')
+WEB_API_TOKEN=$(docker run --rm --pull never -e JWT_SECRET "paparazzi/api:${IMAGE_TAG:-latest}" node scripts/mint-dev-token.mjs --org-id "$(grep -m1 '"org_id"' seed-network.json | sed 's/.*: "\(.*\)".*/\1/')" --role publisher_analyst --sub web-shop --ttl 365d)
+export WEB_PLACEMENT_ID WEB_API_TOKEN
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Store the two values in the vault next to the other secrets so later
+deploys have them; from then on a deploy is the last line alone
+([`docs/runbooks/deploy.md`](docs/runbooks/deploy.md)). The seed line above
+uses the TEST example network inside the image; for the operator's own
+network add `-e NETWORK_FILE=/app/config/network.yaml -v "$PWD/network.yaml:/app/config/network.yaml:ro"`
+to it (the `migrate` service documents the same mount), and keep
+`NETWORK_FILE=/app/config/network.yaml` in the vault with that volume
+uncommented, so a later re-run of the seed reads the same file
+([`docs/runbooks/deploy.md`](docs/runbooks/deploy.md) §1; under
+`NODE_ENV=production` the seed refuses the example file).
+`seed-network.json` stays in this directory for the lines below and is
+gitignored: it holds the organisation and user ids and the `SEED_*_EMAIL`
+addresses. Until a real programme is contracted, `--with-demo-programme` is the only way to get a
+placement, so `WEB_PLACEMENT_ID` points at TEST rows — a sandbox shape, not a
+launch. With the stack up, the links for the shop's placement are minted
+from the api image with an owner token (both scripts ship in it;
+`docker/README.md` "Operator scripts"):
+
+```sh
+OWNER_TOKEN=$(docker run --rm --pull never -e JWT_SECRET "paparazzi/api:${IMAGE_TAG:-latest}" node scripts/mint-dev-token.mjs --org-id "$(grep -m1 '"org_id"' seed-network.json | sed 's/.*: "\(.*\)".*/\1/')" --role publisher_owner --sub network-owner)
+docker compose -f docker-compose.prod.yml run --rm --no-deps -e API_BASE=http://api:3000 -e API_TOKEN="$OWNER_TOKEN" api node scripts/mint-links.mjs --placement "$WEB_PLACEMENT_ID"
+```
+
+**Environment contract** (every read documented in
+[`.env.prod.example`](.env.prod.example)):
+
+| Env | Read by | Meaning |
+|---|---|---|
+| `DATABASE_URL`, `REDIS_URL` | api, redirect, workers; migrate (`DATABASE_URL`) | managed Postgres 16 / Redis (dev: `docker-compose.yml`) |
+| `JWT_SECRET` | api | signs API tokens (the dev stub), including `WEB_API_TOKEN` |
+| `STUB_WEBHOOK_SECRET` | workers | the stub connector's HMAC until a real feed lands |
+| `REDIRECT_BASE_URL` | api | public origin of the redirect service; every tracked link is `<this>/r/<token>` |
+| `API_BASE` | web (server runtime) | catalogue client and the `/api/*` proxy target; compose default `http://api:3000` |
+| `WEB_API_TOKEN` | web (server-only) | read-only `publisher_analyst` bearer; never `NEXT_PUBLIC_`; missing → TEST demo data with a badge |
+| `WEB_PLACEMENT_ID` | web | the shop's placement (`web_placement_id`); items carry tracked links only for it |
+| `NEXT_PUBLIC_API_BASE` | web (build arg) | browser API base; default `/api`, the same-origin proxy |
+| `NEXT_PUBLIC_SITE_NAME` | web (runtime) | site name in titles, footer, manifest; default `Afflino` (a rename is a restart) |
+| `NETWORK_FILE`, `WEB_HOST`, `SEED_*_EMAIL` | migrate (`seed-network.ts`) | the network file (default the TEST example), the shop's host, the four logins |
+| `RETENTION_*_DAYS`, `RETENTION_CRON` | workers | 365-day placeholders, `0 3 * * *` |
+| `LOG_LEVEL`, `IMAGE_TAG` | compose | log level (`info`); the image tag to run |
+| `DEMO_TARGET`, `DEMO_DATABASE_URL` | dev only | `postgres` runs the demo on a scratch database of the `DATABASE_URL` server |
+
+**Hosting** is still a human decision: nothing is provisioned, and
+[`docs/infrastructure-recommendation.md`](docs/infrastructure-recommendation.md)
+(AWS ap-south-1 ≈₹6,700/mo, or DigitalOcean blr1 ≈₹5,200/mo) needs the
+owner's approval first; [`docs/capacity-plan.md`](docs/capacity-plan.md) says
+why its sizes must be revisited against a measured click-through.
+
+**Real-Postgres demo** — `DEMO_TARGET=postgres` runs the 51-assertion money
+loop on a scratch database `paparazzi_demo_<8 hex>` created on the
+`DATABASE_URL` server and dropped at exit (verified on PostgreSQL 16.13:
+51 PASS, 0 FAIL, 0 scratch databases left). Same assertions as pg-mem, no
+shims ([`db/README.md`](db/README.md)).
 
 ## Setup
 
@@ -226,7 +312,7 @@ plus the ledger double-entry invariant
 
 ```sh
 BACKUP_DIR=./backups scripts/backup.sh
-scripts/restore.sh ./backups/paparazzi-paparazzi-<timestamp>.dump
+scripts/restore.sh "$(ls -t ./backups/*.dump | head -1)"
 ```
 
 Connection: `DATABASE_URL` first, else `PGHOST`/`PGPORT`/`PGUSER`/`PGPASSWORD`/
@@ -254,11 +340,8 @@ Deployment shape: [docker-compose.prod.yml](docker-compose.prod.yml) runs
 against **managed** Postgres/Redis supplied via environment (no Postgres or
 Redis containers in prod). The five images in `docker/` build and boot end
 to end ([docker/README.md](docker/README.md): build steps, runtime layout,
-sizes, the recorded smoke test from migrate to a `302` with `subid`). On the
-fleet host the same images run from the fleet's root `docker-compose.yml`
-(profile `affiliate`) with containerised Postgres 16 + Redis 7 — a pilot
-host, not the production shape ([docs/capacity-plan.md](docs/capacity-plan.md)).
-Environment contract: [.env.prod.example](.env.prod.example) — every
+sizes, the recorded smoke test from migrate to a `302` with `subid`); the
+first-deploy order is in "Running Afflino" above. Environment contract: [.env.prod.example](.env.prod.example) — every
 `process.env` read in the codebase is documented there with a comment; the
 filled copy is never committed. Secret generation, vault-vs-env rules,
 rotation cadence, and the pre-launch checklist:
@@ -272,8 +355,8 @@ rotation cadence, and the pre-launch checklist:
 | `packages/api/` | Merchant/publisher-facing HTTP API (Fastify). See [README](packages/api/README.md) · [assumptions](packages/api/ASSUMPTIONS.md) |
 | `packages/redirect/` | Click-tracking redirect service (Fastify). See [README](packages/redirect/README.md) · [assumptions](packages/redirect/ASSUMPTIONS.md) |
 | `packages/workers/` | BullMQ workers: ingestion, attribution, ledger posting, payouts. See [README](packages/workers/README.md) · [assumptions](packages/workers/ASSUMPTIONS.md) |
-| `packages/web/` | The Afflino web app (Next.js 14): marketing site, onboarding, creator / brand / agency areas, admin, and the fleet's consumer shop at `/shop` (live against the catalogue API). Route map, artboards and live / demo status: [README](packages/web/README.md) · [assumptions](packages/web/ASSUMPTIONS.md) |
-| `db/` | Postgres schema, migration runner with `schema_migrations` tracking, demo seed and fleet seed. See [README](db/README.md) |
+| `packages/web/` | The Afflino web app (Next.js 14): marketing site, onboarding, creator / brand / agency areas, admin, and the consumer shop at `/shop` (live against the catalogue API). Route map, artboards and live / demo status: [README](packages/web/README.md) · [assumptions](packages/web/ASSUMPTIONS.md) |
+| `db/` | Postgres schema, migration runner with `schema_migrations` tracking, demo seed, in-house network seed and its example network file. See [README](db/README.md) |
 | `docker/` | The five images (api, redirect, workers, web, migrate) and their build script. See [README](docker/README.md) · [assumptions](docker/ASSUMPTIONS.md) |
 | `docs/` | OpenAPI spec, pilot checklist, action tracker, capacity plan, threat model, runbooks, alert definitions, infrastructure recommendation |
 
@@ -341,7 +424,7 @@ payout rail, retention windows, secrets management).
 ## Integration notes (2026-09-29, the Afflino web app)
 
 `packages/web` was rebuilt to the owner's design handover for **Afflino**, an
-India-first affiliate network, and the fleet's shop moved under it:
+India-first affiliate network, and the consumer shop moved under it:
 
 - **Routes** (`packages/web/README.md` has the full map with artboard ids):
   `/` marketing site, `/login` dev sign-in (paste the JWT stub; no real
@@ -367,8 +450,7 @@ India-first affiliate network, and the fleet's shop moved under it:
   "cookie": the redirect sets none, and the design's readable
   `/r/{handle}/{offer}` links are not implemented.
 - **Site name**: the deployed default is now `Afflino`
-  (`AFFILIATE_SITE_NAME` in the fleet `.env`, `NEXT_PUBLIC_SITE_NAME`
-  here); a rename is a restart.
+  (`NEXT_PUBLIC_SITE_NAME`); a rename is a restart.
 - No API, database or image layout changed; `docker/Dockerfile.web` is
   unchanged. The web build gained one dependency, `qrcode-generator` (MIT,
   the QR download on `/app/links`).

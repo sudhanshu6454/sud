@@ -5,16 +5,17 @@ checkout). This repo is a **sandbox-complete** implementation: the full money lo
 works end to end against stubbed integrations. No real merchant credentials, no
 production secrets, no real money movement.
 
-In the Marketing Fleet repository it lives under `affiliate/` and is deployed with
-the fleet's root `docker-compose.yml` (profile `affiliate`); the fleet is the
-platform's first publisher and its five sites are the first properties
-(`db/seed-fleet.ts`). The fleet-level rules are in the root `CLAUDE.md`.
+The web app is **Afflino**, a standalone website and app with its own stack
+(`docker-compose.prod.yml`), its own CI workflow (`.github/workflows/afflino.yml`
+at the repository root) and its own in-house publisher network, seeded from a
+network file (`db/seed-network.ts`, default `db/network.example.yaml`, TEST data).
+Everything here runs from this directory; nothing outside it is needed.
 
 ## Verified state (2026-09-29)
 
 - `pnpm typecheck` clean on all 5 packages (`packages/*`)
-- **587/587 tests green across 30 test files** (`./node_modules/.bin/vitest run`:
-  api 88, shared 11, workers 15, web 473)
+- **616/616 tests green across 31 test files** (`./node_modules/.bin/vitest run`:
+  api 117, shared 11, workers 15, web 473)
 - Demo: **51/51 assertions** on pg-mem (`tsx scripts/demo-money-loop.ts`) **and
   51/51 on a real PostgreSQL 16.13** (`DEMO_TARGET=postgres`, scratch database
   `paparazzi_demo_<8 hex>` created and dropped, no shims) — link → click →
@@ -24,8 +25,10 @@ platform's first publisher and its five sites are the first properties
 - Migrations `0001`–`0005` apply on a fresh Postgres 16 and are recorded in
   `schema_migrations`; a second run is a no-op (`0 migration(s) applied, 5 already
   applied`); `--status` and `--baseline` work
-- `db/seed.ts` and `db/seed-fleet.ts --with-demo-programme` run on real Postgres;
-  the fleet seed is idempotent (byte-identical JSON on a second run)
+- `db/seed.ts` and `db/seed-network.ts --with-demo-programme` run on real Postgres;
+  the network seed is idempotent (identical row counts and byte-identical JSON on
+  a second run), keeps operator status changes, and refuses (rolling back) to take
+  over another organisation's property or placement
 - `pnpm install --frozen-lockfile` passes (pnpm 9.12.0 locally, in CI and in the
   images)
 - `pnpm --filter @paparazzi/web build` OK (all routes dynamic, standalone output);
@@ -37,13 +40,14 @@ platform's first publisher and its five sites are the first properties
   (`--no-cache`: 264 / 270 / 255 / 269 / 262 MB; the web image is 273 MB after
   the Afflino rebuild) and boot end to end: migrate → seeds → `/healthz` on api,
   redirect and the web proxy → `/` titled "Afflino", `/shop` renders the five
-  fleet looks live → `mint-links.mjs` mints → the look page carries the tracked
-  link → `GET /r/{token}` → 302 with `subid`, no `set-cookie` → one `clicks` row
-  → workers log `click.observed` (`docker/README.md`, smoke test, re-run
-  2026-09-29 after the rebuild)
-- A CI job `affiliate` (`.github/workflows/ci.yml`) runs typecheck, vitest, both
-  demos, the web build and the real-Postgres migrate + seeds; no run has been
-  observed from this sandbox
+  TEST network looks live → `mint-links.mjs` mints → the look page carries the
+  tracked link → `GET /r/{token}` → 302 with `subid`, no `set-cookie` → one
+  `clicks` row → workers log `click.observed` (`docker/README.md`, smoke test,
+  re-run 2026-09-29 with the network seed)
+- The CI workflow `afflino` (`.github/workflows/afflino.yml`, runs on changes
+  under `affiliate/`) runs the frozen install, typecheck, vitest, both demos, the
+  web build and the real-Postgres migrate + seeds; no run has been observed from
+  this sandbox
 
 ## Commands
 
@@ -52,7 +56,7 @@ not at the repo root, so the scripts that need it are given with the api package
 copy.
 
 ```bash
-./node_modules/.bin/vitest run                                        # tests (587)
+./node_modules/.bin/vitest run                                        # tests (616)
 pnpm typecheck                                                        # 5 packages
 ./packages/api/node_modules/.bin/tsx scripts/demo-money-loop.ts       # demo on pg-mem (51 assertions)
 DATABASE_URL=postgresql://paparazzi:changeme@127.0.0.1:5432/paparazzi DEMO_TARGET=postgres ./packages/api/node_modules/.bin/tsx scripts/demo-money-loop.ts   # same demo on real Postgres (scratch DB, dropped)
@@ -61,12 +65,12 @@ DATABASE_URL=postgresql://paparazzi:changeme@127.0.0.1:5432/paparazzi node db/mi
 DATABASE_URL=postgresql://paparazzi:changeme@127.0.0.1:5432/paparazzi node db/migrate.mjs --status    # applied / pending
 DATABASE_URL=postgresql://paparazzi:changeme@127.0.0.1:5432/paparazzi node db/migrate.mjs --baseline  # once, for a DB migrated before tracking existed
 DATABASE_URL=postgresql://paparazzi:changeme@127.0.0.1:5432/paparazzi ./packages/api/node_modules/.bin/tsx db/seed.ts                                  # demo graph
-DATABASE_URL=postgresql://paparazzi:changeme@127.0.0.1:5432/paparazzi ./packages/api/node_modules/.bin/tsx db/seed-fleet.ts --with-demo-programme      # the fleet as publisher + TEST programme
+WEB_HOST=shop.example.com DATABASE_URL=postgresql://paparazzi:changeme@127.0.0.1:5432/paparazzi ./packages/api/node_modules/.bin/tsx db/seed-network.ts --with-demo-programme   # in-house network (example file) + shop property + TEST programme
 pnpm --filter @paparazzi/web build                                    # Next standalone build
 node scripts/load/redirect-soak.js --smoke                            # load smoke (needs a real deployment for meaning)
 ```
 
-Notes: `pnpm demo`, `pnpm demo:pg`, `pnpm seed`, `pnpm seed:fleet` call the api
+Notes: `pnpm demo`, `pnpm demo:pg`, `pnpm seed`, `pnpm seed:network` call the api
 package's `tsx` (`./packages/api/node_modules/.bin/tsx`); the root has none.
 `pnpm install --frozen-lockfile` **works** (the earlier "known-broken" note is
 obsolete; CI runs it). `packageManager` pins pnpm 9.12.0 and the Dockerfiles'
@@ -111,7 +115,7 @@ runs and the docker smoke test.
   disputes + statements, settings), brand workspace `/brand/*`
   (`?workspace=<client id>` for an agency), agency `/agency`, admin
   `/admin/*` (review queue, brands, creators, offers, fraud, settlements,
-  suspense, looks), and the fleet's **consumer shop** `/shop`,
+  suspense, looks), and Afflino's **consumer shop** `/shop`,
   `/looks/[id]`, `/looks/[id]/items/[itemId]`, `/saved` live against the
   catalogue API. Live v1 calls from the app areas: `GET
   /v1/publisher/earnings`, `POST /v1/links`, `GET`/`POST /v1/disputes`,
@@ -134,12 +138,16 @@ runs and the docker smoke test.
   disabled control; no raw merchant URL exists in the bundle.
 - `db/migrations/` — `0001_core.sql` → `0005_looks_web.sql`, append-only;
   `db/migrate.mjs` records files in `schema_migrations` (`--status`,
-  `--baseline`); `db/seed.ts` (demo graph), `db/seed-fleet.ts` (the fleet as
-  publisher, from `../autopub/config/sites.yaml`; `--with-demo-programme` adds the
-  TEST programme and the placements, and refuses `NODE_ENV=production`).
+  `--baseline`); `db/seed.ts` (demo graph), `db/seed-network.ts` (the in-house
+  publisher network from a network file — `--network` / `NETWORK_FILE`, default
+  `db/network.example.yaml`; `WEB_HOST` adds the shop's own property;
+  `--with-demo-programme` adds the TEST programme, one look per property and the
+  placements; under `NODE_ENV=production` the seed refuses both the flag and the
+  example network file).
 - `docker/` — five Dockerfiles that build and boot (`docker/README.md`,
-  `docker/ASSUMPTIONS.md`); `docker-compose.prod.yml` for managed infra; the fleet
-  host uses the root `docker-compose.yml` profile `affiliate` instead.
+  `docker/ASSUMPTIONS.md`); `docker-compose.prod.yml` for managed infra
+  (`docker-compose.yml` is dev Postgres + Redis only). Hosting is not chosen yet
+  (`docs/infrastructure-recommendation.md`).
 - `docs/openapi.yaml` — OpenAPI 3.1 spec; `packages/api/test/openapi.test.ts`
   asserts the spec matches the registered routes in both directions. Keep in sync.
 
@@ -186,12 +194,12 @@ runs and the docker smoke test.
   (input needed, owner, dependency, acceptance criteria) plus the
   sandbox-verified items that are not gates
 - `docs/capacity-plan.md` — the owner's 12-billion-views figure turned into
-  hot-path arithmetic (clicks/s, `clicks` growth, cache, replicas, the web),
-  what the fleet's Linode can host, and what is still unmeasured
+  hot-path arithmetic (clicks/s, `clicks` growth, cache, replicas, the web) and
+  what is still unmeasured
 - `docs/threat-model.md` — trust boundaries, mitigations cited to code/tests,
   10 residual risks, pentest scope input
-- `docs/pentest-scope.md`, `docs/runbooks/` (deploy incl. the fleet-compose
-  path, backup-restore, alerts, incidents), `docs/monitoring/alerts.yaml`
+- `docs/pentest-scope.md`, `docs/runbooks/` (deploy, backup-restore, alerts,
+  incidents), `docs/monitoring/alerts.yaml`
 - `docs/infrastructure-recommendation.md` — AWS ap-south-1 ≈₹6,700/mo (or DO
   blr1 ≈₹5,200/mo) estimates; `docker-compose.prod.yml`, `docs/credential-setup.md`
 - `docker/README.md` — the five images, how they are built, the smoke test
@@ -221,7 +229,7 @@ runs and the docker smoke test.
   (`docs/pilot-checklist.md`). The design's readable `/r/{handle}/{offer}`
   links and first-party attribution cookie are **not** implemented.
 - No merchant programme exists. The only programme anywhere is the TEST "Demo
-  Fleet Programme" from `db/seed-fleet.ts --with-demo-programme`
+  Network Programme" from `db/seed-network.ts --with-demo-programme`
   (`shop.example.com`); the payout rail is the stub. Real ones are human-gated
   (`docs/action-tracker.md`).
 - CSV upload takes inline `csv_text` (2 MB cap) — production needs
@@ -235,7 +243,7 @@ runs and the docker smoke test.
 
 ## Working rules
 
-- Extend in place; keep per-package `ASSUMPTIONS.md` and the root README current.
+- Extend in place; keep per-package `ASSUMPTIONS.md` and this directory's README current.
 - New behavior needs tests; new routes need OpenAPI spec updates (the
   bidirectional test enforces this: `EXPECTED_ROUTES` in
   `packages/api/test/openapi.test.ts` and `docs/openapi.yaml`).

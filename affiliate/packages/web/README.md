@@ -1,4 +1,4 @@
-# @paparazzi/web — Afflino web app (marketing, creator / brand / agency app, admin) and the fleet shop
+# @paparazzi/web — Afflino web app (marketing, creator / brand / agency app, admin) and the consumer shop
 
 Next.js 14.2 (App Router, TypeScript, CSS Modules; no Tailwind, no UI
 library), built to the **Afflino** design handover ("Modernist": Archivo,
@@ -61,7 +61,7 @@ indexes.
 | `/admin/brands` · `/admin/creators` · `/admin/offers` · `/admin/fraud` · `/admin/settlements` | Admin lists in the 2e style (not drawn); fraud says no detection runs, creators says there is no KYC / PAN check, settlements is read-only and explains the API's maker-checker | demo |
 | `/admin/suspense` | Suspense queue (not drawn) | **live** `GET /v1/suspense` (filters as India calendar days; a rejected filter keeps the rows; demo fallback), `POST /v1/suspense/:id/retry` (disabled on demo data and on rows with no click reference) and `/review`; amounts in each row's own currency, exact |
 | `/admin/looks` · `/admin/looks/[id]` | Editorial looks pipeline board (six equal columns from 1100px) and product match review (not drawn) | local — `lib/console.ts` (localStorage `paparazzi_console_looks`, TEST demo looks); no review API |
-| `/shop` | The fleet's consumer shop (no artboard; 1d's ruled grid on the 40px marketing gutters): search (Esc clears), category tags, sort (Newest, Most products, Title A–Z) | **live** `GET /v1/looks` (all pages), server-side with `WEB_API_TOKEN` |
+| `/shop` | Afflino's consumer shop (no artboard; 1d's ruled grid on the 40px marketing gutters): search (Esc clears), category tags, sort (Newest, Most products, Title A–Z) | **live** `GET /v1/looks` (all pages), server-side with `WEB_API_TOKEN` |
 | `/looks/[id]` | Look detail (5fr / 7fr like an offer detail): cover (grayscale, whole photo), Sponsored, source-page attribution, disclosure panel, item rows (match tag, price 24px / 800, merchant · stock, freshness, CTA) | **live** `GET /v1/looks/:id?placement_id=WEB_PLACEMENT_ID` |
 | `/looks/[id]/items/[itemId]` | Product detail (1e's get-link layout on phones, sticky CTA + Save): match tag, price 36px, merchant + stock, freshness, variant facts, CTA, "Payment, delivery and returns are handled by the merchant.", disclosure | **live** — same detail call; `itemId` is the `look_items` id |
 | `/saved` | Wishlist: a ruled list of localStorage `saved-items` entries | local; "Demo data" badge when an entry came from the demo catalogue |
@@ -150,7 +150,7 @@ bearer-only and sets none: the web origin's `cookie` is not sent upstream
 and an upstream `set-cookie` never reaches the browser). It resolves `API_BASE` **at request time**
 (a `rewrites()` entry in `next.config.mjs` would be frozen into the routes
 manifest at `next build`, which breaks deployments that pass `API_BASE` at
-container start, as `docker-compose.yml` does). The browser's own
+container start, as `docker-compose.prod.yml` does). The browser's own
 `Authorization` header is forwarded untouched; the server's
 `WEB_API_TOKEN` is never added. `GET /api/healthz` → `{"ok":true}` proves
 the proxy.
@@ -175,12 +175,10 @@ skipped_no_offer=… skipped_duplicate_offer=… failed=…` line; failures prin
 the API error code verbatim (`HTTP 403 PROGRAMME_NOT_APPROVED: …`) and the
 exit code is 1. Exit 2 is a usage error (placement not a uuid, no token).
 
-Fleet server (no node on the host — run it inside the API container, token
-typed at a hidden prompt, placement read from `.env`):
-
-```bash
-cd /opt/marketing-fleet && read -rs -p 'Mint token (publisher_owner): ' T && echo && docker compose exec -T -e API_BASE=http://127.0.0.1:3000 -e API_TOKEN="$T" affiliate_api node --input-type=module - --placement "$(grep '^AFFILIATE_WEB_PLACEMENT_ID=' .env | cut -d= -f2-)" < affiliate/packages/api/scripts/mint-links.mjs
-```
+A container deployment runs the same script from the api image, which ships
+it; the single-line commands (the web's read-only token, then the links for
+the shop's placement `network-shop-web`) are in `docker/README.md`
+("Operator scripts").
 
 ## Wishlist
 

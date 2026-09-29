@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = { title: 'Shop the looks' };
 
-/** The fleet's consumer shop grid: live GET /v1/looks (all pages), TEST demo looks + badge on fallback. */
+/** Afflino's consumer shop grid: live GET /v1/looks (all pages), TEST demo looks + badge on fallback. */
 export default async function ShopPage() {
   const { value: looks, demo } = await listLooks();
   return <LookGrid looks={looks} demo={demo} />;

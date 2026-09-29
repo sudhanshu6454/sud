@@ -5,7 +5,7 @@ import { ShopNav } from '@/components/shop/ShopNav';
 import styles from './layout.module.css';
 
 /**
- * The fleet's consumer shop (/shop, /looks/*, /saved) in the Afflino chrome:
+ * Afflino's consumer shop (/shop, /looks/*, /saved) in the Afflino chrome:
  * skip link, marketing nav, the shop's tab row, the page (full width, on the
  * 40px marketing gutters), then the footer. The affiliate disclosure is
  * part of each page: the standing line under the grid and the wishlist

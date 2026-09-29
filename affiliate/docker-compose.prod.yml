@@ -1,26 +1,36 @@
-# Production-shaped compose for the pilot deployment.
+# Production-shaped compose for Afflino: api, redirect, workers, web and the
+# one-shot migrate runner.
 #
 # Assumes managed Postgres + managed Redis/Valkey (RDS / ElastiCache or
-# DigitalOcean Managed Databases) reached over the private network.
+# DigitalOcean Managed Databases) reached over the private network; which one
+# is still a human decision (docs/infrastructure-recommendation.md).
 # THERE ARE NO SECRETS IN THIS FILE — every sensitive value comes from the
 # environment (populated from the Secure Vault at deploy time; see
 # .env.prod.example and docs/credential-setup.md).
 #
 # Images are built from ./docker/Dockerfile.* (node:22-alpine, pnpm via corepack,
 # non-root `node` user); docker/README.md documents the layout and the smoke test
-# every image passed. The fleet host uses the root docker-compose.yml (profile
-# `affiliate`) instead of this file; both consume the same images and env names.
+# every image passed.
+#
+# Compose interpolates this whole file for every command, so WEB_API_TOKEN and
+# WEB_PLACEMENT_ID (both required below) must be set before any
+# `docker compose -f docker-compose.prod.yml ...` line runs. Both come from the
+# database, so the first deploy migrates, seeds and mints with the images
+# directly (README.md "Running Afflino", docker/README.md "Operator scripts").
 #
 # Bring-up (migrate runs first; api, redirect and workers wait for it to succeed):
 #   set -a; source /run/secrets/paparazzi.env; set +a   # or your vault's inject step
 #   docker compose -f docker-compose.prod.yml up -d --build
 #
-# One-time seeds (all rows TEST-labelled; see db/README.md):
-#   docker compose -f docker-compose.prod.yml run --rm migrate ./node_modules/.bin/tsx db/seed-fleet.ts
-#   docker compose -f docker-compose.prod.yml run --rm migrate ./node_modules/.bin/tsx db/seed-fleet.ts --with-demo-programme
-#   (--with-demo-programme also creates the shop placement reported as web_placement_id → WEB_PLACEMENT_ID;
-#    it refuses to run with NODE_ENV=production, by design)
-#   docker compose -f docker-compose.prod.yml run --rm migrate ./node_modules/.bin/tsx db/seed.ts
+# Seeds, re-runnable (see db/README.md). A re-run must read the same network file
+# as the first run: for the operator's own network set NETWORK_FILE=/app/config/network.yaml
+# in the vault env and uncomment the migrate volume below; -e NODE_ENV=production
+# then makes a lost NETWORK_FILE fail instead of seeding the TEST example:
+#   docker compose -f docker-compose.prod.yml run --rm -T -e NODE_ENV=production migrate ./node_modules/.bin/tsx db/seed-network.ts
+#   docker compose -f docker-compose.prod.yml run --rm -T migrate ./node_modules/.bin/tsx db/seed-network.ts --with-demo-programme
+#   (--with-demo-programme adds the TEST programme and the shop placement reported as
+#    web_placement_id → WEB_PLACEMENT_ID; it refuses to run with NODE_ENV=production, by design)
+#   docker compose -f docker-compose.prod.yml run --rm -T migrate ./node_modules/.bin/tsx db/seed.ts   # TEST demo org
 #
 # A database migrated before schema_migrations tracking existed needs, once:
 #   docker compose -f docker-compose.prod.yml run --rm migrate node db/migrate.mjs --baseline
@@ -133,7 +143,7 @@ services:
       NODE_ENV: production
       API_BASE: ${API_BASE:-http://api:3000}
       WEB_API_TOKEN: ${WEB_API_TOKEN:?WEB_API_TOKEN is required (read-only bearer for the shop; without it the shop renders TEST demo data)}
-      WEB_PLACEMENT_ID: ${WEB_PLACEMENT_ID:?WEB_PLACEMENT_ID is required (web_placement_id from seed-fleet; without it no item carries a tracked link)}
+      WEB_PLACEMENT_ID: ${WEB_PLACEMENT_ID:?WEB_PLACEMENT_ID is required (web_placement_id from seed-network; without it no item carries a tracked link)}
       NEXT_PUBLIC_SITE_NAME: ${NEXT_PUBLIC_SITE_NAME:-Afflino}
       LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
@@ -157,7 +167,7 @@ services:
   # One-shot migration runner: `node db/migrate.mjs` against DATABASE_URL, then
   # exits; the app services wait for it to succeed. The same image runs the
   # seeds (commands in the header). NODE_ENV is intentionally unset in the image
-  # so `seed-fleet.ts --with-demo-programme` can run; pass -e NODE_ENV=production
+  # so `seed-network.ts --with-demo-programme` can run; pass -e NODE_ENV=production
   # to a `run` when that guard is wanted.
   migrate:
     build:
@@ -166,11 +176,16 @@ services:
     image: paparazzi/migrate:${IMAGE_TAG:-latest}
     environment:
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
-      # seed-fleet.ts reads the fleet's sites.yaml from the mounted directory.
-      FLEET_SITES_YAML: /app/config/sites.yaml
-      # When set, seed-fleet also creates the shop's own `web` property.
-      AFFILIATE_WEB_HOST: ${AFFILIATE_WEB_HOST:-}
-    volumes:
-      - ${FLEET_SITES_DIR:-../autopub/config}:/app/config:ro
+      # The network file seed-network.ts reads. Unset → the TEST example the image
+      # ships (/app/db/network.example.yaml).
+      NETWORK_FILE: ${NETWORK_FILE:-}
+      # When set, seed-network also creates the shop's own `web` property (and, with
+      # --with-demo-programme, the placement reported as web_placement_id).
+      WEB_HOST: ${WEB_HOST:-}
+    # Optional, to seed your own network instead of the TEST example: save it as
+    # network.yaml next to this file (gitignored), uncomment the two lines below
+    # and set NETWORK_FILE=/app/config/network.yaml.
+    # volumes:
+    #   - ./network.yaml:/app/config/network.yaml:ro
     command: ["node", "db/migrate.mjs"]
     restart: "no"

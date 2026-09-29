@@ -79,7 +79,7 @@
     appeared on the second request after the window, not the first).
 21. **`/api` proxy is a route handler, not a `rewrites()` entry.** Next 14
     freezes rewrite destinations into `.next/routes-manifest.json` at build
-    time, but the fleet's `docker-compose.yml` passes `API_BASE` at container
+    time, but `docker-compose.prod.yml` passes `API_BASE` at container
     start (and builds with `NEXT_PUBLIC_API_BASE=/api`). `app/api/[...path]/
     route.ts` resolves `API_BASE` per request instead; the URL shape
     (`/api/:path*` → `${API_BASE}/:path*`) is the one the task specified.
@@ -120,8 +120,8 @@
     script exists for the shop's placement. The script dedupes an offer that
     appears in several looks within one run (`skipped_duplicate_offer`) and
     counts an idempotent replay (`X-Idempotent-Replay: true`) as
-    `replayed`. On the fleet server (no node on the host) it runs inside the
-    API container via `node --input-type=module -` with the script on stdin.
+    `replayed`. In a container deployment it runs from the api image, which
+    ships it (`docker/README.md` "Operator scripts").
 28. **Not verified here.** `docker/Dockerfile.web` was not rebuilt in this
     pass (out of this package's ownership); the standalone layout it expects
     (`.next/standalone/packages/web/server.js`) was confirmed to exist after
@@ -133,8 +133,8 @@
   and URL parsing would collapse them, climbing out of a path-prefixed `API_BASE`. Upstream
   calls time out after 30 s.
 - **The proxy makes the API reachable from the public shop host.** That is no wider than
-  `AFFILIATE_API_HOST` already is, but it means the API's own auth (the JWT stub) is the only
-  gate on both hosts.
+  the API's own public host already is, but it means the API's own auth (the JWT stub) is the
+  only gate on both hosts.
 
 ## Afflino foundation (2026-09-29)
 
@@ -601,3 +601,12 @@ instead).
     (no robots.txt disallow: a crawler must fetch a page to see its
     noindex). The `/api` proxy drops cookies both ways (the API is
     bearer-only and sets none).
+
+## Standalone app (2026-09-29)
+
+73. **Separated from the Marketing Fleet on 2026-09-29** (history, not instructions).
+    Afflino is its own website and app: the shop is Afflino's consumer shop,
+    items 21 and 27 and the `/api` proxy's comment now name
+    `docker-compose.prod.yml` and the api image instead of the shared host's
+    compose file, and the live mint form points at `db/seed-network.ts` for
+    real ids. No route, component or behaviour changed.

@@ -29,7 +29,7 @@
    for a one-shot runner, revisit if reproducibility of that image matters) and
    symlinks `packages/api/node_modules` to them, because the `db/` scripts
    `createRequire('../packages/api/node_modules/…')`. `NODE_ENV` is left unset
-   so `seed-fleet.ts --with-demo-programme` can run; the guard is the script's,
+   so `seed-network.ts --with-demo-programme` can run; the guard is the script's,
    not the image's.
 5. **Non-root.** All five images run as `node`; the web's fetch cache directory
    is owned by `node`. No `HEALTHCHECK` in the Dockerfiles — the compose files
@@ -41,10 +41,10 @@
    `WEB_API_TOKEN` and `WEB_PLACEMENT_ID` in addition to the previous four
    secrets/URLs; the web proxies `/api/*` to `API_BASE` (default
    `http://api:3000`) and `NEXT_PUBLIC_API_BASE` defaults to `/api`. The
-   `migrate` service mounts `${FLEET_SITES_DIR:-../autopub/config}` at
-   `/app/config` for `seed-fleet.ts`. Port publishing is unchanged (3000, 3001,
-   3002 on all interfaces — the LB/private network fronts them; the fleet host
-   uses the root compose with nginx-proxy instead).
+   `migrate` service passes `NETWORK_FILE` and `WEB_HOST` to `seed-network.ts`
+   (unset `NETWORK_FILE` → the image's `db/network.example.yaml`; a commented
+   volume mounts the operator's own file). Port publishing is unchanged (3000,
+   3001, 3002 on all interfaces — the LB/private network fronts them).
 8. **Sandbox caveat.** The builds were verified with `NODE_IMAGE` pointing at a
    local `node:22-alpine` derivative carrying the sandbox's egress CA (the only
    way to reach the npm registry from inside a build here). The Dockerfiles
@@ -56,8 +56,18 @@
 9. **Nested env files stay out of every image.** `.dockerignore` excludes `**/.env` and
    `**/.env.*` as well as the root ones; a probe build confirmed a `packages/web/.env.local`
    no longer enters the context while `.env.example` still does.
-10. **The fleet compose gives the affiliate stack its own network.** Postgres, Redis, migrate
-    and workers are on the `affiliate` bridge only; api, redirect and web also join `web` for
-    nginx-proxy. No WordPress container can reach Redis, whose `route:{token}` entries the
-    redirector trusts. Redis has no password on that private bridge; add `--requirepass` and a
-    password in `REDIS_URL` if anything else ever joins it.
+10. **Redis stays on a private network** (superseded as a compose setting by 11). The
+    shared-host compose file this item described put Postgres, Redis, migrate and workers on a
+    private bridge, with only api, redirect and web on the proxy's network, so no other
+    container on that host could reach Redis, whose `route:{token}` entries the redirector
+    trusts. The rule carries over to any deployment: Redis has no password on a private
+    network; add `--requirepass` and a password in `REDIS_URL` if anything else ever joins it.
+
+## 2026-09-29 — standalone app
+
+11. **Separated from the Marketing Fleet on 2026-09-29** (history, not instructions). The
+    Dockerfiles' build steps are unchanged (only comments changed): the migrate image ships
+    `db/seed-network.ts` and `db/network.example.yaml` (`db/` is copied whole), the
+    `migrate` service in `docker-compose.prod.yml` takes `NETWORK_FILE` and `WEB_HOST`
+    instead of a mounted site list, and the only compose files are this directory's
+    `docker-compose.yml` (dev Postgres + Redis) and `docker-compose.prod.yml`.

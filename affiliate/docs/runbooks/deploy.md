@@ -1,6 +1,6 @@
 # Runbook: deploy & rollback
 
-Dated 2026-09-23. Target: the pilot deployment described in
+Dated 2026-09-23 (commands revised 2026-09-29). Target: the pilot deployment described in
 `docs/infrastructure-recommendation.md` (managed Postgres + Redis, four
 services via `docker-compose.prod.yml`). **Nothing is provisioned yet —
 the infra decision (Option A/B) and account access are PENDING with the
@@ -9,7 +9,7 @@ user.** This runbook is the procedure to follow once they exist.
 ## 0. Preconditions (do not deploy without these)
 
 - [ ] `pnpm typecheck` and `pnpm test` green on the release commit
-      (587/587 tests in 30 files on 2026-09-29; `pnpm demo` and `pnpm demo:pg` green).
+      (616/616 tests in 31 files on 2026-09-29; `pnpm demo` and `pnpm demo:pg` green).
 - [ ] `docs/runbooks/dependency-review.md` re-run for the release; no
       unaddressed high/critical findings.
 - [ ] Fresh database backup exists and is restorable (see
@@ -17,8 +17,16 @@ user.** This runbook is the procedure to follow once they exist.
 - [ ] Secrets are populated in the vault / `/run/secrets/paparazzi.env`
       (see `docs/credential-setup.md`) — never in the image or the repo.
       Required: `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`,
-      `STUB_WEBHOOK_SECRET`; optional: `REDIRECT_BASE_URL`,
-      `NEXT_PUBLIC_API_BASE`, `RETENTION_*` overrides.
+      `STUB_WEBHOOK_SECRET`, `REDIRECT_BASE_URL`, and for the web
+      `WEB_API_TOKEN` + `WEB_PLACEMENT_ID` (compose refuses to load the file
+      without them; on a first deploy they come from the network seed and
+      the api image — README.md "Running Afflino"); `WEB_HOST`, required
+      for the first deploy: the shop's public hostname (without it the seed
+      creates no shop placement, prints no `web_placement_id`, and
+      `WEB_PLACEMENT_ID` comes out empty); `NETWORK_FILE` whenever the
+      operator's own network file is used (§1, first deploy and every
+      re-run of the seed); optional: `NEXT_PUBLIC_API_BASE`, `RETENTION_*`
+      overrides.
 - [ ] The release's migration files are reviewed (see § Migration policy
       below): migrations are **append-only and forward-only**.
 - [ ] On-call engineer + a `network_admin` user are available for the
@@ -55,101 +63,46 @@ environment (`set -a; source /run/secrets/paparazzi.env; set +a`).
    ```sh
    curl -fsS http://localhost:3000/healthz   # api
    curl -fsS http://localhost:3001/healthz   # redirect
+   curl -fsS http://localhost:3002/api/healthz   # web (through its /api proxy to the api)
    docker compose -f docker-compose.prod.yml ps   # all "healthy"/"running"
    ```
 5. **Verify money-path smoke.** Run the canary check: mint a link via the
    API, `GET /r/{token}`, expect a 302 to an allow-listed host with a
-   fresh `subid`. Then run the kill-switch drill (§3) — a deploy is not
+   fresh `subid`. Then run the kill-switch drill (§4) — a deploy is not
    done until the drill passes.
 6. **Watch.** Tail logs for 15 minutes; confirm the BullMQ queues
    (`provider-events`, `click-events`, `reconciliation`) are draining and
    no `LEDGER_IMBALANCE` 409s appear at payout prepare.
 
-## 1b. Fleet host deploy path (root `docker-compose.yml`, profile `affiliate`)
+**First deploy only** (a database with no rows yet): before step 2 —
+compose cannot load the file until both web values exist — build the
+migrate and api images with `docker build`, apply the migrations and run the
+network seed with the migrate image, mint the web's read-only token with the
+api image, and store `WEB_PLACEMENT_ID` and `WEB_API_TOKEN` in the vault;
+after step 4, mint the shop's links. The exact
+single lines are in README.md "Running Afflino" (production shape) and
+`docker/README.md` "Operator scripts". The seed is idempotent and changes no
+status an operator set, so it can be re-run on a later deploy, but a re-run
+must read **the same network file as the first run**. For the operator's own
+network: set `NETWORK_FILE=/app/config/network.yaml` in the vault env, keep
+`network.yaml` next to `docker-compose.prod.yml` and uncomment the `migrate`
+service's volume, then run the line below; `-e NODE_ENV=production` makes the
+seed refuse the TEST example file, so a lost `NETWORK_FILE` fails instead of
+seeding the five TEST properties into the real `afflino` organisation as
+approved and `owner_operated`:
 
-Added 2026-09-29. On the Marketing Fleet's Linode the platform is **not**
-deployed with `docker-compose.prod.yml` but with the fleet's generated root
-compose file (`infra/gen_compose.py` → `docker-compose.yml`, never
-hand-edited): services `affiliate_db` (postgres:16-alpine), `affiliate_redis`
-(redis:7-alpine, `--appendonly yes`), `affiliate_migrate` (one-shot),
-`affiliate_api`, `affiliate_redirect`, `affiliate_workers`, `affiliate_web`,
-all behind the `affiliate` profile, on the fleet's `internal` network with
-the three public services also on `web` behind nginx-proxy + Let's Encrypt.
-Postgres and Redis are containers with named volumes (`affiliate_db_data`,
-`affiliate_redis_data`) on the same 4 GB host as the five WordPress sites —
-a **pilot host**, not the shape in § 1 (`docs/capacity-plan.md` § 6). The
-images are the same five Dockerfiles; the env names are the same, mapped
-from the `AFFILIATE_*` block of the root `.env` (see the root
-`.env.example`). All commands run on the server in `/opt/marketing-fleet`.
+```sh
+docker compose -f docker-compose.prod.yml run --rm -T -e NODE_ENV=production migrate ./node_modules/.bin/tsx db/seed-network.ts
+```
 
-Preconditions, in addition to § 0: `COMPOSE_PROFILES=affiliate`; the three
-hosts `AFFILIATE_WEB_HOST`, `AFFILIATE_LINK_HOST`, `AFFILIATE_API_HOST` set
-and resolving to the server; `AFFILIATE_DB_PASSWORD` (hex only — it is
-spliced into `DATABASE_URL`), `AFFILIATE_JWT_SECRET`,
-`AFFILIATE_STUB_WEBHOOK_SECRET` (`openssl rand -hex 32` each). The exact
-`sed` lines are in the fleet `README.md` ("Affiliate platform").
+A sandbox-shape deployment (the TEST example file, seeded with
+`--with-demo-programme`, the only way to a placement until a programme is
+contracted) re-runs the seed with that flag and without `NODE_ENV=production`,
+which refuses both:
 
-1. **Pull the release** the way the fleet is rebuilt (the rebuild line in
-   the root `CLAUDE.md`), then build + start (the server has no `make`; the
-   `make affiliate-*` targets are these same lines where `make` exists):
-   ```sh
-   docker compose --profile affiliate up -d --build affiliate_db affiliate_redis affiliate_migrate affiliate_api affiliate_redirect affiliate_workers affiliate_web
-   ```
-   This builds the five images from `affiliate/docker/Dockerfile.*`, starts
-   `affiliate_db` and `affiliate_redis`, runs `affiliate_migrate`
-   (`node db/migrate.mjs`), and only then starts api, redirect and workers
-   (`depends_on: affiliate_migrate: service_completed_successfully`,
-   `affiliate_redis: service_healthy`) and the web. A fresh database applies
-   `0001`–`0005` and records them in `schema_migrations`; every later
-   release applies pending files only, and
-   `docker compose --profile affiliate run --rm affiliate_migrate node db/migrate.mjs`
-   is the same step on demand (a no-op when nothing is pending). If
-   `affiliate_migrate` fails, **nothing else starts** — see § 2.
-2. **Baseline, once, only for a database migrated before tracking existed**
-   (not the case for a database `make affiliate-up` created): a plain run
-   fails on `0001` with `relation "organisations" already exists` and a hint
-   naming `--baseline`. If the schema really is current:
-   ```sh
-   docker compose --profile affiliate run --rm affiliate_migrate node db/migrate.mjs --baseline
-   ```
-   Baseline records the present files without running them and verifies
-   nothing; never use it on a database that is not at the latest file.
-3. **Seed (first deploy only).**
-   ```sh
-   docker compose --profile affiliate run --rm -T affiliate_migrate ./node_modules/.bin/tsx db/seed-fleet.ts --with-demo-programme > affiliate-seed.json
-   ```
-   Idempotent; the JSON holds the ids the next lines need —
-   `web_placement_id` for `AFFILIATE_WEB_PLACEMENT_ID`, `org_id` for the
-   token. The `sed` lines that write them into `.env`, the
-   `AFFILIATE_WEB_API_TOKEN` mint (`scripts/mint-dev-token.mjs` inside
-   `affiliate_api`, the JWT stub, `--ttl 365d`) and the web restart
-   (`docker compose --profile affiliate up -d affiliate_web`) are in the
-   fleet `README.md` ("Affiliate platform"). The `--with-demo-programme`
-   rows are TEST data; the migrate image deliberately sets no `NODE_ENV`,
-   so the flag runs there.
-4. **Verify health** (each line prints `{"ok":true}`):
-   ```sh
-   curl -s "https://$(grep '^AFFILIATE_API_HOST=' .env | cut -d= -f2-)/healthz"
-   curl -s "https://$(grep '^AFFILIATE_LINK_HOST=' .env | cut -d= -f2-)/healthz"
-   curl -s "https://$(grep '^AFFILIATE_WEB_HOST=' .env | cut -d= -f2-)/api/healthz"
-   docker compose --profile affiliate ps
-   ```
-5. **Money-path smoke.** Mint the shop's links (`scripts/mint-links.mjs`
-   inside `affiliate_api`; the fleet `README.md` has the single line), open a
-   look on the shop (`/shop` on the web host) and follow its "View at merchant" link: expect `302`
-   with `subid=` to the programme's allow-listed host and a `click.observed`
-   line in
-   `docker compose --profile affiliate logs -f --tail=200 affiliate_api affiliate_redirect affiliate_workers affiliate_web`.
-   Then run the kill-switch drill (§ 4) on the TEST programme.
-6. **Rollback (code-only release).** Check out the previous commit and run
-   the step-1 line again; the migration record is unchanged, so the migrate
-   step is a no-op. A release that applied a migration follows § 2
-   (forward compensating migration, or restore `affiliate_db_data` from the
-   host's backup).
-   `docker compose --profile affiliate rm --stop --force affiliate_db affiliate_redis affiliate_migrate affiliate_api affiliate_redirect affiliate_workers affiliate_web`
-   stops and removes only the affiliate containers and keeps the volumes;
-   never `docker compose down` for this — it takes the WordPress stack with
-   it.
+```sh
+docker compose -f docker-compose.prod.yml run --rm -T migrate ./node_modules/.bin/tsx db/seed-network.ts --with-demo-programme
+```
 
 ## 2. Migration rollback policy
 
@@ -190,9 +143,14 @@ is already current). Consequences:
 1. Note the current `IMAGE_TAG` and the failure symptom; open an incident
    channel.
 2. If the failure is **code-only** (no migration applied in this
-   release): `IMAGE_TAG=<previous> docker compose -f
-   docker-compose.prod.yml up -d --build` and re-run the §1 verify steps.
-   No database action needed.
+   release): check out the previous release tag and redeploy it (§1 step 1
+   tags every release `release-YYYYMMDD-HHMM`, so the second-newest tag is
+   the one before this release; `--build` builds from the checkout, which is
+   why the checkout comes first), then re-run the §1 verify steps. No
+   database action needed.
+   ```sh
+   PREV="$(git tag --list 'release-*' | sort | tail -n 2 | head -n 1)" && git checkout "$PREV" && IMAGE_TAG="$PREV" docker compose -f docker-compose.prod.yml up -d --build
+   ```
 3. If the release **included a migration** that applied: follow the
    migration rollback policy above (forward compensating migration
    preferred; snapshot restore for corruption).
@@ -214,15 +172,21 @@ pilot. Grounded in the tests at
 ~426–536) — the drill is the live version of that test.
 
 Use a **canary programme** (TEST-labelled, never a real merchant
-programme).
+programme). Until a real programme exists the canary is the TEST "Demo
+Network Programme" from the network seed; the lines below read its id and
+the organisation's id from `seed-network.json` (the first deploy's output,
+README.md "Running Afflino") and mint a `network_admin` token with the api
+image (`JWT_SECRET` in the environment), against the api on this host. The
+token's subject is the seeded `network_admin` user's id: the pause and resume
+write an `audit_log` row whose `actor_id` references `users`, so a subject
+that is not a user id fails the call with a 500.
 
 1. **Baseline:** mint a link on the canary programme
    (`POST /v1/links` → 201, capture `token`). `GET /r/{token}` → expect
    **302** to the allow-listed host with `subid=` in the location.
 2. **Pause** (as `network_admin`):
    ```sh
-   curl -X POST $API_BASE/v1/programmes/$CANARY_ID/pause \
-     -H "Authorization: Bearer <network_admin_jwt>"
+   curl -fsS -X POST "http://localhost:3000/v1/programmes/$(grep -m1 '"programme_id"' seed-network.json | sed 's/.*: "\(.*\)".*/\1/')/pause" -H "Authorization: Bearer $(docker run --rm --pull never -e JWT_SECRET "paparazzi/api:${IMAGE_TAG:-latest}" node scripts/mint-dev-token.mjs --org-id "$(grep -m1 '"org_id"' seed-network.json | sed 's/.*: "\(.*\)".*/\1/')" --role network_admin --sub "$(grep -A1 '"network_admin": {' seed-network.json | sed -n 's/.*"id": "\(.*\)".*/\1/p')")"
    ```
    Expect 200, `data.status == "paused"`. (Pause is idempotent —
    re-pausing returns 200; the test asserts this.)
@@ -236,16 +200,18 @@ programme).
      `outbox` event `programme.paused`.
 4. **Resume** (as `network_admin`):
    ```sh
-   curl -X POST $API_BASE/v1/programmes/$CANARY_ID/resume \
-     -H "Authorization: Bearer <network_admin_jwt>"
+   curl -fsS -X POST "http://localhost:3000/v1/programmes/$(grep -m1 '"programme_id"' seed-network.json | sed 's/.*: "\(.*\)".*/\1/')/resume" -H "Authorization: Bearer $(docker run --rm --pull never -e JWT_SECRET "paparazzi/api:${IMAGE_TAG:-latest}" node scripts/mint-dev-token.mjs --org-id "$(grep -m1 '"org_id"' seed-network.json | sed 's/.*: "\(.*\)".*/\1/')" --role network_admin --sub "$(grep -A1 '"network_admin": {' seed-network.json | sed -n 's/.*"id": "\(.*\)".*/\1/p')")"
    ```
    Expect 200, `data.status == "active"`. (Resuming a non-paused
    programme is 409 — the drill uses a paused one.)
 5. **Verify recovery:** `GET /r/{token}` → expect **302** with `subid=`
    again; mint a new link → 201.
-6. **Negative control:** attempt pause as a non-admin role (e.g.
-   `editor`) → expect **403** `FORBIDDEN`. If this ever returns 200, stop
-   the drill and treat it as a security incident.
+6. **Negative control:** attempt pause as a non-admin role (`editor`)
+   → expect **403** `FORBIDDEN` (the line prints the status code). If this
+   ever returns 200, stop the drill and treat it as a security incident.
+   ```sh
+   curl -s -o /dev/null -w '%{http_code}\n' -X POST "http://localhost:3000/v1/programmes/$(grep -m1 '"programme_id"' seed-network.json | sed 's/.*: "\(.*\)".*/\1/')/pause" -H "Authorization: Bearer $(docker run --rm --pull never -e JWT_SECRET "paparazzi/api:${IMAGE_TAG:-latest}" node scripts/mint-dev-token.mjs --org-id "$(grep -m1 '"org_id"' seed-network.json | sed 's/.*: "\(.*\)".*/\1/')" --role editor --sub "$(grep -A1 '"network_admin": {' seed-network.json | sed -n 's/.*"id": "\(.*\)".*/\1/p')")"
+   ```
 7. Log the drill (date, operator, programme id, all six outcomes) in the
    ops log. Any step failing = deploy is not accepted; roll back per §3.
 

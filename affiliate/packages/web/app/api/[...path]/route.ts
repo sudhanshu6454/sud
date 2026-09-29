@@ -7,7 +7,7 @@ import { apiBase } from '../../../lib/server-env';
  * Why a route handler and not `rewrites()` in next.config: Next 14 freezes
  * rewrite destinations into the routes manifest at `next build`, but the
  * deployment passes API_BASE at container start (docker-compose sets
- * API_BASE=http://affiliate_api:3000 as a runtime env). This handler reads
+ * API_BASE=http://api:3000 as a runtime env). This handler reads
  * API_BASE on every request, so the same image works wherever the API lives.
  *
  * Trust: the browser's own Authorization header is forwarded untouched;

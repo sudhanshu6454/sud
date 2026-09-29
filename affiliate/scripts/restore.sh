@@ -100,12 +100,16 @@ if [ "$DRILL_DB" = "$SRC_NAME" ]; then
   die "scratch database '$DRILL_DB' equals the source database — refusing (the drill drops its target). Set PAPARAZZI_RESTORE_DB to a scratch name."
 fi
 
+# psql takes the database (or URL) as a positional argument; pg_restore's only
+# positional argument is the dump file, so it gets the same target through -d.
 if [ -n "${DATABASE_URL:-}" ]; then
   MAINT_CONN=("$MAINT_URL")
   DRILL_CONN=("$(swap_db "$DRILL_DB")")
+  RESTORE_CONN=(-d "$(swap_db "$DRILL_DB")")
 else
   MAINT_CONN=(-h "$SRV_HOST" -p "$SRV_PORT" -U "$SRV_USER" postgres)
   DRILL_CONN=(-h "$SRV_HOST" -p "$SRV_PORT" -U "$SRV_USER" "$DRILL_DB")
+  RESTORE_CONN=(-h "$SRV_HOST" -p "$SRV_PORT" -U "$SRV_USER" -d "$DRILL_DB")
 fi
 
 # ------------------------------------------------- report plumbing
@@ -141,7 +145,7 @@ log "scratch database ready"
 # ------------------------------------------------- 2. restore
 
 log "pg_restore -> $DRILL_DB ..."
-if pg_restore "${DRILL_CONN[@]}" "$DUMP" >/tmp/pg_restore_drill.log 2>&1; then
+if pg_restore "${RESTORE_CONN[@]}" "$DUMP" >/tmp/pg_restore_drill.log 2>&1; then
   check "pg_restore completes" 0 "dump restored into $DRILL_DB"
 else
   rc=$?

@@ -11,11 +11,12 @@ than the two committed examples).
 | `paparazzi/redirect` | `Dockerfile.redirect` | `@paparazzi/redirect` (`GET /r/{token}`) | 3001 | `node dist/index.js` (`/app/packages/redirect`) |
 | `paparazzi/workers` | `Dockerfile.workers` | `@paparazzi/workers` (BullMQ) | — | `node dist/index.js` (`/app/packages/workers`); one-off purge: `node dist/retention/run-once.js [--dry-run]` |
 | `paparazzi/web` | `Dockerfile.web` | `@paparazzi/web` (Next.js 14 standalone: the Afflino web app, the shop at `/shop`) | 3000 | `node packages/web/server.js` (`/app`) |
-| `paparazzi/migrate` | `Dockerfile.migrate` | `db/migrate.mjs`, `db/seed.ts`, `db/seed-fleet.ts` | — | `node db/migrate.mjs` (`/app`) |
+| `paparazzi/migrate` | `Dockerfile.migrate` | `db/migrate.mjs`, `db/seed.ts`, `db/seed-network.ts` (+ `db/network.example.yaml`) | — | `node db/migrate.mjs` (`/app`) |
 
-All five run as the unprivileged `node` user (uid 1000); every copied file is
-`chown`ed to it, so the images work under `cap_drop: [ALL]` +
-`no-new-privileges` (the root `docker-compose.yml` sets both).
+All five run as the unprivileged `node` user (uid 1000) and listen above port
+1024; every copied file is `chown`ed to it, so no image needs a capability and
+`cap_drop: [ALL]` + `no-new-privileges` can be set on every service
+(`docker-compose.prod.yml` sets neither today).
 
 ## Build
 
@@ -116,49 +117,63 @@ Runtime environment (read on every request, never baked — see
 
 ## migrate
 
-`db/migrate.mjs`, `db/seed.ts` and `db/seed-fleet.ts` borrow `pg` and `yaml`
+`db/migrate.mjs`, `db/seed.ts` and `db/seed-network.ts` borrow `pg` and `yaml`
 from `../packages/api/node_modules` (relative to `db/`) via `createRequire`. The
 image keeps that path: `docker/migrate.package.json` installs `pg 8.23.0`,
 `yaml 2.9.1` and `tsx 4.23.15` (the versions resolved in the workspace
 `pnpm-lock.yaml`) into `/app/node_modules`, and `/app/packages/api/node_modules`
-is a symlink to it. `db/` is copied verbatim. Commands (`DATABASE_URL`
-required, WORKDIR `/app`):
+is a symlink to it. `db/` is copied verbatim, so the TEST example network file
+is at `/app/db/network.example.yaml`. Commands (`DATABASE_URL` required,
+WORKDIR `/app`):
 
 ```
 node db/migrate.mjs
 node db/migrate.mjs --status
 node db/migrate.mjs --baseline
 ./node_modules/.bin/tsx db/seed.ts
-./node_modules/.bin/tsx db/seed-fleet.ts --with-demo-programme
+./node_modules/.bin/tsx db/seed-network.ts --with-demo-programme
 ```
 
-`seed-fleet.ts` reads `FLEET_SITES_YAML` (compose mounts the fleet's
-`autopub/config` at `/app/config` and sets `/app/config/sites.yaml`) and
-`AFFILIATE_WEB_HOST` (creates the shop's `web` property and, with
-`--with-demo-programme`, the placement reported as `web_placement_id`).
+`seed-network.ts` reads `NETWORK_FILE` (unset or empty → the image's
+`/app/db/network.example.yaml`; for the operator's own file, mount it, e.g.
+`-v "$PWD/network.yaml:/app/config/network.yaml:ro" -e NETWORK_FILE=/app/config/network.yaml`,
+or uncomment the volume on the `migrate` service in `docker-compose.prod.yml`)
+and `WEB_HOST` (creates the shop's `web` property and, with
+`--with-demo-programme`, the placement `network-shop-web` reported as
+`web_placement_id`).
 `NODE_ENV` is deliberately **not** set in this image: `--with-demo-programme`
 seeds TEST-labelled rows and refuses to run under `NODE_ENV=production`. Pass
-`-e NODE_ENV=production` to a run when that guard is wanted.
+`-e NODE_ENV=production` to a run when that guard is wanted; under it the seed
+also refuses the example network file, so a re-run of the seed against the
+operator's own network fails when `NETWORK_FILE` is missing instead of seeding
+the five TEST properties into the real organisation
+(`docs/runbooks/deploy.md` §1).
 
 ## Operator scripts shipped in the api image
 
 `mint-dev-token.mjs` is the dev-grade JWT stub (the API trusts its claims
 verbatim until the IdP lands); `mint-links.mjs` mints one tracked link per live
-offer for a placement (`--dry-run` to preview). With the fleet seed's JSON saved
-as `seed-fleet.json` (see the smoke test), a read-only token for the shop and
-the links for its placement are:
+offer for a placement (`--dry-run` to preview). With the network seed's JSON
+saved as `seed-network.json` (see the smoke test) and `JWT_SECRET` in the
+environment, a read-only token for the shop (the dev stub; `--ttl 365d` so it
+outlives the default 8 h, rotated with `JWT_SECRET`), an owner token, and — once
+the stack from `docker-compose.prod.yml` is up — the links for the shop's
+placement are (`--pull never`: a missing local image fails instead of being
+pulled from a registry with `JWT_SECRET` handed to it; `IMAGE_TAG` as set for
+the deploy):
 
 ```
-WEB_API_TOKEN=$(docker run --rm -e JWT_SECRET="$JWT_SECRET" paparazzi/api:latest node scripts/mint-dev-token.mjs --org-id "$(grep -m1 '"org_id"' seed-fleet.json | sed 's/.*: "\(.*\)".*/\1/')" --role publisher_analyst --sub web-shop)
-OWNER_TOKEN=$(docker run --rm -e JWT_SECRET="$JWT_SECRET" paparazzi/api:latest node scripts/mint-dev-token.mjs --org-id "$(grep -m1 '"org_id"' seed-fleet.json | sed 's/.*: "\(.*\)".*/\1/')" --role publisher_owner --sub fleet-owner)
-docker run --rm --network NETWORK_NAME -e API_BASE=http://api:3000 -e API_TOKEN="$OWNER_TOKEN" paparazzi/api:latest node scripts/mint-links.mjs --placement "$(grep -m1 '"web_placement_id"' seed-fleet.json | sed 's/.*: "\(.*\)".*/\1/')"
+WEB_API_TOKEN=$(docker run --rm --pull never -e JWT_SECRET "paparazzi/api:${IMAGE_TAG:-latest}" node scripts/mint-dev-token.mjs --org-id "$(grep -m1 '"org_id"' seed-network.json | sed 's/.*: "\(.*\)".*/\1/')" --role publisher_analyst --sub web-shop --ttl 365d)
+OWNER_TOKEN=$(docker run --rm --pull never -e JWT_SECRET "paparazzi/api:${IMAGE_TAG:-latest}" node scripts/mint-dev-token.mjs --org-id "$(grep -m1 '"org_id"' seed-network.json | sed 's/.*: "\(.*\)".*/\1/')" --role publisher_owner --sub network-owner)
+docker compose -f docker-compose.prod.yml run --rm --no-deps -e API_BASE=http://api:3000 -e API_TOKEN="$OWNER_TOKEN" api node scripts/mint-links.mjs --placement "$(grep -m1 '"web_placement_id"' seed-network.json | sed 's/.*: "\(.*\)".*/\1/')"
 ```
 
-(`NETWORK_NAME` is whichever Docker network the api container is on — the fleet
-compose's `internal`; the smoke test below uses `pz-test`. `grep`/`sed` are used
-rather than node because the fleet host has no node outside the containers.)
+(`run --no-deps api` starts a one-off container from the api image on the
+compose network, so `http://api:3000` is the running api service; the smoke test
+below does the same with plain `docker run --network pz-test`. `grep`/`sed` read
+the JSON so the host needs no node outside the containers.)
 
-## Smoke test (what was verified, 2026-09-29; re-run after the Afflino web rebuild)
+## Smoke test (what was verified, 2026-09-29; re-run with the network seed)
 
 Run from `affiliate/` after building the five images with the `:test` tag. Every
 line is a complete command (ids come from the seed's JSON, tokens from the api
@@ -172,12 +187,12 @@ docker run -d --name pz-redis --network pz-test redis:7-alpine
 until docker exec pz-db pg_isready -U paparazzi -d paparazzi >/dev/null 2>&1; do sleep 1; done
 docker run --rm --network pz-test -e DATABASE_URL=postgresql://paparazzi:pw@pz-db:5432/paparazzi paparazzi/migrate:test
 docker run --rm --network pz-test -e DATABASE_URL=postgresql://paparazzi:pw@pz-db:5432/paparazzi paparazzi/migrate:test ./node_modules/.bin/tsx db/seed.ts
-docker run --rm --network pz-test -e DATABASE_URL=postgresql://paparazzi:pw@pz-db:5432/paparazzi -e FLEET_SITES_YAML=/app/config/sites.yaml -e AFFILIATE_WEB_HOST=shop.pz-test.invalid -v "$PWD/../autopub/config:/app/config:ro" paparazzi/migrate:test ./node_modules/.bin/tsx db/seed-fleet.ts --with-demo-programme > seed-fleet.json
-ORG_ID=$(grep -m1 '"org_id"' seed-fleet.json | sed 's/.*: "\(.*\)".*/\1/')
-WEB_PLACEMENT_ID=$(grep -m1 '"web_placement_id"' seed-fleet.json | sed 's/.*: "\(.*\)".*/\1/')
-LOOK_ID=$(grep -m1 '"look_id"' seed-fleet.json | sed 's/.*: "\(.*\)".*/\1/')
+docker run --rm --network pz-test -e DATABASE_URL=postgresql://paparazzi:pw@pz-db:5432/paparazzi -e WEB_HOST=shop.pz-test.invalid paparazzi/migrate:test ./node_modules/.bin/tsx db/seed-network.ts --with-demo-programme > seed-network.json
+ORG_ID=$(grep -m1 '"org_id"' seed-network.json | sed 's/.*: "\(.*\)".*/\1/')
+WEB_PLACEMENT_ID=$(grep -m1 '"web_placement_id"' seed-network.json | sed 's/.*: "\(.*\)".*/\1/')
+LOOK_ID=$(grep -m1 '"look_id"' seed-network.json | sed 's/.*: "\(.*\)".*/\1/')
 WEB_API_TOKEN=$(docker run --rm -e JWT_SECRET=test-secret paparazzi/api:test node scripts/mint-dev-token.mjs --org-id "$ORG_ID" --role publisher_analyst --sub web-shop)
-OWNER_TOKEN=$(docker run --rm -e JWT_SECRET=test-secret paparazzi/api:test node scripts/mint-dev-token.mjs --org-id "$ORG_ID" --role publisher_owner --sub fleet-owner)
+OWNER_TOKEN=$(docker run --rm -e JWT_SECRET=test-secret paparazzi/api:test node scripts/mint-dev-token.mjs --org-id "$ORG_ID" --role publisher_owner --sub network-owner)
 docker run -d --name pz-api --network pz-test --network-alias api -p 127.0.0.1:3100:3000 -e NODE_ENV=production -e API_HOST=0.0.0.0 -e API_PORT=3000 -e DATABASE_URL=postgresql://paparazzi:pw@pz-db:5432/paparazzi -e REDIS_URL=redis://pz-redis:6379 -e JWT_SECRET=test-secret -e REDIRECT_BASE_URL=http://redirect:3001 paparazzi/api:test
 docker run -d --name pz-redirect --network pz-test --network-alias redirect -p 127.0.0.1:3101:3001 -e NODE_ENV=production -e REDIRECT_PORT=3001 -e DATABASE_URL=postgresql://paparazzi:pw@pz-db:5432/paparazzi -e REDIS_URL=redis://pz-redis:6379 paparazzi/redirect:test
 docker run -d --name pz-workers --network pz-test -e NODE_ENV=production -e DATABASE_URL=postgresql://paparazzi:pw@pz-db:5432/paparazzi -e REDIS_URL=redis://pz-redis:6379 -e STUB_WEBHOOK_SECRET=test-secret paparazzi/workers:test
@@ -194,23 +209,28 @@ LINK_TOKEN=$(curl -s "http://127.0.0.1:3200/looks/$LOOK_ID" | grep -o 'redirect:
 curl -s -o /dev/null -D - "http://127.0.0.1:3101/r/$LINK_TOKEN" | grep -i '^HTTP\|^location\|^set-cookie'
 docker exec pz-db psql -U paparazzi -d paparazzi -tAc "select count(*) from clicks"
 sleep 8; docker logs pz-workers 2>&1 | grep -o '"message":"[^"]*"' | sort -u
-docker rm -f pz-web pz-workers pz-redirect pz-api pz-redis pz-db && docker network rm pz-test && rm -f seed-fleet.json
+docker rm -f pz-web pz-workers pz-redirect pz-api pz-redis pz-db && docker network rm pz-test && rm -f seed-network.json
 ```
 
-Observed on the last run (2026-09-29, re-run verbatim after the web review
-fixes with `paparazzi/web:test` (273 MB) and `paparazzi/api:test` (264 MB;
-`src/errors.ts` now answers Fastify's own 4xx as `VALIDATION_ERROR`) rebuilt
-from this tree, and the migrate, redirect and workers images of the same day —
-their code did not change; all containers running as `node`, PID 1; the
-output below was identical):
+Observed on the last run (2026-09-29, re-run verbatim after the switch to
+the network seed and again after the review fixes, with `paparazzi/migrate:test`
+(262 MB) and `paparazzi/api:test` (264 MB) rebuilt from this tree,
+`paparazzi/web:test` (273 MB) rebuilt with every layer cached (no input
+changed), and the redirect and workers images of the same day — their code did
+not change; all containers running as `node`, PID 1). On that stack, with the
+api forwarded to `localhost:3000`, the kill-switch drill lines of
+`docs/runbooks/deploy.md` §4 ran as written: pause 200 `paused` (the link then
+served the paused page, 200), resume 200 `active` (302 again), `editor` pause
+403, and `audit_log` rows `programme.pause` / `programme.resume` naming the
+seeded `network_admin` user:
 
-- migrate: `5 migration(s) applied, 0 already applied`; `seed.ts` and `seed-fleet.ts --with-demo-programme` succeed (`seed-fleet: 5 site(s) from /app/config/sites.yaml, shop host shop.pz-test.invalid, with TEST demo programme`). Checked on the first run of the day and not repeated here: `--status` lists 0001–0005 applied and the fleet seed is byte-identical on a second run (5 looks, one per fleet site, `web_placement_id` reported).
-- `curl http://127.0.0.1:3100/healthz` → `{"ok":true}` 200; `curl http://127.0.0.1:3101/healthz` → `{"ok":true}` 200; `curl http://127.0.0.1:3200/api/healthz` (proxy) → `{"ok":true}` 200; without a bearer the proxy relays the API's 401 envelope.
-- `curl http://127.0.0.1:3200/` → `<title>Afflino</title>` (the marketing home); `curl http://127.0.0.1:3200/shop` → `<title>Shop the looks · Afflino</title>` and five `<h2 class="LookCard_title__…">` cells (`Demo look — Filmybuff`, `— Crazy4Marketing`, `— ScreenStat`, `— Marketing Mentalist`, `— Marketing Junkies`; order varies with publish time), no "Demo data" badge (live).
-- mint-links: `minted=1 replayed=0 skipped_linked=4 … failed=0` (one live offer shared by the five looks), url `http://redirect:3001/r/<token>`.
-- `curl http://127.0.0.1:3200/looks/<look id>` → `<title>Demo look — Marketing Mentalist · Afflino</title>` and `<a href="http://redirect:3001/r/<token>" rel="sponsored nofollow noopener"` (the "View at merchant →" CTA), no "Link not available yet", no demo badge.
-- `curl -D - http://127.0.0.1:3101/r/<token>` → `HTTP/1.1 302 Found`, `location: https://shop.example.com/p/demo-fleet-sku?subid=<click_id>`, no `set-cookie` line; `select count(*) from clicks` → `1`.
-- workers log: `workers started` (queues click-events, provider-events, feeds, reconciliation, retention), `outbox relay started`, `retention repeat scheduled`, `outbox batch published`, then `click.observed` for that click.
+- migrate: `5 migration(s) applied, 0 already applied`; `seed.ts` succeeds and `seed-network.ts --with-demo-programme` reads the example file shipped in the image (`seed-network: 5 properties from /app/db/network.example.yaml, shop host shop.pz-test.invalid, with TEST demo programme`). Not repeated inside the image here (checked the same day on a fresh Postgres 16 outside Docker): a second run gives identical row counts and byte-identical JSON.
+- `curl http://127.0.0.1:3100/healthz` → `{"ok":true}`; `curl http://127.0.0.1:3101/healthz` → `{"ok":true}`; `curl http://127.0.0.1:3200/api/healthz` (proxy) → `{"ok":true}`.
+- `curl http://127.0.0.1:3200/` → `<title>Afflino</title>` (the marketing home); `curl http://127.0.0.1:3200/shop` → `<title>Shop the looks · Afflino</title>` and five `<h2 class="LookCard_title__…">` cells, one per entry of the network file (`Demo look — Demo Instagram`, `— Demo YouTube`, `— Demo Snapchat`, `— Demo Telegram`, `— Demo Web`; order varies with publish time), no "Demo data" badge (live).
+- mint-links: `summary: looks=5 items=5 minted=1 replayed=0 skipped_linked=4 skipped_no_offer=0 skipped_duplicate_offer=0 failed=0` (one live offer shared by the five looks), url `http://redirect:3001/r/<token>`.
+- `curl http://127.0.0.1:3200/looks/<look id>` (the first property's look) → `<title>Demo look — Demo Instagram · Afflino</title>` and `<a href="http://redirect:3001/r/<token>" rel="sponsored nofollow noopener"` (the "View at merchant →" CTA), no "Link not available yet", no demo badge.
+- `curl -D - http://127.0.0.1:3101/r/<token>` → `HTTP/1.1 302 Found`, `location: https://shop.example.com/p/demo-network-sku?subid=<click_id>`, no `set-cookie` line; `select count(*) from clicks` → `1`.
+- workers log: `workers started`, `outbox relay started`, `retention repeat scheduled`, `outbox batch published`, then `click.observed` for that click.
 
 The sandbox that ran this build cannot reach the npm registry without an extra
 CA, so the builds were run with `--build-arg NODE_IMAGE=<node:22-alpine plus
