@@ -1,12 +1,13 @@
 import type { Metadata } from 'next';
-import { LegalStub } from '@/components/shell/LegalStub';
+import { StubPage } from '@/components/marketing/StubPage';
 
-export const metadata: Metadata = { title: 'Terms' };
+export const metadata: Metadata = { title: 'Terms of use' };
 
+/** Honest stub: the terms do not exist yet. */
 export default function TermsPage() {
   return (
-    <LegalStub title="Terms of use">
-      <p>Afflino&apos;s terms of use are being prepared. They will be published here before Afflino launches.</p>
-    </LegalStub>
+    <StubPage eyebrow="Legal" title="Terms of use">
+      <p>This document is being prepared and will be published before launch.</p>
+    </StubPage>
   );
 }

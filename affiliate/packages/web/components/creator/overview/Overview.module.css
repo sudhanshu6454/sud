@@ -1,0 +1,240 @@
+/* Creator Overview — 1c (desktop) and 1e left (phone). Values from the
+   artboards: 24px 32px cells over 2px rules, 12px eyebrows 16px above their
+   content, the 2fr / 1fr chart row, the Top links table. */
+
+.badge {
+  margin-bottom: 0;
+}
+
+/* ---------- desktop ---------- */
+
+/* When the controls do not fit beside the title (≤ ~960px), they move under
+   it instead of squeezing "Last 30 days" onto two lines. */
+.header {
+  flex-wrap: wrap;
+}
+
+.header h1 {
+  white-space: nowrap;
+}
+
+.desktop {
+  display: flex;
+  flex-direction: column;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  border-bottom: 2px solid var(--color-divider);
+}
+
+.chartCell {
+  min-width: 0;
+  padding: var(--space-6) var(--space-8);
+  border-right: 2px solid var(--color-divider);
+}
+
+.platformCell {
+  min-width: 0;
+  padding: var(--space-6) var(--space-8);
+}
+
+.sectionLabel {
+  margin-bottom: var(--space-4);
+}
+
+.axisSkeleton {
+  display: flex;
+  justify-content: space-between;
+  margin-top: var(--space-2);
+  height: 19px;
+  align-items: center;
+}
+
+.platforms {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  font-size: 14px;
+}
+
+.platformRow {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.platformBar {
+  margin-top: 6px;
+}
+
+.links {
+  padding: var(--space-6) var(--space-8);
+}
+
+.linksHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-3);
+}
+
+.allLinks {
+  font-size: 13px;
+}
+
+/* The link column may wrap (after a "/" only) on narrower windows instead
+   of running into Clicks. */
+.linkCell {
+  padding-right: var(--space-4);
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+/* Four 36px figures stop fitting a quarter of the content area below
+   ~1240px (the Clicks split line wraps first): two rows of two, with the
+   strip's rules redrawn. */
+@media (max-width: 1240px) and (min-width: 761px) {
+  div.kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  div.kpis > * {
+    border-right: 0;
+  }
+
+  div.kpis > :nth-child(odd) {
+    border-right: 2px solid var(--color-divider);
+  }
+
+  div.kpis > :nth-child(n + 3) {
+    border-top: 2px solid var(--color-divider);
+  }
+}
+
+@media (max-width: 960px) and (min-width: 761px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .chartCell {
+    border-right: 0;
+    border-bottom: 2px solid var(--color-divider);
+  }
+}
+
+/* ---------- phone (1e) ---------- */
+
+.phone {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .desktop {
+    display: none;
+  }
+
+  .phone {
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+.hero {
+  padding: 20px;
+  border-bottom: 2px solid var(--color-divider);
+}
+
+.heroTop {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0 var(--space-2);
+}
+
+/* The badge sits in the eyebrow's line without making it taller. */
+.heroTop .badge {
+  margin: -4px 0;
+}
+
+.heroValue {
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 40px;
+  letter-spacing: -0.04em;
+  margin-top: 6px;
+  white-space: nowrap;
+}
+
+.heroLine {
+  margin: var(--space-1) 0 0;
+  font-size: 13px;
+  color: var(--color-neutral-700);
+}
+
+.positive {
+  color: var(--color-accent-700);
+}
+
+.mini {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  border-bottom: 2px solid var(--color-divider);
+}
+
+.miniCell {
+  min-width: 0;
+  padding: 14px 20px;
+}
+
+.miniCell + .miniCell {
+  border-left: 2px solid var(--color-divider);
+}
+
+.miniCell dt {
+  font-size: 11px;
+  color: var(--color-neutral-700);
+}
+
+.miniCell dd {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.phoneLinks {
+  padding: 20px;
+}
+
+.phoneLinksLabel {
+  margin-bottom: var(--space-3);
+}
+
+.phoneList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.phoneRow {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-divider);
+  font-size: 14px;
+}
+
+.phoneOffer {
+  font-weight: 600;
+  min-width: 0;
+}

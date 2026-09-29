@@ -1,0 +1,105 @@
+/* Brand billing: wallet / spend / fee strip, then 2fr history | 1fr plan. */
+
+.anchor {
+  scroll-margin-top: 0;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+}
+
+.history {
+  padding: var(--space-6) var(--space-8);
+  border-right: 2px solid var(--color-divider);
+  min-width: 0;
+}
+
+.meta {
+  font-size: 13px;
+  color: var(--color-neutral-700);
+}
+
+.ref {
+  font-size: 13px;
+}
+
+.plan {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-6) var(--space-8);
+  min-width: 0;
+}
+
+.planName {
+  margin-top: var(--space-1);
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 22px;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.planPrice {
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 32px;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+}
+
+.planPer {
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--color-neutral-700);
+}
+
+.planFee {
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-accent-700);
+}
+
+.features {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 14px;
+  border-top: 1px solid var(--color-divider);
+}
+
+.features li {
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.planActions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin: var(--space-2) 0;
+}
+
+@media (max-width: 1100px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .history {
+    border-right: 0;
+    border-bottom: 2px solid var(--color-divider);
+  }
+}
+
+@media (max-width: 760px) {
+  .history,
+  .plan {
+    padding: var(--space-4) 20px;
+  }
+
+  .touch {
+    min-height: 44px;
+  }
+}

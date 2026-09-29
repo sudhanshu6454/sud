@@ -1,9 +1,9 @@
 # Pre-pilot checklist
 
 What is built and proven in this sandbox vs what still needs engineering or a
-human before the pilot. Last verified test run (2026-09-29): **133/133 green
-across 11 files** (`./node_modules/.bin/vitest run`; the earlier figures of 57
-and 94 are stale). Legend: ✅ verified in this repo · ⏳ not done — needs
+human before the pilot. Last verified test run (2026-09-29): **558/558 green
+across 28 files** (`./node_modules/.bin/vitest run`: api 87, shared 11,
+workers 15, web 445; the earlier figures of 57, 94 and 133 are stale). Legend: ✅ verified in this repo · ⏳ not done — needs
 engineering work · 👤 needs a human (see
 [EXTERNAL DEPENDENCIES](#external-dependencies) and the
 [action tracker](./action-tracker.md)).
@@ -21,7 +21,7 @@ has seen real merchants, real money, real traffic or a real host.
   `packageManager` pin, used locally, in CI and in the images
   ([`docker/README.md`](../docker/README.md) "pnpm version policy"). The old
   "known-broken" note is obsolete.
-- ✅ `vitest run` green — 133 tests in 11 files: ledger math
+- ✅ `vitest run` green — 558 tests in 28 files: ledger math
   ([`packages/shared/src/ledger.test.ts`](../packages/shared/src/ledger.test.ts)),
   money-loop API incl. idempotency ×10, revision ordering, suspense,
   reversals, payout gates, maker-checker
@@ -44,6 +44,10 @@ has seen real merchants, real money, real traffic or a real host.
   `mint-links.mjs` end to end against a stub API
   ([`packages/web/test/catalogue.test.ts`](../packages/web/test/catalogue.test.ts),
   [`packages/web/test/mint-links.test.ts`](../packages/web/test/mint-links.test.ts)),
+  the **Afflino screens'** models (formats, validators, onboarding, earnings
+  mapping, link composition and a QR decoder, payouts / TDS, reports and CSV,
+  brand fees, admin queue, agency share, shop CTA states; 17 more files in
+  [`packages/web/test/`](../packages/web/test/)),
   OpenAPI contract
   ([`packages/api/test/openapi.test.ts`](../packages/api/test/openapi.test.ts)
   against [`docs/openapi.yaml`](./openapi.yaml)).
@@ -78,12 +82,14 @@ has seen real merchants, real money, real traffic or a real host.
   database give identical row counts and byte-identical JSON.
 - ✅ Docker images build and boot —
   [`docker/Dockerfile.{api,redirect,workers,web,migrate}`](../docker/):
-  `--no-cache` builds of 264 / 270 / 255 / 269 / 262 MB, all running as the
+  `--no-cache` builds of 264 / 270 / 255 / 269 / 262 MB (web 273 MB after
+  the Afflino rebuild), all running as the
   unprivileged `node` user under `cap_drop: [ALL]`. The recorded smoke test
   ([`docker/README.md`](../docker/README.md)) boots Postgres 16 + Redis 7 +
   all five images: migrate applies 0001–0005, both seeds run, `/healthz` on
-  api, redirect and the web's `/api` proxy answer `{"ok":true}`, the shop
-  renders the five fleet looks live (no demo badge), `mint-links.mjs` mints
+  api, redirect and the web's `/api` proxy answer `{"ok":true}`, `/` is
+  titled "Afflino", `/shop` renders the five fleet looks live (no demo
+  badge), `mint-links.mjs` mints
   one link (`minted=1 … failed=0`), the look page shows
   `<a href="…/r/<token>" rel="sponsored nofollow noopener">View at
   merchant</a>`, `GET /r/<token>` answers `302` to the TEST destination with
@@ -91,12 +97,25 @@ has seen real merchants, real money, real traffic or a real host.
   workers log `click.observed`. Sandbox caveat: the builds needed a base
   image carrying the sandbox's egress CA; the Dockerfiles carry no such
   setting.
-- ✅ Consumer shop live — [`packages/web`](../packages/web/README.md): `/`,
-  `/looks/[id]`, `/looks/[id]/items/[itemId]` read the catalogue API
+- ✅ Consumer shop live — [`packages/web`](../packages/web/README.md): `/shop`
+  (moved from `/` on 2026-09-29), `/looks/[id]`, `/looks/[id]/items/[itemId]` read the catalogue API
   server-side with a server-only token; every merchant CTA is the tracked
   `/r/{token}` link or a visibly disabled control; no raw merchant URL is
   returned by the API or rendered (asserted in
   `packages/api/test/catalogue.test.ts` and the web tests).
+- ✅ **Afflino web app built** (2026-09-29) —
+  [`packages/web/README.md`](../packages/web/README.md) "Screen map": every
+  artboard of the design handover (1a–3f) plus the undrawn pages of each
+  area, on the handover's tokens, self-hosted Archivo and one set of
+  primitives. `next build` OK; on the build (`next start`) all 36 crawled
+  routes answer 200 and all 110 internal links they render resolve (200 or
+  an intended 307), every page that shows TEST data carries the "Demo data"
+  badge, and no page requests Google Fonts, names a real merchant from the
+  design mocks or mentions a cookie. **What is live today** from the app
+  areas: `GET /v1/publisher/earnings` (overview and payouts balances),
+  `POST /v1/links`, `GET` / `POST /v1/disputes`, `GET /v1/suspense` + retry
+  / review, `POST /v1/publishers`; the shop reads `GET /v1/looks[/:id]`
+  server-side. Everything else is labelled demo data (below).
 - ✅ Fleet wiring — the root `docker-compose.yml` (generated by
   `infra/gen_compose.py`) carries the seven `affiliate_*` services behind
   the `affiliate` profile with `AFFILIATE_*` env, `make affiliate-up |
@@ -213,6 +232,44 @@ real infrastructure or real traffic yet:
   capacity plan's estimate.
 - ⏳ A `Cache-Control` policy for the shop so a CDN can front it (Next's
   dynamic default is no-store); LCP has never been measured.
+- ⏳ **Backend for the Afflino screens that are demo today** (each page shows
+  the "Demo data" badge until its endpoint exists; `packages/web/README.md`
+  screen map):
+  - Brand self-serve: brand accounts and workspaces, offer create / submit /
+    edit / pause / end (`/brand/offers/new`, `/brand/offers`), the admin
+    approval workflow that turns a submitted offer into a live programme
+    (`/admin` review queue, `/admin/offers`), creator requests
+    (approve / decline), brand-side conversion validation, billing and the
+    wallet (`/brand/billing`; needs a payments provider).
+  - Creator: a link listing endpoint (the "My links" table), report
+    aggregates by day / offer / platform / city / sub-ID (`/app/reports`,
+    the overview's clicks, conversions and chart), a creator-safe offers
+    feed (`GET /v1/offers` returns the raw merchant `offer_url` to any
+    signed-in role today, so the offer browser does not call it — restrict
+    it first), applications for approval-gated offers, settings persistence
+    (profile, payout method), a statement / ledger endpoint
+    (`/app/payouts/statements`), payout history per publisher.
+  - Publisher withdrawals: there is no publisher-initiated withdrawal;
+    payouts are finance-prepared batches with maker-checker. Decide whether
+    "Withdraw" becomes a request into the next batch.
+  - Sign-in: OTP / an identity provider replacing the JWT stub (`/login` is a
+    paste-a-token dev page; `/join`'s OTP accepts any 6 digits).
+  - KYC / PAN verification (the PAN "Verified" line is a labelled demo),
+    GSTIN verification (format only today).
+  - Platform OAuth (Meta, YouTube, Snapchat) for connected accounts and
+    audience figures (`/join` step 2, `/app/settings`).
+  - Agency rosters: agency organisations, client workspaces, roster and the
+    agency share (`/agency`, `/brand?workspace=`).
+  - Admin: review-queue endpoints for offers, KYC and fraud; the fraud
+    signals shown on `/admin/fraud` are demo — no fraud detection runs.
+  - The design's readable `/r/{handle}/{offer}?s=` links and first-party
+    attribution cookie are **not** implemented (the redirect mints
+    `/r/{32-hex}` and sets no cookie); both are counsel-gated first
+    (below), then engineering.
+  - `GET /v1/publisher/earnings`: no next-payout date or threshold in the
+    response (the overview's live "Next payout" is max(collected − payable,
+    0) without them); its payable filter names a `cancelled` status the
+    0001 migration does not allow.
 
 ## EXTERNAL DEPENDENCIES
 
@@ -273,3 +330,28 @@ and acceptance criteria.
   *Only the on-call rotation can rehearse an incident.*
 - 👤 App-handoff / device matrix: in-app browsers, deferred deep links run
   before pilot traffic. *Only humans have the physical devices.*
+- 👤 **Afflino placeholders to confirm** (all in
+  `packages/web/lib/site-copy.ts`, printed on the site today as drawn): the
+  audience claim (400M reach across Meta, YouTube, Snapchat), ₹0 upfront
+  for brands, the T+7 creator payout cycle, prices (Starter ₹0/month,
+  Network ₹24,999/month), network fees (15% / 8%), TDS 1% under section
+  194-O (rate and section to be confirmed by the tax adviser), the 7-day
+  validation window (3 / 7 / 14 in the builder), the ₹500 minimum
+  withdrawal, the 15% default agency share, and the reading that a brand's
+  budget cap covers creator payouts with the fee on top. *Only the business
+  can commit to prices and claims.*
+- 👤 **Disclosure wording**: the creator `#ad` line
+  (`CREATOR_DISCLOSURE_LINE`) and the shop's disclosure (`SHOP_DISCLOSURE`)
+  are drafts; counsel approves the wording and placement (action tracker,
+  ASCI rows). The Creator Terms, Terms of use and Privacy notice pages are
+  stubs, and `/contact` publishes no channel until launch. *Only counsel can
+  approve disclosures and legal documents.*
+- 👤 **Readable links + attribution cookie**: whether a first-party
+  attribution cookie may be set at all (DPDP consent, ASCI) and whether
+  readable `/r/{handle}/{offer}` links are acceptable — counsel first, then
+  engineering. Until then offer copy says "attribution window", and the
+  30 / 7-day windows it prints are placeholders (no window is implemented).
+- 👤 **Providers for the demo flows**: SMS / OTP or identity provider, KYC /
+  PAN verification, a payments provider for brand wallet top-ups, and
+  developer access to the Meta, YouTube and Snapchat APIs. *Vendor choice
+  and contracts are human decisions.*

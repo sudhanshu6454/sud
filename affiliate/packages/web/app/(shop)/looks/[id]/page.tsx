@@ -3,13 +3,14 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import DemoBadge from '@/components/DemoBadge';
 import Disclosure from '@/components/Disclosure';
-import MatchBadge from '@/components/MatchBadge';
-import MerchantCta from '@/components/MerchantCta';
-import SaveButton from '@/components/SaveButton';
+import { BackBar } from '@/components/shop/BackBar';
+import { Cover } from '@/components/shop/Cover';
+import { Facts } from '@/components/shop/Facts';
+import { ItemRow } from '@/components/shop/ItemRow';
+import { productCount, publishedLabel } from '@/components/shop/model';
+import styles from '@/components/shop/detail.module.css';
+import { EmptyState, Eyebrow, PageHeader, Tag } from '@/components/ui';
 import { getLook } from '@/lib/catalogue';
-import { formatMoney, freshnessLabel } from '@/lib/format';
-import { itemHref } from '@/lib/saved';
-import styles from './page.module.css';
 
 interface Params {
   params: { id: string };
@@ -19,82 +20,106 @@ export const dynamic = 'force-dynamic';
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { value: look } = await getLook(params.id);
+  // A miss is a 404 here too. No loading.tsx on this route: a Suspense
+  // boundary would start the stream before notFound(), turning it into 200.
+  if (!look) notFound();
   // The root layout's title template appends the site name.
-  return look ? { title: look.title } : {};
+  return { title: look.title };
 }
 
+/**
+ * Look detail, drawn like an offer detail: header (crumb · category, title,
+ * source-page attribution, Sponsored tag), then the cover and the look's
+ * facts beside "Shop this look" — the disclosure panel and one row per
+ * product with its match tag, price, merchant, freshness, stock and the
+ * tracked "View at merchant →" link (or its disabled / unavailable states).
+ * Live GET /v1/looks/:id?placement_id=; TEST demo data + badge on fallback.
+ */
 export default async function LookDetailPage({ params }: Params) {
   const { value: look, demo } = await getLook(params.id);
   if (!look) notFound();
 
-  const [from, to] = look.gradientSeed;
+  const published = publishedLabel(look.publishedAt);
+  const count = productCount(look.items.length);
 
   return (
-    <div>
-      <div className={styles.hero} style={{ background: `linear-gradient(135deg, ${from}, ${to})` }}>
-        {look.coverUrl ? (
-          /* eslint-disable-next-line @next/next/no-img-element -- remote hosts vary per deployment */
-          <img src={look.coverUrl} alt={look.title} className={styles.cover} />
-        ) : (
-          <span className={styles.srOnly}>Placeholder artwork for {look.title}</span>
-        )}
-        {look.sponsored && <span className={styles.sponsored}>Sponsored</span>}
-      </div>
-
-      {demo && <DemoBadge />}
-
-      {look.sourcePage && <p className={styles.kicker}>Spotted on {look.sourcePage}</p>}
-      <h1 className={styles.title}>{look.title}</h1>
-      {look.sourcePage ? (
-        <p className={styles.attr}>
-          Source-page attribution: <strong>{look.sourcePage}</strong>
-        </p>
-      ) : (
-        <p className={styles.attr}>Source page not recorded for this look.</p>
-      )}
-
-      <div className={styles.disclosureWrap}>
-        <Disclosure />
-      </div>
-
-      <h2 className={styles.sectionTitle}>Shop this look</h2>
-
-      {look.items.length === 0 ? (
-        <p className={styles.emptyItems}>No products have been matched to this look yet.</p>
-      ) : (
-        <ul className={styles.productList}>
-          {look.items.map((item) => (
-            <li key={item.id} className={styles.productCard}>
-              <div className={styles.productTop}>
-                <MatchBadge match={item.match} />
-                <SaveButton
-                  lookId={look.id}
-                  itemId={item.id}
-                  lookTitle={look.title}
-                  brand={item.brand}
-                  model={item.model}
-                  merchant={item.merchant}
-                  price_minor={item.price_minor}
-                  currency={item.currency}
-                />
-              </div>
-              <Link href={itemHref(look.id, item.id)} className={styles.productName}>
-                {item.brand} — {item.model}
+    <>
+      <BackBar href="/shop" label="Shop the looks" title="Look" />
+      <PageHeader
+        className={styles.header}
+        eyebrow={
+          <>
+            <span className={styles.crumbDesk}>
+              <Link href="/shop" className={styles.crumb}>
+                Shop the looks
               </Link>
-              {item.available && item.price_minor !== null && item.currency ? (
-                <>
-                  <p className={styles.priceRow}>
-                    <span className={styles.price}>{formatMoney(item.price_minor, item.currency)}</span>
-                    {item.merchant && <span className={styles.merchant}>at {item.merchant}</span>}
-                  </p>
-                  {item.freshness && <p className={styles.freshness}>{freshnessLabel(item.freshness)}</p>}
-                </>
-              ) : null}
-              <MerchantCta linkUrl={item.linkUrl} available={item.available} />
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+              {look.category ? ' · ' : null}
+            </span>
+            {look.category ?? <span className={styles.crumbDesk}>Look</span>}
+          </>
+        }
+        title={look.title}
+        description={
+          look.sourcePage ? (
+            <>
+              Spotted on <strong>{look.sourcePage}</strong>
+            </>
+          ) : (
+            'Source page not recorded for this look.'
+          )
+        }
+        actions={
+          look.sponsored || demo ? (
+            <span className={styles.headerActions}>
+              {look.sponsored ? <Tag variant="accent">Sponsored</Tag> : null}
+              {demo ? <DemoBadge className={styles.badge} /> : null}
+            </span>
+          ) : undefined
+        }
+      />
+
+      <div className={styles.split}>
+        <div className={styles.media}>
+          <div className={styles.cover}>
+            <Cover look={look} alt={look.title} fit="natural" loading="eager" />
+          </div>
+          <div className={styles.aside}>
+            <Facts
+              label="About this look"
+              items={[
+                ['Source page', look.sourcePage ?? 'Not recorded'],
+                ['Category', look.category ?? 'Not set'],
+                ['Products', count],
+                ...(published ? ([['Published', published.replace(/^Published /, '')]] as [string, string][]) : []),
+                ['Sponsored', look.sponsored ? 'Yes' : 'No'],
+              ]}
+            />
+          </div>
+        </div>
+
+        <section className={styles.body} aria-labelledby="look-products">
+          <div className={styles.sectionHead}>
+            <h2 id="look-products" className={styles.sectionTitle}>
+              Shop this look
+            </h2>
+            <Eyebrow as="span">{count}</Eyebrow>
+          </div>
+          <Disclosure />
+          {look.items.length === 0 ? (
+            <div className={styles.empty}>
+              <EmptyState title="No products yet." action={{ label: 'Browse the shop', href: '/shop' }}>
+                No products have been matched to this look yet.
+              </EmptyState>
+            </div>
+          ) : (
+            <ul className={styles.list}>
+              {look.items.map((item) => (
+                <ItemRow key={item.id} look={look} item={item} />
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
+    </>
   );
 }

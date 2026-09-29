@@ -1,0 +1,131 @@
+/* Brand overview — 2b: header, 4-cell KPI strip, then a 2fr / 1fr row
+   (Top creators table | Creator requests), both cells 24px 32px, split by a
+   2px rule. 3f right (≤760px): "Brand · …" / "Today" head, a 2-cell KPI
+   row, the budget bar and the request list, each band over a 2px rule. */
+
+.badge {
+  margin: 0;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+}
+
+.creators {
+  padding: var(--space-6) var(--space-8);
+  border-right: 2px solid var(--color-divider);
+  min-width: 0;
+}
+
+.sectionLabel {
+  margin-bottom: var(--space-3);
+}
+
+.requests {
+  padding: var(--space-6) var(--space-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.phone {
+  display: none;
+}
+
+/* Narrow desktops / tablets: stack the row so the table keeps its columns. */
+@media (max-width: 1100px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .creators {
+    border-right: 0;
+    border-bottom: 2px solid var(--color-divider);
+  }
+}
+
+@media (max-width: 760px) {
+  .desktop {
+    display: none;
+  }
+
+  .phone {
+    display: block;
+  }
+}
+
+/* ---------- phone (3f) ---------- */
+
+.phHead {
+  padding: var(--space-4) 20px;
+  border-bottom: 2px solid var(--color-divider);
+}
+
+.phEyebrowRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* The badge sits in the eyebrow line without making it taller. */
+.phEyebrowRow .badge {
+  margin: -4px 0;
+}
+
+.phTitle {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 24px;
+  line-height: 1.55;
+  letter-spacing: -0.03em;
+}
+
+.phKpis {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  border-bottom: 2px solid var(--color-divider);
+}
+
+.phKpi {
+  padding: var(--space-4) 20px;
+  min-width: 0;
+}
+
+.phKpi + .phKpi {
+  border-left: 2px solid var(--color-divider);
+}
+
+.phKpiLabel {
+  font-size: 11px;
+  color: var(--color-neutral-700);
+}
+
+.phKpiValue {
+  font-weight: 800;
+  font-size: 24px;
+  line-height: 1.55;
+  white-space: nowrap;
+}
+
+.phBudget {
+  padding: var(--space-4) 20px;
+  border-bottom: 2px solid var(--color-divider);
+}
+
+.phBudgetLabel {
+  font-size: 12px;
+  color: var(--color-neutral-700);
+  margin-bottom: 6px;
+}
+
+.phRequests {
+  padding: var(--space-3) 20px;
+}
+
+.phRequestsLabel {
+  margin-bottom: var(--space-1);
+}

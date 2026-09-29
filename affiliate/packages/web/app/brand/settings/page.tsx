@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
-import { ScreenPlaceholder } from '@/components/shell/ScreenPlaceholder';
+import { BrandSettings } from '@/components/brand/BrandSettings';
 
 export const metadata: Metadata = { title: 'Brand settings' };
 
-/** Placeholder — a screen builder replaces this page. */
+/** Company details (legal name, GSTIN, website, category). TEST demo: saved in this browser; no brand-profile endpoint in v1. */
 export default function BrandSettingsPage() {
-  return <ScreenPlaceholder eyebrow="Brand" title="Settings" />;
+  return <BrandSettings />;
 }

@@ -1,0 +1,128 @@
+/* Creator requests — 2b: rows 14px 0 over a 1px rule, 12px apart (the
+   column's gap), name 600 / reach neutral-700 at 14px, xs Approve / Decline
+   8px apart. 3f: rows 12px 0, no gap, 44px equal-width buttons 8px under
+   the name line. */
+
+.wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: 14px 0;
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.line {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.name {
+  font-weight: 600;
+  min-width: 0;
+}
+
+.reach {
+  color: var(--color-neutral-700);
+  white-space: nowrap;
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* Decision confirmation: 13px accent-700, visible; kept in the DOM (empty
+   and visually hidden) so the live region exists before it speaks. */
+.status {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-accent-700);
+}
+
+.status:focus {
+  outline: none;
+}
+
+.statusEmpty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.empty {
+  padding: var(--space-3) 0;
+}
+
+.skel {
+  display: inline-block;
+  height: 14px;
+  background: var(--color-neutral-200);
+}
+
+.skelButton {
+  width: 140px;
+  height: 28px;
+}
+
+/* ---------- phone (3f) ---------- */
+
+.phone {
+  gap: 0;
+}
+
+.phone .list {
+  gap: 0;
+}
+
+.phone .item {
+  gap: 0;
+  padding: var(--space-3) 0;
+}
+
+.phone .actions {
+  margin-top: var(--space-2);
+}
+
+.phone .button {
+  flex: 1;
+}
+
+.phone .skelButton {
+  width: 100%;
+  height: 44px;
+}
+
+.phone .status:not(.statusEmpty) {
+  margin: var(--space-1) 0 var(--space-2);
+}
+
+/* The desktop list on a phone (Creators page): 44px, equal-width buttons. */
+@media (max-width: 760px) {
+  .button {
+    flex: 1;
+    min-height: 44px;
+  }
+}

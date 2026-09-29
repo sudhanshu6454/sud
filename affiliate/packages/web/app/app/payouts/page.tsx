@@ -1,9 +1,13 @@
 import type { Metadata } from 'next';
-import { ScreenPlaceholder } from '@/components/shell/ScreenPlaceholder';
+import { Payouts } from '@/components/creator/payouts/Payouts';
 
 export const metadata: Metadata = { title: 'Payouts' };
 
-/** Placeholder — a screen builder replaces this page. */
+/**
+ * Creator Payouts (2c; 3f on phones): balances from GET /v1/publisher/earnings
+ * with the demo fallback; payout method, history, conversions and clicks are
+ * TEST demo data (no v1 endpoint) — components/creator/payouts.
+ */
 export default function AppPayoutsPage() {
-  return <ScreenPlaceholder eyebrow="Payouts" title="Payouts" artboard="2c" />;
+  return <Payouts />;
 }

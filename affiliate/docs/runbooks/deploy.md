@@ -9,7 +9,7 @@ user.** This runbook is the procedure to follow once they exist.
 ## 0. Preconditions (do not deploy without these)
 
 - [ ] `pnpm typecheck` and `pnpm test` green on the release commit
-      (133/133 tests in 11 files; `pnpm demo` and `pnpm demo:pg` green).
+      (558/558 tests in 28 files on 2026-09-29; `pnpm demo` and `pnpm demo:pg` green).
 - [ ] `docs/runbooks/dependency-review.md` re-run for the release; no
       unaddressed high/critical findings.
 - [ ] Fresh database backup exists and is restorable (see
@@ -136,7 +136,7 @@ spliced into `DATABASE_URL`), `AFFILIATE_JWT_SECRET`,
    ```
 5. **Money-path smoke.** Mint the shop's links (`scripts/mint-links.mjs`
    inside `affiliate_api`; the fleet `README.md` has the single line), open a
-   look on the shop and follow its "View at merchant" link: expect `302`
+   look on the shop (`/shop` on the web host) and follow its "View at merchant" link: expect `302`
    with `subid=` to the programme's allow-listed host and a `click.observed`
    line in
    `docker compose --profile affiliate logs -f --tail=200 affiliate_api affiliate_redirect affiliate_workers affiliate_web`.

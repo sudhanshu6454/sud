@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
-import { ScreenPlaceholder } from '@/components/shell/ScreenPlaceholder';
+import { BrandOffers } from '@/components/brand/BrandOffers';
 
 export const metadata: Metadata = { title: 'Brand offers' };
 
-/** Placeholder — a screen builder replaces this page. */
+/** The brand's offers and their status flow. TEST demo: no brand-offer endpoint in v1; local drafts and submissions included. */
 export default function BrandOffersPage() {
-  return <ScreenPlaceholder eyebrow="Brand" title="Offers" />;
+  return <BrandOffers />;
 }

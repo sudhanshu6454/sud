@@ -1,0 +1,267 @@
+/* Creator Settings — 2d: 200px sub-nav over a 2px rule; sections 28px 32px
+   split by 2px rules; 2-column fields, 16px gap; list rows 14px 0 with 1px
+   rules; footer right-aligned, 8px gap. Phones (≤760px): the sub-nav is a
+   sticky horizontal scroller, fields stack. */
+
+.layout {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  flex: 1;
+}
+
+/* The column carries the full-height rule; the list inside stays in view. */
+.navCol {
+  border-right: 2px solid var(--color-divider);
+  min-width: 0;
+}
+
+.subnav {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  font-size: 14px;
+}
+
+.item {
+  text-decoration: none;
+  padding: 14px var(--space-6);
+  border-left: 4px solid transparent;
+  color: var(--color-text);
+  white-space: nowrap;
+  transition: background-color 120ms ease-out, color 120ms ease-out;
+}
+
+.item:hover {
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-text) 4%, transparent);
+}
+
+.active,
+.active:hover {
+  font-weight: 600;
+  color: var(--color-accent-700);
+  border-left-color: var(--color-accent);
+}
+
+.item:focus-visible {
+  outline-offset: -2px;
+}
+
+.navBadge {
+  position: sticky;
+  top: 260px;
+  padding: var(--space-4) var(--space-6);
+}
+
+.badge {
+  margin: 0;
+}
+
+.phoneBadge {
+  display: none;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.section {
+  padding: 28px var(--space-8);
+  border-bottom: 2px solid var(--color-divider);
+  scroll-margin-top: var(--space-4);
+}
+
+.last {
+  border-bottom: 0;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.span {
+  grid-column: 1 / -1;
+}
+
+.sectionLabel {
+  margin-bottom: var(--space-2);
+}
+
+/* Payout & tax: 16px from the section label to the first field label. */
+.sectionLabel + .grid {
+  margin-top: var(--space-2);
+}
+
+.rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-4);
+  padding: 14px 0;
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.rowText {
+  min-width: 0;
+}
+
+.rowName {
+  display: block;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.rowDetail {
+  display: block;
+  font-size: 13px;
+  color: var(--color-neutral-700);
+}
+
+.rowAction {
+  flex: none;
+}
+
+.rowLink {
+  flex: none;
+  font-size: 13px;
+}
+
+/* A notification row: the checkbox dot, then name and detail. */
+.check {
+  flex: 1;
+}
+
+.note {
+  margin: var(--space-4) 0 0;
+  font-size: 13px;
+  color: var(--color-neutral-700);
+  max-width: 640px;
+}
+
+/* Footer: right-aligned Cancel + Save changes, under the last section (as
+   drawn, after the rows). With unsaved changes it floats at the bottom of
+   the viewport until the form end scrolls up to it, with a 2px rule while
+   it floats. */
+.footer {
+  z-index: 5;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-8) 28px;
+  background: var(--color-bg);
+  border-top: 2px solid transparent;
+}
+
+.floating {
+  position: sticky;
+  bottom: 0;
+}
+
+.stuck {
+  border-top-color: var(--color-divider);
+  padding-bottom: var(--space-4);
+}
+
+.unsaved {
+  margin-right: auto;
+  font-size: 13px;
+  color: var(--color-neutral-700);
+}
+
+/* ---------- phone ---------- */
+
+@media (max-width: 760px) {
+  .layout {
+    display: block;
+  }
+
+  .navCol {
+    display: contents;
+  }
+
+  .subnav {
+    top: 0;
+    z-index: 6;
+    flex-direction: row;
+    overflow-x: auto;
+    background: var(--color-bg);
+    border-bottom: 2px solid var(--color-divider);
+    scrollbar-width: none;
+  }
+
+  .subnav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .item {
+    flex: none;
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 10px var(--space-4);
+    border-left: 0;
+    border-bottom: 4px solid transparent;
+  }
+
+  .active,
+  .active:hover {
+    border-bottom-color: var(--color-accent);
+  }
+
+  .navBadge {
+    display: none;
+  }
+
+  .phoneBadge {
+    display: block;
+    padding: var(--space-4) 20px 0;
+  }
+
+  .section {
+    padding: 20px;
+    scroll-margin-top: 60px;
+  }
+
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .row {
+    flex-wrap: wrap;
+  }
+
+  .rowAction {
+    min-height: 44px;
+  }
+
+  .rowLink {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .footer {
+    padding: var(--space-3) 20px;
+    flex-wrap: wrap;
+  }
+
+  .floating {
+    bottom: calc(47px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .footer :global(button) {
+    min-height: 44px;
+  }
+}

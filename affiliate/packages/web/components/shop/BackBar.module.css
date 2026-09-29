@@ -1,0 +1,38 @@
+.bar {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-4) 20px;
+    border-bottom: 2px solid var(--color-divider);
+    font-size: 14px;
+    line-height: 1.55;
+  }
+
+  /* 44px hit area on a 14px text link. */
+  .back {
+    display: inline-block;
+    min-width: 0;
+    padding: 12px 0;
+    margin: -12px 0;
+    color: var(--color-text);
+    text-decoration: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .back:hover {
+    color: var(--color-accent-700);
+  }
+
+  .title {
+    flex: none;
+    font-weight: 600;
+  }
+}

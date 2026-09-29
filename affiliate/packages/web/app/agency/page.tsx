@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
-import { ScreenPlaceholder } from '@/components/shell/ScreenPlaceholder';
+import { AgencyWorkspace } from '@/components/agency/AgencyWorkspace';
 
 export const metadata: Metadata = { title: 'Agency' };
 
-/** Placeholder — a screen builder replaces this page. */
+/** Agency workspace (3e): brand clients and the creator roster. TEST demo data (no agency endpoint in v1). */
 export default function AgencyPage() {
-  return <ScreenPlaceholder eyebrow="Agency" title="Agency workspace" artboard="3e" />;
+  return <AgencyWorkspace />;
 }

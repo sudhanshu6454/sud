@@ -1,0 +1,192 @@
+/* Shared layout bits for the admin pages (2e and the undrawn ones). */
+
+.kpis {
+  min-width: 0;
+}
+
+.badge {
+  margin-bottom: 0;
+}
+
+/* A full-width band of cells (fraud signals): a padded label row, then
+   cells split by 2px rules, as 2e's KPI strip and 3e's client cells. */
+.band {
+  border-bottom: 2px solid var(--color-divider);
+}
+
+.bandHead {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-6) var(--space-8) var(--space-3);
+}
+
+.bandLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.bandNote {
+  margin: 0;
+}
+
+.cells {
+  display: grid;
+  grid-template-columns: repeat(var(--cells, 4), minmax(0, 1fr));
+  list-style: none;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  border-top: 2px solid var(--color-divider);
+}
+
+.cell {
+  min-width: 0;
+  padding: var(--space-6) var(--space-8);
+  border-right: 2px solid var(--color-divider);
+}
+
+.cell:last-child {
+  border-right: 0;
+}
+
+.cellTitle {
+  margin: 6px 0 0;
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 22px;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.cellFigure {
+  margin-top: var(--space-4);
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 32px;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+}
+
+.cellMeta {
+  margin: var(--space-1) 0 0;
+  font-size: 13px;
+  color: var(--color-neutral-700);
+}
+
+.cellBar {
+  margin-top: var(--space-3);
+}
+
+.cellRule {
+  margin: var(--space-4) 0 0;
+  font-size: 14px;
+  color: var(--color-neutral-800);
+}
+
+.examplesLabel {
+  margin-top: var(--space-4);
+}
+
+.examples {
+  margin: var(--space-1) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+
+.examples li {
+  display: flex;
+  flex-direction: column;
+}
+
+.exampleSubject {
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.exampleReason {
+  color: var(--color-neutral-700);
+}
+
+.note {
+  margin: 0 var(--space-8);
+}
+
+.noteWrap {
+  padding: var(--space-6) var(--space-8) 0;
+}
+
+.noteWrap > p {
+  margin: 0;
+}
+
+.muted {
+  color: var(--color-neutral-700);
+}
+
+.small {
+  font-size: 13px;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 1100px) {
+  .cells {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cell:nth-child(2n) {
+    border-right: 0;
+  }
+
+  .cell:nth-child(n + 3) {
+    border-top: 2px solid var(--color-divider);
+  }
+}
+
+@media (max-width: 760px) {
+  .cells {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cell {
+    padding: var(--space-4) 20px;
+    border-right: 0;
+  }
+
+  .cell + .cell {
+    border-top: 2px solid var(--color-divider);
+  }
+
+  .noteWrap {
+    padding: var(--space-4) 20px 0;
+  }
+
+  .bandHead {
+    padding: var(--space-4) 20px var(--space-3);
+  }
+
+  .inline button {
+    min-height: 44px;
+  }
+}
+
+.strongCell {
+  font-weight: 600;
+}
+
+.noteWrap:last-child {
+  padding-bottom: var(--space-8);
+}

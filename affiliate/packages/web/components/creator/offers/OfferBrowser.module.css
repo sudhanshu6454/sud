@@ -1,0 +1,328 @@
+/* Offer browser — 1d (desktop) and 3f left (phone). Values from the
+   artboard markup: filter row 16px 32px with 8px gaps; 3-column grid of
+   cells with 2px right / bottom rules, 24px padding, 12px gap, min-height
+   220px; kicker 12px uppercase 0.1em; title 22px / 800 / −0.02em; body 14px
+   / 1.5 neutral-800 at .8 opacity (the handover's .card-body); payout 24px
+   / 800 / −0.02em; platforms 12px neutral-700. */
+
+.badge {
+  margin: 0;
+}
+
+.search {
+  display: block;
+  width: 320px;
+}
+
+.phoneSearch {
+  display: block;
+}
+
+/* ---------- filter row ---------- */
+
+.filters {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-8);
+  border-bottom: 2px solid var(--color-divider);
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.short {
+  display: none;
+}
+
+.sort {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--color-neutral-700);
+  white-space: nowrap;
+}
+
+/* "Sort: Highest payout" drawn as plain 13px text; a native select with a
+   small chevron (the Select primitive's affordance, scaled down). */
+.sortSelect {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0;
+  border-radius: 0;
+  margin: 0 0 0 0.28em;
+  padding: 0 14px 0 0;
+  font: inherit;
+  color: inherit;
+  background-color: transparent;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 4px) 55%, 100% 55%;
+  background-size: 4px 4px, 4px 4px;
+  background-repeat: no-repeat;
+  cursor: pointer;
+  transition: color 120ms ease-out;
+}
+
+.sortSelect:hover {
+  color: var(--color-text);
+}
+
+/* ---------- grid (desktop) ---------- */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-height: 220px;
+  min-width: 0;
+  padding: var(--space-6);
+  border-right: 2px solid var(--color-divider);
+  border-bottom: 2px solid var(--color-divider);
+  background: var(--color-bg);
+}
+
+.cellHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.kicker {
+  font-size: 12px;
+  line-height: 1.55;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-neutral-700);
+}
+
+.cellTags {
+  display: inline-flex;
+  gap: var(--space-1);
+}
+
+.cellTitle {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 22px;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.cellBody {
+  flex: 1;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-neutral-800);
+  opacity: 0.8;
+}
+
+.payRow {
+  margin-top: auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.payLabel {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--color-neutral-700);
+}
+
+.payValue {
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 24px;
+  line-height: 1.55;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+.platforms {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--color-neutral-700);
+  text-align: right;
+}
+
+/* The whole cell opens the offer (the button's hit area covers it); one tab stop. */
+.cta::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.empty {
+  padding: var(--space-6) var(--space-8);
+}
+
+/* ---------- phone list (3f) ---------- */
+
+.phoneHeader,
+.list {
+  display: none;
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 44px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--color-divider);
+  color: var(--color-text);
+  text-decoration: none;
+  transition: background-color 120ms ease-out;
+}
+
+.row:hover {
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-text) 4%, transparent);
+}
+
+.row:focus-visible {
+  outline-offset: -2px;
+}
+
+.rowText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.rowName {
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.rowMeta {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--color-neutral-700);
+}
+
+.rowPay {
+  font-weight: 800;
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: nowrap;
+}
+
+/* ---------- widths ---------- */
+
+@media (max-width: 1180px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 960px) {
+  .search {
+    width: 260px;
+  }
+}
+
+@media (max-width: 760px) {
+  .desk,
+  .grid,
+  .sort {
+    display: none;
+  }
+
+  .phoneHeader {
+    display: block;
+    padding: var(--space-4) 20px;
+    border-bottom: 2px solid var(--color-divider);
+  }
+
+  .phoneTitleRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--space-3);
+  }
+
+  .phoneTitle {
+    margin: 0;
+    font-family: var(--font-heading);
+    font-weight: var(--font-heading-weight);
+    font-size: 24px;
+    line-height: 1.55;
+    letter-spacing: -0.03em;
+  }
+
+  .phoneSearch {
+    margin-top: 10px;
+  }
+
+  .filters {
+    padding: var(--space-3) 20px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .filters::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tags {
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
+
+  /* 44px hit area around the 23px tag, without changing how it looks. */
+  .tag {
+    position: relative;
+    flex: none;
+  }
+
+  .tag::after {
+    content: '';
+    position: absolute;
+    inset: -11px -3px;
+  }
+
+  .long {
+    display: none;
+  }
+
+  .short {
+    display: inline;
+  }
+
+  .list {
+    display: block;
+  }
+
+  .empty {
+    padding: var(--space-4) 20px;
+  }
+}

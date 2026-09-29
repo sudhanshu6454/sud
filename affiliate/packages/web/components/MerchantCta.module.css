@@ -1,37 +1,64 @@
-.cta {
-  display: block;
-  text-align: center;
-  margin-top: 0.75rem;
-  padding: 0.7rem;
-  background: #111;
-  color: #fff;
-  font-weight: 700;
+/* The merchant CTA as the handover's primary block button: Archivo 800
+   14px, accent fill, ground text, label flush left, 8px 14.4px padding;
+   hover accent-600, pressed accent-700, 2px accent focus ring (global).
+   Disabled ("Link not available yet") = the secondary block look (1px
+   divider border, ink label) at 45%, so an inert control never reads as the
+   accent call to action. "Not available right now" is a surface notice of
+   the same size. 44px tall on phones. */
+
+.box {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  margin: 0;
+  padding: var(--space-2) calc(var(--space-3) * 1.2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  line-height: 1.2;
+  text-align: left;
   text-decoration: none;
-  border-radius: 0.6rem;
 }
 
-.large {
-  margin-top: 0.5rem;
-  padding: 0.95rem;
-  font-weight: 800;
-  font-size: 1.05rem;
-  border-radius: 0.65rem;
+.cta {
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  background: var(--color-accent);
+  color: var(--color-bg);
+  cursor: pointer;
+  transition: background-color 120ms ease-out, color 120ms ease-out;
+}
+
+a.cta:hover {
+  background: var(--color-accent-600);
+  color: var(--color-bg);
+}
+
+a.cta:active {
+  background: var(--color-accent-700);
 }
 
 .disabled {
-  background: #e5e5e5;
-  color: #6b6b6b;
+  background: transparent;
+  border-color: var(--color-divider);
+  color: var(--color-text);
+  opacity: 0.45;
   cursor: not-allowed;
-  border: 1px dashed #bdbdbd;
 }
 
 .unavailable {
-  margin-top: 0.75rem;
-  padding: 0.7rem;
-  text-align: center;
-  font-weight: 700;
-  color: #7a3b00;
-  background: #fff4e5;
-  border: 1px solid #f5c98a;
-  border-radius: 0.6rem;
+  font-weight: 600;
+  background: var(--color-surface);
+  color: var(--color-neutral-800);
+}
+
+.touch {
+  min-height: 44px;
+}
+
+@media (max-width: 760px) {
+  .box {
+    min-height: 44px;
+  }
 }

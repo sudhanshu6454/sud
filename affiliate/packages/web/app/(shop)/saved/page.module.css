@@ -1,93 +1,117 @@
-.heading {
-  margin-bottom: 1rem;
-}
+/* Wishlist as a list (the 1c / 3f list rows): 16px vertical padding, 1px
+   divider rules, 4% ink hover; name 15px / 600, meta 13px neutral-700,
+   price 16px / 800 right-aligned, a ghost "Remove". */
 
-.empty {
-  border: 1px dashed #bbb;
-  border-radius: 0.75rem;
-  padding: 2rem 1.5rem;
-  text-align: center;
-}
-
-.emptyTitle {
-  font-weight: 700;
-  font-size: 1.05rem;
-  margin-bottom: 0.25rem;
-}
-
-.emptyText {
-  color: #666;
-  font-size: 0.9rem;
-  margin-bottom: 1rem;
-}
-
-.cta {
-  display: inline-block;
-  padding: 0.6rem 1.4rem;
-  border-radius: 999px;
-  background: #111;
-  color: #fff;
-  font-weight: 600;
-  text-decoration: none;
+.body {
+  padding: var(--space-6) 40px;
 }
 
 .list {
-  list-style: none;
+  margin: 0;
   padding: 0;
-  display: grid;
-  gap: 1rem;
+  list-style: none;
+  max-width: 960px;
+  border-top: 2px solid var(--color-divider);
 }
 
-.card {
-  border: 1px solid #e5e5e5;
-  border-radius: 0.75rem;
-  padding: 1rem;
-  background: #fff;
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px 96px;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--color-divider);
+  transition: background-color 120ms ease-out;
+}
+
+.row:hover {
+  background: color-mix(in srgb, var(--color-text) 4%, transparent);
+}
+
+.main,
+.price {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.price {
+  align-items: flex-end;
+  text-align: right;
 }
 
 .name {
-  font-weight: 700;
-  color: #1a1a1a;
+  font-size: 15px;
+  line-height: 1.4;
+  font-weight: 600;
+  color: var(--color-text);
   text-decoration: none;
 }
 
 .name:hover {
+  color: var(--color-accent-700);
   text-decoration: underline;
 }
 
-.priceRow {
-  margin: 0.25rem 0 0.5rem;
+.meta {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--color-neutral-700);
 }
 
-.price {
-  font-weight: 800;
-  margin-right: 0.5rem;
+.amount {
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 16px;
+  line-height: 1.4;
+  letter-spacing: -0.01em;
 }
 
-.merchant {
-  font-size: 0.88rem;
-  color: #666;
+.action {
+  display: flex;
+  justify-content: flex-end;
 }
 
-.remove {
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: #b91c1c;
-  background: transparent;
-  border: 1px solid #f0c4c4;
-  border-radius: 999px;
-  padding: 0.35rem 0.8rem;
-  cursor: pointer;
+@media (max-width: 899px) {
+  .body {
+    padding-inline: 20px;
+  }
 }
 
-.note {
-  font-size: 0.85rem;
-  color: #666;
-  margin-bottom: 0.75rem;
-}
+@media (max-width: 760px) {
+  .body {
+    padding-block: var(--space-4);
+  }
 
-.lookRef {
-  font-size: 0.82rem;
-  color: #666;
-  margin-bottom: 0.5rem;
+  /* Name over price, Remove on the right of the price line. */
+  .row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'main main'
+      'price action';
+    gap: var(--space-2) var(--space-3);
+    padding: 14px 0;
+  }
+
+  .main {
+    grid-area: main;
+  }
+
+  .price {
+    grid-area: price;
+    flex-direction: row;
+    align-items: baseline;
+    gap: var(--space-2);
+    text-align: left;
+  }
+
+  .action {
+    grid-area: action;
+  }
+
+  .remove,
+  .empty a {
+    min-height: 44px;
+  }
 }

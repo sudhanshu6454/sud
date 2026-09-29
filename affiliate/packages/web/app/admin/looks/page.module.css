@@ -1,5 +1,6 @@
 /* Looks pipeline board (admin, no artboard): one column per state, split by
-   2px rules; cards split by 1px rules. Scrolls sideways below 1400px. */
+   2px rules; cards split by 1px rules. Scrolls sideways between 761px and
+   1400px; stacks on phones. */
 
 .badge {
   margin-bottom: 0;
@@ -109,11 +110,6 @@
   margin-left: calc(-1 * var(--space-3));
 }
 
-/* The Dialog body is 85% opacity for copy; form fields stay fully opaque. */
-.formDialog > div[id] {
-  opacity: 1;
-}
-
 .dialogFields {
   display: flex;
   flex-direction: column;
@@ -123,4 +119,38 @@
 .dialogHint {
   margin: 0;
   color: var(--color-neutral-700);
+}
+
+/* Phones: the states stack, one full-width column each, split by 2px rules. */
+@media (max-width: 760px) {
+  .board {
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
+    grid-template-columns: minmax(0, 1fr);
+    overflow-x: visible;
+  }
+
+  .column,
+  .column:first-child {
+    padding: var(--space-4) 0;
+    border-right: 0;
+  }
+
+  .column + .column {
+    border-top: 2px solid var(--color-divider);
+  }
+
+  .gates > button,
+  .cardActions > button {
+    min-height: 44px;
+  }
+
+  .gate {
+    min-height: 44px;
+    align-items: center;
+  }
+
+  .cardTitle {
+    padding: 11px 0;
+  }
 }

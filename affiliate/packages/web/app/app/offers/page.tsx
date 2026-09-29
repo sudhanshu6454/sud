@@ -1,9 +1,11 @@
 import type { Metadata } from 'next';
-import { ScreenPlaceholder } from '@/components/shell/ScreenPlaceholder';
+import { OfferBrowser } from '@/components/creator/offers/OfferBrowser';
+import { DEMO_LIVE_OFFER_COUNT } from '@/lib/demo/afflino';
+import { DEMO_LINK_OFFERS } from '@/lib/demo/links';
 
 export const metadata: Metadata = { title: 'Offers' };
 
-/** Placeholder — a screen builder replaces this page. */
+/** Offer browser (design 1d; phone 3f). TEST demo offers: no v1 endpoint serves the Afflino offer model. */
 export default function AppOffersPage() {
-  return <ScreenPlaceholder eyebrow="Offers" title="Live offers" artboard="1d" />;
+  return <OfferBrowser offers={DEMO_LINK_OFFERS} liveCount={DEMO_LIVE_OFFER_COUNT} />;
 }

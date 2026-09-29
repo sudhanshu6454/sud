@@ -1,0 +1,132 @@
+/* Creator Reports — 3d. Header with the filter tags (stretched to the
+   Export button's height, as drawn), the 5-cell funnel strip, then
+   "Conversions by city" and "By sub-ID" side by side, then the grouped
+   periods. */
+
+.header {
+  flex-wrap: wrap;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.badge {
+  align-self: center;
+  margin: 0 var(--space-2) 0 0;
+}
+
+/* The artboard draws a rule on the last funnel cell's right edge too. */
+@media (min-width: 761px) {
+  div.funnel > :last-child {
+    border-right: 2px solid var(--color-divider);
+  }
+}
+
+/* Five 32px figures stop fitting below ~1180px: three cells over two. */
+@media (max-width: 1180px) and (min-width: 761px) {
+  div.funnel {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  div.funnel > * {
+    grid-column: span 2;
+  }
+
+  div.funnel > :nth-child(n + 4) {
+    grid-column: span 3;
+    border-top: 2px solid var(--color-divider);
+  }
+
+  div.funnel > :nth-child(3),
+  div.funnel > :nth-child(5) {
+    border-right: 0;
+  }
+}
+
+.row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.citiesCell {
+  min-width: 0;
+  padding: var(--space-6) var(--space-8);
+  border-right: 2px solid var(--color-divider);
+}
+
+.citiesLabel {
+  margin-bottom: var(--space-4);
+}
+
+.cities {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.city {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr) 60px;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-2) 0;
+  font-size: 14px;
+}
+
+.cityValue {
+  text-align: right;
+}
+
+.subIdCell {
+  min-width: 0;
+  padding: var(--space-6) var(--space-8);
+}
+
+.subIdLabel {
+  margin-bottom: var(--space-3);
+}
+
+.periods {
+  padding: var(--space-6) var(--space-8);
+  border-top: 2px solid var(--color-divider);
+}
+
+.nothing {
+  padding: var(--space-6) var(--space-8);
+}
+
+@media (max-width: 960px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .citiesCell {
+    border-right: 0;
+    border-bottom: 2px solid var(--color-divider);
+  }
+}
+
+@media (max-width: 760px) {
+  .filters {
+    justify-content: flex-start;
+  }
+
+  .export {
+    min-height: 44px;
+  }
+
+  .citiesCell,
+  .subIdCell,
+  .periods,
+  .nothing {
+    padding: var(--space-4) 20px;
+  }
+
+  .city {
+    grid-template-columns: 96px minmax(0, 1fr) 48px;
+  }
+}

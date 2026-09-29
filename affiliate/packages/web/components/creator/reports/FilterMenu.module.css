@@ -1,0 +1,98 @@
+/* Filter tag + menu (3d). The trigger is the handover's outline tag
+   (11px, 0.02em, 3px 10px, 1px accent border, accent text) stretched to the
+   filter row's height as drawn; the menu is a small flat list under it. */
+
+.wrap {
+  position: relative;
+  display: flex;
+}
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  font-family: inherit;
+  font-size: 11px;
+  line-height: inherit;
+  letter-spacing: 0.02em;
+  padding: 3px 10px;
+  border: 1px solid var(--color-accent);
+  border-radius: calc(var(--radius-md) * 0.75);
+  background: transparent;
+  color: var(--color-accent);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 120ms ease-out, color 120ms ease-out;
+}
+
+.trigger:hover,
+.open {
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+}
+
+.trigger:active {
+  background: color-mix(in srgb, var(--color-accent) 18%, transparent);
+}
+
+.menu {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  right: 0;
+  z-index: 30;
+  min-width: 100%;
+  width: max-content;
+  max-width: min(280px, calc(100vw - 32px));
+  margin: 0;
+  padding: var(--space-1) 0;
+  list-style: none;
+  background: var(--color-bg);
+  border: 2px solid var(--color-text);
+  box-shadow: var(--shadow-md);
+}
+
+.alignStart {
+  left: 0;
+  right: auto;
+}
+
+.item {
+  display: block;
+  width: 100%;
+  padding: 10px 14px;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.3;
+  text-align: left;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background-color 120ms ease-out, color 120ms ease-out;
+}
+
+.item:hover,
+.item:focus {
+  background: color-mix(in srgb, var(--color-text) 7%, transparent);
+}
+
+.item:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.checked,
+.checked:hover,
+.checked:focus {
+  background: var(--color-accent-100);
+  color: var(--color-accent-700);
+  font-weight: 600;
+}
+
+@media (max-width: 760px) {
+  .trigger {
+    min-height: 44px;
+  }
+
+  .item {
+    min-height: 44px;
+  }
+}

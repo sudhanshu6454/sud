@@ -1,14 +1,38 @@
-/* Disputes (was /portal/disputes). */
+/* Disputes (was /portal/disputes): the 3c grid — form 5fr, tickets 7fr,
+   split by a 2px rule; stacked below 1100px. */
 
 .badge {
   margin-bottom: 0;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  flex: 1;
+}
+
+.formCell,
+.listCell {
+  min-width: 0;
+  padding: var(--space-6) var(--space-8) var(--space-8);
+}
+
+.formCell {
+  border-right: 2px solid var(--color-divider);
+}
+
+.cellLabel {
+  margin-bottom: var(--space-4);
 }
 
 .form {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-  max-width: 560px;
+}
+
+.note {
+  margin: var(--space-6) 0 0;
 }
 
 .ok,
@@ -18,7 +42,8 @@
   font-size: 13px;
 }
 
-.ok {
+.ok,
+.error {
   color: var(--color-accent-700);
 }
 
@@ -26,42 +51,63 @@
   color: var(--color-neutral-700);
 }
 
-.error {
-  color: var(--color-accent-700);
+.table th:not(:last-child),
+.table td:not(:last-child) {
+  padding-right: var(--space-4);
 }
 
-.list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  border-top: 2px solid var(--color-divider);
-  max-width: 880px;
-}
-
-.card {
-  padding: var(--space-3) 0;
-  border-bottom: 1px solid var(--color-divider);
-  font-size: 14px;
-}
-
-.cardHead {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.kind {
-  font-size: 13px;
-  color: var(--color-neutral-700);
+.top {
+  vertical-align: top;
 }
 
 .subject {
-  margin: var(--space-1) 0 0;
+  display: block;
   color: var(--color-neutral-800);
 }
 
 .meta {
-  margin: 2px 0 0;
+  display: block;
   font-size: 13px;
   color: var(--color-neutral-700);
+}
+
+/* Phones fold the Kind column into the meta line. */
+.phoneKind {
+  display: none;
+}
+
+@media (max-width: 1100px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .formCell {
+    border-right: 0;
+    border-bottom: 2px solid var(--color-divider);
+  }
+
+  .form,
+  .note {
+    max-width: 560px;
+  }
+}
+
+@media (max-width: 760px) {
+  .formCell,
+  .listCell {
+    padding: var(--space-4) 20px var(--space-6);
+  }
+
+  .table th:nth-child(3),
+  .table td:nth-child(3) {
+    display: none;
+  }
+
+  .phoneKind {
+    display: inline;
+  }
+
+  .filed {
+    white-space: nowrap;
+  }
 }

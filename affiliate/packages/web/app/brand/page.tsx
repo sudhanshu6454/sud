@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
-import { ScreenPlaceholder } from '@/components/shell/ScreenPlaceholder';
+import { BrandOverview } from '@/components/brand/BrandOverview';
 
 export const metadata: Metadata = { title: 'Brand overview' };
 
-/** Placeholder — a screen builder replaces this page. */
+/** Brand overview (2b; phone 3f right). TEST demo data: no v1 endpoint serves brand campaign figures. */
 export default function BrandPage() {
-  return <ScreenPlaceholder eyebrow="Overview" title="Campaign performance" artboard="2b" />;
+  return <BrandOverview />;
 }

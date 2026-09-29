@@ -6,6 +6,12 @@ import Disclosure from '@/components/Disclosure';
 import MatchBadge from '@/components/MatchBadge';
 import MerchantCta from '@/components/MerchantCta';
 import SaveButton from '@/components/SaveButton';
+import { BackBar } from '@/components/shop/BackBar';
+import { Cover } from '@/components/shop/Cover';
+import { Facts } from '@/components/shop/Facts';
+import { displayCategory, hasPrice, itemName, matchTag, stockIsOut, variantFacts } from '@/components/shop/model';
+import shared from '@/components/shop/detail.module.css';
+import { PageHeader, Tag } from '@/components/ui';
 import { getLook } from '@/lib/catalogue';
 import { formatMoney, freshnessLabel, stockLabel } from '@/lib/format';
 import styles from './page.module.css';
@@ -23,89 +29,131 @@ export const dynamic = 'force-dynamic';
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { value: look } = await getLook(params.id);
   const item = look?.items.find((i) => i.id === params.itemId);
+  // A miss is a 404 here too. No loading.tsx on this route: a Suspense
+  // boundary would start the stream before notFound(), turning it into 200.
+  if (!item) notFound();
   // The root layout's title template appends the site name.
-  return item ? { title: `${item.brand} — ${item.model}` } : {};
+  return { title: itemName(item) };
 }
 
+/**
+ * Drawn like an offer detail: header (the look as crumb, product name), the
+ * look's cover on the left; on the right the match tag, price (36px / 800),
+ * merchant, stock and freshness, the disclosure panel, "View at merchant →"
+ * with Save (a sticky footer on phones, as 1e's "Copy link →" bar), the
+ * merchant note and the variant facts. Live GET /v1/looks/:id; TEST demo
+ * data + badge on fallback.
+ */
 export default async function ItemDetailPage({ params }: Params) {
   const { value: look, demo } = await getLook(params.id);
   if (!look) notFound();
   const item = look.items.find((i) => i.id === params.itemId);
   if (!item) notFound();
 
-  const [from, to] = look.gradientSeed;
-  const facts: string[] = [];
-  if (item.variant.size) facts.push(`Size ${item.variant.size}`);
-  if (item.variant.colour) facts.push(item.variant.colour);
-  if (item.variant.sku) facts.push(`SKU ${item.variant.sku}`);
+  const name = itemName(item);
+  const variant = variantFacts(item.variant);
+  const priced = hasPrice(item);
+  const lookHref = `/looks/${encodeURIComponent(look.id)}`;
+
+  const facts: Array<[string, React.ReactNode]> = [];
+  if (item.available) {
+    facts.push(['Merchant', item.merchant ?? 'Not recorded']);
+    if (item.stock) facts.push(['Stock', stockLabel(item.stock)]);
+  }
+  facts.push(['Variant', variant.length > 0 ? variant.join(' · ') : 'Single variant']);
+  if (item.variant.sku) facts.push(['Merchant SKU', <span key="sku" className={styles.mono}>{item.variant.sku}</span>]);
+  facts.push(['Match', matchTag(item.match).label]);
+  if (item.evidence) facts.push(['Match evidence', item.evidence]);
+  facts.push(['Category', displayCategory(item.category)]);
+  facts.push(['From the look', <Link key="look" href={lookHref}>{look.title}</Link>]);
 
   return (
-    <div>
-      <Link href={`/looks/${encodeURIComponent(look.id)}`} className={styles.back}>
-        ← {look.title}
-      </Link>
+    <>
+      <BackBar href={lookHref} label={look.title} title="Product" />
+      <PageHeader
+        className={shared.header}
+        eyebrow={
+          <>
+            <span className={shared.crumbDesk}>
+              <Link href={lookHref} className={shared.crumb}>
+                {look.title}
+              </Link>
+              {' · '}
+            </span>
+            {displayCategory(item.category)}
+          </>
+        }
+        title={name}
+        description={
+          look.sourcePage ? (
+            <>
+              From a look spotted on <strong>{look.sourcePage}</strong>
+            </>
+          ) : undefined
+        }
+        actions={demo ? <DemoBadge className={shared.badge} /> : undefined}
+      />
 
-      <div className={styles.media} style={{ background: `linear-gradient(135deg, ${from}, ${to})` }}>
-        {look.coverUrl ? (
-          /* eslint-disable-next-line @next/next/no-img-element -- remote hosts vary per deployment */
-          <img src={look.coverUrl} alt={look.title} className={styles.cover} />
-        ) : null}
-      </div>
-
-      {demo && <DemoBadge />}
-
-      <div className={styles.topRow}>
-        <MatchBadge match={item.match} />
-        <SaveButton
-          lookId={look.id}
-          itemId={item.id}
-          lookTitle={look.title}
-          brand={item.brand}
-          model={item.model}
-          merchant={item.merchant}
-          price_minor={item.price_minor}
-          currency={item.currency}
-        />
-      </div>
-
-      <h1 className={styles.title}>
-        {item.brand} — {item.model}
-      </h1>
-
-      {item.available && item.price_minor !== null && item.currency ? (
-        <p className={styles.price}>{formatMoney(item.price_minor, item.currency)}</p>
-      ) : (
-        <p className={styles.unavailableNote}>Not available right now — no live offer for this item.</p>
-      )}
-
-      {item.available && (
-        <div className={styles.block}>
-          <h2 className={styles.label}>Merchant</h2>
-          <div className={styles.merchantRow}>
-            <span className={styles.merchantName}>{item.merchant}</span>
-            {item.stock && (
-              <span className={item.stock === 'out_of_stock' ? styles.stockOut : styles.stockIn}>
-                {stockLabel(item.stock)}
-              </span>
-            )}
+      <div className={`${shared.split} ${styles.split}`}>
+        <div className={shared.media}>
+          <div className={`${shared.cover} ${styles.cover}`}>
+            <Cover look={look} alt={`${look.title}, the look this product was spotted in`} fit="natural" loading="eager" />
           </div>
-          {item.freshness && <p className={styles.freshness}>{freshnessLabel(item.freshness)}</p>}
         </div>
-      )}
 
-      <div className={styles.block}>
-        <h2 className={styles.label}>Variant</h2>
-        <p className={styles.facts}>{facts.length > 0 ? facts.join(' · ') : 'Single variant'}</p>
-        {item.evidence && <p className={styles.evidence}>Match evidence: {item.evidence}</p>}
+        <section className={shared.body} aria-labelledby="item-offer">
+          <h2 id="item-offer" className="sr-only">
+            Offer
+          </h2>
+          <div className={styles.tags}>
+            <MatchBadge match={item.match} />
+            {look.sponsored ? <Tag variant="accent">Sponsored look</Tag> : null}
+          </div>
+
+          {priced ? (
+            <div className={styles.offer}>
+              <div className={styles.priceLabel}>Price</div>
+              <div className={styles.price}>{formatMoney(item.price_minor, item.currency)}</div>
+              <p className={styles.merchant}>
+                {item.merchant ? (
+                  <>
+                    at <strong>{item.merchant}</strong>
+                  </>
+                ) : null}
+                {item.merchant && item.stock ? ' · ' : null}
+                {item.stock ? (
+                  <span className={stockIsOut(item.stock) ? styles.out : undefined}>{stockLabel(item.stock)}</span>
+                ) : null}
+              </p>
+              {item.freshness ? <p className={shared.note}>{freshnessLabel(item.freshness)}</p> : null}
+            </div>
+          ) : (
+            <p className={styles.unavailableNote}>This product has no live offer at the moment, so there is no price. Save it and check back later.</p>
+          )}
+
+          <Disclosure />
+
+          <div className={styles.actions}>
+            <MerchantCta linkUrl={item.linkUrl} available={item.available} itemName={name} touch />
+            <SaveButton
+              block
+              lookId={look.id}
+              itemId={item.id}
+              lookTitle={look.title}
+              brand={item.brand}
+              model={item.model}
+              merchant={item.merchant}
+              price_minor={item.price_minor}
+              currency={item.currency}
+              className={styles.save}
+            />
+          </div>
+
+          <p className={shared.note}>Payment, delivery and returns are handled by the merchant.</p>
+
+          <Facts label="Product details" items={facts} />
+        </section>
       </div>
-
-      <MerchantCta linkUrl={item.linkUrl} available={item.available} label="Shop at merchant" size="large" />
-
-      <p className={styles.merchantNote}>Payment, delivery and returns are handled by the merchant.</p>
-
-      <div className={styles.disclosureWrap}>
-        <Disclosure />
-      </div>
-    </div>
+    </>
   );
 }

@@ -227,3 +227,236 @@
     the group's `aria-labelledby` (auto-detected for a direct Segmented /
     SelectableCardGroup child via their static `fieldGroup` flag, or
     `<Field group>`); a `<label for>` would point at an id nothing carries.
+
+## Afflino screens (2026-09-29)
+
+Every route of the handover is built (README "Screen map"). Items 2, 3, 5, 7
+and 9 above describe the pre-Afflino prototype and are superseded (live
+catalogue: 18–22; the locale toggle is gone; Archivo: 30; wishlist key
+`saved-items`: 22).
+
+**Across the app**
+
+46. **One accepted visual deviation: the demo badge.** Every page that shows
+    TEST data renders `<DemoBadge />` — `variant="mock"` where no endpoint
+    exists, `"fallback"` when a live call failed — in the page header's
+    actions or next to a section label. The badge has no outer margin; the
+    placement spaces it. Proper nouns are "Demo …" one-for-one and the
+    numbers are as designed; the extra data each area needs lives in
+    `lib/demo/<area>.ts` under the same rule (new identifiers include
+    `rq-demo-6`…`rq-demo-10`, `ST-DEMO-*`, `winter-sale.example.net`, PAN
+    `DEMOX0000Z`, handle `@demo.priyanair`, promo codes `DEMO` + the payout
+    figure, landing hosts `*.example.com`). Invented where the design draws
+    nothing: the Snapchat account on `/join` (96K · 88% India), the 7d / 90d
+    creator figures (built around the designed 30d), the undrawn admin and
+    brand pages' figures (made to add up to the drawn totals).
+47. **Browser storage** (demo state, per browser, never sent):
+    `afflino_demo_creator_settings`, `afflino_demo_applications`,
+    `afflino_brand_{offers,requests,conversions,settings}_v1` (split by
+    workspace: `own` or the client id), `afflino_agency_{share,invites,clients}_v1`,
+    `afflino_admin_review_v1` (shared by every admin page),
+    `paparazzi_console_looks`, `saved-items` (+ the
+    `afflino:saved-items-change` event, since `lib/saved.ts` has no change
+    notification); `/login` writes `paparazzi_token` / `paparazzi_publisher_id`.
+48. **Interactions** follow the handover everywhere: primitives' hover /
+    pressed / focus-visible states, 120ms colour transitions, skeletons (no
+    spinners) and "—" in KPIs until loaded, flush-left empty states with one
+    action, inline accent-700 field errors that focus the first invalid
+    control on submit, a top Banner for page-level failures, "Copied" for 2s
+    announced through a polite live region, dialogs through the Dialog
+    primitive, ≥44px targets on phones.
+49. **Integration fixes.** The pieces two or more areas needed were
+    promoted: `lib/csv.ts` (the three Export CSV implementations were
+    identical; the brand's export now also carries the UTF-8 BOM),
+    `lib/download.ts`, `lib/clipboard.ts` (onboarding's copy gains the
+    execCommand fallback), `lib/earnings.ts`, and `validateIfsc` /
+    `validateBankAccount` in `lib/validators.ts` (onboarding and settings keep
+    their own empty-field wording). The Dialog body dims its copy with a text
+    colour instead of `opacity: 0.85`, so forms inside dialogs are not faded
+    (the three local overrides are gone); the Input primitive hides WebKit's
+    blue search clear button (three local rules gone); the creator app has
+    its own 404 inside the shell; "Log in" carries `aria-current` on
+    `/login`; the unused `LegalStub` and `ScreenPlaceholder` were removed.
+50. **Creator earnings, one mapping** (`lib/earnings.ts`). Overview (1c)
+    "Next payout" and Payouts (2c) "Available to withdraw" are the same
+    figure, max(`collected` − `payable`, 0) — what `POST /v1/payout-batches`
+    can still put in a batch (it sizes batches as max(min(eligible,
+    collected) − batched, 0), and `collected` never exceeds eligible) — as the
+    design draws one amount (₹42,900) for both. `approved` (the net
+    publisher_liability) is not shown as a payout: it includes earnings the
+    merchant has not paid for and earnings inside the returns window.
+    Overview "Earnings to date" = `pending` + `approved` (the route takes no
+    date range); Payouts "Pending approval" = `pending`. The contract's
+    payout threshold is not in the response and is not reflected. On
+    fallback the pages print the designed figures, not `DEMO_EARNINGS`
+    mapped (that would print ₹41,090 beside platform rows summing to
+    ₹1,84,320). A reply for another publisher id is an error Banner and demo
+    data.
+
+**Marketing** (`/`, `/login`, `/terms`, `/privacy`, `/contact`)
+
+51. `/` is static: every figure comes from `lib/site-copy.ts` through
+    `components/marketing/copy.ts`; the creator poster is dropped when
+    `MARKETING_CLAIMS.creatorsFree` is false (and `#creators` with it).
+    Between 900 and 1279px the H1 and poster title scale with the viewport
+    (exact at 1280); below 900px everything stacks on 20px gutters (H1,
+    stats and poster title 44px, plan names 40px). A skip link and visually
+    hidden h2s ("How it works", "Pricing for brands") were added. Copy claims
+    that are not numbers ("Live in a day", "Approved earnings settle
+    weekly", "No fee, no minimum followers") are still literal in
+    `copy.ts`, not in site-copy.
+52. `/login` checks the token's shape only (it strips "Bearer " and line
+    breaks, refuses empty, malformed, unreadable and expired tokens); the
+    claims it shows are read from the token and labelled unverified — the
+    API checks the signature. A publisher id must be a uuid (stored
+    lower-case); blank keeps a saved token; blocked storage shows a Banner
+    and disables Continue. The page is noindex. `/contact` publishes no
+    email, phone or form until launch; terms and privacy are "being
+    prepared".
+
+**Onboarding** (`/join`, 2a / 3a)
+
+53. Demo flows, nothing verified: no SMS is sent and any 6 digits pass (the
+    number must still be a valid +91 mobile; changing it invalidates the
+    code); "Connect" fills in a TEST account (no OAuth); the PAN line reads
+    "Verified · DEMO PRIYA NAIR — demo, no PAN check was made"; the wallet
+    top-up takes no payment and creates no wallet. Platform connections, PAN
+    and payout details are never sent to the API and nothing is persisted (a
+    reload restarts at step 1).
+54. Rules set here (placeholders pending business decisions): bank account
+    9–18 digits (spaces and hyphens ignored); IFSC `^[A-Z]{4}0[A-Z0-9]{6}$`;
+    website http(s) with a dotted host (`https://` added); Telegram `@name`,
+    `t.me/…` or `telegram.me/…`, 5–32 characters, invite links refused;
+    email a basic shape; top-up optional whole rupees, ≤ 9 digits, kept in
+    paise; full name 2–100 characters with a letter; brand / agency GSTIN
+    optional and website required. A website or Telegram channel counts as
+    "a platform".
+55. Consent wording is the design's draft (no legal conclusion): "Creator
+    Terms" links to `/terms` in a new tab (publishers see the same wording);
+    the ASCI guidelines are not linked (no URL decided); brands and agencies
+    consent to the "Terms of use".
+56. Live submit: `POST /v1/publishers` with `{legal_name, country: 'IN'}` and
+    one `Idempotency-Key` per legal name per page session, only for a creator
+    / publisher with a dev token; 201 stores the new id as
+    `paparazzi_publisher_id`. `NETWORK_UNREACHABLE` / `UPSTREAM_UNAVAILABLE`
+    show a labelled demo result with "Try again"; any other error is a
+    Banner and nothing is created. Steps use `history.pushState(null, …)`
+    (Next 14's `__NA` flag in `history.state` otherwise stops
+    `useSearchParams` syncing). Fields start empty (the mock draws the
+    filled state); the 3a columns sit in the 5fr / 7fr shell (634px against
+    the drawn 558px, so the step 2 lead wraps differently); phones show a
+    step strip with short labels. The home page's `?plan=starter` is not
+    read: the onboarding design has no plan step.
+
+**Creator app** (`/app/*`)
+
+57. Overview / Reports (1c, 3d): 7d | 30d | 90d changes title and data (late
+    replies ignored); the 90d chart is 13 weekly bars. Top links are the same
+    for every range (the drawn rows exceed 30-day earnings, so they are
+    all-time). Reports splits the designed totals by offer × platform, scales
+    7d / 90d to the Overview totals and keeps the designed non-linear funnel
+    bars; a "By day / week / month" table under the drawn area makes "Group
+    by" do something (the one structural addition — drop it to match 3d
+    exactly). The phone overview has no range switch (1e draws none).
+    `DEMO_MY_LINKS` puts `story-12` (Demo Rail Trips) on Meta although that
+    offer allows YouTube and Snapchat (as drawn); Reports gives Rail a Meta
+    share so its filters stay consistent.
+58. Offers / links (1d, 1e, 3c): `/app/offers` never calls `GET /v1/offers`
+    (it returns the raw merchant `offer_url` to any signed-in role — an API
+    item to fix before a creator screen uses it). "Highest payout" ranks by
+    rupees per conversion; a percentage payout uses a test-only reference
+    order value (Demo Style Festive ₹1,400, Demo Rail Trips ₹500, never
+    shown) so the drawn order reproduces — a product decision (e.g. brands
+    supplying an average order value). The landing page must be on one of
+    the offer's allowed hosts by exact match, like the API's
+    `allowed_domains`. Only Demo Ludo Arena needs approval; "Apply" is a
+    demo dialog (stored in this browser, nothing sent) and the link then
+    carries Review status. "Attribution 30 days / 7 days" is placeholder
+    copy: no attribution window is implemented. QR: error correction M, 8px
+    modules, 4-module margin, 1-bit greyscale PNG
+    (`qrcode-generator@2.0.4`, MIT). Live minting sits in an inline "Live
+    tracked link" section (not a dialog); editing the generator after a live
+    mint returns the Generated box to the demo preview. On the phone detail
+    page the shell's top bar and tab bar stay (1e hides both; the sticky
+    footer sits above the tab bar) and a "Disclosure text" box is added
+    (every copy / share action offers the #ad line); "Sort" is hidden on
+    phones (3f).
+59. Payouts / settings (2c, 2d, 3f): Withdraw takes whole rupees from the
+    ₹500 minimum (gross, inclusive) up to the available balance; TDS uses
+    the site-copy rate rounded half-up to the rupee (the design's ₹513); a
+    live Withdraw moves no money and explains that batches are prepared and
+    approved by a second person (there is no publisher withdrawal endpoint).
+    Exports carry a TEST row first. Desktop 2c / 2d have hidden h1s (no
+    drawn title); "Raise a ticket →", "Statements →" and, on phones, "Change
+    payout method →" were added. Settings is one form over five sections;
+    Save is enabled only when something changed and floats at the bottom
+    with unsaved changes; the saved payout method also shows on Payouts.
+    The 3f "Available" panel sets 13px ground-coloured text on the accent
+    (about 3.7:1, below WCAG AA for small text) as drawn — a design decision
+    to revisit. **Tax, open:** site-copy's TDS 1% under 194-O is a
+    placeholder; the rate and even the section for creator commissions need
+    the tax adviser (the maths handles fractional rates).
+
+**Brand** (`/brand/*`, 2b / 3b / 3f)
+
+60. All TEST data (v1 has no brand endpoints). Read from 2b and needing
+    business confirmation: the budget cap covers creator payouts only and
+    the network fee is billed on top (₹18.4L ÷ 10,212 ≈ ₹180); the fee is
+    rounded half-up to the paisa and is display only (nothing is posted to
+    the ledger). Estimated reach is a demo table per platform (Meta 22–30M,
+    YouTube 10–14M, Snapchat 6–8M, Telegram 2–3M → the drawn 38–52M), not a
+    forecast. Builder steps 02–04 are this build's design, not the owner's;
+    the builder opens pre-filled with the drawn example; the preview card
+    also lists allowed platforms. Landing pages must be https on the
+    brand's website domain (subdomains allowed); creators never see them.
+    GSTIN is format-checked only. Admin review is not simulated: a submitted
+    offer stays "In review" and never reaches `/admin`. Agency client
+    workspaces show the same TEST figures under the client's name. On phones
+    `/brand` is the 3f composition (no Top creators table).
+
+**Agency and admin** (`/agency`, `/admin/*`, 3e / 2e)
+
+61. Agency share: one rate for the whole roster, whole numbers 0–50,
+    default `DEFAULT_AGENCY_SHARE_PCT`; share = round(earned × pct / 100),
+    half-up to the paisa; per-creator rates (the handover's
+    `roster[{sharePct}]`) are not built. Only the three drawn clients exist
+    (the header still says 6); pending clients are not links; the dialogs
+    send no email. The share control sits under the roster table so the
+    drawn area stays exact.
+62. Admin queue: counts are 212 / 14 / 76 / 122 minus the sample items
+    approved or rejected in this browser; only rejection needs a note (≤ 500
+    characters); decisions update every admin page (approving Demo
+    CardMint's first offer makes the brand Active). The undrawn pages'
+    figures are made to agree with 2e (fraud signals sum to 1,284 flagged
+    and 122 cases, KYC buckets to 18,406, September fees to ₹52.6L); fraud
+    thresholds are demo values and the pages say that no fraud detection,
+    KYC or PAN verification exists. Settlements is read-only and explains
+    the API's maker-checker flow. 2e gains two tabs (Suspense, Looks).
+
+**Shop** (`/shop`, `/looks/*`, `/saved`)
+
+63. No artboard: composed from 1d's ruled grid and 1e's phone get-link
+    layout on the 40px marketing gutters (cells 24px 40px), with a tab row
+    ("Shop the looks" | "Saved · n"). Covers are grayscale; the gradient
+    placeholder is grayscale at 45% on the surface fill; grid cells crop 4:3
+    weighted to the upper third, detail pages show the whole photo
+    letterboxed and never enlarged. The disabled CTA is the outlined
+    secondary look. The disclosure is a panel above the products on look and
+    item pages and a standing line on `/shop` and `/saved` (no longer in
+    the layout, which printed it twice); its wording is unchanged, in one
+    constant `SHOP_DISCLOSURE` (`components/Disclosure.tsx`), pending
+    counsel. No price sort (the list endpoint has no prices). Demo wishlist
+    entries are recognised by a non-uuid look id.
+
+**Open foundation items** (worked around locally, not changed): `Banner`'s
+title wraps beside a long message and its fixed role cannot pre-exist as a
+live region; `TagButton` does not forward refs; `SelectableCard` takes no
+`id` / `aria-describedby`; `EmptyState`'s action is 35px tall on phones;
+`Kpi` has no step between 760px and the 4-cell desktop (pages add their own
+at 1000–1240px); `PageHeader` titles can wrap into the actions; `AppShell`
+has no detail mode that hides the tab bar (1e); `statusTag` has no mapping
+for "Rejected" or "Due"; `formatPayout` prints 12.5% as "13%" (the brand
+uses its own `formatBps`); `lib/demo/afflino.ts` marks every offer
+`requiresApproval: false` (overridden in `lib/demo/links.ts`); an `sr-only`
+span inside a button yields a stray space in its name (aria-label used
+instead).

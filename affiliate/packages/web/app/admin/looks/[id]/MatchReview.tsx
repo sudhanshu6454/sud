@@ -5,14 +5,15 @@
  * logic is the HEAD page unchanged (verdict per candidate, evidence required
  * for "exact", rights checklist, approve → commercial review / reject →
  * draft; local, lib/console.ts), set in the admin shell with the Afflino
- * primitives. TEST demo looks and products.
+ * primitives (section labels and rules as the admin console, 2e). TEST demo
+ * looks and products.
  */
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import DemoBadge from '@/components/DemoBadge';
-import { PageBody, PageSection } from '@/components/shell/PageBody';
-import { Button, Checkbox, EmptyState, Field, PageHeader, Segmented, Skeleton, Textarea } from '@/components/ui';
+import { PageBody } from '@/components/shell/PageBody';
+import { Button, Checkbox, EmptyState, Eyebrow, Field, PageHeader, Segmented, Skeleton, Textarea } from '@/components/ui';
 import { RIGHTS_GATES, getLook, loadLooks, saveLooks, stateLabel, type ConsoleLook } from '@/lib/console';
 import { getProduct } from '@/lib/mock-data';
 import styles from './page.module.css';
@@ -122,53 +123,61 @@ export function MatchReview({ id }: { id: string }) {
         actions={<DemoBadge variant="mock" className={styles.badge} />}
       />
       <PageBody>
-        <PageSection>Candidate products</PageSection>
-        <div className={styles.candidates}>
-          {look.candidates.map((c) => {
-            const product = getProduct(c.productId);
-            const needsEvidence = c.verdict === 'exact' && c.evidence.trim() === '';
-            return (
-              <div key={c.productId} className={styles.candidate}>
-                <p className={styles.productName}>{product ? `${product.brand} — ${product.model}` : c.productId}</p>
-                {product && (
-                  <p className={styles.productMeta}>
-                    {product.merchant} · {product.match}
-                  </p>
-                )}
-                <Field label="Match verdict">
-                  <Segmented<string>
-                    block
-                    name={`verdict-${c.productId}`}
-                    value={c.verdict ?? ''}
-                    options={VERDICTS}
-                    onChange={(v) => setVerdict(c.productId, v as Verdict)}
-                  />
-                </Field>
-                <Field
-                  label="Evidence"
-                  labelSuffix={c.verdict === 'exact' ? '(required for exact)' : undefined}
-                  error={needsEvidence ? 'Evidence is required for an “exact” verdict.' : undefined}
-                >
-                  <Textarea
-                    value={c.evidence}
-                    onChange={(e) => setEvidence(c.productId, e.target.value)}
-                    rows={2}
-                    placeholder="What proves this is the exact item?"
-                  />
-                </Field>
-              </div>
-            );
-          })}
-        </div>
+        <section aria-labelledby="match-candidates-title">
+          <Eyebrow as="h2" id="match-candidates-title" className={styles.sectionLabel}>
+            Candidate products
+          </Eyebrow>
+          <div className={styles.candidates}>
+            {look.candidates.map((c) => {
+              const product = getProduct(c.productId);
+              const needsEvidence = c.verdict === 'exact' && c.evidence.trim() === '';
+              return (
+                <div key={c.productId} className={styles.candidate}>
+                  <p className={styles.productName}>{product ? `${product.brand} — ${product.model}` : c.productId}</p>
+                  {product && (
+                    <p className={styles.productMeta}>
+                      {product.merchant} · {product.match}
+                    </p>
+                  )}
+                  <Field label="Match verdict">
+                    <Segmented<string>
+                      block
+                      name={`verdict-${c.productId}`}
+                      value={c.verdict ?? ''}
+                      options={VERDICTS}
+                      onChange={(v) => setVerdict(c.productId, v as Verdict)}
+                    />
+                  </Field>
+                  <Field
+                    label="Evidence"
+                    labelSuffix={c.verdict === 'exact' ? '(required for exact)' : undefined}
+                    error={needsEvidence ? 'Evidence is required for an “exact” verdict.' : undefined}
+                  >
+                    <Textarea
+                      value={c.evidence}
+                      onChange={(e) => setEvidence(c.productId, e.target.value)}
+                      rows={2}
+                      placeholder="What proves this is the exact item?"
+                    />
+                  </Field>
+                </div>
+              );
+            })}
+          </div>
+        </section>
 
-        <PageSection>Rights checklist</PageSection>
-        <div className={styles.rights}>
-          {RIGHTS_GATES.map((g) => (
-            <Checkbox key={g.id} checked={!!look.rights[g.id]} onChange={() => toggleRight(g.id)}>
-              {g.label}
-            </Checkbox>
-          ))}
-        </div>
+        <section aria-labelledby="match-rights-title">
+          <Eyebrow as="h2" id="match-rights-title" className={styles.sectionLabel}>
+            Rights checklist
+          </Eyebrow>
+          <div className={styles.rights}>
+            {RIGHTS_GATES.map((g) => (
+              <Checkbox key={g.id} checked={!!look.rights[g.id]} onChange={() => toggleRight(g.id)}>
+                {g.label}
+              </Checkbox>
+            ))}
+          </div>
+        </section>
 
         <div className={styles.actions}>
           <Button

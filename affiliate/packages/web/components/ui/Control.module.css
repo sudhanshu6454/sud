@@ -25,6 +25,13 @@
   outline-offset: 0;
 }
 
+/* type="search": no browser-coloured clear button (off-palette); each
+   search box clears with Esc or its own "Clear" action. */
+.control::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
 /* Search / filter inputs in page headers (1d, 3c, 3f): 10px 12px. */
 .compact {
   padding: 10px var(--space-3);

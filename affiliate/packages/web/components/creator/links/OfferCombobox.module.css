@@ -1,0 +1,85 @@
+/* Searchable offer select: the Input box (2px ink, 12px, 14px) with a
+   listbox popup in the same frame. Flat (no shadow), 0 radius. */
+
+.wrap {
+  position: relative;
+}
+
+/* Room for the chevron, as the Select primitive does. */
+.wrap .input {
+  padding-right: 36px;
+  text-overflow: ellipsis;
+}
+
+.chevron {
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  width: 10px;
+  height: 5px;
+  margin-top: -2px;
+  pointer-events: none;
+  background: linear-gradient(45deg, transparent 50%, var(--color-text) 50%) left / 5px 5px no-repeat,
+    linear-gradient(135deg, var(--color-text) 50%, transparent 50%) right / 5px 5px no-repeat;
+}
+
+.list {
+  position: absolute;
+  z-index: 30;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: 288px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: var(--color-bg);
+  border: 2px solid var(--color-text);
+  border-top: 0;
+}
+
+.list[hidden] {
+  display: none;
+}
+
+.option {
+  display: flex;
+  flex-direction: column;
+  padding: 10px var(--space-3);
+  font-size: 14px;
+  line-height: 1.35;
+  cursor: pointer;
+  border-bottom: 1px solid var(--color-divider);
+  transition: background-color 120ms ease-out;
+}
+
+.option:last-child {
+  border-bottom: 0;
+}
+
+.active {
+  background: color-mix(in srgb, var(--color-text) 7%, transparent);
+}
+
+.selected .optionLabel {
+  font-weight: 600;
+}
+
+.optionMeta {
+  font-size: 12px;
+  color: var(--color-neutral-700);
+}
+
+.none {
+  padding: 10px var(--space-3);
+  font-size: 14px;
+  color: var(--color-neutral-700);
+}
+
+@media (max-width: 760px) {
+  .option {
+    min-height: 44px;
+    justify-content: center;
+  }
+}

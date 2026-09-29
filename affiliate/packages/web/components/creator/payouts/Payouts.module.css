@@ -1,0 +1,274 @@
+/* Creator Payouts — 2c (desktop) and 3f middle (phone ≤760px). Values from
+   the artboards: 32px balance cells split by 2px rules, 48px balances, a
+   20px 32px toolbar over a 2px rule, the table in 8px 32px 32px. */
+
+.desktop {
+  display: flex;
+  flex-direction: column;
+}
+
+.phone {
+  display: none;
+}
+
+/* ---------- balance cells ---------- */
+
+.cells {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-bottom: 2px solid var(--color-divider);
+  container-type: inline-size;
+}
+
+.cell {
+  min-width: 0;
+  padding: var(--space-8);
+  border-right: 2px solid var(--color-divider);
+}
+
+.cell:last-child {
+  border-right: 0;
+}
+
+.value {
+  margin: var(--space-2) 0 0;
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 48px;
+  font-size: min(48px, calc((33.333cqi - 64px) / 4.8));
+  line-height: 1.55;
+  letter-spacing: -0.04em;
+  white-space: nowrap;
+}
+
+.liveMeta,
+.pendingMeta,
+.methodMeta,
+.reason {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-neutral-700);
+}
+
+.liveMeta {
+  margin-top: var(--space-1);
+}
+
+.pendingMeta {
+  margin-top: var(--space-4);
+}
+
+.withdraw {
+  margin-top: var(--space-4);
+}
+
+.reason {
+  margin-top: var(--space-2);
+  max-width: 320px;
+}
+
+.method {
+  margin: var(--space-3) 0 0;
+  font-size: 18px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.methodMeta {
+  margin-top: var(--space-1);
+}
+
+.change {
+  display: block;
+  width: fit-content;
+  margin-top: var(--space-4);
+  font-size: 13px;
+}
+
+/* ---------- toolbar ---------- */
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3) var(--space-4);
+  padding: 20px var(--space-8);
+  border-bottom: 2px solid var(--color-divider);
+}
+
+/* The period tag stretches to the Export button's height, as drawn. */
+.toolbarEnd {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.toolbarEnd .badge {
+  margin: 0;
+  align-self: center;
+}
+
+/* ---------- table ---------- */
+
+.tableArea {
+  padding: var(--space-2) var(--space-8) var(--space-8);
+  min-width: 0;
+}
+
+/* The columns share the width (as drawn); a little air keeps narrow
+   layouts from butting cells together. */
+.table th:not(:last-child),
+.table td:not(:last-child) {
+  padding-right: var(--space-3);
+}
+
+.more {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-6);
+  margin: var(--space-4) 0 0;
+  font-size: 13px;
+}
+
+/* ---------- narrower desktop / tablet ---------- */
+
+/* The balances shrink with the cell (container units: ₹1,12,480 is about
+   4.65 em wide) so they never overflow; 48px from ~1080px up, as drawn.
+   At 900px and below: two cells, the payout method under them. */
+@media (max-width: 900px) {
+  .cells {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .value {
+    font-size: min(48px, calc((50cqi - 64px) / 4.8));
+  }
+
+  .cell:nth-child(2) {
+    border-right: 0;
+  }
+
+  .cell:last-child {
+    grid-column: 1 / -1;
+    border-top: 2px solid var(--color-divider);
+  }
+}
+
+/* ---------- phone (3f) ---------- */
+
+@media (max-width: 760px) {
+  .desktop {
+    display: none;
+  }
+
+  .phone {
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+.phoneHeader {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4) 20px;
+  border-bottom: 2px solid var(--color-divider);
+}
+
+.phoneHeader .badge {
+  margin: 0;
+}
+
+.phoneTitle {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 24px;
+  line-height: 1.55;
+  letter-spacing: -0.03em;
+}
+
+/* Full accent "poster" panel with ground-coloured type. */
+.panel {
+  padding: 20px;
+  background: var(--color-accent);
+  color: var(--color-bg);
+}
+
+.panelLabel {
+  margin: 0;
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 12px;
+  line-height: 1.55;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.panelValue {
+  margin: var(--space-1) 0 0;
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 40px;
+  line-height: 1.55;
+  letter-spacing: -0.04em;
+  white-space: nowrap;
+}
+
+.panelLine {
+  margin: var(--space-1) 0 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.phoneAction {
+  padding: var(--space-4) 20px;
+  border-bottom: 2px solid var(--color-divider);
+}
+
+.history {
+  padding: 0 20px var(--space-6);
+}
+
+.historyList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.historyRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 14px 0;
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.historyNet {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.historyMeta {
+  font-size: 12px;
+  color: var(--color-neutral-700);
+}
+
+.phoneMore {
+  display: flex;
+  flex-direction: column;
+  margin: var(--space-2) 0 0;
+  font-size: 14px;
+}
+
+.phoneMore a {
+  display: block;
+  width: fit-content;
+  min-height: 44px;
+  padding: 11px 0;
+}

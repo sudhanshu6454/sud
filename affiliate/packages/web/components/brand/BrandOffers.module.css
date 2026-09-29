@@ -1,0 +1,82 @@
+/* Brand offers (not drawn): header, status filter row (1d / 2e pattern),
+   then the table in the app gutters (24px 32px). */
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-6) var(--space-8);
+  min-width: 0;
+}
+
+.notice {
+  padding: var(--space-3) var(--space-8) 0;
+}
+
+.offerCell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.offerName {
+  font-weight: 600;
+}
+
+.offerEvent {
+  font-size: 13px;
+  color: var(--color-neutral-700);
+}
+
+.reason {
+  font-size: 13px;
+  color: var(--color-accent-700);
+}
+
+.rowActions {
+  display: inline-flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.skelRow {
+  display: block;
+  height: 44px;
+  background: var(--color-neutral-200);
+}
+
+@media (max-width: 760px) {
+  .body {
+    padding: var(--space-4) 20px;
+  }
+
+  .notice {
+    padding: var(--space-3) 20px 0;
+  }
+
+  .touch,
+  .filterTag {
+    min-height: 44px;
+  }
+
+  .filterTag {
+    padding-inline: 14px;
+  }
+
+  .rowActions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .rowActions > * {
+    min-height: 44px;
+    min-width: 88px;
+  }
+}

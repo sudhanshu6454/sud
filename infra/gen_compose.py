@@ -180,10 +180,11 @@ def build(sites: list[dict]) -> dict:
     }
     volumes["pulse_worker_data"] = {}
 
-    # Affiliate platform (affiliate/, "Paparazzi"): the consumer shop, the click redirector, the v1 API and
-    # its workers on their own Postgres + Redis. Opt-in: every service carries profile "affiliate", so a
-    # plain `docker compose up -d` never starts it; COMPOSE_PROFILES=affiliate in .env switches it on.
-    # Public hosts: AFFILIATE_WEB_HOST (shop), AFFILIATE_LINK_HOST (redirector), AFFILIATE_API_HOST (API).
+    # Affiliate platform (affiliate/, the "Paparazzi" platform): the Afflino web app (with the consumer shop
+    # at /shop), the click redirector, the v1 API and its workers on their own Postgres + Redis. Opt-in:
+    # every service carries profile "affiliate", so a plain `docker compose up -d` never starts it;
+    # COMPOSE_PROFILES=affiliate in .env switches it on.
+    # Public hosts: AFFILIATE_WEB_HOST (web app + shop), AFFILIATE_LINK_HOST (redirector), AFFILIATE_API_HOST (API).
     # Every ${...} has a :- default so `docker compose config` passes on .env.example; the owner fills
     # the values before opting in (an empty POSTGRES_PASSWORD stops affiliate_db, by design).
     # Network: the affiliate containers get a bridge of their own ("affiliate"). Postgres, Redis, the
@@ -313,9 +314,10 @@ def build(sites: list[dict]) -> dict:
         "networks": ["affiliate"],
         **aff_hardening,
     }
-    # The shop. Server-side pages reach the API over the affiliate network. Browser calls (portal, console)
-    # go to /api on the shop's own host, a proxy to the API, so the API is reachable from the public shop
-    # host as well as from AFFILIATE_API_HOST; its auth is the JWT stub either way (affiliate/CLAUDE.md).
+    # The Afflino web app: marketing site, creator / brand / agency / admin areas and the fleet shop at /shop.
+    # Server-side pages reach the API over the affiliate network. Browser calls (the app areas) go to /api
+    # on the web host, a proxy to the API, so the API is reachable from the public web host as well as from
+    # AFFILIATE_API_HOST; its auth is the JWT stub either way (affiliate/CLAUDE.md).
     services["affiliate_web"] = {
         "build": aff_build("Dockerfile.web", {"NEXT_PUBLIC_API_BASE": "/api"}),
         "container_name": "affiliate_web",
@@ -327,7 +329,7 @@ def build(sites: list[dict]) -> dict:
             "API_BASE": "http://affiliate_api:3000",
             "WEB_API_TOKEN": "${AFFILIATE_WEB_API_TOKEN:-}",
             "WEB_PLACEMENT_ID": "${AFFILIATE_WEB_PLACEMENT_ID:-}",
-            "NEXT_PUBLIC_SITE_NAME": "${AFFILIATE_SITE_NAME:-Paparazzi Commerce}",
+            "NEXT_PUBLIC_SITE_NAME": "${AFFILIATE_SITE_NAME:-Afflino}",
             "VIRTUAL_HOST": "${AFFILIATE_WEB_HOST:-}",
             "VIRTUAL_PORT": "3000",
             "LETSENCRYPT_HOST": "${AFFILIATE_WEB_HOST:-}",

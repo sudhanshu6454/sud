@@ -1,0 +1,128 @@
+/* Shared by the look and item pages: the page header on the 40px marketing
+   gutters, and the 5fr / 7fr split (3c's proportion) under it with a 2px
+   vertical rule — media and facts on the left, the products on the right.
+   Stacks at ≤760px (cover, products, facts), 20px gutters. */
+
+.header.header {
+  padding-inline: 40px;
+}
+
+.headerActions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.badge {
+  margin: 0;
+}
+
+.crumb {
+  color: inherit;
+  text-decoration: none;
+}
+
+.crumb:hover {
+  color: var(--color-accent-700);
+  text-decoration: underline;
+}
+
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  flex: 1;
+}
+
+.media {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding: var(--space-8) 40px;
+  border-right: 2px solid var(--color-divider);
+  min-width: 0;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding: var(--space-8) 40px;
+  min-width: 0;
+}
+
+.sectionHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.sectionTitle {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 24px;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--color-neutral-700);
+}
+
+@media (max-width: 899px) {
+  .header.header {
+    padding-inline: 20px;
+  }
+
+  .media,
+  .body {
+    padding: var(--space-6) 20px;
+  }
+}
+
+@media (max-width: 760px) {
+  .crumbDesk {
+    display: none;
+  }
+
+  /* One column: the cover, then the products, then the facts. */
+  .split {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .media {
+    display: contents;
+  }
+
+  .cover {
+    order: 1;
+    padding: var(--space-4) 20px 0;
+  }
+
+  .body {
+    order: 2;
+    padding: 20px;
+    gap: var(--space-4);
+  }
+
+  .aside {
+    order: 3;
+    padding: 0 20px 20px;
+  }
+
+  .empty a {
+    min-height: 44px;
+  }
+}

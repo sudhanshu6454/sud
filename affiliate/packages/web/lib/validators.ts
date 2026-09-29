@@ -1,6 +1,6 @@
 /**
- * Form validators for sign-up, onboarding, payouts and link building
- * (design handover 2a / 3a / 3c). Each returns { ok, message } — message is
+ * Form validators for sign-up, onboarding, payouts, settings and link
+ * building (design handover 2a / 3a / 3c / 2d). Each returns { ok, message } — message is
  * '' when ok — plus the normalised value to submit when there is one.
  *
  * These are client-side shape checks only. PAN is verified against the name
@@ -96,5 +96,34 @@ export function validateSubId(input: string, rule: OptionalRule = { optional: tr
   if (raw === '') return rule.optional ? pass('') : fail('Enter a sub-ID.');
   if (raw.length > 32) return fail('A sub-ID is at most 32 characters.');
   if (!/^[a-z0-9-]+$/.test(raw)) return fail('Use lowercase letters, digits and hyphens only (e.g. reel-oct-01).');
+  return pass(raw);
+}
+
+/**
+ * Bank account number: 9 to 18 digits (the range Indian banks issue);
+ * spaces and hyphens are ignored. Normalised to the digits. Shared by
+ * onboarding (3a) and settings (2d); `emptyMessage` keeps each screen's
+ * wording.
+ */
+export function validateBankAccount(input: string, emptyMessage = 'Enter your account number.'): ValidationResult {
+  const raw = input.trim();
+  if (raw === '') return fail(emptyMessage);
+  if (!/^[\d\s-]+$/.test(raw)) return fail('Use digits only.');
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length < 9 || digits.length > 18) return fail('An account number is 9 to 18 digits.');
+  return pass(digits);
+}
+
+/**
+ * IFSC: 11 characters — 4 letters (the bank), a 0, then 6 letters or digits
+ * (the branch): ^[A-Z]{4}0[A-Z0-9]{6}$. Trimmed and upper-cased first.
+ * Shape only; no branch lookup. Shared by onboarding (3a) and settings (2d).
+ */
+export function validateIfsc(input: string, emptyMessage = 'Enter the branch IFSC.'): ValidationResult {
+  const raw = input.trim().toUpperCase();
+  if (raw === '') return fail(emptyMessage);
+  if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(raw)) {
+    return fail('IFSC is 11 characters: 4 letters, a 0, then 6 letters or digits.');
+  }
   return pass(raw);
 }

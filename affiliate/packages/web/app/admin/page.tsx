@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
-import { ScreenPlaceholder } from '@/components/shell/ScreenPlaceholder';
+import { AdminQueue } from '@/components/admin/AdminQueue';
 
 export const metadata: Metadata = { title: 'Admin queue' };
 
-/** Placeholder — a screen builder replaces this page. */
+/** Admin console (2e): network KPIs and the review queue. TEST demo data (no queue endpoint in v1). */
 export default function AdminPage() {
-  return <ScreenPlaceholder eyebrow="Admin" title="Review queue" artboard="2e" />;
+  return <AdminQueue />;
 }

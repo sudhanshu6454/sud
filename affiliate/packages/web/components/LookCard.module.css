@@ -1,56 +1,135 @@
-.card {
-  display: block;
-  border: 1px solid #e5e5e5;
-  border-radius: 0.75rem;
-  overflow: hidden;
-  text-decoration: none;
-  color: inherit;
-  background: #fff;
-  transition: transform 0.12s ease, box-shadow 0.12s ease;
-}
+/* A look as a 1d offer cell (values from the 1d artboard markup): 2px right
+   / bottom rules, 12px gap, kicker 12px uppercase 0.1em neutral-700, title
+   22px / 800 / −0.02em, body 14px / 1.5 neutral-800, "payout" slot 12px label
+   over 24px / 800 / −0.02em with 12px meta on the right, then a secondary
+   block button (with .btn-block's 8px top margin). Padded 24px 40px so the text sits on the 40px marketing
+   gutter under the nav. The grid (LookGrid) drops the rightmost rule. */
 
-.card:active {
-  transform: scale(0.99);
-}
-
-.media {
+.cell {
   position: relative;
-  aspect-ratio: 4 / 3;
-  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-6) 40px;
+  border-right: 2px solid var(--color-divider);
+  border-bottom: 2px solid var(--color-divider);
+  background: var(--color-bg);
 }
 
-.sponsored {
-  position: absolute;
-  top: 0.5rem;
-  left: 0.5rem;
-  background: rgba(17, 17, 17, 0.85);
-  color: #fff;
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 23px;
+}
+
+.kicker {
+  font-size: 12px;
+  line-height: 1.55;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  padding: 0.25rem 0.5rem;
-  border-radius: 0.25rem;
-}
-
-.body {
-  padding: 0.75rem 1rem 1rem;
-}
-
-.title {
-  font-size: 1rem;
-  margin-bottom: 0.15rem;
-}
-
-.meta {
-  font-size: 0.82rem;
-  color: #666;
+  color: var(--color-neutral-700);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .cover {
+  margin: var(--space-1) 0;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 22px;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.source {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-neutral-800);
+}
+
+.sourceName {
+  font-weight: 600;
+}
+
+.countRow {
+  margin-top: auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.countLabel,
+.meta {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--color-neutral-700);
+}
+
+.meta {
+  text-align: right;
+}
+
+.countValue {
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 24px;
+  line-height: 1.55;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+/* The handover's secondary block button: 800 14px, 1px divider border,
+   label flush left, 7% / 14% ink hover / pressed. Its ::after covers the
+   cell, so the whole cell is the link. */
+.cta {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  margin-top: var(--space-2);
+  padding: var(--space-2) calc(var(--space-3) * 1.2);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 14px;
+  line-height: 1.2;
+  color: var(--color-text);
+  text-decoration: none;
+  transition: background-color 120ms ease-out;
+}
+
+.cta::after {
+  content: '';
   position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+}
+
+.cta:hover {
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-text) 7%, transparent);
+}
+
+.cta:active {
+  background: color-mix(in srgb, var(--color-text) 14%, transparent);
+}
+
+@media (max-width: 760px) {
+  .cell {
+    padding: 20px;
+  }
+
+  .cta {
+    min-height: 44px;
+  }
 }

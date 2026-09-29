@@ -1,16 +1,60 @@
+/* Save toggle — the handover's secondary button at the list-row size (sm:
+   13px, 8px 14px, 1px divider border, 7% / 14% ink hover / pressed).
+   Saved = accent-100 fill, accent-700 text, accent border. 44px on phones. */
+
 .button {
-  font-size: 0.8rem;
-  font-weight: 600;
-  padding: 0.4rem 0.75rem;
-  border: 1px solid #ccc;
-  border-radius: 999px;
-  background: #fff;
-  color: #333;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2) 14px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text);
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 13px;
+  line-height: 1.2;
+  white-space: nowrap;
   cursor: pointer;
+  transition: background-color 120ms ease-out, color 120ms ease-out, border-color 120ms ease-out;
 }
 
-.saved {
-  background: #111;
-  border-color: #111;
-  color: #fff;
+.button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-text) 7%, transparent);
+}
+
+.button:active:not(:disabled) {
+  background: color-mix(in srgb, var(--color-text) 14%, transparent);
+}
+
+.saved,
+.saved:hover:not(:disabled) {
+  background: var(--color-accent-100);
+  border-color: var(--color-accent);
+  color: var(--color-accent-700);
+}
+
+.saved:active:not(:disabled) {
+  background: var(--color-accent-200);
+}
+
+/* Not read yet: keep the box, show nothing (no wrong-state flash, no 45% flicker). */
+.pending,
+.pending:disabled {
+  visibility: hidden;
+  opacity: 1;
+}
+
+.block {
+  width: 100%;
+  justify-content: flex-start;
+  font-size: 14px;
+  padding: var(--space-2) calc(var(--space-3) * 1.2);
+}
+
+@media (max-width: 760px) {
+  .button {
+    min-height: 44px;
+  }
 }

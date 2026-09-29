@@ -1,0 +1,277 @@
+/* Marketing site — design 1b, ported from the artboard's inline styles.
+   Desktop values are the artboard's at 1280; below 1280 the two display
+   sizes scale with the viewport; below 900 every grid stacks (hero, How it
+   works, pricing, poster) with the 20px phone gutters the nav and footer
+   use, and the hero H1 drops to 44px. */
+
+/* ---------- hero: 7fr / 5fr, 2px rule between ---------- */
+
+.hero {
+  display: grid;
+  grid-template-columns: 7fr 5fr;
+  border-bottom: 2px solid var(--color-divider);
+}
+
+.heroMain {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding: 72px 40px;
+  border-right: 2px solid var(--color-divider);
+  min-width: 0;
+}
+
+.display {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 72px;
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+  text-wrap: pretty;
+}
+
+.lead {
+  margin: 0;
+  max-width: 560px;
+  font-size: 18px;
+  line-height: 1.5;
+  color: var(--color-neutral-800);
+}
+
+.ctas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* Three stat rows, equal height, split by 2px rules. */
+.stats {
+  display: grid;
+  grid-template-rows: 1fr 1fr 1fr;
+  margin: 0;
+  padding: 40px;
+  list-style: none;
+  min-width: 0;
+}
+
+.stat {
+  padding: var(--space-4) 0;
+  border-bottom: 2px solid var(--color-divider);
+}
+
+.stat:last-child {
+  border-bottom: 0;
+}
+
+.statValue {
+  display: block;
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 56px;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.statLabel {
+  display: block;
+  margin-top: var(--space-2);
+  font-size: 14px;
+}
+
+/* ---------- How it works (#brands): three equal cells ---------- */
+
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-bottom: 2px solid var(--color-divider);
+}
+
+.step {
+  padding: 40px;
+  min-width: 0;
+}
+
+.step:not(:last-child) {
+  border-right: 2px solid var(--color-divider);
+}
+
+.stepTitle {
+  margin: var(--space-4) 0 var(--space-2);
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 24px;
+  letter-spacing: -0.02em;
+}
+
+.stepBody {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--color-neutral-800);
+}
+
+/* ---------- Pricing (#pricing): Starter / Network ---------- */
+
+.pricing {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-bottom: 2px solid var(--color-divider);
+}
+
+.plan {
+  padding: 64px 40px;
+  min-width: 0;
+}
+
+.plan:not(:last-child) {
+  border-right: 2px solid var(--color-divider);
+}
+
+.planName {
+  margin: var(--space-4) 0 0;
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 48px;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.planPrice {
+  margin: var(--space-3) 0 0;
+  font-size: 18px;
+}
+
+.planFeatures {
+  margin: var(--space-6) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 15px;
+  line-height: 1.8;
+  color: var(--color-neutral-800);
+}
+
+.planCta {
+  margin-top: var(--space-8);
+}
+
+/* ---------- poster close (#creators): full accent field ---------- */
+
+.poster {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 40px;
+  align-items: end;
+  padding: 80px 40px;
+  background: var(--color-accent);
+  color: var(--color-bg);
+}
+
+.posterTitle {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 64px;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  text-wrap: pretty;
+}
+
+.posterAside {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  font-size: 15px;
+  min-width: 0;
+}
+
+.posterBody {
+  margin: 0;
+}
+
+/* ---------- responsive ---------- */
+
+/* Between the stacked layout and the artboard's 1280: scale the two display
+   sizes with the viewport (72/1280 and 64/1280), exact at 1280 and up. */
+@media (max-width: 1279px) {
+  .display {
+    font-size: clamp(48px, 5.625vw, 72px);
+  }
+
+  .posterTitle {
+    font-size: clamp(44px, 5vw, 64px);
+  }
+}
+
+@media (max-width: 899px) {
+  .hero,
+  .steps,
+  .pricing,
+  .poster {
+    grid-template-columns: 1fr;
+  }
+
+  .heroMain {
+    gap: var(--space-6);
+    padding: 48px 20px;
+    border-right: 0;
+    border-bottom: 2px solid var(--color-divider);
+  }
+
+  .display {
+    font-size: 44px;
+    line-height: 1;
+  }
+
+  .lead {
+    font-size: 17px;
+  }
+
+  .stats {
+    grid-template-rows: none;
+    padding: var(--space-2) 20px;
+  }
+
+  .stat {
+    padding: 20px 0;
+  }
+
+  .statValue {
+    font-size: 44px;
+  }
+
+  .step {
+    padding: var(--space-8) 20px;
+  }
+
+  .step:not(:last-child),
+  .plan:not(:last-child) {
+    border-right: 0;
+    border-bottom: 2px solid var(--color-divider);
+  }
+
+  .plan {
+    padding: 48px 20px;
+  }
+
+  .planName {
+    font-size: 40px;
+  }
+
+  .poster {
+    gap: var(--space-6);
+    align-items: start;
+    padding: 56px 20px;
+  }
+
+  .posterTitle {
+    font-size: 44px;
+  }
+}
+
+/* Phone: every call to action is a 44px target. */
+@media (max-width: 760px) {
+  .cta {
+    min-height: 44px;
+  }
+}

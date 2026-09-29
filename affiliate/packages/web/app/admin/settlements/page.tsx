@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
-import { ScreenPlaceholder } from '@/components/shell/ScreenPlaceholder';
+import { AdminSettlements } from '@/components/admin/AdminSettlements';
 
-export const metadata: Metadata = { title: 'Settlements' };
+export const metadata: Metadata = { title: 'Admin settlements' };
 
-/** Placeholder — a screen builder replaces this page. */
+/** Admin · Settlements: weekly batches, read-only (not drawn; 2e style). TEST demo data; real batches use the API's maker-checker flow. */
 export default function AdminSettlementsPage() {
-  return <ScreenPlaceholder eyebrow="Admin" title="Settlements" />;
+  return <AdminSettlements />;
 }

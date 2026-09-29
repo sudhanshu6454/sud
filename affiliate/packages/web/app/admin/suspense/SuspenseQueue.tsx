@@ -4,16 +4,17 @@
  * Suspense queue — the live finance-ops page (was /console/suspense). No
  * design artboard: the logic is the HEAD page unchanged (GET /v1/suspense
  * with filters, POST retry / review, demo fallback with <DemoBadge />), set
- * in the admin shell with the Afflino primitives.
+ * in the admin shell with the Afflino primitives; on phones the table is a
+ * stacked list (components/admin/ResponsiveTable).
  */
 
 import { useEffect, useState } from 'react';
 import DemoBadge from '@/components/DemoBadge';
+import { ResponsiveTable, StackRow } from '@/components/admin/ResponsiveTable';
 import { PageBody, PageNote } from '@/components/shell/PageBody';
 import {
   Banner,
   Button,
-  DataTable,
   Field,
   Input,
   PageHeader,
@@ -143,6 +144,74 @@ export function SuspenseQueue() {
     }
   }
 
+  const rawToggle = (item: SuspenseItem) => (
+    <>
+      <button
+        className={styles.linkButton}
+        type="button"
+        aria-expanded={expanded === item.id}
+        onClick={() => setExpanded(expanded === item.id ? null : item.id)}
+      >
+        {expanded === item.id ? 'Hide raw payload' : 'Show raw payload'}
+      </button>
+      {expanded === item.id && <pre className={styles.raw}>{JSON.stringify(item.raw, null, 2)}</pre>}
+    </>
+  );
+
+  const reviewed = (item: SuspenseItem) =>
+    item.reviewed_at ? (
+      <>
+        <Tag variant="accent">yes</Tag>
+        <div className={styles.muted}>{item.review_note}</div>
+      </>
+    ) : (
+      <span className={styles.muted}>no</span>
+    );
+
+  const received = (item: SuspenseItem) =>
+    new Date(item.received_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+
+  const actions = (item: SuspenseItem) => (
+    <>
+      <div className={styles.actions}>
+        <Button
+          size="xs"
+          disabled={demo || busyId === item.id}
+          title={
+            item.returned_click_ref
+              ? 'Re-check the click reference against clicks'
+              : 'No click reference on this row — nothing deterministic to retry against'
+          }
+          onClick={() => onRetry(item)}
+        >
+          {busyId === item.id ? '…' : 'Retry attribution'}
+        </Button>
+        <Button
+          size="xs"
+          variant="ghost"
+          disabled={demo || busyId === item.id}
+          aria-expanded={reviewId === item.id}
+          onClick={() => {
+            setReviewId(reviewId === item.id ? null : item.id);
+            setReviewNote('');
+          }}
+        >
+          Mark reviewed
+        </Button>
+      </div>
+      {reviewId === item.id && (
+        <div className={styles.reviewBox}>
+          <Field label="Evidence note" hint="What was checked, why it stays unknown (min 10 characters).">
+            <Textarea rows={3} value={reviewNote} onChange={(e) => setReviewNote(e.target.value)} />
+          </Field>
+          <Button size="xs" variant="primary" disabled={demo || busyId === item.id} onClick={() => onReview(item)}>
+            Save review
+          </Button>
+        </div>
+      )}
+    </>
+  );
+
   const columns: ReadonlyArray<DataTableColumn<SuspenseItem>> = [
     {
       key: 'txn',
@@ -155,15 +224,7 @@ export function SuspenseQueue() {
           <div className={styles.muted}>
             ref: <span className={styles.mono}>{item.returned_click_ref ?? <em>none</em>}</span>
           </div>
-          <button
-            className={styles.linkButton}
-            type="button"
-            aria-expanded={expanded === item.id}
-            onClick={() => setExpanded(expanded === item.id ? null : item.id)}
-          >
-            {expanded === item.id ? 'Hide raw payload' : 'Show raw payload'}
-          </button>
-          {expanded === item.id && <pre className={styles.raw}>{JSON.stringify(item.raw, null, 2)}</pre>}
+          {rawToggle(item)}
         </>
       ),
     },
@@ -202,68 +263,45 @@ export function SuspenseQueue() {
       key: 'received',
       header: 'Received',
       className: styles.cell,
-      cell: (item) => new Date(item.received_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
+      cell: received,
     },
     {
       key: 'reviewed',
       header: 'Reviewed',
       className: styles.cell,
-      cell: (item) =>
-        item.reviewed_at ? (
-          <>
-            <Tag variant="accent">yes</Tag>
-            <div className={styles.muted}>{item.review_note}</div>
-          </>
-        ) : (
-          <span className={styles.muted}>no</span>
-        ),
+      cell: reviewed,
     },
     {
       key: 'actions',
       header: 'Actions',
       className: styles.cell,
-      cell: (item) => (
-        <>
-          <div className={styles.actions}>
-            <Button
-              size="xs"
-              disabled={demo || busyId === item.id}
-              title={
-                item.returned_click_ref
-                  ? 'Re-check the click reference against clicks'
-                  : 'No click reference on this row — nothing deterministic to retry against'
-              }
-              onClick={() => onRetry(item)}
-            >
-              {busyId === item.id ? '…' : 'Retry attribution'}
-            </Button>
-            <Button
-              size="xs"
-              variant="ghost"
-              disabled={demo || busyId === item.id}
-              aria-expanded={reviewId === item.id}
-              onClick={() => {
-                setReviewId(reviewId === item.id ? null : item.id);
-                setReviewNote('');
-              }}
-            >
-              Mark reviewed
-            </Button>
-          </div>
-          {reviewId === item.id && (
-            <div className={styles.reviewBox}>
-              <Field label="Evidence note" hint="What was checked, why it stays unknown (min 10 characters).">
-                <Textarea rows={3} value={reviewNote} onChange={(e) => setReviewNote(e.target.value)} />
-              </Field>
-              <Button size="xs" variant="primary" disabled={demo || busyId === item.id} onClick={() => onReview(item)}>
-                Save review
-              </Button>
-            </div>
-          )}
-        </>
-      ),
+      cell: actions,
     },
   ];
+
+  // Phones (≤760px): one stacked row per item instead of eight columns.
+  const phoneRow = (item: SuspenseItem) => (
+    <StackRow
+      eyebrow={<Tag variant="outline">{REASON_LABELS[item.reason_code]}</Tag>}
+      title={item.source_transaction_id}
+      aside={formatINR(item.commission_minor)}
+      meta={
+        <>
+          <div>
+            {item.programme_name} · {item.provider_status} · order {formatINR(item.eligible_value_minor)}
+          </div>
+          <div>
+            {item.provider_account_id} · ref:{' '}
+            <span className={styles.mono}>{item.returned_click_ref ?? <em>none</em>}</span>
+          </div>
+          <div>Received {received(item)}</div>
+          <div className={styles.phoneReviewed}>Reviewed: {reviewed(item)}</div>
+          {rawToggle(item)}
+        </>
+      }
+      actions={<div className={styles.phoneActions}>{actions(item)}</div>}
+    />
+  );
 
   return (
     <>
@@ -345,13 +383,14 @@ export function SuspenseQueue() {
           </div>
         </form>
 
-        <DataTable
+        <ResponsiveTable
           className={styles.table}
           caption="Suspense items"
           columns={columns}
           rows={items}
           rowKey={(item) => item.id}
           empty={loading ? 'Loading…' : 'No suspense items match these filters.'}
+          phoneRow={phoneRow}
         />
       </PageBody>
     </>

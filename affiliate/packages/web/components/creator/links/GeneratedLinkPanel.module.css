@@ -1,0 +1,91 @@
+/* 3c "Generated": 16px padding on the surface fill, 8px gap; eyebrow 12px
+   uppercase 0.1em; link 15px monospace; meta 13px with the promo code in
+   bold at 0.06em. Actions: 8px apart. */
+
+.box {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--color-surface);
+  min-width: 0;
+}
+
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 18.6px;
+}
+
+.eyebrow {
+  font-size: 12px;
+  line-height: 1.55;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-neutral-700);
+}
+
+.tags {
+  display: inline-flex;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* Fit the eyebrow row's 18.6px line instead of the tag's 23px. */
+.head .tag {
+  padding-top: 1px;
+  padding-bottom: 1px;
+  line-height: 16px;
+}
+
+.head .badge {
+  margin: 0;
+}
+
+.url {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.blocked {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--color-neutral-700);
+}
+
+.meta {
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.code {
+  letter-spacing: 0.06em;
+}
+
+.note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-neutral-700);
+}
+
+.back {
+  margin-left: calc(var(--space-3) * -1);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+@media (max-width: 760px) {
+  .actions .action {
+    min-height: 44px;
+  }
+}

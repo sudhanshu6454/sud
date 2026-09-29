@@ -47,6 +47,8 @@
 }
 
 .linkButton {
+  display: block;
+  text-align: left;
   background: none;
   border: 0;
   padding: var(--space-1) 0 0;
@@ -86,4 +88,42 @@
 
 .reviewBox > button {
   justify-self: start;
+}
+
+/* Phone rows (≤760px): the reviewed line and the actions in full width. */
+.phoneReviewed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.phoneActions {
+  width: 100%;
+}
+
+.phoneActions button {
+  min-height: 44px;
+}
+
+.phoneActions .actions {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.phoneActions .reviewBox {
+  min-width: 0;
+}
+
+@media (max-width: 760px) {
+  .filters input,
+  .filters select,
+  .filterActions button {
+    min-height: 44px;
+  }
+
+  .linkButton {
+    min-height: 44px;
+  }
 }

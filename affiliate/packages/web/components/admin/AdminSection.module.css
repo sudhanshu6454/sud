@@ -1,0 +1,52 @@
+/* Admin section — 2e's review queue block: 24px 32px 32px, label row with
+   filters on the right, 12px above the table. */
+
+.section {
+  padding: var(--space-6) var(--space-8) var(--space-8);
+  min-width: 0;
+}
+
+.section + .section {
+  border-top: 2px solid var(--color-divider);
+}
+
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin-bottom: var(--space-3);
+}
+
+.label {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.label > [role='note'] {
+  margin-bottom: 0;
+}
+
+.aside {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.note {
+  margin: var(--space-3) 0 0;
+  font-size: 13px;
+  color: var(--color-neutral-700);
+  max-width: 880px;
+}
+
+@media (max-width: 760px) {
+  .section {
+    padding: var(--space-4) 20px var(--space-6);
+  }
+}

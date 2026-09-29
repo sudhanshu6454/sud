@@ -1,4 +1,6 @@
-/* Demo-data label in the Modernist look: a small outline tag. */
+/* Demo-data label in the Modernist look: a small outline tag. No outer
+   margin: it sits inline (header actions, next to a section label), and
+   the placement spaces it. */
 .badge {
   display: inline-flex;
   align-items: center;
@@ -10,6 +12,5 @@
   color: var(--color-accent-700);
   background: transparent;
   white-space: nowrap;
-  margin-bottom: var(--space-3);
   vertical-align: middle;
 }

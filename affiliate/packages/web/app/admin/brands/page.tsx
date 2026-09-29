@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
-import { ScreenPlaceholder } from '@/components/shell/ScreenPlaceholder';
+import { AdminBrands } from '@/components/admin/AdminBrands';
 
 export const metadata: Metadata = { title: 'Admin brands' };
 
-/** Placeholder — a screen builder replaces this page. */
+/** Admin · Brands: plan, wallet and status per brand (not drawn; 2e style). TEST demo data (no brands endpoint in v1). */
 export default function AdminBrandsPage() {
-  return <ScreenPlaceholder eyebrow="Admin" title="Brands" />;
+  return <AdminBrands />;
 }

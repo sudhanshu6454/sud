@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
-import { ScreenPlaceholder } from '@/components/shell/ScreenPlaceholder';
+import { Reports } from '@/components/creator/reports/Reports';
 
 export const metadata: Metadata = { title: 'Reports' };
 
-/** Placeholder — a screen builder replaces this page. */
+/** Creator Reports (3d): TEST demo data with <DemoBadge /> — no v1 reports endpoint (components/creator/reports). */
 export default function AppReportsPage() {
-  return <ScreenPlaceholder title="Reports" artboard="3d" />;
+  return <Reports />;
 }

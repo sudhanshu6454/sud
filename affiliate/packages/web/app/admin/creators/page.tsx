@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
-import { ScreenPlaceholder } from '@/components/shell/ScreenPlaceholder';
+import { AdminCreators } from '@/components/admin/AdminCreators';
 
 export const metadata: Metadata = { title: 'Admin creators' };
 
-/** Placeholder — a screen builder replaces this page. */
+/** Admin · Creators: reach and KYC status (not drawn; 2e style). TEST demo data (no creators or KYC endpoint in v1). */
 export default function AdminCreatorsPage() {
-  return <ScreenPlaceholder eyebrow="Admin" title="Creators" />;
+  return <AdminCreators />;
 }

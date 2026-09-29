@@ -13,7 +13,8 @@ platform's first publisher and its five sites are the first properties
 ## Verified state (2026-09-29)
 
 - `pnpm typecheck` clean on all 5 packages (`packages/*`)
-- **133/133 tests green across 11 test files** (`./node_modules/.bin/vitest run`)
+- **558/558 tests green across 28 test files** (`./node_modules/.bin/vitest run`:
+  api 87, shared 11, workers 15, web 445)
 - Demo: **51/51 assertions** on pg-mem (`tsx scripts/demo-money-loop.ts`) **and
   51/51 on a real PostgreSQL 16.13** (`DEMO_TARGET=postgres`, scratch database
   `paparazzi_demo_<8 hex>` created and dropped, no shims) — link → click →
@@ -27,12 +28,19 @@ platform's first publisher and its five sites are the first properties
   the fleet seed is idempotent (byte-identical JSON on a second run)
 - `pnpm install --frozen-lockfile` passes (pnpm 9.12.0 locally, in CI and in the
   images)
-- `pnpm --filter @paparazzi/web build` OK (all routes dynamic, standalone output)
+- `pnpm --filter @paparazzi/web build` OK (all routes dynamic, standalone output);
+  on the build (`next start`) all 36 routes of the web route map answer 200, the
+  110 internal links they render resolve (200 or an intended 307), every page
+  that shows TEST data carries the "Demo data" badge, no page requests Google
+  Fonts, names a real merchant from the design mocks or mentions a cookie
 - The five images (`docker/Dockerfile.{api,redirect,workers,web,migrate}`) build
-  (`--no-cache`: 264 / 270 / 255 / 269 / 262 MB) and boot end to end: migrate →
-  seeds → `/healthz` on api, redirect and the web proxy → shop renders the five
-  fleet looks live → `mint-links.mjs` mints → `GET /r/{token}` → 302 with `subid`
-  → one `clicks` row → workers log `click.observed` (`docker/README.md`, smoke test)
+  (`--no-cache`: 264 / 270 / 255 / 269 / 262 MB; the web image is 273 MB after
+  the Afflino rebuild) and boot end to end: migrate → seeds → `/healthz` on api,
+  redirect and the web proxy → `/` titled "Afflino", `/shop` renders the five
+  fleet looks live → `mint-links.mjs` mints → the look page carries the tracked
+  link → `GET /r/{token}` → 302 with `subid`, no `set-cookie` → one `clicks` row
+  → workers log `click.observed` (`docker/README.md`, smoke test, re-run
+  2026-09-29 after the rebuild)
 - A CI job `affiliate` (`.github/workflows/ci.yml`) runs typecheck, vitest, both
   demos, the web build and the real-Postgres migrate + seeds; no run has been
   observed from this sandbox
@@ -44,7 +52,7 @@ not at the repo root, so the scripts that need it are given with the api package
 copy.
 
 ```bash
-./node_modules/.bin/vitest run                                        # tests (133)
+./node_modules/.bin/vitest run                                        # tests (558)
 pnpm typecheck                                                        # 5 packages
 ./packages/api/node_modules/.bin/tsx scripts/demo-money-loop.ts       # demo on pg-mem (51 assertions)
 DATABASE_URL=postgresql://paparazzi:changeme@127.0.0.1:5432/paparazzi DEMO_TARGET=postgres ./packages/api/node_modules/.bin/tsx scripts/demo-money-loop.ts   # same demo on real Postgres (scratch DB, dropped)
@@ -94,10 +102,24 @@ runs and the docker smoke test.
   cannot be persisted).
 - `packages/workers` — BullMQ workers: click events, provider events, ledger
   mirror, outbox, suspense retry, retention purge (`src/retention/`).
-- `packages/web` — Next.js 14: **consumer shop** (`/`, `/looks/[id]`,
-  `/looks/[id]/items/[itemId]`, `/saved`) live against the catalogue API,
-  publisher portal (`/portal/*`) and editorial console (`/console/*`).
-  **Web contract:** `API_BASE` (server runtime; default `http://localhost:3000`),
+- `packages/web` — Next.js 14.2, the **Afflino** web app built to the design
+  handover (tokens `app/globals.css`, self-hosted Archivo, primitives
+  `components/ui`, shells `components/shell`; route map with artboard ids and
+  live / demo status in `packages/web/README.md`): marketing site `/` (+
+  `/login` dev sign-in, `/terms`, `/privacy`, `/contact` stubs), onboarding
+  `/join`, creator app `/app/*` (overview, offers, links, reports, payouts +
+  disputes + statements, settings), brand workspace `/brand/*`
+  (`?workspace=<client id>` for an agency), agency `/agency`, admin
+  `/admin/*` (review queue, brands, creators, offers, fraud, settlements,
+  suspense, looks), and the fleet's **consumer shop** `/shop`,
+  `/looks/[id]`, `/looks/[id]/items/[itemId]`, `/saved` live against the
+  catalogue API. Live v1 calls from the app areas: `GET
+  /v1/publisher/earnings`, `POST /v1/links`, `GET`/`POST /v1/disputes`,
+  `GET /v1/suspense` + retry / review, `POST /v1/publishers`; everything
+  else is TEST data (`lib/demo/*`) with `<DemoBadge />`. Old `/portal/*` and
+  `/console/*` URLs 307 to their new routes. Marketing figures, prices,
+  fees, TDS, the validation window, the minimum withdrawal and the #ad line
+  are placeholders in `lib/site-copy.ts`. **Web contract:** `API_BASE` (server runtime; default `http://localhost:3000`),
   `WEB_API_TOKEN` (server-only bearer for a read-only `publisher_analyst`; never
   `NEXT_PUBLIC_`, never sent to the browser, missing → TEST demo data with a
   badge), `WEB_PLACEMENT_ID` (uuid appended as `placement_id` so items carry
@@ -186,8 +208,15 @@ runs and the docker smoke test.
   default TTL 8 h, `exp` enforced); production needs a real IdP + membership
   validation. The shop's `WEB_API_TOKEN` is that stub too.
 - No webhook signature verification on API ingress; no rate limiting (also not
-  on `/r/{token}`); no CSP; `localStorage` bearer token in the portal — all
-  flagged in the threat model as pre-launch work.
+  on `/r/{token}`); no CSP; `localStorage` bearer token in the web app's
+  areas (`/login` writes it) — all flagged in the threat model as pre-launch
+  work.
+- The Afflino screens without a v1 endpoint are demo flows and say so: no
+  OTP / identity provider, no KYC or PAN check, no platform OAuth, no brand
+  self-serve offers or admin approval, no creator link listing or report
+  aggregates, no publisher withdrawal, no agency roster
+  (`docs/pilot-checklist.md`). The design's readable `/r/{handle}/{offer}`
+  links and first-party attribution cookie are **not** implemented.
 - No merchant programme exists. The only programme anywhere is the TEST "Demo
   Fleet Programme" from `db/seed-fleet.ts --with-demo-programme`
   (`shop.example.com`); the payout rail is the stub. Real ones are human-gated

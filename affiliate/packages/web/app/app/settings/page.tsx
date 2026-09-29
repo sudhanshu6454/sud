@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
-import { ScreenPlaceholder } from '@/components/shell/ScreenPlaceholder';
+import { Settings } from '@/components/creator/settings/Settings';
 
 export const metadata: Metadata = { title: 'Settings' };
 
-/** Placeholder — a screen builder replaces this page. */
+/** Creator Settings & profile (2d): TEST demo data saved in this browser — no v1 endpoint (components/creator/settings). */
 export default function AppSettingsPage() {
-  return <ScreenPlaceholder eyebrow="Settings" title="Settings & profile" artboard="2d" />;
+  return <Settings />;
 }

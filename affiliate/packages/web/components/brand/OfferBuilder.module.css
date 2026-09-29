@@ -1,0 +1,325 @@
+/* Offer builder — 3b: header; a 4-cell step row (13px, 14px 32px, 2px
+   rules; active = 700 accent-700 with a 4px accent bottom border); then
+   2fr form (32px padding, 2-column grid, 20px gap) | 1fr surface preview
+   column (32px padding, 16px gap). */
+
+.headerButton {
+  flex: none;
+}
+
+/* Page-level confirmation ("Draft saved …"): the Banner's info look. */
+.infoBar {
+  padding: var(--space-3) var(--space-8);
+  background: var(--color-neutral-100);
+  color: var(--color-neutral-800);
+  font-size: 14px;
+  border-bottom: 2px solid var(--color-divider);
+}
+
+/* ---------- step tabs ---------- */
+
+.tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-bottom: 2px solid var(--color-divider);
+  font-size: 13px;
+}
+
+.tab {
+  display: block;
+  min-width: 0;
+  margin: 0;
+  padding: 14px var(--space-8);
+  border: 0;
+  border-right: 2px solid var(--color-divider);
+  /* Every tab reserves the active tab's 4px rule, so labels line up. */
+  border-bottom: 4px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.55;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 120ms ease-out, color 120ms ease-out;
+}
+
+.tab:last-child {
+  border-right: 0;
+}
+
+.tab:hover {
+  background: color-mix(in srgb, var(--color-text) 4%, transparent);
+}
+
+.tab:focus-visible {
+  outline-offset: -2px;
+}
+
+.tabActive,
+.tabActive:hover {
+  font-weight: 700;
+  color: var(--color-accent-700);
+  border-bottom: 4px solid var(--color-accent);
+  background: transparent;
+}
+
+.tabErrors {
+  font-weight: 600;
+  color: var(--color-accent-700);
+}
+
+/* ---------- form + preview ---------- */
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  flex: 1;
+}
+
+.form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 20px;
+  align-content: start;
+  padding: var(--space-8);
+  border-right: 2px solid var(--color-divider);
+  min-width: 0;
+}
+
+.wide {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+/* Segmented options as drawn in 3b: 10px all round. */
+.seg.seg > label {
+  padding: 10px;
+}
+
+.platformTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.footer {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-divider);
+}
+
+.footerNav {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.footerButton {
+  flex: none;
+}
+
+.formNote {
+  grid-column: 1 / -1;
+  margin-top: calc(var(--space-1) - 20px + var(--space-2));
+}
+
+.preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-8);
+  background: var(--color-surface);
+  min-width: 0;
+}
+
+.previewNote {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-neutral-800);
+}
+
+/* ---------- 02 Payout ---------- */
+
+.breakdown {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.breakdownCaption {
+  text-align: left;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-neutral-700);
+  padding-bottom: 10px;
+  border-bottom: 2px solid var(--color-divider);
+}
+
+.breakdown th,
+.breakdown td {
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-divider);
+  text-align: left;
+  font-weight: 400;
+}
+
+.breakdown th {
+  color: var(--color-neutral-800);
+  padding-right: var(--space-4);
+}
+
+.breakdown td {
+  font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.stepNote {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-neutral-800);
+  max-width: 720px;
+}
+
+/* ---------- 04 Creative kit ---------- */
+
+.disclosure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--color-surface);
+}
+
+.disclosureLine {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 14px;
+}
+
+/* ---------- submitted ---------- */
+
+.confirm {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-8);
+  border-right: 2px solid var(--color-divider);
+  min-width: 0;
+}
+
+.confirmTitle {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 24px;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.confirmTitle:focus {
+  outline: none;
+}
+
+.confirmCopy {
+  margin: 0;
+  font-size: 15px;
+  color: var(--color-neutral-800);
+  max-width: 560px;
+}
+
+.confirmActions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-top: var(--space-2);
+}
+
+/* ---------- narrower ---------- */
+
+@media (max-width: 1100px) {
+  .tab {
+    padding: 14px var(--space-4);
+  }
+}
+
+@media (max-width: 960px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .form,
+  .confirm {
+    border-right: 0;
+    border-bottom: 2px solid var(--color-divider);
+  }
+}
+
+@media (max-width: 760px) {
+  .infoBar {
+    padding: var(--space-3) 20px;
+  }
+
+  /* Two by two, so every step stays visible at 360px. */
+  .tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tab {
+    min-height: 44px;
+    padding: 12px var(--space-4) 8px;
+  }
+
+  .tab:nth-child(2n) {
+    border-right: 0;
+  }
+
+  .tab:nth-child(n + 3) {
+    border-top: 2px solid var(--color-divider);
+  }
+
+  .form {
+    grid-template-columns: minmax(0, 1fr);
+    padding: var(--space-4) 20px;
+    gap: var(--space-4);
+  }
+
+  .formNote {
+    margin-top: 0;
+  }
+
+  .preview,
+  .confirm {
+    padding: var(--space-4) 20px;
+  }
+
+  .headerButton,
+  .footerButton {
+    min-height: 44px;
+  }
+
+  .platformTag {
+    min-height: 44px;
+    padding-inline: 14px;
+  }
+
+  .seg.seg > label {
+    min-height: 44px;
+  }
+
+  .breakdown td {
+    white-space: normal;
+  }
+}

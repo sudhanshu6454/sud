@@ -1,6 +1,6 @@
-import { ScreenPlaceholder } from '@/components/shell/ScreenPlaceholder';
+import { MarketingHome } from '@/components/marketing/MarketingHome';
 
-/** Placeholder — the marketing site (1b) replaces this page; anchors #brands, #creators, #pricing live here. */
+/** afflino.com (design 1b). Static marketing copy; no API call, no demo data. */
 export default function HomePage() {
-  return <ScreenPlaceholder eyebrow="Affiliate network · India" title="Afflino" artboard="1b" />;
+  return <MarketingHome />;
 }

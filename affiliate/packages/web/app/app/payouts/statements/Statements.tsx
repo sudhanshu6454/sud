@@ -5,16 +5,31 @@
  * statement / ledger endpoint exists yet, so the page is TEST demo data
  * (lib/portal-demo.ts) with <DemoBadge />; the logic (cascading filters,
  * running balance, per-currency totals, dispute history) is the HEAD page
- * unchanged, set in the app shell with the Afflino primitives.
+ * unchanged, set in the app shell with the Afflino primitives (dates as
+ * the 2c table prints them, dispute history in the standard table).
  */
 
+import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import DemoBadge from '@/components/DemoBadge';
-import { PageBody, PageNote, PageSection } from '@/components/shell/PageBody';
-import { DataTable, Field, KpiCell, KpiStrip, PageHeader, Select, StatusTag, type DataTableColumn } from '@/components/ui';
-import { formatCount, formatINR } from '@/lib/format';
+import { disputeStatusTag, formatLongDate, humanise } from '@/components/creator/payouts/labels';
+import { PageBody, PageNote } from '@/components/shell/PageBody';
+import {
+  Button,
+  DataTable,
+  Eyebrow,
+  Field,
+  KpiCell,
+  KpiStrip,
+  PageHeader,
+  Select,
+  Tag,
+  type DataTableColumn,
+} from '@/components/ui';
+import { formatCount, formatDayMonth, formatINR } from '@/lib/format';
 import {
   DEMO_DISPUTES,
+  type DemoDispute,
   DEMO_LEDGER,
   DEMO_PLACEMENTS,
   DEMO_PROGRAMMES,
@@ -26,7 +41,7 @@ import styles from './page.module.css';
 type Row = DemoLedgerEntry & { running: number };
 
 const COLUMNS: ReadonlyArray<DataTableColumn<Row>> = [
-  { key: 'date', header: 'Date', className: styles.cell, numeric: true },
+  { key: 'date', header: 'Date', width: '12%', className: styles.cell, cell: (e) => formatDayMonth(e.date, { pad: true }) },
   {
     key: 'entry',
     header: 'Entry',
@@ -40,10 +55,11 @@ const COLUMNS: ReadonlyArray<DataTableColumn<Row>> = [
       </>
     ),
   },
-  { key: 'kind', header: 'Kind', className: styles.cell, tone: 'muted' },
+  { key: 'kind', header: 'Kind', width: '14%', className: styles.cell, tone: 'muted', cell: (e) => humanise(e.kind) },
   {
     key: 'amount',
     header: 'Amount',
+    width: '13%',
     numeric: true,
     className: styles.cell,
     cell: (e) => (
@@ -53,7 +69,21 @@ const COLUMNS: ReadonlyArray<DataTableColumn<Row>> = [
       </span>
     ),
   },
-  { key: 'balance', header: 'Balance', numeric: true, tone: 'strong', className: styles.cell, cell: (e) => formatINR(e.running) },
+  { key: 'balance', header: 'Balance', width: '13%', numeric: true, tone: 'strong', className: styles.cell, cell: (e) => formatINR(e.running) },
+];
+
+const DISPUTE_COLUMNS: ReadonlyArray<DataTableColumn<DemoDispute>> = [
+  { key: 'filed', header: 'Filed', width: '14%', className: styles.cell, cell: (d) => formatLongDate(d.filed) },
+  { key: 'id', header: 'Ticket', width: '10%', tone: 'strong', className: styles.cell, cell: (d) => d.id },
+  { key: 'conversion', header: 'Conversion', width: '13%', tone: 'mono', className: styles.cell, cell: (d) => d.conversion },
+  { key: 'reason', header: 'Reason', tone: 'body', className: styles.cell, cell: (d) => d.reason },
+  {
+    key: 'status',
+    header: 'Status',
+    width: '12%',
+    className: styles.cell,
+    cell: (d) => <Tag variant={disputeStatusTag(d.status)}>{humanise(d.status)}</Tag>,
+  },
 ];
 
 export function Statements() {
@@ -97,7 +127,14 @@ export function Statements() {
         eyebrow="Payouts"
         title="Statements"
         description="Ledger drilldown — conversions and adjustments with a running balance."
-        actions={<DemoBadge variant="mock" className={styles.badge} />}
+        actions={
+          <>
+            <DemoBadge variant="mock" className={styles.badge} />
+            <Button href="/app/payouts" arrow="left">
+              Payouts
+            </Button>
+          </>
+        }
       />
       <KpiStrip columns={totals.length + 1}>
         {totals.map(([currency, total]) => (
@@ -153,21 +190,24 @@ export function Statements() {
           empty="No entries match these filters."
         />
 
-        <PageSection>Dispute history</PageSection>
-        <ul className={styles.disputes}>
-          {DEMO_DISPUTES.map((d) => (
-            <li key={d.id} className={styles.dispute}>
-              <div className={styles.disputeHead}>
-                <strong>{d.id}</strong>
-                <StatusTag status={d.status} />
-              </div>
-              <p className={styles.disputeText}>
-                Conversion {d.conversion} — {d.reason}
-              </p>
-              <p className={styles.disputeMeta}>Filed {d.filed}</p>
-            </li>
-          ))}
-        </ul>
+        <section className={styles.history} aria-labelledby="statements-disputes-title">
+          <div className={styles.historyHead}>
+            <Eyebrow as="h2" id="statements-disputes-title">
+              Dispute history
+            </Eyebrow>
+            <Link href="/app/payouts/disputes" className={styles.historyLink}>
+              Raise a ticket<span aria-hidden="true"> →</span>
+            </Link>
+          </div>
+          <DataTable
+            className={styles.table}
+            caption="Dispute history: filed date, ticket, conversion, reason and status"
+            columns={DISPUTE_COLUMNS}
+            rows={DEMO_DISPUTES}
+            rowKey={(d) => d.id}
+            empty="No disputes filed."
+          />
+        </section>
         <PageNote>
           A screenshot alone does not create a payable sale. Disputes are decided against click, conversion and
           ledger evidence — attach the relevant evidence when filing.

@@ -3,9 +3,11 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import styles from './not-found.module.css';
 
 /**
- * 404 in the Afflino look. No chrome of its own: a notFound() inside an area
- * renders this within that area's layout (shell, marketing nav), and an
- * unmatched URL renders it in the bare root layout.
+ * 404 in the Afflino look for an unmatched URL (and for a notFound() in an
+ * area without its own not-found.tsx). It renders in the bare root layout
+ * only: a not-found boundary sits inside the layout of the segment that
+ * owns it, so an area that wants its chrome around a 404 has its own file
+ * — app/(shop)/not-found.tsx and app/app/not-found.tsx.
  */
 export default function NotFound() {
   return (

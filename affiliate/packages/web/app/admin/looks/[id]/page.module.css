@@ -14,18 +14,50 @@
   text-decoration: underline;
 }
 
+.sectionLabel {
+  margin: 0 0 var(--space-3);
+}
+
+/* Candidates fill the row (auto-fit), 32px apart, between the 2px rules
+   the admin console draws under a section label. */
 .candidates {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  column-gap: var(--space-8);
   border-top: 2px solid var(--color-divider);
+  border-bottom: 2px solid var(--color-divider);
 }
 
 .candidate {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  padding: var(--space-4) var(--space-4) var(--space-4) 0;
-  border-bottom: 1px solid var(--color-divider);
+  min-width: 0;
+  padding: var(--space-4) 0;
+}
+
+.candidate + .candidate {
+  border-top: 0;
+}
+
+@media (max-width: 760px) {
+  .candidate + .candidate {
+    border-top: 1px solid var(--color-divider);
+  }
+
+  .actions > button {
+    min-height: 44px;
+  }
+
+  .rights > * {
+    min-height: 44px;
+    align-items: center;
+  }
+
+  .back {
+    display: inline-block;
+    padding: 14px 0;
+  }
 }
 
 .productName {

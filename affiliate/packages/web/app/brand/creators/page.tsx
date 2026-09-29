@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
-import { ScreenPlaceholder } from '@/components/shell/ScreenPlaceholder';
+import { BrandCreators } from '@/components/brand/BrandCreators';
 
 export const metadata: Metadata = { title: 'Brand creators' };
 
-/** Placeholder — a screen builder replaces this page. */
+/** Approved creators and pending requests. TEST demo: no creator-approval endpoint in v1. */
 export default function BrandCreatorsPage() {
-  return <ScreenPlaceholder eyebrow="Brand" title="Creators" />;
+  return <BrandCreators />;
 }

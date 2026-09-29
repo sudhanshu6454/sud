@@ -37,9 +37,11 @@
   margin: 0;
 }
 
+/* Body copy at 85% ink. A text colour, not opacity: a form or a tag inside
+   the body keeps its own full-strength colours and borders. */
 .body {
   font-size: 14px;
-  opacity: 0.85;
+  color: color-mix(in srgb, var(--color-text) 85%, transparent);
 }
 
 .actions {

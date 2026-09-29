@@ -79,7 +79,7 @@ maps them from:
 | `WEB_API_TOKEN` (web, server-only) | `AFFILIATE_WEB_API_TOKEN` | read-only `publisher_analyst` bearer; never `NEXT_PUBLIC_`; missing → TEST demo data with a badge |
 | `WEB_PLACEMENT_ID` (web) | `AFFILIATE_WEB_PLACEMENT_ID` | the shop's placement; items carry tracked links only for it |
 | `NEXT_PUBLIC_API_BASE` (web, build arg) | fixed `/api` | browser calls go through the same-origin proxy |
-| `NEXT_PUBLIC_SITE_NAME` (web, runtime) | `AFFILIATE_SITE_NAME` | title, header, footer, manifest (a rename is a restart) |
+| `NEXT_PUBLIC_SITE_NAME` (web, runtime) | `AFFILIATE_SITE_NAME` | site name in titles, footer, manifest; default `Afflino` (a rename is a restart) |
 | `FLEET_SITES_YAML`, `AFFILIATE_WEB_HOST` (migrate) | `../autopub/config` mounted at `/app/config`; `AFFILIATE_WEB_HOST` | what `seed-fleet.ts` reads |
 | `RETENTION_*_DAYS`, `RETENTION_CRON` (workers) | `AFFILIATE_RETENTION_*` | 365-day placeholders, `0 3 * * *` |
 | `DEMO_TARGET`, `DEMO_DATABASE_URL` (dev only) | — | `postgres` runs the demo on a scratch database of the `DATABASE_URL` server |
@@ -272,7 +272,7 @@ rotation cadence, and the pre-launch checklist:
 | `packages/api/` | Merchant/publisher-facing HTTP API (Fastify). See [README](packages/api/README.md) · [assumptions](packages/api/ASSUMPTIONS.md) |
 | `packages/redirect/` | Click-tracking redirect service (Fastify). See [README](packages/redirect/README.md) · [assumptions](packages/redirect/ASSUMPTIONS.md) |
 | `packages/workers/` | BullMQ workers: ingestion, attribution, ledger posting, payouts. See [README](packages/workers/README.md) · [assumptions](packages/workers/ASSUMPTIONS.md) |
-| `packages/web/` | Consumer shop (live against the catalogue API), publisher portal and editorial console (Next.js 14). See [README](packages/web/README.md) · [assumptions](packages/web/ASSUMPTIONS.md) |
+| `packages/web/` | The Afflino web app (Next.js 14): marketing site, onboarding, creator / brand / agency areas, admin, and the fleet's consumer shop at `/shop` (live against the catalogue API). Route map, artboards and live / demo status: [README](packages/web/README.md) · [assumptions](packages/web/ASSUMPTIONS.md) |
 | `db/` | Postgres schema, migration runner with `schema_migrations` tracking, demo seed and fleet seed. See [README](db/README.md) |
 | `docker/` | The five images (api, redirect, workers, web, migrate) and their build script. See [README](docker/README.md) · [assumptions](docker/ASSUMPTIONS.md) |
 | `docs/` | OpenAPI spec, pilot checklist, action tracker, capacity plan, threat model, runbooks, alert definitions, infrastructure recommendation |
@@ -304,7 +304,7 @@ To view it:
 ## Security
 
 [docs/threat-model.md](docs/threat-model.md) is the pre-pentest review for this
-sandbox: trust boundaries (public `/r/:token` path, portal, console, finance
+sandbox: trust boundaries (public `/r/:token` path, the web app's creator and admin areas, finance
 endpoints, webhook/CSV ingestion, workers, database), a per-component STRIDE
 analysis with every mitigation tied to the code or test that implements it
 (tenant isolation via `tenantQuery`, payout maker-checker, the no-guess
@@ -327,7 +327,7 @@ payout rail, retention windows, secrets management).
   dev-only.
 - **Dev-run / typecheck:** `tsx` for dev servers (`pnpm --filter … dev`),
   `tsc --noEmit` for typechecking (`pnpm typecheck`).
-- **Web:** Next.js 14 for the dashboard.
+- **Web:** Next.js 14 (App Router, CSS Modules) for the Afflino web app and the shop.
 - **Money:** integer minor units (paise) everywhere — see `MinorUnits` in
   `packages/shared`. Negatives are rejected; deductions are positive amounts
   on the opposite ledger side.
@@ -337,6 +337,41 @@ payout rail, retention windows, secrets management).
   manifest) and `scripts/restore.sh` (scratch-DB drill with row-count and
   ledger-balance checks); production guards and open infra questions in
   [scripts/ASSUMPTIONS.md](scripts/ASSUMPTIONS.md).
+
+## Integration notes (2026-09-29, the Afflino web app)
+
+`packages/web` was rebuilt to the owner's design handover for **Afflino**, an
+India-first affiliate network, and the fleet's shop moved under it:
+
+- **Routes** (`packages/web/README.md` has the full map with artboard ids):
+  `/` marketing site, `/login` dev sign-in (paste the JWT stub; no real
+  sign-in exists), `/join` onboarding, `/app/*` creator app, `/brand/*`
+  brand workspace (`?workspace=<client id>` for an agency), `/agency`,
+  `/admin/*`, and the consumer shop at `/shop`, `/looks/[id]`,
+  `/looks/[id]/items/[itemId]`, `/saved`. The old `/portal/*` and
+  `/console/*` URLs 307 to their new homes.
+- **Live today** (through the web's same-origin `/api` proxy, with the dev
+  token from `/login`): `GET /v1/publisher/earnings` (overview and payouts
+  balances), `POST /v1/links` (the tracked `/r/{32-hex}` link), `GET` /
+  `POST /v1/disputes`, `GET /v1/suspense` + retry / review, `POST
+  /v1/publishers` (creator / publisher sign-up); server-side, the shop's
+  `GET /v1/looks` and `GET /v1/looks/:id`. **Everything else is TEST demo
+  data** with a visible "Demo data" badge, and the demo flows (OTP, platform
+  connect, PAN "Verified", wallet top-up, withdrawals, brand approvals,
+  admin decisions) say that nothing was verified, sent or charged.
+- **Placeholders**: every marketing figure, price, fee, the TDS rate, the
+  7-day validation window, the ₹500 minimum withdrawal and the `#ad`
+  disclosure line are in `packages/web/lib/site-copy.ts`, pending business
+  and counsel confirmation (`docs/pilot-checklist.md`,
+  `docs/action-tracker.md`). Offer copy says "attribution window", never
+  "cookie": the redirect sets none, and the design's readable
+  `/r/{handle}/{offer}` links are not implemented.
+- **Site name**: the deployed default is now `Afflino`
+  (`AFFILIATE_SITE_NAME` in the fleet `.env`, `NEXT_PUBLIC_SITE_NAME`
+  here); a rename is a restart.
+- No API, database or image layout changed; `docker/Dockerfile.web` is
+  unchanged. The web build gained one dependency, `qrcode-generator` (MIT,
+  the QR download on `/app/links`).
 
 ## Integration notes (2026-09-22, phase 4 — suspense queue operations view)
 
@@ -365,8 +400,8 @@ payout rail, retention windows, secrets management).
   evidence. A late-attributed row emits `suspense.attributed` on the outbox
   so a downstream consumer can run ledger posting — the API itself posts no
   ledger entries from this path.
-- **Web**: operator console page at `/console/suspense`
-  (`packages/web/app/console/suspense/page.tsx`): filters, per-row raw
+- **Web**: operator console page at `/console/suspense` (since 2026-09-29
+  `/admin/suspense`, `packages/web/app/admin/suspense/SuspenseQueue.tsx`): filters, per-row raw
   payload viewer, retry + mark-reviewed actions wired to the API, falling
   back to clearly-labelled demo data (`DEMO_SUSPENSE_ITEMS` in
   `lib/portal-demo.ts`, rendered with `<DemoBadge/>`) when the API is
@@ -444,7 +479,7 @@ payout rail, retention windows, secrets management).
   (network_admin/editor). Resolving requires `provider_verified: true` plus
   a resolution note — screenshots alone can never create a payable sale
   (422 otherwise). Resolution never posts ledger entries; the provider must
-  re-report through the webhook path. Portal UI: `/portal/disputes`.
+  re-report through the webhook path. Portal UI: `/portal/disputes` (since 2026-09-29 `/app/payouts/disputes`).
 - **Contract versioning**: `POST /v1/contracts` (version = max+1,
   effective_from not earlier than the previous version's), `POST
   /v1/contracts/:id/approve` (network_admin), `GET /v1/contracts`. Ledger
@@ -499,7 +534,8 @@ Four workstreams built in parallel against written contracts, then reconciled:
   maker-checker), and the provider-events worker. All green in this
   environment.
 - **Web**: publisher portal (`/portal`, `/portal/links`, `/portal/statements`)
-  and editorial console (`/console`, `/console/looks/[id]`) added; live
+  and editorial console (`/console`, `/console/looks/[id]`) added (since
+  2026-09-29 under `/app` and `/admin`; the old URLs redirect); live
   against `GET /v1/publisher/earnings` and `POST /v1/links` when
   `NEXT_PUBLIC_API_BASE` is reachable, labelled demo-data fallback otherwise.
 

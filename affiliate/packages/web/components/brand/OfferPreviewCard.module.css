@@ -1,0 +1,71 @@
+/* 3b preview card: 24px padding on the ground colour inside the surface
+   column, 10px gap; 12px uppercase kicker + model tag; 22px / 800 / −0.02em
+   title; 14px / 1.5 neutral-800 line; 24px / 800 payout. Platforms as in
+   1d: 12px neutral-700, bottom-right of the payout row. */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: var(--space-6);
+  background: var(--color-bg);
+  min-width: 0;
+}
+
+.head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.kicker {
+  font-size: 12px;
+  line-height: 1.55;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-neutral-700);
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 22px;
+  line-height: 1.55;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.body {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-neutral-800);
+  overflow-wrap: anywhere;
+}
+
+.payRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.payout {
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 24px;
+  line-height: 1.55;
+}
+
+.platforms {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--color-neutral-700);
+  text-align: right;
+  padding-bottom: 5px;
+}
+
+.placeholder {
+  color: var(--color-neutral-600);
+}

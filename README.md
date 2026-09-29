@@ -50,7 +50,7 @@ infra/
   dns.py              GoDaddy (or Linode) DNS records for every domain
   bootstrap.sh        server-side: compose up + WordPress install
   wp/init-sites.sh    wp-cli: install core/theme/plugins, create autopub user + app passwords
-affiliate/          the affiliate platform: shop, /r/{token} click redirector, v1 API, workers, ledger
+affiliate/          the affiliate platform: Afflino web app + shop, /r/{token} redirector, v1 API, workers, ledger
                     (pnpm monorepo with its own README.md and CLAUDE.md; profile `affiliate` in the compose)
 docker-compose.yml  nginx-proxy + Let's Encrypt, MariaDB, 3× WordPress, autopub worker; profile `affiliate`
                     adds affiliate_db, affiliate_redis, affiliate_migrate, affiliate_api, affiliate_redirect,
@@ -446,7 +446,12 @@ tracked, attributable purchases: India-first, INR, the merchant owns the checkou
 publisher** and the **five sites are its properties** (`affiliate/db/seed-fleet.ts` reads
 `autopub/config/sites.yaml` and creates them, plus a `web` property for the shop). What it consists of:
 
-- **The shop** (`affiliate_web`, Next.js): curated looks, one page per look and per item, a wishlist.
+- **The web app** (`affiliate_web`, Next.js): **Afflino**, the network's site — the marketing page at `/`,
+  sign-up at `/join`, the creator app (`/app`), brand and agency workspaces (`/brand`, `/agency`) and the
+  admin console (`/admin`). Most of those screens show clearly labelled TEST demo data until their API
+  exists; live today are earnings, tracked-link minting, disputes, the suspense queue and publisher
+  sign-up (`affiliate/packages/web/README.md` has the route map).
+- **The shop** (same container, at `/shop`): curated looks, one page per look and per item, a wishlist.
   It reads the platform's catalogue API server-side and every "View at merchant" is a tracked link.
 - **Tracked links** (`affiliate_redirect`): `https://<link host>/r/{token}` resolves the token (Redis
   cache, Postgres behind it), writes one click row with no cookie and a hashed IP, and 302s to the
@@ -517,18 +522,27 @@ offer; the owner token is minted inline and never printed):
 docker compose --profile affiliate exec -T -e API_BASE=http://127.0.0.1:3000 -e API_TOKEN="$(docker compose --profile affiliate exec -T affiliate_api node scripts/mint-dev-token.mjs --org-id "$(grep -m1 '"org_id"' affiliate-seed.json | sed 's/.*: "\(.*\)".*/\1/')" --role publisher_owner --sub fleet-owner)" affiliate_api node scripts/mint-links.mjs --placement "$(grep '^AFFILIATE_WEB_PLACEMENT_ID=' .env | cut -d= -f2-)"
 ```
 
-Check it is up:
+The site name in page titles is `AFFILIATE_SITE_NAME` (default `Afflino`). A `.env` copied before the
+rename still says `Paparazzi Commerce`; this changes it and restarts the web container (a restart, no
+rebuild):
+
+```bash
+sed -i 's/^AFFILIATE_SITE_NAME=Paparazzi Commerce$/AFFILIATE_SITE_NAME=Afflino/' .env && docker compose --profile affiliate up -d affiliate_web
+```
+
+Check it is up (the `/shop` curl prints `<title>Shop the looks · Afflino</title>`):
 
 ```bash
 curl -s "https://$(grep '^AFFILIATE_API_HOST=' .env | cut -d= -f2-)/healthz"
 curl -s "https://$(grep '^AFFILIATE_LINK_HOST=' .env | cut -d= -f2-)/healthz"
 curl -s "https://$(grep '^AFFILIATE_WEB_HOST=' .env | cut -d= -f2-)/api/healthz"
+curl -s "https://$(grep '^AFFILIATE_WEB_HOST=' .env | cut -d= -f2-)/shop" | grep -o '<title>[^<]*</title>'
 docker compose --profile affiliate logs -f --tail=200 affiliate_api affiliate_redirect affiliate_workers affiliate_web
 ```
 
 `docker compose --profile affiliate rm --stop --force affiliate_db affiliate_redis affiliate_migrate affiliate_api affiliate_redirect affiliate_workers affiliate_web`
 stops and removes only the affiliate containers (volumes kept); `docker compose down` would take the
-WordPress stack with it. The 133 unit tests need node and run on a dev machine or in CI
+WordPress stack with it. The 558 unit tests need node and run on a dev machine or in CI
 (`cd affiliate && ./node_modules/.bin/vitest run`, or `make affiliate-test`), not on the server.
 
 ### What is still sandbox

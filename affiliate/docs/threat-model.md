@@ -1,7 +1,8 @@
 # Threat model & pre-pentest review — Paparazzi Affiliate Commerce Platform
 
 Date: 2026-09-22. Scope: the sandbox codebase at this repo root (API, redirect
-service, workers, web portal/console, DB migrations). Grounded in code and
+service, workers, the web app — creator / brand / agency areas, admin, shop —
+DB migrations; web paths updated 2026-09-29 for the Afflino rebuild). Grounded in code and
 tests as they exist today — every mitigation claim cites a file or test.
 Anything not implemented is marked **residual risk** (§4) or **open question**
 (§6); §5 is the proposed pentest scope.
@@ -37,10 +38,12 @@ Boundaries, in order of exposure:
    one sanctioned cross-tenant read (documented exception; writes use the
    row's `org_id`). Raw IPs are never stored — `sha256(ip)` into
    `clicks.context` (`redirect/src/index.ts`).
-2. **Publisher portal** (`packages/web/app/portal/*`) — authenticated,
-   publisher-scoped views (earnings, links, statements, disputes).
-3. **Editorial console** (`packages/web/app/console/*` — looks, suspense
-   queue) — staff roles.
+2. **Creator app** (`packages/web/app/app/*`, formerly `/portal`) —
+   authenticated, publisher-scoped views (earnings, links, payouts,
+   statements, disputes). The brand and agency areas (`app/brand/*`,
+   `app/agency/*`) call no API yet (TEST demo data).
+3. **Admin area** (`packages/web/app/admin/*`, formerly `/console` —
+   looks, suspense queue; the review pages are demo data) — staff roles.
 4. **Finance endpoints** (`packages/api/src/routes/payouts.ts`,
    `suspense.ts`, `programmes.ts` pause/resume) — role-gated, maker-checker
    on payouts.
@@ -168,8 +171,8 @@ Both shapes run through **one** state machine (`ingestConversionEvent`).
   with 422 when no programme resolves (`CONVERSION_PROGRAMME_UNKNOWN`).
 - **I** — webhook route allowlists connectors (`stub-network` only);
   `raw` provider payloads are surfaced to suspense reviewers as evidence
-  (console renders them JSON-escaped in a `<pre>`,
-  `packages/web/app/console/suspense/page.tsx:259-260`).
+  (the admin suspense queue renders them JSON-escaped in a `<pre>`,
+  `packages/web/app/admin/suspense/SuspenseQueue.tsx:157`).
 - **D** — 2 MB CSV cap; webhook bodies are small JSON. _Residual:_ no
   request rate limits on ingestion endpoints.
 
@@ -231,15 +234,18 @@ HMAC uses `route_signature` — **dev-grade: reuses `JWT_SECRET`**
   and self-auditing (`actor_id = NULL`, machine-readable entity_id).
 - **D** — BullMQ `removeOnComplete/removeOnFail` caps on click-event jobs.
 
-### 3g. Web portal/console (`packages/web`)
+### 3g. Web app (`packages/web`)
 
 - No `dangerouslySetInnerHTML` anywhere (verified by grep); React escapes
   all rendered values including suspense `raw` payloads and review notes.
-- Auth token lives in **`localStorage`** (`packages/web/lib/api.ts:38`)
-  — any XSS would exfiltrate the Bearer <redacted> (residual risk; §4).
-- Console pages fall back to **demo/mock data** (`withDemoFallback`,
-  `portal-demo.ts`, `DemoBadge`) when the API is unreachable — operators
-  must be trained that demo data is not evidence.
+- Auth token lives in **`localStorage`** (`paparazzi_token`, read in
+  `packages/web/lib/api.ts`, written by `/login`) — any XSS would
+  exfiltrate the bearer (residual risk; §4). The other `afflino_*` keys
+  hold demo state only, no secrets.
+- App pages fall back to **demo/mock data** (`withDemoFallback`,
+  `lib/demo/*`, `portal-demo.ts`, `DemoBadge`) when the API is unreachable,
+  and pages with no endpoint always show TEST data with the badge —
+  operators must be trained that demo data is not evidence.
 
 ## 4. Residual risks (implemented gaps — fix before any shared environment)
 

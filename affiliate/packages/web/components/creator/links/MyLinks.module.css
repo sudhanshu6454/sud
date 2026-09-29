@@ -1,0 +1,106 @@
+/* 3c right column: title row (H2 28px + 220px filter, 8px 12px, 13px) 12px
+   above the table; link cell = offer 600 over a 12px monospace URL. */
+
+.section {
+  min-width: 0;
+}
+
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-3);
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 28px;
+  line-height: 1.12;
+  letter-spacing: -0.03em;
+  white-space: nowrap;
+}
+
+.badge {
+  margin: 0;
+}
+
+.filter {
+  display: block;
+  flex: none;
+  width: 220px;
+}
+
+.filter input {
+  padding: var(--space-2) var(--space-3);
+  font-size: 13px;
+}
+
+.offer {
+  font-weight: 600;
+}
+
+.url {
+  font-size: 12px;
+  color: var(--color-neutral-700);
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+/* The mock's cells have no padding and rely on spare width; keep a 12px
+   gutter so narrow tables never run columns together. */
+.colPlatform,
+.colNum,
+.colStatus {
+  white-space: nowrap;
+  padding-left: var(--space-3);
+}
+
+.phoneMeta {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-3);
+  }
+
+  .title {
+    font-size: 24px;
+  }
+
+  .filter {
+    width: 100%;
+  }
+
+  .filter input {
+    min-height: 44px;
+  }
+
+  /* Phone: Link · Clicks · Status; platform and EPC move under the URL. */
+  .colPlatform,
+  .colEpc {
+    display: none;
+  }
+
+  .phoneMeta {
+    display: block;
+    font-size: 12px;
+    color: var(--color-neutral-700);
+  }
+
+  .linkCell {
+    padding-right: var(--space-2);
+  }
+}

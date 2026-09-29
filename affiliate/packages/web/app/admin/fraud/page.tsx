@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
-import { ScreenPlaceholder } from '@/components/shell/ScreenPlaceholder';
+import { AdminFraud } from '@/components/admin/AdminFraud';
 
-export const metadata: Metadata = { title: 'Fraud' };
+export const metadata: Metadata = { title: 'Admin fraud' };
 
-/** Placeholder — a screen builder replaces this page. */
+/** Admin · Fraud: the design's four signals and the open cases (not drawn; 2e style). TEST demo data; no detection runs yet. */
 export default function AdminFraudPage() {
-  return <ScreenPlaceholder eyebrow="Admin" title="Fraud" />;
+  return <AdminFraud />;
 }

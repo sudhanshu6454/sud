@@ -1,0 +1,45 @@
+/* 2e review queue: filter tags, table, row actions. */
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.table td {
+  vertical-align: middle;
+}
+
+/* Long link subjects wrap instead of pushing the table wider. */
+.table td.subject {
+  overflow-wrap: anywhere;
+  padding-right: var(--space-4);
+}
+
+.decided {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.decided .view {
+  padding-inline: var(--space-1);
+}
+
+.age {
+  font-size: 13px;
+  color: var(--color-neutral-700);
+}
+
+@media (max-width: 760px) {
+  .filters .filterTag {
+    min-height: 44px;
+    padding: 0 14px;
+    font-size: 13px;
+  }
+
+  .action {
+    min-height: 44px;
+    min-width: 88px;
+  }
+}

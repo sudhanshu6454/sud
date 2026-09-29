@@ -1,0 +1,81 @@
+/* Brand creators: KPI strip, then 2fr roster | 1fr requests (2b row). */
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+}
+
+.roster {
+  padding: var(--space-6) var(--space-8);
+  border-right: 2px solid var(--color-divider);
+  min-width: 0;
+}
+
+.requests {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-6) var(--space-8);
+  min-width: 0;
+}
+
+.meta {
+  font-size: 13px;
+  color: var(--color-neutral-700);
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.reach {
+  font-size: 13px;
+  color: var(--color-neutral-700);
+}
+
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.skelRow {
+  display: block;
+  height: 36px;
+  background: var(--color-neutral-200);
+}
+
+@media (max-width: 1100px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .roster {
+    border-right: 0;
+    border-bottom: 2px solid var(--color-divider);
+  }
+}
+
+@media (max-width: 760px) {
+  .roster,
+  .requests {
+    padding: var(--space-4) 20px;
+  }
+
+  /* Requests first on phones: they are what needs doing. */
+  .requests {
+    order: -1;
+    border-bottom: 2px solid var(--color-divider);
+  }
+
+  .roster {
+    border-bottom: 0;
+  }
+
+  .touch {
+    min-height: 44px;
+  }
+}

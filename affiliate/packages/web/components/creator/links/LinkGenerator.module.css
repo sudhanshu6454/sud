@@ -1,0 +1,71 @@
+/* 3c left column body: 18px between rows; H2 28px / 800 / −0.03em;
+   Platform + Sub-ID side by side, 12px apart. The column's padding and
+   rule belong to the page grid. */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+.headRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.heading {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 28px;
+  line-height: 1.12;
+  letter-spacing: -0.03em;
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+.applyBox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--color-surface);
+}
+
+.eyebrow {
+  font-size: 12px;
+  line-height: 1.55;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-accent-700);
+}
+
+.applyCopy {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-neutral-800);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+@media (max-width: 760px) {
+  .heading {
+    font-size: 24px;
+  }
+
+  .actions .action {
+    min-height: 44px;
+  }
+}

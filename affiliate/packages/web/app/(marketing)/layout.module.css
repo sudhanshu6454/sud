@@ -5,7 +5,34 @@
   flex-direction: column;
 }
 
+/* A column, so a page can fill the height between nav and footer (flex: 1). */
 .main {
   flex: 1;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
+}
+
+/* The target of the skip link takes focus without drawing a ring round the page. */
+.main:focus,
+.main:focus-visible {
+  outline: none;
+}
+
+/* Skip link: off-screen until focused (same treatment as the app shell's). */
+.skip {
+  position: absolute;
+  left: var(--space-2);
+  top: -100px;
+  z-index: 50;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-text);
+  color: var(--color-bg);
+  font-size: 14px;
+}
+
+.skip:focus,
+.skip:focus-visible {
+  top: var(--space-2);
+  color: var(--color-bg);
 }

@@ -3,7 +3,7 @@ import styles from './DemoBadge.module.css';
 interface DemoBadgeProps {
   /** 'fallback' (API unreachable/errored) or 'mock' (no API endpoint exists). */
   variant?: 'fallback' | 'mock';
-  /** Extra classes, e.g. to drop the bottom margin inside a header row. */
+  /** Extra classes for the placement (spacing, alignment). */
   className?: string;
 }
 

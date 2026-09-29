@@ -1,55 +1,41 @@
-/* Link minting (was /portal/links) — 3c's form column and generated box. */
+/* 3c: grid 5fr / 7fr; each column 32px padding; a 2px rule between them.
+   Stacks (form, then list) below 1180px viewport width. */
 
-.badge {
-  margin-bottom: 0;
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  flex: 1;
 }
 
-.form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  max-width: 480px;
+.formCol {
+  padding: var(--space-8);
+  border-right: 2px solid var(--color-divider);
+  min-width: 0;
 }
 
-.error {
-  margin: 0;
-  font-size: 13px;
-  color: var(--color-accent-700);
+.listCol {
+  padding: var(--space-8);
+  min-width: 0;
 }
 
-/* 3c's generated-link box: surface fill. */
-.result {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-3);
-  max-width: 640px;
-  padding: var(--space-4);
-  background: var(--color-surface);
+@media (max-width: 1180px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .formCol {
+    border-right: 0;
+    border-bottom: 2px solid var(--color-divider);
+  }
+
+  .formCol > * {
+    max-width: 640px;
+  }
 }
 
-.result > * {
-  margin: 0;
-}
-
-.resultTitle {
-  font-weight: 600;
-}
-
-.demoNote,
-.disclosureNote {
-  font-size: 13px;
-  color: var(--color-neutral-700);
-}
-
-.url {
-  font-family: var(--font-mono);
-  font-size: 14px;
-  overflow-wrap: anywhere;
-}
-
-.resultActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
+@media (max-width: 760px) {
+  .formCol,
+  .listCol {
+    padding: var(--space-4) 20px var(--space-6);
+  }
 }

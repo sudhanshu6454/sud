@@ -1,0 +1,76 @@
+/* Shop tabs — the 3b step-tab row adapted to the marketing gutters: 13px
+   cells, 14px vertical padding, 2px right rules; active = 700 weight,
+   accent-700 text, 4px accent bottom rule. The first cell starts at the
+   40px marketing gutter so its label lines up with the logo. */
+
+.bar {
+  display: flex;
+  border-bottom: 2px solid var(--color-divider);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  padding: 14px var(--space-8);
+  border-right: 2px solid var(--color-divider);
+  border-bottom: 4px solid transparent;
+  color: var(--color-text);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color 120ms ease-out, color 120ms ease-out;
+}
+
+.tab:first-child {
+  padding-left: 40px;
+}
+
+.tab:hover {
+  color: var(--color-accent-700);
+  background: color-mix(in srgb, var(--color-text) 4%, transparent);
+}
+
+.tab:focus-visible {
+  outline-offset: -2px;
+}
+
+.active,
+.active:hover {
+  font-weight: 700;
+  color: var(--color-accent-700);
+  border-bottom-color: var(--color-accent);
+}
+
+.label {
+  display: inline-flex;
+  flex-direction: column;
+}
+
+.label::after {
+  content: attr(data-label);
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  font-weight: 700;
+  user-select: none;
+  pointer-events: none;
+}
+
+@media (max-width: 899px) {
+  .tab:first-child {
+    padding-left: 20px;
+  }
+}
+
+@media (max-width: 760px) {
+  .tab {
+    flex: 1;
+    min-height: 44px;
+    padding: 10px 20px;
+  }
+
+  .tab:last-child {
+    border-right: 0;
+  }
+}

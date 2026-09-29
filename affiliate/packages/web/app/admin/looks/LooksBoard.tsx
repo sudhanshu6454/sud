@@ -161,7 +161,6 @@ export function LooksBoard() {
         open={pauseId !== null}
         onClose={() => setPauseId(null)}
         title="Pause / withdraw"
-        className={styles.formDialog}
         actions={
           <>
             <Button variant="ghost" onClick={() => setPauseId(null)}>
@@ -194,7 +193,6 @@ export function LooksBoard() {
         open={publishId !== null}
         onClose={() => setPublishId(null)}
         title="Record live post"
-        className={styles.formDialog}
         actions={
           <>
             <Button variant="ghost" onClick={() => setPublishId(null)}>

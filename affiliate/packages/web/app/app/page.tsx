@@ -1,9 +1,13 @@
 import type { Metadata } from 'next';
-import { ScreenPlaceholder } from '@/components/shell/ScreenPlaceholder';
+import { Overview } from '@/components/creator/overview/Overview';
 
 export const metadata: Metadata = { title: 'Overview' };
 
-/** Placeholder — a screen builder replaces this page. */
+/**
+ * Creator Overview (1c; 1e on phones). Earnings and Next payout are live from
+ * GET /v1/publisher/earnings when it answers; the rest is TEST demo data
+ * with <DemoBadge /> (components/creator/overview).
+ */
 export default function AppPage() {
-  return <ScreenPlaceholder eyebrow="Overview" title="Last 30 days" artboard="1c" />;
+  return <Overview />;
 }

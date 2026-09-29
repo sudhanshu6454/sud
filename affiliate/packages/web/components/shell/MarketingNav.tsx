@@ -22,6 +22,7 @@ export function MarketingNav() {
   const menuId = useId();
 
   useEffect(() => setOpen(false), [pathname]);
+  const loginCurrent = pathname === '/login' ? ('page' as const) : undefined;
 
   useEffect(() => {
     if (!open) return;
@@ -46,7 +47,7 @@ export function MarketingNav() {
           ))}
         </nav>
         <div className={styles.actions}>
-          <Button variant="ghost" href="/login" className={styles.login}>
+          <Button variant="ghost" href="/login" className={styles.login} aria-current={loginCurrent}>
             Log in
           </Button>
           <Button variant="primary" href="/join" className={styles.join}>
@@ -72,7 +73,7 @@ export function MarketingNav() {
           ))}
         </nav>
         <div className={styles.menuActions}>
-          <Button variant="secondary" href="/login" block flush touch>
+          <Button variant="secondary" href="/login" block flush touch aria-current={loginCurrent}>
             Log in
           </Button>
           <Button variant="primary" href="/join" block flush touch arrow>

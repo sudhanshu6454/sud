@@ -1,0 +1,107 @@
+/* Desktop: the DataTable look (tableClasses) with a little room between
+   columns, since these tables carry more columns than the drawn ones.
+   Phone (≤760px): each row is a block — the primary cell as its heading,
+   then "Label  value" lines, then the actions — over the 1px row rule. */
+
+.wrap {
+  overflow-x: auto;
+}
+
+.table td,
+.table th {
+  padding-right: var(--space-4);
+}
+
+.table td:last-child,
+.table th:last-child {
+  padding-right: 0;
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+.actions {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.emptyCell {
+  padding-right: 0;
+}
+
+@media (min-width: 761px) and (max-width: 1100px) {
+  .hideMd {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .table,
+  .table tbody,
+  .table tr,
+  .table td {
+    display: block;
+    width: 100%;
+  }
+
+  .table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+
+  .table tr {
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid var(--color-divider);
+  }
+
+  .table td {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: 2px 0;
+    border-bottom: 0;
+    text-align: right;
+  }
+
+  .table td[data-label]::before {
+    content: attr(data-label);
+    flex: none;
+    text-align: left;
+    font-size: 12px;
+    color: var(--color-neutral-700);
+    padding-top: 2px;
+  }
+
+  .table td.primary {
+    display: block;
+    text-align: left;
+    padding-bottom: var(--space-1);
+  }
+
+  .table td.actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    padding-top: var(--space-2);
+    text-align: left;
+    white-space: normal;
+  }
+
+  .table td.actions > * {
+    min-height: 44px;
+  }
+
+  .table .emptyCell {
+    display: block;
+    text-align: left;
+  }
+
+  .nowrap {
+    white-space: normal;
+  }
+}

@@ -1,21 +1,18 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
-import { ScreenPlaceholder } from '@/components/shell/ScreenPlaceholder';
-import { Lockup } from '@/components/ui/Logo';
-import styles from './page.module.css';
+import { Suspense } from 'react';
+import { Onboarding } from '@/components/onboarding/Onboarding';
 
 export const metadata: Metadata = { title: 'Join' };
 
-/** Placeholder — the 3-step sign-up & onboarding (2a, 3a) replaces this page (it has no marketing chrome). */
+/**
+ * Sign-up & onboarding (2a, 3a): three steps in the accent-panel shell, no
+ * marketing chrome. ?role=creator|publisher|brand|agency preselects the
+ * account type; ?step= is the current step (components/onboarding).
+ */
 export default function JoinPage() {
   return (
-    <main id="main">
-      <div className={styles.top}>
-        <Link href="/" className={styles.home} aria-label="afflino — home">
-          <Lockup markSize={28} />
-        </Link>
-      </div>
-      <ScreenPlaceholder eyebrow="Step 1 of 3" title="How will you use Afflino?" artboard="2a, 3a" />
-    </main>
+    <Suspense>
+      <Onboarding />
+    </Suspense>
   );
 }

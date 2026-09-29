@@ -1,0 +1,61 @@
+/* Withdraw dialog (2c): amount field, TDS / net breakdown, destination, demo note. */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.copy {
+  margin: 0;
+}
+
+.copy + .copy {
+  margin-top: var(--space-2);
+}
+
+.breakdown {
+  margin: 0;
+  border-top: 2px solid var(--color-divider);
+}
+
+.line,
+.total {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.line dt,
+.line dd,
+.total dt,
+.total dd {
+  margin: 0;
+}
+
+.line dd,
+.total dd {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.total {
+  font-weight: 600;
+}
+
+.to {
+  margin: 0;
+  font-size: 13px;
+}
+
+.demo {
+  margin: var(--space-2) 0 0;
+  font-size: 13px;
+  color: var(--color-accent-700);
+}
+
+.form .demo {
+  margin-top: 0;
+}

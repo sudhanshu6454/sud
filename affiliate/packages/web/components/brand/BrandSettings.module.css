@@ -1,0 +1,51 @@
+/* Brand settings (2d pattern): 2-column fields, 20px gap, footer with
+   Cancel (ghost) and Save changes (primary) over a 2px rule. */
+
+.form {
+  padding: var(--space-8);
+  max-width: 960px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 20px;
+}
+
+.footer {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-top: var(--space-8);
+  padding-top: var(--space-4);
+  border-top: 2px solid var(--color-divider);
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+@media (max-width: 760px) {
+  .form {
+    padding: var(--space-4) 20px;
+  }
+
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-4);
+  }
+
+  .actions {
+    width: 100%;
+  }
+
+  .touch {
+    flex: 1;
+    min-height: 44px;
+  }
+}

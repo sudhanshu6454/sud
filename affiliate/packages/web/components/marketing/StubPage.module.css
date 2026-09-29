@@ -1,0 +1,61 @@
+/* Stub for a public page that is not written yet — the hero's type and
+   rhythm (1b): 72px 40px padding, 32px between blocks, 48px title
+   (the pricing plan size), 18px body at neutral-800. */
+
+.stub {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding: 72px 40px;
+  max-width: 1280px;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 48px;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: 560px;
+  font-size: 18px;
+  line-height: 1.5;
+  color: var(--color-neutral-800);
+}
+
+.body > * {
+  margin: 0;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+@media (max-width: 899px) {
+  .stub {
+    gap: var(--space-6);
+    padding: 48px 20px;
+  }
+
+  .title {
+    font-size: 40px;
+  }
+
+  .body {
+    font-size: 17px;
+  }
+}
+
+@media (max-width: 760px) {
+  .actions > * {
+    min-height: 44px;
+  }
+}

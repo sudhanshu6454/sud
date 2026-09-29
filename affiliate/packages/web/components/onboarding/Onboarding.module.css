@@ -1,0 +1,532 @@
+/* /join — sign-up & onboarding (2a, 3a). Grid 5fr / 7fr: a full accent panel
+   (ground-coloured logo glyph, "Set up in three steps." at 52px, the step list
+   split by 2px ground rules) and the step on the ground at 48 / 56px padding.
+   Phone (≤760px): the panel becomes a header strip with the step list. */
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.skip {
+  position: absolute;
+  left: var(--space-2);
+  top: -100px;
+  z-index: 50;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-text);
+  color: var(--color-bg);
+  font-size: 14px;
+}
+
+.skip:focus,
+.skip:focus-visible {
+  top: var(--space-2);
+  color: var(--color-bg);
+}
+
+/* ---------- accent panel ---------- */
+
+/* The grid cell carries the accent so it runs the full page height; the
+   panel inside stays in view (sticky, one viewport tall). */
+.panelCell {
+  background: var(--color-accent);
+}
+
+.panel {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100vh;
+  height: 100dvh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--space-8);
+  padding: 48px 40px;
+  background: var(--color-accent);
+  color: var(--color-bg);
+}
+
+.home {
+  display: inline-flex;
+  align-self: flex-start;
+  color: inherit;
+  text-decoration: none;
+}
+
+.home:hover {
+  color: inherit;
+}
+
+.home:focus-visible,
+.panel :focus-visible {
+  outline-color: var(--color-bg);
+}
+
+.headline {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 52px;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  text-wrap: pretty;
+}
+
+.steps {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 15px;
+}
+
+.step {
+  padding: 14px 0;
+  border-top: 2px solid var(--color-bg);
+}
+
+.step:last-child {
+  border-bottom: 2px solid var(--color-bg);
+}
+
+.current {
+  font-weight: 700;
+}
+
+.stepShort {
+  display: none;
+}
+
+/* ---------- step panel ---------- */
+
+.main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 48px 56px;
+}
+
+/* Page-level failure: the banner spans the panel's top edge. */
+.banner {
+  margin: -48px -56px 24px;
+}
+
+.bannerTitle {
+  font-weight: 600;
+}
+
+.form,
+.done {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+/* Gaps as drawn: 28px (2a step 1), 24px (3a step 2), 20px (3a step 3). */
+.gap1 {
+  gap: 28px;
+}
+
+.gap2 {
+  gap: 24px;
+}
+
+.gap3 {
+  gap: 20px;
+}
+
+.done {
+  gap: 24px;
+}
+
+/* The eyebrow line keeps its 12px × 1.55 height; the demo badge overhangs it. */
+.eyebrowRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  height: calc(12px * 1.55);
+}
+
+.eyebrowRow .badge {
+  margin: -4px 0;
+}
+
+.title {
+  margin: 8px 0 0;
+  font-size: 36px;
+  line-height: 1.12;
+  letter-spacing: -0.03em;
+}
+
+.titleSm {
+  font-size: 32px;
+}
+
+/* Focused only programmatically (step change), never an interactive target. */
+.title:focus,
+.title:focus-visible {
+  outline: none;
+}
+
+.lead {
+  margin: 8px 0 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--color-neutral-800);
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-4);
+}
+
+.groupError {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--color-accent-700);
+}
+
+.footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-4);
+  margin-top: auto;
+}
+
+.submitNote {
+  margin: auto 0 0;
+  font-size: 13px;
+  color: var(--color-neutral-700);
+}
+
+.submitNote + .footer {
+  margin-top: 0;
+}
+
+.login {
+  font-size: 13px;
+  color: var(--color-neutral-700);
+}
+
+.cta {
+  min-width: 200px;
+}
+
+.inlineLink {
+  color: inherit;
+}
+
+/* ---------- step 1: mobile + demo OTP ---------- */
+
+.otpBox {
+  position: relative;
+}
+
+.otpInput {
+  padding-right: 104px;
+}
+
+.otpSend {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+}
+
+.otpField {
+  grid-column: 2;
+}
+
+.otpNote {
+  grid-column: 1;
+  grid-row: 2;
+  align-self: end;
+  padding-bottom: 14px;
+}
+
+/* ---------- demo label ---------- */
+
+.demoNote {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-neutral-700);
+}
+
+.demoTag {
+  flex: none;
+  padding: 0 8px;
+  border: 1px solid var(--color-accent);
+  color: var(--color-accent-700);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  line-height: 18px;
+}
+
+.hintDemo {
+  color: var(--color-neutral-700);
+}
+
+/* ---------- supply step 2: platforms ---------- */
+
+.platformBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.platformBlock .groupError {
+  margin: 0;
+}
+
+.platforms {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 2px solid var(--color-divider);
+}
+
+.platformRow {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  column-gap: var(--space-4);
+  padding: 18px 0;
+  border-bottom: 2px solid var(--color-divider);
+}
+
+.platformText {
+  min-width: 0;
+}
+
+.platformName {
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.platformDetail {
+  font-size: 13px;
+  color: var(--color-neutral-700);
+  overflow-wrap: anywhere;
+}
+
+/* The "Connected" / "Review" tag is the undo control: its hit area reaches ~44px. */
+.toggleTag {
+  position: relative;
+}
+
+.toggleTag::after {
+  content: '';
+  position: absolute;
+  inset: -11px -8px;
+}
+
+.channelForm {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.channelActions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* ---------- done ---------- */
+
+.facts {
+  margin: 0;
+  border-top: 2px solid var(--color-divider);
+}
+
+.fact {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: center;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--color-divider);
+  font-size: 14px;
+}
+
+.fact dt {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-neutral-700);
+}
+
+.fact dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  margin: 0;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.meta {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-neutral-700);
+}
+
+/* ---------- narrower desktops ---------- */
+
+@media (max-width: 1100px) {
+  .main {
+    padding: 48px 40px;
+  }
+
+  .banner {
+    margin: -48px -40px 24px;
+  }
+}
+
+@media (max-width: 1000px) {
+  .pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .otpField,
+  .otpNote {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .otpNote {
+    padding-bottom: 0;
+  }
+
+  .headline {
+    font-size: 44px;
+  }
+
+  .fact {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-1);
+  }
+}
+
+/* ---------- phone ---------- */
+
+@media (max-width: 760px) {
+  .page {
+    display: block;
+    min-height: 0;
+  }
+
+  .panelCell {
+    display: block;
+  }
+
+  .panel {
+    position: static;
+    height: auto;
+    overflow: visible;
+    justify-content: flex-start;
+    gap: var(--space-4);
+    padding: var(--space-4) 20px 0;
+  }
+
+  .headline {
+    display: none;
+  }
+
+  .steps {
+    flex-direction: row;
+    gap: var(--space-2);
+    font-size: 13px;
+  }
+
+  .step {
+    flex: 1;
+    min-width: 0;
+    padding: 10px 0 12px;
+    line-height: 1.3;
+  }
+
+  .step:last-child {
+    border-bottom: 0;
+  }
+
+  /* The full label stays for assistive technology; the short one is drawn. */
+  .stepFull {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+
+  .stepShort {
+    display: block;
+  }
+
+  .main {
+    padding: var(--space-6) 20px var(--space-8);
+  }
+
+  .banner {
+    margin: -24px -20px 20px;
+  }
+
+  .title,
+  .titleSm {
+    font-size: 28px;
+  }
+
+  .footer {
+    flex-wrap: wrap;
+  }
+
+  .footerAccount {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  /* Full-width on a phone, so the label sits flush left (.btn-block, 1e). */
+  .cta {
+    flex: 1;
+    min-width: 0;
+    min-height: 44px;
+    justify-content: flex-start;
+  }
+
+  .touch,
+  .rowAction,
+  .segTouch > label {
+    min-height: 44px;
+  }
+
+  .otpSend {
+    top: 3px;
+    bottom: 3px;
+    transform: none;
+  }
+}

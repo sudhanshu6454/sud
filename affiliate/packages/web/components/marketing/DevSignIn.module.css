@@ -1,0 +1,185 @@
+/* /login — dev sign-in, set in the marketing site's hero grid (1b): 7fr form
+   column over a 2px rule, 5fr "This browser" column; eyebrow, 48px title,
+   18px lead, fields in the handover's input style (2a / 3a). */
+
+/* Fills the height between nav and footer (the layout's main is a column). */
+.page {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 7fr 5fr;
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding: 72px 40px;
+  border-right: 2px solid var(--color-divider);
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 48px;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.lead {
+  margin: 0;
+  max-width: 560px;
+  font-size: 18px;
+  line-height: 1.5;
+  color: var(--color-neutral-800);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 560px;
+}
+
+.tokenRow {
+  display: flex;
+  gap: var(--space-2);
+  align-items: stretch;
+}
+
+.tokenRow > input {
+  flex: 1;
+}
+
+.reveal {
+  flex: none;
+  min-width: 72px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.status {
+  margin: 0;
+  min-height: 1.5em;
+  font-size: 14px;
+  color: var(--color-accent-700);
+}
+
+.status:empty {
+  min-height: 0;
+}
+
+.meta {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-neutral-700);
+}
+
+/* ---------- This browser ---------- */
+
+.side {
+  padding: 72px 40px;
+  min-width: 0;
+}
+
+.facts {
+  margin: var(--space-4) 0 0;
+  border-top: 2px solid var(--color-divider);
+}
+
+.fact {
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.factLabel {
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-neutral-700);
+}
+
+.factValue {
+  margin: var(--space-1) 0 0;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+.statusValue {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 22px;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 14px;
+}
+
+.expired {
+  color: var(--color-accent-700);
+}
+
+.notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-6);
+  max-width: 440px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-neutral-700);
+}
+
+.notes > p {
+  margin: 0;
+}
+
+/* ---------- responsive ---------- */
+
+@media (max-width: 899px) {
+  .page {
+    grid-template-columns: 1fr;
+  }
+
+  .main {
+    gap: var(--space-6);
+    padding: 48px 20px;
+    border-right: 0;
+    border-bottom: 2px solid var(--color-divider);
+  }
+
+  .title {
+    font-size: 40px;
+  }
+
+  .lead {
+    font-size: 17px;
+  }
+
+  .side {
+    padding: 40px 20px 48px;
+  }
+}
+
+/* Phone: full-width 44px actions, label flush left (the handover's
+   full-width button rule). */
+@media (max-width: 760px) {
+  .actions .action,
+  .reveal {
+    min-height: 44px;
+  }
+
+  .actions .action {
+    flex: 1 1 100%;
+    justify-content: flex-start;
+  }
+}

@@ -1,96 +1,135 @@
 'use client';
 
+/*
+ * The shop grid (/shop) in the 1d offer-browser composition: page header with
+ * the look count and a search input, a row of category filter tags with a
+ * sort on the right, then the looks as 2px-ruled cells. Receives the
+ * already-loaded looks from the server page (app/(shop)/shop/page.tsx) and
+ * never calls the API itself. Search and filters run over the loaded list
+ * (the list endpoint has neither).
+ */
+
 import { useMemo, useState } from 'react';
+import DemoBadge from './DemoBadge';
+import { DisclosureLine } from './shop/DisclosureLine';
 import LookCard from './LookCard';
+import { filterLooks, lookCategories, LOOK_SORTS, sortLooks, type LookSort } from './shop/model';
+import { EmptyState } from './ui/EmptyState';
+import { Input } from './ui/Input';
+import { PageHeader } from './ui/PageHeader';
+import { TagButton } from './ui/Tag';
 import type { LookSummary } from '../lib/types';
 import styles from './LookGrid.module.css';
 
-/**
- * Client half of the home page: search box, category chips, grid and the
- * empty state. Receives the already-loaded looks from the server component
- * (app/page.tsx) — it never calls the API itself.
- */
-export default function LookGrid({ looks }: { looks: LookSummary[] }) {
+export interface LookGridProps {
+  looks: LookSummary[];
+  /** The catalogue fell back to the TEST demo data: render the badge. */
+  demo: boolean;
+}
+
+export default function LookGrid({ looks, demo }: LookGridProps) {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<string | null>(null);
+  const [sort, setSort] = useState<LookSort>('newest');
 
-  const categories = useMemo(() => {
-    const seen = new Map<string, string>();
-    for (const l of looks) {
-      if (l.category) seen.set(l.category.toLowerCase(), l.category);
-    }
-    return [...seen.values()].sort((a, b) => a.localeCompare(b));
-  }, [looks]);
-
-  const visible = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return looks.filter((l) => {
-      if (category && (l.category ?? '').toLowerCase() !== category.toLowerCase()) return false;
-      if (!q) return true;
-      return (
-        l.title.toLowerCase().includes(q) ||
-        (l.sourcePage ?? '').toLowerCase().includes(q) ||
-        (l.category ?? '').toLowerCase().includes(q)
-      );
-    });
-  }, [looks, query, category]);
+  const categories = useMemo(() => lookCategories(looks), [looks]);
+  const visible = useMemo(() => sortLooks(filterLooks(looks, { query, category }), sort), [looks, query, category, sort]);
+  const now = useMemo(() => new Date(), []);
 
   const clear = () => {
     setQuery('');
     setCategory(null);
   };
 
+  const count = `${looks.length} curated ${looks.length === 1 ? 'look' : 'looks'}`;
+  const trimmed = query.trim();
+
   return (
-    <div>
-      <input
-        type="search"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search looks, pages, categories…"
-        className={styles.search}
-        aria-label="Search looks"
+    <>
+      <PageHeader
+        eyebrow="Shop the looks"
+        title={count}
+        description="Spotted on your favourite pages — shop exact matches and similar styles."
+        className={styles.header}
+        actions={
+          <>
+            {demo ? <DemoBadge className={styles.badge} /> : null}
+            <span className={styles.search}>
+              <Input
+                type="search"
+                compact
+                aria-label="Search looks"
+                placeholder="Search looks, pages, categories"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setQuery('');
+                }}
+              />
+            </span>
+          </>
+        }
       />
 
-      {categories.length > 0 && (
-        <div className={styles.chipRow} role="group" aria-label="Categories">
+      <div className={styles.filters}>
+        <div className={styles.tags} role="group" aria-label="Filter by category">
+          <TagButton selected={category === null} onClick={() => setCategory(null)} className={styles.tag}>
+            All
+          </TagButton>
           {categories.map((c) => {
             const active = category !== null && category.toLowerCase() === c.toLowerCase();
             return (
-              <button
-                key={c}
-                type="button"
-                className={`${styles.chip} ${active ? styles.chipActive : ''}`}
-                aria-pressed={active}
-                onClick={() => setCategory(active ? null : c)}
-              >
+              <TagButton key={c} selected={active} onClick={() => setCategory(active ? null : c)} className={styles.tag}>
                 {c}
-              </button>
+              </TagButton>
             );
           })}
         </div>
-      )}
+        <label className={styles.sort}>
+          Sort:{' '}
+          <span className={styles.sortBox}>
+            <span className={styles.sizer} aria-hidden="true">
+              {LOOK_SORTS.find((s) => s.value === sort)?.label}
+            </span>
+            <select className={styles.sortSelect} value={sort} onChange={(e) => setSort(e.target.value as LookSort)}>
+              {LOOK_SORTS.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </span>
+        </label>
+      </div>
 
-      <h2 className={styles.sectionTitle}>Curated looks</h2>
+      <p className="sr-only" aria-live="polite">
+        {visible.length === looks.length ? count : `${visible.length} of ${looks.length} looks shown`}
+      </p>
 
       {visible.length === 0 ? (
         <div className={styles.empty}>
-          <p className={styles.emptyTitle}>{looks.length === 0 ? 'No looks published yet' : 'No looks match'}</p>
-          <p className={styles.emptyText}>
-            {looks.length === 0 ? 'Check back soon.' : 'Try clearing filters or search terms.'}
-          </p>
-          {looks.length > 0 && (
-            <button type="button" className={styles.clearButton} onClick={clear}>
-              Clear search
-            </button>
+          {looks.length === 0 ? (
+            <EmptyState title="No looks published yet." action={{ label: 'See your saved items', href: '/saved' }}>
+              New looks appear here as soon as the editors publish them.
+            </EmptyState>
+          ) : (
+            <EmptyState title="No looks match." action={{ label: 'Clear search', onClick: clear }}>
+              {trimmed ? `Nothing matches “${trimmed}”` : 'Nothing matches'}
+              {category ? ` in ${category}` : ''}. Try a page name or a category.
+            </EmptyState>
           )}
         </div>
       ) : (
-        <div className={styles.grid}>
-          {visible.map((look) => (
-            <LookCard key={look.id} look={look} />
-          ))}
+        <div className={styles.gridWrap}>
+          <ul className={styles.grid} aria-label="Looks">
+            {visible.map((look) => (
+              <LookCard key={look.id} look={look} now={now} />
+            ))}
+          </ul>
         </div>
       )}
-    </div>
+
+      <DisclosureLine />
+    </>
   );
 }

@@ -1,0 +1,89 @@
+/* Shared by the brand screens. */
+
+/* DemoBadge in a header actions row or next to a section label. */
+.badge {
+  margin: 0;
+}
+
+/* KPI strips: two per row between the phone breakpoint and ~1000px, where
+   four 36px figures no longer fit their cells (the primitive switches only
+   at 760px). */
+@media (max-width: 1000px) and (min-width: 761px) {
+  .kpis.kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .kpis.kpis > :nth-child(2n) {
+    border-right: 0;
+  }
+
+  .kpis.kpis > :nth-child(n + 3) {
+    border-top: 2px solid var(--color-divider);
+  }
+}
+
+/* A section inside a page body: eyebrow label, 12px, then the content. */
+.sectionHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  flex-wrap: wrap;
+}
+
+/* Filter tag row (1d / 2e pattern): 16px 32px over a 2px rule. */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-8);
+  border-bottom: 2px solid var(--color-divider);
+}
+
+.filtersEnd {
+  margin-left: auto;
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+/* Polite confirmation line (accent-700, 13px). */
+.notice {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-accent-700);
+}
+
+.noticeEmpty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+/* Demo disclosure copy (13px neutral-700). */
+.demoNote {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-neutral-700);
+}
+
+@media (max-width: 760px) {
+  .filters {
+    padding: var(--space-3) 20px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+
+  .filters > * {
+    flex: none;
+  }
+
+  .filtersEnd {
+    margin-left: 0;
+  }
+}

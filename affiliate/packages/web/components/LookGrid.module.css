@@ -1,81 +1,184 @@
+/* Shop grid — the 1d offer browser on the marketing gutters (40px; 20px on
+   phones): header 20px 40px, filter row 16px 40px with 8px tag gaps and
+   "Sort:" 13px neutral-700 on the right, then 3 / 2 / 1 columns of cells. */
+
+.header.header {
+  padding-inline: 40px;
+}
+
+.badge {
+  margin: 0;
+}
+
 .search {
-  width: 100%;
-  padding: 0.65rem 0.9rem;
-  border: 1px solid #ccc;
-  border-radius: 0.6rem;
-  margin-bottom: 0.75rem;
+  display: block;
+  width: 320px;
 }
 
-.search:focus {
-  outline: 2px solid #111;
-  outline-offset: 1px;
-  border-color: #111;
+.filters {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4) 40px;
+  border-bottom: 2px solid var(--color-divider);
 }
 
-.chipRow {
+.tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
+  gap: var(--space-2);
+  min-width: 0;
 }
 
-.chip {
-  font-size: 0.82rem;
-  font-weight: 600;
-  padding: 0.4rem 0.8rem;
-  border: 1px solid #d4d4d4;
-  border-radius: 999px;
-  background: #fff;
-  color: #333;
+.sort {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--color-neutral-700);
+  white-space: nowrap;
+}
+
+/* The select is as wide as its current label (a hidden sizer in the same
+   grid cell), so the chevron sits right after "Newest" as the text is drawn. */
+.sortBox {
+  position: relative;
+  display: inline-block;
+  margin-left: 0.28em;
+}
+
+.sortBox .sortSelect {
+  position: absolute;
+  inset: 0;
+}
+
+.sizer {
+  visibility: hidden;
+  padding-right: 14px;
+  white-space: nowrap;
+}
+
+/* Drawn as plain 13px text; a native select with a small chevron. */
+.sortSelect {
+  width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0;
+  border-radius: var(--radius-md);
+  margin: 0;
+  padding: 0 14px 0 0;
+  font: inherit;
+  color: inherit;
+  background-color: transparent;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 4px) 55%, 100% 55%;
+  background-size: 4px 4px, 4px 4px;
+  background-repeat: no-repeat;
   cursor: pointer;
+  transition: color 120ms ease-out;
 }
 
-.chipActive {
-  background: #111;
-  border-color: #111;
-  color: #fff;
+.sortSelect:hover {
+  color: var(--color-text);
 }
 
-.sectionTitle {
-  margin: 1.25rem 0 0.75rem;
+.gridWrap {
+  overflow: hidden;
 }
 
+/* Every cell carries its 2px right rule; the grid runs 2px past the wrapper,
+   which clips the last column's rule (the 1b feature cells have none at the
+   edge) while every column keeps the same width. */
 .grid {
   display: grid;
-  gap: 1rem;
-}
-
-@media (min-width: 560px) {
-  .grid {
-    grid-template-columns: 1fr 1fr;
-  }
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0 -2px 0 0;
+  padding: 0;
+  list-style: none;
 }
 
 .empty {
-  border: 1px dashed #bbb;
-  border-radius: 0.75rem;
-  padding: 2rem 1.5rem;
-  text-align: center;
+  padding: var(--space-6) 40px;
 }
 
-.emptyTitle {
-  font-weight: 700;
-  font-size: 1.05rem;
-  margin-bottom: 0.25rem;
+@media (max-width: 1100px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
-.emptyText {
-  color: #666;
-  font-size: 0.9rem;
-  margin-bottom: 1rem;
+@media (max-width: 960px) {
+  .search {
+    width: 260px;
+  }
 }
 
-.clearButton {
-  padding: 0.5rem 1.1rem;
-  border-radius: 999px;
-  border: 0;
-  background: #111;
-  color: #fff;
-  font-weight: 600;
-  cursor: pointer;
+@media (max-width: 899px) {
+  .header.header,
+  .filters,
+  .empty {
+    padding-inline: 20px;
+  }
+}
+
+@media (max-width: 760px) {
+  .search {
+    width: 100%;
+  }
+
+  .filters {
+    flex-wrap: wrap;
+    padding-block: var(--space-3);
+    row-gap: var(--space-3);
+  }
+
+  /* Tags scroll sideways in one row (3f); the sort drops under them. */
+  .tags {
+    flex: 1 1 100%;
+    flex-wrap: nowrap;
+    gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin: -11px -20px;
+    padding: 11px 20px;
+  }
+
+  .tags::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* 44px hit area around the 23px tag, without changing how it looks. */
+  .tag {
+    position: relative;
+    flex: none;
+  }
+
+  .tag::after {
+    content: '';
+    position: absolute;
+    inset: -11px -3px;
+  }
+
+  .sort {
+    margin-left: 0;
+    min-height: 44px;
+  }
+
+  .empty a,
+  .empty button {
+    min-height: 44px;
+  }
+
+  /* The select covers the whole 44px row, not just the 13px line. */
+  .sortBox {
+    display: flex;
+    align-items: center;
+    align-self: stretch;
+  }
+
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

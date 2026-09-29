@@ -134,7 +134,7 @@ services:
       API_BASE: ${API_BASE:-http://api:3000}
       WEB_API_TOKEN: ${WEB_API_TOKEN:?WEB_API_TOKEN is required (read-only bearer for the shop; without it the shop renders TEST demo data)}
       WEB_PLACEMENT_ID: ${WEB_PLACEMENT_ID:?WEB_PLACEMENT_ID is required (web_placement_id from seed-fleet; without it no item carries a tracked link)}
-      NEXT_PUBLIC_SITE_NAME: ${NEXT_PUBLIC_SITE_NAME:-Paparazzi Commerce}
+      NEXT_PUBLIC_SITE_NAME: ${NEXT_PUBLIC_SITE_NAME:-Afflino}
       LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
       - "3002:3000"

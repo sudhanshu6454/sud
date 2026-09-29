@@ -1,0 +1,91 @@
+/* Desktop table / phone stacked list (≤760px). Phone rows: 1px divider
+   rules, 12px vertical padding, like the 3f lists. */
+
+/* DataTable cells carry no horizontal padding (as drawn); a 16px gutter
+   keeps adjacent columns apart when the page narrows. Column widths are
+   border-box, so the drawn column positions do not move. */
+.desktop th:not(:last-child),
+.desktop td:not(:last-child) {
+  padding-right: var(--space-4);
+}
+
+.phone {
+  display: none;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 2px solid var(--color-divider);
+}
+
+.item {
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-divider);
+  font-size: 14px;
+}
+
+.empty {
+  color: var(--color-neutral-700);
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.eyebrow {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 2px;
+}
+
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.title {
+  font-weight: 600;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.aside {
+  flex: none;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.meta {
+  font-size: 13px;
+  color: var(--color-neutral-700);
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  margin-top: var(--space-2);
+}
+
+.actions > :is(button, a) {
+  min-height: 44px;
+}
+
+@media (max-width: 760px) {
+  .desktop {
+    display: none;
+  }
+
+  .phone {
+    display: block;
+  }
+}

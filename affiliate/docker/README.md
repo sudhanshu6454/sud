@@ -10,7 +10,7 @@ than the two committed examples).
 | `paparazzi/api` | `Dockerfile.api` | `@paparazzi/api` (Fastify v1 API) | 3000 | `node dist/index.js` (`/app/packages/api`) |
 | `paparazzi/redirect` | `Dockerfile.redirect` | `@paparazzi/redirect` (`GET /r/{token}`) | 3001 | `node dist/index.js` (`/app/packages/redirect`) |
 | `paparazzi/workers` | `Dockerfile.workers` | `@paparazzi/workers` (BullMQ) | — | `node dist/index.js` (`/app/packages/workers`); one-off purge: `node dist/retention/run-once.js [--dry-run]` |
-| `paparazzi/web` | `Dockerfile.web` | `@paparazzi/web` (Next.js 14 standalone) | 3000 | `node packages/web/server.js` (`/app`) |
+| `paparazzi/web` | `Dockerfile.web` | `@paparazzi/web` (Next.js 14 standalone: the Afflino web app, the shop at `/shop`) | 3000 | `node packages/web/server.js` (`/app`) |
 | `paparazzi/migrate` | `Dockerfile.migrate` | `db/migrate.mjs`, `db/seed.ts`, `db/seed-fleet.ts` | — | `node db/migrate.mjs` (`/app`) |
 
 All five run as the unprivileged `node` user (uid 1000); every copied file is
@@ -111,7 +111,7 @@ Runtime environment (read on every request, never baked — see
 | `API_BASE` | API origin as seen from the web container (compose: `http://api:3000`); also the target of the `/api/*` proxy. |
 | `WEB_API_TOKEN` | Read-only bearer (`publisher_analyst`) for catalogue reads. Server-side only. Missing → TEST demo data with a badge. |
 | `WEB_PLACEMENT_ID` | The shop's own placement; items carry tracked links only for it. |
-| `NEXT_PUBLIC_SITE_NAME` | Site name in `<title>`, header, footer, manifest (a rename is a restart). |
+| `NEXT_PUBLIC_SITE_NAME` | Site name in `<title>` (`%s · Afflino`), the footer and the manifest; default `Afflino` (a rename is a restart). |
 | `HOSTNAME` / `PORT` | Set to `0.0.0.0` / `3000` in the image. |
 
 ## migrate
@@ -158,7 +158,7 @@ docker run --rm --network NETWORK_NAME -e API_BASE=http://api:3000 -e API_TOKEN=
 compose's `internal`; the smoke test below uses `pz-test`. `grep`/`sed` are used
 rather than node because the fleet host has no node outside the containers.)
 
-## Smoke test (what was verified, 2026-09-29)
+## Smoke test (what was verified, 2026-09-29; re-run after the Afflino web rebuild)
 
 Run from `affiliate/` after building the five images with the `:test` tag. Every
 line is a complete command (ids come from the seed's JSON, tokens from the api
@@ -181,29 +181,34 @@ OWNER_TOKEN=$(docker run --rm -e JWT_SECRET=test-secret paparazzi/api:test node 
 docker run -d --name pz-api --network pz-test --network-alias api -p 127.0.0.1:3100:3000 -e NODE_ENV=production -e API_HOST=0.0.0.0 -e API_PORT=3000 -e DATABASE_URL=postgresql://paparazzi:pw@pz-db:5432/paparazzi -e REDIS_URL=redis://pz-redis:6379 -e JWT_SECRET=test-secret -e REDIRECT_BASE_URL=http://redirect:3001 paparazzi/api:test
 docker run -d --name pz-redirect --network pz-test --network-alias redirect -p 127.0.0.1:3101:3001 -e NODE_ENV=production -e REDIRECT_PORT=3001 -e DATABASE_URL=postgresql://paparazzi:pw@pz-db:5432/paparazzi -e REDIS_URL=redis://pz-redis:6379 paparazzi/redirect:test
 docker run -d --name pz-workers --network pz-test -e NODE_ENV=production -e DATABASE_URL=postgresql://paparazzi:pw@pz-db:5432/paparazzi -e REDIS_URL=redis://pz-redis:6379 -e STUB_WEBHOOK_SECRET=test-secret paparazzi/workers:test
-docker run -d --name pz-web --network pz-test -p 127.0.0.1:3200:3000 -e API_BASE=http://api:3000 -e WEB_API_TOKEN="$WEB_API_TOKEN" -e WEB_PLACEMENT_ID="$WEB_PLACEMENT_ID" -e NEXT_PUBLIC_SITE_NAME="Paparazzi Commerce" paparazzi/web:test
+docker run -d --name pz-web --network pz-test -p 127.0.0.1:3200:3000 -e API_BASE=http://api:3000 -e WEB_API_TOKEN="$WEB_API_TOKEN" -e WEB_PLACEMENT_ID="$WEB_PLACEMENT_ID" -e NEXT_PUBLIC_SITE_NAME=Afflino paparazzi/web:test
 sleep 5
 curl -s http://127.0.0.1:3100/healthz; echo
 curl -s http://127.0.0.1:3101/healthz; echo
 curl -s http://127.0.0.1:3200/api/healthz; echo
-curl -s http://127.0.0.1:3200/ | grep -o '<title>[^<]*</title>\|aria-label="View look: [^"]*"'
+curl -s http://127.0.0.1:3200/ | grep -o '<title>[^<]*</title>'
+curl -s http://127.0.0.1:3200/shop | grep -o '<title>[^<]*</title>\|<h2 class="LookCard_title[^"]*">[^<]*</h2>\|Demo data[^<]*'
 docker run --rm --network pz-test -e API_BASE=http://api:3000 -e API_TOKEN="$OWNER_TOKEN" paparazzi/api:test node scripts/mint-links.mjs --placement "$WEB_PLACEMENT_ID"
-curl -s "http://127.0.0.1:3200/looks/$LOOK_ID" | grep -o '<a href="http://redirect:3001/r/[0-9a-f]*"[^>]*>[^<]*</a>'
+curl -s "http://127.0.0.1:3200/looks/$LOOK_ID" | grep -o '<title>[^<]*</title>\|<a href="http://redirect:3001/r/[0-9a-f]*" rel="[^"]*"\|Link not available yet\|Demo data[^<]*'
 LINK_TOKEN=$(curl -s "http://127.0.0.1:3200/looks/$LOOK_ID" | grep -o 'redirect:3001/r/[0-9a-f]*' | head -1 | sed 's#.*/r/##')
-curl -s -o /dev/null -D - "http://127.0.0.1:3101/r/$LINK_TOKEN" | grep -i '^HTTP\|^location'
+curl -s -o /dev/null -D - "http://127.0.0.1:3101/r/$LINK_TOKEN" | grep -i '^HTTP\|^location\|^set-cookie'
+docker exec pz-db psql -U paparazzi -d paparazzi -tAc "select count(*) from clicks"
 sleep 8; docker logs pz-workers 2>&1 | grep -o '"message":"[^"]*"' | sort -u
 docker rm -f pz-web pz-workers pz-redirect pz-api pz-redis pz-db && docker network rm pz-test && rm -f seed-fleet.json
 ```
 
-Observed (all containers running as `node`, PID 1):
+Observed on the last run (2026-09-29, with `paparazzi/web:test` and
+`paparazzi/migrate:test` rebuilt from this tree and the api, redirect and
+workers images of the same day — their code did not change; all containers
+running as `node`, PID 1):
 
-- migrate: `5 migration(s) applied, 0 already applied`; `--status` lists 0001–0005 applied; `seed.ts` and `seed-fleet.ts --with-demo-programme` succeed, the fleet seed is byte-identical on a second run (5 looks, one per fleet site, `web_placement_id` reported).
+- migrate: `5 migration(s) applied, 0 already applied`; `seed.ts` and `seed-fleet.ts --with-demo-programme` succeed (`seed-fleet: 5 site(s) from /app/config/sites.yaml, shop host shop.pz-test.invalid, with TEST demo programme`). Checked on the first run of the day and not repeated here: `--status` lists 0001–0005 applied and the fleet seed is byte-identical on a second run (5 looks, one per fleet site, `web_placement_id` reported).
 - `curl http://127.0.0.1:3100/healthz` → `{"ok":true}` 200; `curl http://127.0.0.1:3101/healthz` → `{"ok":true}` 200; `curl http://127.0.0.1:3200/api/healthz` (proxy) → `{"ok":true}` 200; without a bearer the proxy relays the API's 401 envelope.
-- `curl http://127.0.0.1:3200/` → 200, `<title>Paparazzi Commerce</title>`, five cards (`View look: Demo look — Filmybuff`, …), no demo badge.
+- `curl http://127.0.0.1:3200/` → `<title>Afflino</title>` (the marketing home); `curl http://127.0.0.1:3200/shop` → `<title>Shop the looks · Afflino</title>` and five `<h2 class="LookCard_title__…">` cells (`Demo look — Filmybuff`, `— Crazy4Marketing`, `— ScreenStat`, `— Marketing Mentalist`, `— Marketing Junkies`; order varies with publish time), no "Demo data" badge (live).
 - mint-links: `minted=1 replayed=0 skipped_linked=4 … failed=0` (one live offer shared by the five looks), url `http://redirect:3001/r/<token>`.
-- `curl http://127.0.0.1:3200/looks/<look id>` → 200 with `<a href="http://redirect:3001/r/<token>" rel="sponsored nofollow noopener">View at merchant</a>` and no "Link not available yet".
-- `curl -D - http://127.0.0.1:3101/r/<token>` → `HTTP/1.1 302 Found`, `location: https://shop.example.com/p/demo-fleet-sku?subid=<click_id>`, no `set-cookie`; one row in `clicks`.
-- workers log: `workers started` (queues click-events, provider-events, feeds, reconciliation, retention), `retention repeat scheduled`, `outbox batch published`, then `click.observed` for that click.
+- `curl http://127.0.0.1:3200/looks/<look id>` → `<title>Demo look — Marketing Mentalist · Afflino</title>` and `<a href="http://redirect:3001/r/<token>" rel="sponsored nofollow noopener"` (the "View at merchant →" CTA), no "Link not available yet", no demo badge.
+- `curl -D - http://127.0.0.1:3101/r/<token>` → `HTTP/1.1 302 Found`, `location: https://shop.example.com/p/demo-fleet-sku?subid=<click_id>`, no `set-cookie` line; `select count(*) from clicks` → `1`.
+- workers log: `workers started` (queues click-events, provider-events, feeds, reconciliation, retention), `outbox relay started`, `retention repeat scheduled`, `outbox batch published`, then `click.observed` for that click.
 
 The sandbox that ran this build cannot reach the npm registry without an extra
 CA, so the builds were run with `--build-arg NODE_IMAGE=<node:22-alpine plus
@@ -217,7 +222,7 @@ themselves contain no proxy or CA settings.
 | `paparazzi/api` | 264 MB | 18 s |
 | `paparazzi/redirect` | 270 MB | 15 s |
 | `paparazzi/workers` | 255 MB | 14 s |
-| `paparazzi/web` | 269 MB | 58 s |
+| `paparazzi/web` | 273 MB (269 MB before the Afflino rebuild) | 58 s (`--no-cache`, before the rebuild); the Afflino rebuild took 84 s with only the base and corepack layers cached (install 9 s, `next build` 71 s) |
 | `paparazzi/migrate` | 262 MB | 4 s |
 
 The service images add 17–32 MB of application code and production

@@ -1,0 +1,74 @@
+/* Live minting below 3c's generator: a 2px rule, an eyebrow-style heading,
+   13px copy, then the collapsible POST /v1/links form. */
+
+.live {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+  padding-top: var(--space-6);
+  border-top: 2px solid var(--color-divider);
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 12px;
+  line-height: 1.55;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-neutral-700);
+}
+
+.copy {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-neutral-800);
+  max-width: 560px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.form[hidden] {
+  display: none;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+.error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-accent-700);
+}
+
+.last {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-neutral-700);
+}
+
+.code {
+  font-family: var(--font-mono);
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .live :global(button) {
+    min-height: 44px;
+  }
+}

@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
-import { ScreenPlaceholder } from '@/components/shell/ScreenPlaceholder';
+import { BrandConversions } from '@/components/brand/BrandConversions';
 
 export const metadata: Metadata = { title: 'Conversions' };
 
-/** Placeholder — a screen builder replaces this page. */
+/** The brand's conversions by status. TEST demo: no brand conversions endpoint in v1. */
 export default function BrandConversionsPage() {
-  return <ScreenPlaceholder eyebrow="Brand" title="Conversions" />;
+  return <BrandConversions />;
 }

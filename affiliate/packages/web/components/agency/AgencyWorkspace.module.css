@@ -1,0 +1,209 @@
+/* Agency workspace — 3e: header, a row of brand-client cells (3 per row,
+   2px rules), then the roster (24px 32px 32px) with the share control
+   under the table. Phone (≤760px): cells stack, the roster becomes a list. */
+
+.badge {
+  margin-bottom: 0;
+}
+
+/* ---------- brand clients ---------- */
+
+.clients {
+  border-bottom: 2px solid var(--color-divider);
+  scroll-margin-top: var(--space-4);
+}
+
+.clientGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* As drawn: every cell carries a 2px right rule (the last one too). Cells
+   after the first row get a top rule. */
+.client {
+  position: relative;
+  min-width: 0;
+  padding: var(--space-6) var(--space-8);
+  border-right: 2px solid var(--color-divider);
+  transition: background-color 120ms ease-out;
+}
+
+.client:nth-child(n + 4) {
+  border-top: 2px solid var(--color-divider);
+}
+
+.client:has(.clientLink):hover {
+  background: color-mix(in srgb, var(--color-text) 4%, transparent);
+}
+
+.clientName {
+  margin: 6px 0 0;
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 22px;
+  /* A div in the mock: body line-height (1.55), not the heading's 1.12. */
+  line-height: 1.55;
+  letter-spacing: -0.02em;
+}
+
+/* The brand name is the link; its ::after covers the cell, so the whole cell
+   opens the workspace and the focus ring draws round the cell. */
+.clientLink,
+.clientLink:hover {
+  color: inherit;
+  text-decoration: none;
+}
+
+.clientLink::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.clientLink:focus-visible {
+  outline: none;
+}
+
+.clientLink:focus-visible::after {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.clientMeta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  font-size: 14px;
+}
+
+.pendingEyebrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.muted {
+  color: var(--color-neutral-700);
+  font-size: 13px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.remove {
+  position: relative;
+  z-index: 1;
+  flex: none;
+}
+
+/* ---------- roster ---------- */
+
+.roster {
+  padding: var(--space-6) var(--space-8) var(--space-8);
+  scroll-margin-top: var(--space-4);
+}
+
+.sectionLabel {
+  margin: 0 0 var(--space-3);
+}
+
+.shareForm {
+  margin-top: var(--space-6);
+  max-width: 640px;
+}
+
+.shareRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+}
+
+.shareInput {
+  width: 96px;
+  flex: none;
+}
+
+.shareTotal {
+  font-size: 14px;
+  color: var(--color-neutral-800);
+}
+
+.invites {
+  margin-top: var(--space-8);
+}
+
+.inviteList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 2px solid var(--color-divider);
+}
+
+.invite {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-4);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-divider);
+  font-size: 14px;
+}
+
+.inviteName {
+  font-weight: 600;
+}
+
+.invite .remove {
+  margin-left: auto;
+}
+
+/* ---------- narrower desktops ---------- */
+
+@media (max-width: 1100px) {
+  .client {
+    padding: var(--space-6);
+  }
+}
+
+/* ---------- phone ---------- */
+
+@media (max-width: 760px) {
+  .headerButton {
+    min-height: 44px;
+  }
+
+  .clientGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .client {
+    padding: var(--space-4) 20px;
+    border-right: 0;
+  }
+
+  .client + .client {
+    border-top: 2px solid var(--color-divider);
+  }
+
+  .client:nth-child(n + 4) {
+    border-top: 2px solid var(--color-divider);
+  }
+
+  .roster {
+    padding: var(--space-4) 20px var(--space-6);
+  }
+
+  .shareInput {
+    min-height: 44px;
+  }
+
+  .remove {
+    min-height: 44px;
+  }
+}

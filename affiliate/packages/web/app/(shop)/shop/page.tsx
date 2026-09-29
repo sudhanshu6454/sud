@@ -1,21 +1,15 @@
-import DemoBadge from '@/components/DemoBadge';
+import type { Metadata } from 'next';
 import LookGrid from '@/components/LookGrid';
 import { listLooks } from '@/lib/catalogue';
-import styles from './page.module.css';
 
 // Rendered per request; the catalogue fetch itself is cached for 60 s
 // (lib/catalogue.ts), so the grid is never a build-time snapshot.
 export const dynamic = 'force-dynamic';
 
-export default async function HomePage() {
-  const { value: looks, demo } = await listLooks();
+export const metadata: Metadata = { title: 'Shop the looks' };
 
-  return (
-    <div>
-      <h1 className={styles.heading}>Shop the looks</h1>
-      <p className={styles.sub}>Spotted on your favourite pages — shop exact matches and similar styles.</p>
-      {demo && <DemoBadge />}
-      <LookGrid looks={looks} />
-    </div>
-  );
+/** The fleet's consumer shop grid: live GET /v1/looks (all pages), TEST demo looks + badge on fallback. */
+export default async function ShopPage() {
+  const { value: looks, demo } = await listLooks();
+  return <LookGrid looks={looks} demo={demo} />;
 }

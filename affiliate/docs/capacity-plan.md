@@ -152,7 +152,7 @@ database work and must be sized then.
   gradient placeholder renders, and there is no image LCP element to
   measure yet.
 - The shop's own token is server-side only (`WEB_API_TOKEN`) and the
-  `/api/*` proxy adds one hop for portal/console calls; the proxy is a
+  `/api/*` proxy adds one hop for the app areas' browser calls; the proxy is a
   per-request route handler and shares the web process's CPU.
 
 ## 5. Alerts already defined (none wired)
