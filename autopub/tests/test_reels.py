@@ -131,6 +131,7 @@ class StoryRewriter:
             captions=Captions(twitter="tw", facebook="fb", instagram="ig", linkedin="li", pinterest_title="pt",
                               pinterest="pi", telegram="tg", threads="th"),
             story_frames=[StoryFrame(heading="What happened", body="Facts. " * 10), StoryFrame(heading="Why it matters", body="Stakes. " * 10)],
+            is_major=True,
         )
 
 
