@@ -50,7 +50,11 @@ infra/
   dns.py              GoDaddy (or Linode) DNS records for every domain
   bootstrap.sh        server-side: compose up + WordPress install
   wp/init-sites.sh    wp-cli: install core/theme/plugins, create autopub user + app passwords
-docker-compose.yml  nginx-proxy + Let's Encrypt, MariaDB, 3× WordPress, autopub worker
+affiliate/          the affiliate platform: shop, /r/{token} click redirector, v1 API, workers, ledger
+                    (pnpm monorepo with its own README.md and CLAUDE.md; profile `affiliate` in the compose)
+docker-compose.yml  nginx-proxy + Let's Encrypt, MariaDB, 3× WordPress, autopub worker; profile `affiliate`
+                    adds affiliate_db, affiliate_redis, affiliate_migrate, affiliate_api, affiliate_redirect,
+                    affiliate_workers, affiliate_web
 ```
 
 ## Quick start (from your laptop)
@@ -434,6 +438,108 @@ decides, so these compete with the rest of the day's candidates rather than bein
 
 Tuning lives in `sites.yaml` (`settings:` block and per-site `max_posts_per_run`, `max_age_hours`, feeds,
 keywords). After editing: `make up` (the config is mounted into the container, a restart is enough).
+
+## Affiliate platform (affiliate/)
+
+The fleet's audience buys things. `affiliate/` is the affiliate commerce platform that turns that into
+tracked, attributable purchases: India-first, INR, the merchant owns the checkout. The **fleet is the
+publisher** and the **five sites are its properties** (`affiliate/db/seed-fleet.ts` reads
+`autopub/config/sites.yaml` and creates them, plus a `web` property for the shop). What it consists of:
+
+- **The shop** (`affiliate_web`, Next.js): curated looks, one page per look and per item, a wishlist.
+  It reads the platform's catalogue API server-side and every "View at merchant" is a tracked link.
+- **Tracked links** (`affiliate_redirect`): `https://<link host>/r/{token}` resolves the token (Redis
+  cache, Postgres behind it), writes one click row with no cookie and a hashed IP, and 302s to the
+  merchant with `subid=<click id>`. If the click cannot be written the shopper is still redirected,
+  without the subid (fail-open; the loss is logged). No consumer ever receives a raw merchant URL.
+- **The API** (`affiliate_api`, `/v1`): looks and links for the shop, conversion ingest (webhook and
+  CSV), suspense queue, payouts, disputes, contracts, programme kill switch. `affiliate/docs/openapi.yaml`.
+- **Workers** (`affiliate_workers`): click events, provider events, outbox relay, daily retention purge.
+- **Ledger and payouts**: integer paise, double-entry, append-only; unattributable conversions go to
+  suspense and are never guessed; payouts are maker-checker (the preparer cannot approve). The whole
+  loop is asserted by a 51-step demo on pg-mem and on real Postgres 16 (`affiliate/README.md`).
+
+Everything runs beside the fleet from this compose file, behind the `affiliate` profile: its own
+Postgres 16 and Redis 7 (volumes `affiliate_db_data`, `affiliate_redis_data`), three public hosts
+through the same nginx-proxy + Let's Encrypt. **Off until `COMPOSE_PROFILES=affiliate` is set.**
+
+### Switching it on (on the server, in `/opt/marketing-fleet`)
+
+Fill the `AFFILIATE PLATFORM` block of `.env` (the comments there say what each line is): the three
+hosts `AFFILIATE_WEB_HOST`, `AFFILIATE_LINK_HOST`, `AFFILIATE_API_HOST` (host only, A records pointing at
+this server; nginx-proxy issues the certificates once they resolve), then the profile and the secrets:
+
+```bash
+sed -i 's/^COMPOSE_PROFILES=.*/COMPOSE_PROFILES=affiliate/' .env
+sed -i "s/^AFFILIATE_DB_PASSWORD=.*/AFFILIATE_DB_PASSWORD=$(openssl rand -hex 32)/; s/^AFFILIATE_JWT_SECRET=.*/AFFILIATE_JWT_SECRET=$(openssl rand -hex 32)/; s/^AFFILIATE_STUB_WEBHOOK_SECRET=.*/AFFILIATE_STUB_WEBHOOK_SECRET=$(openssl rand -hex 32)/" .env
+docker compose --profile affiliate up -d --build affiliate_db affiliate_redis affiliate_migrate affiliate_api affiliate_redirect affiliate_workers affiliate_web
+```
+
+That builds the five images, starts db + redis, runs the migrations (`affiliate_migrate`, recorded in
+`schema_migrations`) and only then api, redirect, workers and web. It is the release command too: on
+later releases the migrate step applies pending files only, and on demand
+`docker compose --profile affiliate run --rm affiliate_migrate node db/migrate.mjs` does the same (a
+no-op when nothing is pending). The `make affiliate-up`, `affiliate-migrate`, `affiliate-seed`,
+`affiliate-logs`, `affiliate-down` targets in the Makefile are these same lines for a machine that has
+`make`; the server does not.
+
+Seed the fleet as the publisher (writes the ids to `affiliate-seed.json`; ids and `.invalid` logins
+only, nothing secret) and put the shop's placement id in `.env`:
+
+```bash
+docker compose --profile affiliate run --rm -T affiliate_migrate ./node_modules/.bin/tsx db/seed-fleet.ts --with-demo-programme > affiliate-seed.json
+sed -i "s|^AFFILIATE_WEB_PLACEMENT_ID=.*|AFFILIATE_WEB_PLACEMENT_ID=$(grep -m1 '"web_placement_id"' affiliate-seed.json | sed 's/.*: "\(.*\)".*/\1/')|" .env
+```
+
+The seed is idempotent: a second run changes nothing and prints the same ids. The
+`--with-demo-programme` rows are TEST data (`Demo Fleet Programme`, `shop.example.com`); without a
+programme there are no placements, and the seed never invents a real one.
+
+### The shop's token and its links
+
+There is no login system yet: the API trusts a signed JWT (the dev stub, `affiliate/CLAUDE.md`). The
+shop needs a read-only one, minted inside the API container from the org id in `affiliate-seed.json`,
+signed with `AFFILIATE_JWT_SECRET`, valid a year (re-mint when the secret rotates); then restart:
+
+```bash
+sed -i "s|^AFFILIATE_WEB_API_TOKEN=.*|AFFILIATE_WEB_API_TOKEN=$(docker compose --profile affiliate exec -T affiliate_api node scripts/mint-dev-token.mjs --org-id "$(grep -m1 '"org_id"' affiliate-seed.json | sed 's/.*: "\(.*\)".*/\1/')" --role publisher_analyst --sub web-shop --ttl 365d)|" .env
+docker compose --profile affiliate up -d affiliate_web
+```
+
+Without the token the shop serves clearly labelled demo data. Consumers only see links that exist, so
+mint one tracked link per live offer for the shop's placement (idempotent; re-run after every new
+offer; the owner token is minted inline and never printed):
+
+```bash
+docker compose --profile affiliate exec -T -e API_BASE=http://127.0.0.1:3000 -e API_TOKEN="$(docker compose --profile affiliate exec -T affiliate_api node scripts/mint-dev-token.mjs --org-id "$(grep -m1 '"org_id"' affiliate-seed.json | sed 's/.*: "\(.*\)".*/\1/')" --role publisher_owner --sub fleet-owner)" affiliate_api node scripts/mint-links.mjs --placement "$(grep '^AFFILIATE_WEB_PLACEMENT_ID=' .env | cut -d= -f2-)"
+```
+
+Check it is up:
+
+```bash
+curl -s "https://$(grep '^AFFILIATE_API_HOST=' .env | cut -d= -f2-)/healthz"
+curl -s "https://$(grep '^AFFILIATE_LINK_HOST=' .env | cut -d= -f2-)/healthz"
+curl -s "https://$(grep '^AFFILIATE_WEB_HOST=' .env | cut -d= -f2-)/api/healthz"
+docker compose --profile affiliate logs -f --tail=200 affiliate_api affiliate_redirect affiliate_workers affiliate_web
+```
+
+`docker compose --profile affiliate rm --stop --force affiliate_db affiliate_redis affiliate_migrate affiliate_api affiliate_redirect affiliate_workers affiliate_web`
+stops and removes only the affiliate containers (volumes kept); `docker compose down` would take the
+WordPress stack with it. The 130 unit tests need node and run on a dev machine or in CI
+(`cd affiliate && ./node_modules/.bin/vitest run`, or `make affiliate-test`), not on the server.
+
+### What is still sandbox
+
+- **Auth is a JWT stub**: `mint-dev-token.mjs` signs whatever `sub`/`org_id`/`role` it is given and the
+  API trusts it. A real identity provider is engineering work behind a human choice.
+- **The payout rail is a stub** (`stub-network`): the ledger, batches and maker-checker are real, the
+  money movement is not. No webhook signature verification, no rate limiting on `/r/`.
+- **No merchant programmes**: the only programme anywhere is the TEST one from the seed. Signed
+  insertion terms, counsel sign-off (DPDP, ASCI disclosure, image rights), the payout account and the
+  rest are human-gated rows in `affiliate/docs/action-tracker.md`; the engineering gaps are in
+  `affiliate/docs/pilot-checklist.md`.
+- **This Linode is a pilot host**: the load soak has never run; the arithmetic on the fleet's audience
+  and what it would mean for `/r/` is `affiliate/docs/capacity-plan.md`.
 
 ## Adding site 4 and 5
 

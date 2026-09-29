@@ -9,3 +9,4 @@ out/
 !.env.prod.example
 .DS_Store
 *.log
+*.tsbuildinfo

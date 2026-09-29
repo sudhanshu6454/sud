@@ -7,9 +7,107 @@ ledger; merchants own checkout.
 > Foundation scaffold (weeks 3–6 core product). No real merchant credentials,
 > no production secrets, no real money movement.
 
+## In this repository: the Marketing Fleet's affiliate site
+
+This directory is the affiliate platform of the Marketing Fleet — the five
+WordPress sites defined in `../autopub/config/sites.yaml`. The fleet is the
+platform's first publisher and its sites are the first properties; the
+mapping, exactly as `db/seed-fleet.ts` creates it (idempotent, one
+transaction):
+
+| Fleet | Platform rows |
+|---|---|
+| The fleet, owner-operated | organisation `marketing-fleet` ("Marketing Fleet"); publisher "Marketing Fleet (in-house)", `approved` / `active` — it skips the onboarding state machine because it *is* the operator ([`scripts/ASSUMPTIONS.md`](scripts/ASSUMPTIONS.md) §11) |
+| marketingmentalist.in · crazy4marketing.com · marketingjunkies.in · screenstat.in · filmybuff.com | one `web` property each (`approved`, `owner_operated` verification, canonical `https://<domain>`); with `--with-demo-programme` one placement each (`fleet-<key>-web`, channel `web_article`) and one published TEST look each ("Demo look — <site>") |
+| The shop (`AFFILIATE_WEB_HOST`) | a sixth `web` property and the placement `fleet-shop-web` (channel `shop_web`); its id is printed as `web_placement_id` and becomes `WEB_PLACEMENT_ID` |
+| Owner / finance / admin logins | `publisher_owner`, `finance_operator`, `finance_approver`, `network_admin` at `<role>@marketing-fleet.invalid` (RFC 2606) until `FLEET_OWNER_EMAIL` / `FLEET_OPERATOR_EMAIL` / `FLEET_APPROVER_EMAIL` / `FLEET_ADMIN_EMAIL` supply real addresses |
+
+Only the rows behind `--with-demo-programme` are TEST data ("Demo Merchant
+(fleet sandbox)", "Demo Fleet Programme", `shop.example.com`, one offer at
+149900 minor); **no real merchant programme exists** — those are human-gated
+in [`docs/action-tracker.md`](docs/action-tracker.md). The flag refuses
+`NODE_ENV=production`.
+
+**On the fleet server** nothing here is run directly: the platform is part of
+the fleet's generated root `docker-compose.yml` (services `affiliate_db`,
+`affiliate_redis`, `affiliate_migrate`, `affiliate_api`, `affiliate_redirect`,
+`affiliate_workers`, `affiliate_web`, all behind the `affiliate` profile),
+configured by the `AFFILIATE_*` block of the root `.env`, driven by
+`docker compose --profile affiliate …` lines (the server has no `make` and
+no node; the root Makefile's `affiliate-up | affiliate-migrate |
+affiliate-seed | affiliate-logs | affiliate-down | affiliate-test` targets
+are the same lines for a machine that has `make`). The owner's steps, with
+every id and token derived by the previous line, are in the fleet
+`README.md` ("Affiliate platform") and
+[`docs/runbooks/deploy.md`](docs/runbooks/deploy.md) §1b. The
+five images are `docker/Dockerfile.{api,redirect,workers,web,migrate}`
+([`docker/README.md`](docker/README.md): build, layout, sizes, the recorded
+smoke test).
+
+**On a dev machine**, from this directory (Node 22, pnpm 9.12.0, a Postgres
+16 reachable as `postgresql://paparazzi:changeme@127.0.0.1:5432/paparazzi`):
+
+```sh
+pnpm install --frozen-lockfile
+pnpm typecheck
+./node_modules/.bin/vitest run
+DATABASE_URL=postgresql://paparazzi:changeme@127.0.0.1:5432/paparazzi node db/migrate.mjs
+DATABASE_URL=postgresql://paparazzi:changeme@127.0.0.1:5432/paparazzi node db/migrate.mjs --status
+DATABASE_URL=postgresql://paparazzi:changeme@127.0.0.1:5432/paparazzi ./packages/api/node_modules/.bin/tsx db/seed.ts
+AFFILIATE_WEB_HOST=shop.example.com DATABASE_URL=postgresql://paparazzi:changeme@127.0.0.1:5432/paparazzi ./packages/api/node_modules/.bin/tsx db/seed-fleet.ts --with-demo-programme
+./packages/api/node_modules/.bin/tsx scripts/demo-money-loop.ts
+DATABASE_URL=postgresql://paparazzi:changeme@127.0.0.1:5432/paparazzi DEMO_TARGET=postgres ./packages/api/node_modules/.bin/tsx scripts/demo-money-loop.ts
+```
+
+(`tsx` is not at the repo root, hence the api package's copy; `pnpm demo`,
+`pnpm demo:pg`, `pnpm seed`, `pnpm seed:fleet` work once
+`packages/api/node_modules/.bin` is on `PATH`.) A database migrated before
+`schema_migrations` existed needs `node db/migrate.mjs --baseline` once —
+the plain run fails loudly on `0001` with a hint, by design
+([`db/README.md`](db/README.md)).
+
+**Environment** — the names the services read, and what the fleet compose
+maps them from:
+
+| Service env | Fleet `.env` | Meaning |
+|---|---|---|
+| `DATABASE_URL`, `REDIS_URL` | built from `AFFILIATE_DB_PASSWORD` (hex only) | Postgres / Redis of the affiliate stack |
+| `JWT_SECRET` | `AFFILIATE_JWT_SECRET` | signs API tokens (the dev stub) |
+| `STUB_WEBHOOK_SECRET` | `AFFILIATE_STUB_WEBHOOK_SECRET` | the stub connector's HMAC until a real feed lands |
+| `REDIRECT_BASE_URL` | `https://` + `AFFILIATE_LINK_HOST` | every tracked link is `<this>/r/<token>` |
+| `API_BASE` (web, server runtime) | fixed `http://affiliate_api:3000` | catalogue client and the `/api/*` proxy |
+| `WEB_API_TOKEN` (web, server-only) | `AFFILIATE_WEB_API_TOKEN` | read-only `publisher_analyst` bearer; never `NEXT_PUBLIC_`; missing → TEST demo data with a badge |
+| `WEB_PLACEMENT_ID` (web) | `AFFILIATE_WEB_PLACEMENT_ID` | the shop's placement; items carry tracked links only for it |
+| `NEXT_PUBLIC_API_BASE` (web, build arg) | fixed `/api` | browser calls go through the same-origin proxy |
+| `NEXT_PUBLIC_SITE_NAME` (web, runtime) | `AFFILIATE_SITE_NAME` | title, header, footer, manifest (a rename is a restart) |
+| `FLEET_SITES_YAML`, `AFFILIATE_WEB_HOST` (migrate) | `../autopub/config` mounted at `/app/config`; `AFFILIATE_WEB_HOST` | what `seed-fleet.ts` reads |
+| `RETENTION_*_DAYS`, `RETENTION_CRON` (workers) | `AFFILIATE_RETENTION_*` | 365-day placeholders, `0 3 * * *` |
+| `DEMO_TARGET`, `DEMO_DATABASE_URL` (dev only) | — | `postgres` runs the demo on a scratch database of the `DATABASE_URL` server |
+
+**Minting the shop's links** — consumers only see links that exist.
+`packages/api/scripts/mint-links.mjs` (shipped in the api image) mints one
+tracked link per live offer for a placement, idempotently
+(`Idempotency-Key: mint-links:<placement>:<offer_id>`; re-runs are no-ops).
+Dev machine, against the API on 3000 with the fleet seed applied:
+
+```sh
+cd packages/api && API_BASE=http://127.0.0.1:3000 API_TOKEN="$(JWT_SECRET=dev-only-change-me node scripts/mint-dev-token.mjs --org-id "$(PGPASSWORD=changeme psql -h 127.0.0.1 -U paparazzi -d paparazzi -tAc "select id from organisations where slug='marketing-fleet'")" --role publisher_owner)" node scripts/mint-links.mjs --placement "$(PGPASSWORD=changeme psql -h 127.0.0.1 -U paparazzi -d paparazzi -tAc "select id from placements where placement_key='fleet-shop-web'")" --dry-run
+```
+
+Drop `--dry-run` to mint. The token is the JWT dev stub
+(`mint-dev-token.mjs`, default TTL 8 h) until an identity provider lands;
+the fleet-server form is in the fleet `README.md`.
+
+**Real-Postgres demo** — the last line of the dev block above runs the
+51-assertion money loop on a scratch database `paparazzi_demo_<8 hex>`
+created on the `DATABASE_URL` server and dropped at exit (verified on
+PostgreSQL 16.13: 51 PASS, 0 FAIL, 0 scratch databases left). Same
+assertions as pg-mem, no shims ([`db/README.md`](db/README.md)).
+
 ## Setup
 
-Prerequisites: **Node ≥ 20**, **pnpm 9**, **Docker**.
+Prerequisites: **Node 22** (`engines` ≥ 20), **pnpm 9.12.0** (`packageManager`;
+the images build with pnpm 10.34.6 and both accept the lockfile), **Docker**.
 
 ```sh
 pnpm install                 # already run at scaffold time; re-run after pulling
@@ -84,6 +182,14 @@ Sandbox guards: the script **refuses to run with `NODE_ENV=production`**
 transaction refs, `STMT-DEMO-*` statements, RFC 2606 `example.com` domains —
 and the payout rail is a stub (see `packages/api/src/payout-rail.ts`).
 
+The same 51 assertions run on a **real Postgres** with `DEMO_TARGET=postgres`
+(`pnpm demo:pg`): the migrations are applied verbatim through
+`db/migrate.mjs` (no pg-mem shims), on a scratch database
+`paparazzi_demo_<8 hex>` created on the `DATABASE_URL` server and dropped at
+exit even when a step fails; `DEMO_DATABASE_URL` names an *empty* database to
+use as-is instead. Verified on PostgreSQL 16.13 — no assertion differs between
+the two targets ([db/README.md](db/README.md)).
+
 ## Retention purge
 
 Raw tracking payloads age out on a schedule; financial and governance records
@@ -146,7 +252,12 @@ monitoring stack, and the DPDP open questions for counsel live in
 Deployment shape: [docker-compose.prod.yml](docker-compose.prod.yml) runs
 `api`, `redirect`, `workers`, `web` plus a one-shot `migrate` service
 against **managed** Postgres/Redis supplied via environment (no Postgres or
-Redis containers in prod). First-cut Dockerfiles are in `docker/`.
+Redis containers in prod). The five images in `docker/` build and boot end
+to end ([docker/README.md](docker/README.md): build steps, runtime layout,
+sizes, the recorded smoke test from migrate to a `302` with `subid`). On the
+fleet host the same images run from the fleet's root `docker-compose.yml`
+(profile `affiliate`) with containerised Postgres 16 + Redis 7 — a pilot
+host, not the production shape ([docs/capacity-plan.md](docs/capacity-plan.md)).
 Environment contract: [.env.prod.example](.env.prod.example) — every
 `process.env` read in the codebase is documented there with a comment; the
 filled copy is never committed. Secret generation, vault-vs-env rules,
@@ -161,15 +272,18 @@ rotation cadence, and the pre-launch checklist:
 | `packages/api/` | Merchant/publisher-facing HTTP API (Fastify). See [README](packages/api/README.md) · [assumptions](packages/api/ASSUMPTIONS.md) |
 | `packages/redirect/` | Click-tracking redirect service (Fastify). See [README](packages/redirect/README.md) · [assumptions](packages/redirect/ASSUMPTIONS.md) |
 | `packages/workers/` | BullMQ workers: ingestion, attribution, ledger posting, payouts. See [README](packages/workers/README.md) · [assumptions](packages/workers/ASSUMPTIONS.md) |
-| `packages/web/` | Publisher/merchant dashboard (Next.js). See [README](packages/web/README.md) · [assumptions](packages/web/ASSUMPTIONS.md) |
-| `db/` | Postgres schema + migration runner. See [README](db/README.md) |
+| `packages/web/` | Consumer shop (live against the catalogue API), publisher portal and editorial console (Next.js 14). See [README](packages/web/README.md) · [assumptions](packages/web/ASSUMPTIONS.md) |
+| `db/` | Postgres schema, migration runner with `schema_migrations` tracking, demo seed and fleet seed. See [README](db/README.md) |
+| `docker/` | The five images (api, redirect, workers, web, migrate) and their build script. See [README](docker/README.md) · [assumptions](docker/ASSUMPTIONS.md) |
+| `docs/` | OpenAPI spec, pilot checklist, action tracker, capacity plan, threat model, runbooks, alert definitions, infrastructure recommendation |
 
 ## API reference (OpenAPI)
 
 [docs/openapi.yaml](docs/openapi.yaml) is the OpenAPI 3.1 spec for the v1 API,
 written from the real route handlers (`packages/api/src/routes/*.ts`) — every
-registered route is documented, nothing is invented. It covers link minting
-with its guard error codes (`PROGRAMME_NOT_APPROVED`, `OFFER_STALE`,
+registered route is documented, nothing is invented. It covers the catalogue
+(`GET /v1/looks`, `GET /v1/looks/{id}` with the live offer and tracked link
+per item; never a merchant URL), link minting with its guard error codes (`PROGRAMME_NOT_APPROVED`, `OFFER_STALE`,
 `PROPERTY_FORBIDDEN`, `PUBLISHER_NOT_ACTIVE`), the stub-network webhook and CSV
 uploads, suspense ops, payout batches (prepare/approve/disburse + provider
 callback), publisher earnings, disputes, programme pause/resume, publisher

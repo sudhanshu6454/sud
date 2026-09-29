@@ -28,6 +28,7 @@ type HttpMethod = 'GET' | 'POST';
 const EXPECTED_ROUTES: Array<{ method: HttpMethod; url: string }> = [
   { method: 'GET', url: '/healthz' },
   { method: 'GET', url: '/v1/looks' },
+  { method: 'GET', url: '/v1/looks/:id' },
   { method: 'GET', url: '/v1/offers' },
   { method: 'POST', url: '/v1/links' },
   { method: 'POST', url: '/v1/integrations/:connector/events' },

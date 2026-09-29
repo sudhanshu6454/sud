@@ -4,7 +4,6 @@ import { useState } from 'react';
 import Link from 'next/link';
 import DemoBadge from '../../../components/DemoBadge';
 import {
-  API_BASE,
   ApiError,
   apiFetch,
   linkErrorMessage,
@@ -59,13 +58,14 @@ export default function LinkBuilderPage() {
         method: 'POST',
         body: values satisfies CreateLinkBody,
       });
-      setResult({ url: data.url || `${API_BASE}/r/${data.token}`, demo: false });
+      // The API composes the tracked URL (REDIRECT_BASE_URL + /r/ + token); never rebuild it here.
+      setResult({ url: data.url, demo: false });
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.code === 'NETWORK_UNREACHABLE') {
-          // Demo mint: clearly labelled, NOT a tracked link.
+          // Demo mint: clearly labelled, NOT a tracked link (RFC 2606 .invalid host).
           const token = `demo-${Math.random().toString(36).slice(2, 10)}`;
-          setResult({ url: `${API_BASE}/r/${token}`, demo: true });
+          setResult({ url: `https://redirect.demo.invalid/r/${token}`, demo: true });
         } else {
           setError(linkErrorMessage(err.code));
         }

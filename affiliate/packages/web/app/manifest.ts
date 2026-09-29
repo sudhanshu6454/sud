@@ -1,9 +1,13 @@
 import type { MetadataRoute } from 'next';
+import { siteName } from '../lib/site';
+
+export const dynamic = 'force-dynamic';
 
 export default function manifest(): MetadataRoute.Manifest {
+  const name = siteName();
   return {
-    name: 'Paparazzi Commerce',
-    short_name: 'Paparazzi',
+    name,
+    short_name: name.length > 12 ? name.split(/\s+/)[0] ?? name : name,
     start_url: '/',
     display: 'standalone',
     background_color: '#ffffff',

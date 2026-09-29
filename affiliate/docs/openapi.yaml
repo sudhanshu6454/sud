@@ -235,13 +235,122 @@ components:
     # ---- domain models ----
     Look:
       type: object
-      required: [id, title, locale, category]
+      description: |
+        List item of the consumer catalogue (`GET /v1/looks`). `cover_url` is
+        `assets.public_url` of the look's `cover_asset_id` (null when there is
+        no public copy); `item_count` is the number of `look_items` rows;
+        `sponsored` drives the paid-placement disclosure label.
+      required: [id, title, locale, category, published_at, source_page, sponsored, cover_url, item_count]
       properties:
         id: { $ref: '#/components/schemas/Uuid' }
         title: { type: string }
         locale: { type: string, example: en-IN }
-        category: { type: string, example: street-style }
+        category: { type: string, example: street-style, nullable: true }
         published_at: { $ref: '#/components/schemas/DateTime', nullable: true }
+        source_page:
+          type: string
+          nullable: true
+          description: Where the look was spotted (attribution line on the page).
+          example: https://example.com/demo-street-style
+        sponsored: { type: boolean, example: false }
+        cover_url:
+          type: string
+          format: uri
+          nullable: true
+          example: https://cdn.example.com/demo-cover.jpg
+        item_count: { type: integer, minimum: 0, example: 3 }
+    LookItemProduct:
+      type: object
+      required: [id, brand, model, category]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        brand: { type: string }
+        model: { type: string }
+        category: { type: string }
+    LookItemVariant:
+      type: object
+      required: [id, size_text, colour, merchant_sku]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        size_text: { type: string, nullable: true }
+        colour: { type: string, nullable: true }
+        merchant_sku: { type: string, nullable: true }
+    LookItemOffer:
+      type: object
+      description: |
+        The live offer for the item's variant: `offers.status='active'`,
+        `fresh_until` in the future AND the offer's programme `active`. The
+        cheapest qualifying offer wins (ties by id). **Never carries
+        `offer_url`** — the consumer only gets the tracked link.
+      required: [id, programme_id, merchant, price_minor, currency, stock_status, fresh_until]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        programme_id: { $ref: '#/components/schemas/Uuid' }
+        merchant:
+          type: object
+          required: [id, name]
+          properties:
+            id: { $ref: '#/components/schemas/Uuid' }
+            name: { type: string, example: Demo Merchant }
+        price_minor: { $ref: '#/components/schemas/MinorUnits' }
+        currency: { $ref: '#/components/schemas/Currency' }
+        stock_status: { type: string, example: in_stock }
+        fresh_until: { $ref: '#/components/schemas/DateTime' }
+    LookItem:
+      type: object
+      description: One `look_items` row; items are ordered by `created_at` then `id`.
+      required: [id, match_type, evidence, product, variant, offer, link]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        match_type: { type: string, enum: [exact, similar], nullable: true }
+        evidence: { type: string, nullable: true }
+        product: { $ref: '#/components/schemas/LookItemProduct' }
+        variant: { $ref: '#/components/schemas/LookItemVariant' }
+        offer:
+          oneOf:
+            - $ref: '#/components/schemas/LookItemOffer'
+            - type: 'null'
+          description: Null when the variant has no live offer.
+        link:
+          oneOf:
+            - $ref: '#/components/schemas/Link'
+            - type: 'null'
+          description: |
+            Present only when `placement_id` was given AND an active `links`
+            row exists for (placement, offer). `url` is composed exactly as
+            `POST /v1/links` composes it (`REDIRECT_BASE_URL + '/r/' + token`).
+    LookDetail:
+      type: object
+      description: |
+        `GET /v1/looks/{id}` payload. `status` is always `published` for
+        consumer roles (any other status is a 404 for them); `editor` and
+        `network_admin` may see every status.
+      required: [id, title, locale, category, status, published_at, source_page, sponsored, cover_url, items, placement]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        title: { type: string }
+        locale: { type: string, example: en-IN }
+        category: { type: string, example: street-style, nullable: true }
+        status:
+          type: string
+          enum: [draft, in_review, ready, published, paused, withdrawn]
+        published_at: { $ref: '#/components/schemas/DateTime', nullable: true }
+        source_page: { type: string, nullable: true }
+        sponsored: { type: boolean }
+        cover_url: { type: string, format: uri, nullable: true }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/LookItem' }
+        placement:
+          description: Echo of the `placement_id` query parameter's row, or null when it was omitted.
+          oneOf:
+            - type: object
+              required: [id, property_id, campaign_id]
+              properties:
+                id: { $ref: '#/components/schemas/Uuid' }
+                property_id: { $ref: '#/components/schemas/Uuid' }
+                campaign_id: { $ref: '#/components/schemas/Uuid' }
+            - type: 'null'
     Offer:
       type: object
       required: [id, variant_id, programme_id, merchant_id, price_minor, currency, stock_status, offer_url]
@@ -519,6 +628,85 @@ paths:
                           total: { type: integer, example: 132 }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /v1/looks/{id}:
+    get:
+      tags: [Catalog]
+      summary: Get one look with items, live offers and tracked links
+      description: |
+        Consumer-shop detail view. Any authenticated role.
+
+        Visibility (every refusal is `404 NOT_FOUND`, never 403 — a consumer
+        must not learn that a draft exists):
+        - the look is not in the caller's organisation → 404
+        - the look is not `published` and the caller's role is not `editor`
+          or `network_admin` → 404
+        - `placement_id` is given but not in the caller's organisation → 404
+
+        Per item, `offer` is the live offer for the variant (active, fresh,
+        programme active; cheapest wins) or null. `link` is returned only when
+        `placement_id` is given and an active `links` row exists for that
+        (placement, offer); it is the tracked redirect URL. The raw merchant
+        `offer_url` is never returned by this endpoint.
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+        - name: placement_id
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/Uuid' }
+          description: "Placement to resolve tracked links for. Omitted → `link: null` on every item and `placement: null`."
+      responses:
+        '200':
+          description: The look.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { $ref: '#/components/schemas/LookDetail' }
+              examples:
+                withPlacement:
+                  value:
+                    data:
+                      id: 55555555-5555-4555-8555-555555555555
+                      title: Demo street-style look
+                      locale: en-IN
+                      category: street-style
+                      status: published
+                      published_at: '2026-09-29T00:00:00.000Z'
+                      source_page: https://example.com/demo-street-style
+                      sponsored: false
+                      cover_url: https://cdn.example.com/demo-cover.jpg
+                      items:
+                        - id: 66666666-6666-4666-8666-666666666666
+                          match_type: exact
+                          evidence: Demo evidence note
+                          product: { id: 77777777-7777-4777-8777-777777777777, brand: Demo Brand, model: Demo Model, category: kurta }
+                          variant: { id: 22222222-2222-4222-8222-222222222222, size_text: M, colour: red, merchant_sku: DEMO-SKU-1 }
+                          offer:
+                            id: 11111111-1111-4111-8111-111111111111
+                            programme_id: 33333333-3333-4333-8333-333333333333
+                            merchant: { id: 44444444-4444-4444-8444-444444444444, name: Demo Merchant }
+                            price_minor: 49900
+                            currency: INR
+                            stock_status: in_stock
+                            fresh_until: '2026-10-29T00:00:00.000Z'
+                          link:
+                            token: 9f2c1ab4e5d64f7a8b9c0d1e2f3a4b5c
+                            url: http://localhost:3001/r/9f2c1ab4e5d64f7a8b9c0d1e2f3a4b5c
+                      placement:
+                        id: 88888888-8888-4888-8888-888888888888
+                        property_id: 99999999-9999-4999-8999-999999999999
+                        campaign_id: 12121212-1212-4121-8121-121212121212
+                    request_id: 0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
 
   /v1/offers:
     get:

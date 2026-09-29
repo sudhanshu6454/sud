@@ -65,6 +65,92 @@ environment (`set -a; source /run/secrets/paparazzi.env; set +a`).
    (`provider-events`, `click-events`, `reconciliation`) are draining and
    no `LEDGER_IMBALANCE` 409s appear at payout prepare.
 
+## 1b. Fleet host deploy path (root `docker-compose.yml`, profile `affiliate`)
+
+Added 2026-09-29. On the Marketing Fleet's Linode the platform is **not**
+deployed with `docker-compose.prod.yml` but with the fleet's generated root
+compose file (`infra/gen_compose.py` → `docker-compose.yml`, never
+hand-edited): services `affiliate_db` (postgres:16-alpine), `affiliate_redis`
+(redis:7-alpine, `--appendonly yes`), `affiliate_migrate` (one-shot),
+`affiliate_api`, `affiliate_redirect`, `affiliate_workers`, `affiliate_web`,
+all behind the `affiliate` profile, on the fleet's `internal` network with
+the three public services also on `web` behind nginx-proxy + Let's Encrypt.
+Postgres and Redis are containers with named volumes (`affiliate_db_data`,
+`affiliate_redis_data`) on the same 4 GB host as the five WordPress sites —
+a **pilot host**, not the shape in § 1 (`docs/capacity-plan.md` § 6). The
+images are the same five Dockerfiles; the env names are the same, mapped
+from the `AFFILIATE_*` block of the root `.env` (see the root
+`.env.example`). All commands run on the server in `/opt/marketing-fleet`.
+
+Preconditions, in addition to § 0: `COMPOSE_PROFILES=affiliate`; the three
+hosts `AFFILIATE_WEB_HOST`, `AFFILIATE_LINK_HOST`, `AFFILIATE_API_HOST` set
+and resolving to the server; `AFFILIATE_DB_PASSWORD` (hex only — it is
+spliced into `DATABASE_URL`), `AFFILIATE_JWT_SECRET`,
+`AFFILIATE_STUB_WEBHOOK_SECRET` (`openssl rand -hex 32` each). The exact
+`sed` lines are in the fleet `README.md` ("Affiliate platform").
+
+1. **Pull the release** the way the fleet is rebuilt (the rebuild line in
+   the root `CLAUDE.md`), then build + start (the server has no `make`; the
+   `make affiliate-*` targets are these same lines where `make` exists):
+   ```sh
+   docker compose --profile affiliate up -d --build affiliate_db affiliate_redis affiliate_migrate affiliate_api affiliate_redirect affiliate_workers affiliate_web
+   ```
+   This builds the five images from `affiliate/docker/Dockerfile.*`, starts
+   `affiliate_db` and `affiliate_redis`, runs `affiliate_migrate`
+   (`node db/migrate.mjs`), and only then starts api, redirect and workers
+   (`depends_on: affiliate_migrate: service_completed_successfully`,
+   `affiliate_redis: service_healthy`) and the web. A fresh database applies
+   `0001`–`0005` and records them in `schema_migrations`; every later
+   release applies pending files only, and
+   `docker compose --profile affiliate run --rm affiliate_migrate node db/migrate.mjs`
+   is the same step on demand (a no-op when nothing is pending). If
+   `affiliate_migrate` fails, **nothing else starts** — see § 2.
+2. **Baseline, once, only for a database migrated before tracking existed**
+   (not the case for a database `make affiliate-up` created): a plain run
+   fails on `0001` with `relation "organisations" already exists` and a hint
+   naming `--baseline`. If the schema really is current:
+   ```sh
+   docker compose --profile affiliate run --rm affiliate_migrate node db/migrate.mjs --baseline
+   ```
+   Baseline records the present files without running them and verifies
+   nothing; never use it on a database that is not at the latest file.
+3. **Seed (first deploy only).**
+   ```sh
+   docker compose --profile affiliate run --rm -T affiliate_migrate ./node_modules/.bin/tsx db/seed-fleet.ts --with-demo-programme > affiliate-seed.json
+   ```
+   Idempotent; the JSON holds the ids the next lines need —
+   `web_placement_id` for `AFFILIATE_WEB_PLACEMENT_ID`, `org_id` for the
+   token. The `sed` lines that write them into `.env`, the
+   `AFFILIATE_WEB_API_TOKEN` mint (`scripts/mint-dev-token.mjs` inside
+   `affiliate_api`, the JWT stub, `--ttl 365d`) and the web restart
+   (`docker compose --profile affiliate up -d affiliate_web`) are in the
+   fleet `README.md` ("Affiliate platform"). The `--with-demo-programme`
+   rows are TEST data; the migrate image deliberately sets no `NODE_ENV`,
+   so the flag runs there.
+4. **Verify health** (each line prints `{"ok":true}`):
+   ```sh
+   curl -s "https://$(grep '^AFFILIATE_API_HOST=' .env | cut -d= -f2-)/healthz"
+   curl -s "https://$(grep '^AFFILIATE_LINK_HOST=' .env | cut -d= -f2-)/healthz"
+   curl -s "https://$(grep '^AFFILIATE_WEB_HOST=' .env | cut -d= -f2-)/api/healthz"
+   docker compose --profile affiliate ps
+   ```
+5. **Money-path smoke.** Mint the shop's links (`scripts/mint-links.mjs`
+   inside `affiliate_api`; the fleet `README.md` has the single line), open a
+   look on the shop and follow its "View at merchant" link: expect `302`
+   with `subid=` to the programme's allow-listed host and a `click.observed`
+   line in
+   `docker compose --profile affiliate logs -f --tail=200 affiliate_api affiliate_redirect affiliate_workers affiliate_web`.
+   Then run the kill-switch drill (§ 4) on the TEST programme.
+6. **Rollback (code-only release).** Check out the previous commit and run
+   the step-1 line again; the migration record is unchanged, so the migrate
+   step is a no-op. A release that applied a migration follows § 2
+   (forward compensating migration, or restore `affiliate_db_data` from the
+   host's backup).
+   `docker compose --profile affiliate rm --stop --force affiliate_db affiliate_redis affiliate_migrate affiliate_api affiliate_redirect affiliate_workers affiliate_web`
+   stops and removes only the affiliate containers and keeps the volumes;
+   never `docker compose down` for this — it takes the WordPress stack with
+   it.
+
 ## 2. Migration rollback policy
 
 **Migrations in this repo are append-only and forward-only — there are no

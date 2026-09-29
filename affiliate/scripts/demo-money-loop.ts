@@ -13,11 +13,23 @@ if (process.env.NODE_ENV === 'production') {
 /**
  * End-to-end money-loop demo (in-process sandbox).
  *
+ * Two targets, same assertions:
  *
- * Boots a pg-mem Postgres, applies db/migrations/*.sql in lexical order
- * (with the pg-mem shims in transformForPgMem), swaps the API's pool via the
- * `__setPool` test seam, and serves the API + redirect apps over real HTTP
- * on 127.0.0.1 ephemeral ports. Then it walks the full money loop:
+ *  - default (`pnpm demo`): boots a pg-mem Postgres and applies
+ *    db/migrations/*.sql in lexical order with the pg-mem shims in
+ *    transformForPgMem. No external services.
+ *  - `DEMO_TARGET=postgres` (`pnpm demo:pg`): a real Postgres. With
+ *    DATABASE_URL set, creates a scratch database `paparazzi_demo_<8 hex>` on
+ *    that server (via the `postgres` maintenance database, same credentials),
+ *    applies the migrations verbatim through db/migrate.mjs's runMigrations,
+ *    runs every step, and drops the scratch database at the end even on
+ *    failure (it refuses to drop any name not starting with `paparazzi_demo_`).
+ *    With DEMO_DATABASE_URL set, uses that database as-is: nothing is created
+ *    or dropped, so it must be empty (migrations are applied into it).
+ *
+ * Either way the API's pool is swapped via the `__setPool` test seam and the
+ * API + redirect apps are served over real HTTP on 127.0.0.1 ephemeral ports.
+ * Then it walks the full money loop:
  *
  *    link → click → conversion (INR 160 commission) → ledger 112/48
  *      → webhook dedupe → 50% reversal → 56/24 → merchant settlement
@@ -63,6 +75,24 @@ if (process.env.NODE_ENV === 'production') {
  *    occurred_at, last_status_query_at, …): pg-mem cannot cast timestamptz →
  *    text, but `new Date()` parses its bare value identically.
  */
+// Demo target: 'pgmem' (default) or 'postgres'. Captured before the env
+// defaults below so the postgres path can tell a real DATABASE_URL from the
+// pg-mem placeholder.
+const DEMO_TARGET = (process.env.DEMO_TARGET ?? 'pgmem').toLowerCase();
+const USER_DATABASE_URL = process.env.DATABASE_URL;
+const DEMO_DATABASE_URL = process.env.DEMO_DATABASE_URL;
+if (DEMO_TARGET !== 'pgmem' && DEMO_TARGET !== 'postgres') {
+  console.error(`demo: DEMO_TARGET must be 'pgmem' (default) or 'postgres' (got '${DEMO_TARGET}')`);
+  process.exit(1);
+}
+if (DEMO_TARGET === 'postgres' && !USER_DATABASE_URL && !DEMO_DATABASE_URL) {
+  console.error(
+    'demo: DEMO_TARGET=postgres needs DATABASE_URL (a scratch database is created on that server) ' +
+      'or DEMO_DATABASE_URL (an existing EMPTY database, used as-is).',
+  );
+  process.exit(1);
+}
+
 process.env.JWT_SECRET ??= 'demo-secret';
 process.env.DATABASE_URL ??= 'dummy-not-used';
 // The app entrypoints run unguarded main() on import; keep any stray
@@ -70,7 +100,7 @@ process.env.DATABASE_URL ??= 'dummy-not-used';
 process.env.API_PORT ??= '0';
 process.env.REDIRECT_PORT ??= '0';
 
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -97,6 +127,17 @@ type Queryable = {
 type AppLike = {
   listen(opts: { port: number; host: string }): Promise<string>;
   close(): Promise<void>;
+};
+
+type DemoPool = Queryable & { end(): Promise<void> };
+
+/** What a boot path hands back: the pool to inject, and how to tear it down. */
+type Booted = {
+  pool: DemoPool;
+  /** Human-readable target (no credentials). */
+  label: string;
+  /** Ends the pool and (postgres) drops the scratch database. Must run even on failure. */
+  teardown(): Promise<void>;
 };
 
 interface SeedIds {
@@ -232,20 +273,11 @@ function transformForPgMem(filename: string, sql: string): string {
   return sql;
 }
 
-async function main(): Promise<void> {
-  const missing = await checkContracts();
-  if (missing.length > 0) {
-    console.log('DEMO BLOCKED — the following contract pieces are missing:');
-    for (const m of missing) console.log(`  - ${m}`);
-    console.log(
-      'The demo builds against these contracts and does not reimplement the API;',
-    );
-    console.log('see the workstream report for the full gap list.');
-    process.exitCode = 1;
-    return;
-  }
-
-  // -- boot: pg-mem + migrations ------------------------------------------------
+/**
+ * Default target: in-process pg-mem with the shims in transformForPgMem and
+ * the demo-side `::text` query shim. No external services.
+ */
+async function bootPgMem(): Promise<Booted> {
   const db = newDb();
   // impure: true — pg-mem memoises pure functions; uuids must be fresh per call.
   db.public.registerFunction({
@@ -264,7 +296,7 @@ async function main(): Promise<void> {
   }
 
   const { Pool } = db.adapters.createPg();
-  const rawPool = new Pool() as unknown as Queryable & { end(): Promise<void> };
+  const rawPool = new Pool() as unknown as DemoPool;
   // pg-mem query shim (demo-side only): pg-mem cannot cast timestamptz →
   // text, but several service queries select `<ts_col>::text` (redirect's
   // fresh_until, finance's occurred_at, payout-rail's last_status_query_at).
@@ -288,7 +320,159 @@ async function main(): Promise<void> {
       const v = Reflect.get(target, prop, receiver);
       return typeof v === 'function' ? (v as (...a: unknown[]) => unknown).bind(target) : v;
     },
-  }) as unknown as Queryable & { end(): Promise<void> };
+  }) as unknown as DemoPool;
+
+  return {
+    pool,
+    label: 'pg-mem (in-process)',
+    teardown: async () => {
+      await pool.end().catch(() => undefined);
+    },
+  };
+}
+
+const SCRATCH_DB_PREFIX = 'paparazzi_demo_';
+
+/** Host + database of a connection URL, for logs — never the credentials. */
+function describeDbUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    return `${u.pathname.replace(/^\//, '')} on ${u.hostname}${u.port ? `:${u.port}` : ''}`;
+  } catch {
+    return '<unparseable DATABASE_URL>';
+  }
+}
+
+/**
+ * DEMO_TARGET=postgres: the SAME migrations (verbatim, via db/migrate.mjs)
+ * and the SAME steps against a real Postgres.
+ *
+ *  - DATABASE_URL set (and no DEMO_DATABASE_URL): a scratch database
+ *    `paparazzi_demo_<8 hex>` is created on that server through the
+ *    `postgres` maintenance database with the same credentials, and dropped
+ *    in teardown (also when a step or the migration fails). Only names with
+ *    the `paparazzi_demo_` prefix are ever dropped.
+ *  - DEMO_DATABASE_URL set: that database is used as-is (must be empty);
+ *    nothing is created or dropped.
+ *
+ * No query shim on this path: `::text` on timestamptz and `unique nulls not
+ * distinct` are native here, and 0002's ledger_entries ALTERs run for real.
+ */
+async function bootPostgres(): Promise<Booted> {
+  const pg = requireApi('pg') as {
+    Pool: new (opts: { connectionString: string; max?: number }) => DemoPool;
+    Client: new (opts: { connectionString: string }) => {
+      connect(): Promise<void>;
+      query(sql: string, params?: unknown[]): Promise<{ rows: Array<Record<string, unknown>> }>;
+      end(): Promise<void>;
+    };
+  };
+  const { runMigrations } = (await import('../db/migrate.mjs')) as {
+    runMigrations(
+      databaseUrl: string,
+      opts?: { mode?: 'apply' | 'baseline' | 'status'; log?: (line: string) => void },
+    ): Promise<{ applied: string[]; skipped: string[] }>;
+  };
+
+  async function withAdmin<T>(adminUrl: string, fn: (q: (sql: string) => Promise<unknown>) => Promise<T>): Promise<T> {
+    const client = new pg.Client({ connectionString: adminUrl });
+    await client.connect();
+    try {
+      return await fn((sql) => client.query(sql));
+    } finally {
+      await client.end().catch(() => undefined);
+    }
+  }
+
+  let scratchUrl: string;
+  let created: { name: string; adminUrl: string } | null = null;
+
+  if (DEMO_DATABASE_URL) {
+    scratchUrl = DEMO_DATABASE_URL;
+  } else {
+    const base = new URL(USER_DATABASE_URL as string);
+    const name = `${SCRATCH_DB_PREFIX}${randomBytes(4).toString('hex')}`;
+    const admin = new URL(base.toString());
+    admin.pathname = '/postgres';
+    // Identifier is [a-z0-9_] by construction; quoted anyway.
+    await withAdmin(admin.toString(), (q) => q(`create database "${name}"`));
+    const scratch = new URL(base.toString());
+    scratch.pathname = `/${name}`;
+    scratchUrl = scratch.toString();
+    created = { name, adminUrl: admin.toString() };
+    console.log(`  created scratch database ${describeDbUrl(scratchUrl)}`);
+  }
+
+  const dropScratch = async (): Promise<void> => {
+    if (!created) return;
+    if (!created.name.startsWith(SCRATCH_DB_PREFIX)) {
+      throw new Error(`demo: refusing to drop '${created.name}' (not a ${SCRATCH_DB_PREFIX}* database)`);
+    }
+    const ident = `"${created.name}"`;
+    await withAdmin(created.adminUrl, async (q) => {
+      try {
+        // Postgres 13+: terminate any straggling session (e.g. the api's
+        // default pool) so the drop cannot fail on "being accessed by other users".
+        await q(`drop database if exists ${ident} with (force)`);
+      } catch {
+        await q(`drop database if exists ${ident}`);
+      }
+    });
+    console.log(`  dropped scratch database ${created.name}`);
+    created = null;
+  };
+
+  // The api module builds its default pool from DATABASE_URL at import time;
+  // point it at the scratch database so nothing in-process can ever touch
+  // the caller's real database, even before __setPool swaps the pool.
+  process.env.DATABASE_URL = scratchUrl;
+
+  let pool: DemoPool | null = null;
+  try {
+    const r = await runMigrations(scratchUrl, { log: (line) => console.log(`  ${line}`) });
+    if (r.skipped.length > 0) {
+      throw new Error(
+        `demo: ${describeDbUrl(scratchUrl)} already had ${r.skipped.length} migration(s) recorded — ` +
+          'the demo needs an empty database (it seeds and asserts absolute row counts).',
+      );
+    }
+    pool = new pg.Pool({ connectionString: scratchUrl, max: 10 });
+    // Fail fast with a clear message if the scratch database is unreachable.
+    await pool.query('select 1');
+  } catch (err) {
+    await pool?.end().catch(() => undefined);
+    await dropScratch();
+    throw err;
+  }
+
+  const livePool = pool;
+  return {
+    pool: livePool,
+    label: `postgres: ${describeDbUrl(scratchUrl)}${created ? ' (scratch, dropped at exit)' : ' (DEMO_DATABASE_URL, kept)'}`,
+    teardown: async () => {
+      await livePool.end().catch(() => undefined);
+      await dropScratch();
+    },
+  };
+}
+
+async function main(): Promise<void> {
+  const missing = await checkContracts();
+  if (missing.length > 0) {
+    console.log('DEMO BLOCKED — the following contract pieces are missing:');
+    for (const m of missing) console.log(`  - ${m}`);
+    console.log(
+      'The demo builds against these contracts and does not reimplement the API;',
+    );
+    console.log('see the workstream report for the full gap list.');
+    process.exitCode = 1;
+    return;
+  }
+
+  // -- boot: pg-mem (default) or a real Postgres scratch database ----------------
+  const booted = DEMO_TARGET === 'postgres' ? await bootPostgres() : await bootPgMem();
+  const { pool } = booted;
+  console.log(`  target: ${booted.label}`);
 
   // Dynamic imports: env above must be set before these modules initialise.
   const { __setPool } = (await import('../packages/api/src/db.js')) as {
@@ -314,7 +498,10 @@ async function main(): Promise<void> {
   } finally {
     await api.close().catch(() => undefined);
     await redirectApp.close().catch(() => undefined);
-    await pool.end().catch(() => undefined);
+    // Ends the pool; on the postgres target also drops the scratch database.
+    // A teardown failure must be visible (a leaked scratch DB is a bug), so
+    // it is not swallowed — but it runs after the apps are closed.
+    await booted.teardown();
   }
 
   printSummary(payoutCompleted);

@@ -1,25 +1,49 @@
-# First-cut production image for @paparazzi/api.
-# Builds the whole pnpm workspace, compiles the api package, and runs it.
-# Validate on the provisioned host before launch: docker build -f docker/Dockerfile.api .
-FROM node:20-alpine AS build
-RUN corepack enable && corepack prepare pnpm@9 --activate
+# Production image for @paparazzi/api — Fastify v1 API (port 3000).
+# Build from the repo root (the context is the workspace, trimmed by .dockerignore):
+#   docker build -f docker/Dockerfile.api -t paparazzi/api:latest .
+# See docker/README.md for the layout, the pnpm/shared decisions and the smoke test.
+ARG NODE_IMAGE=node:22-alpine
+ARG PNPM_VERSION=10.34.6
+
+# ── base: pnpm via corepack + workspace manifests (shared by build and prod-deps) ──
+FROM ${NODE_IMAGE} AS base
+ARG PNPM_VERSION
+# COREPACK_ENABLE_PROJECT_SPEC=0: use exactly PNPM_VERSION even though package.json
+# pins a packageManager; both accept the checked-in lockfile (see docker/README.md).
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0 COREPACK_ENABLE_PROJECT_SPEC=0 CI=true
+RUN corepack enable && corepack prepare "pnpm@${PNPM_VERSION}" --activate
 WORKDIR /app
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
-COPY packages/api/package.json packages/api/
 COPY packages/shared/package.json packages/shared/
-RUN pnpm install --frozen-lockfile
+COPY packages/api/package.json packages/api/
+
+# ── build: full install for api (+ shared), type-check, emit dist/ ──
+FROM base AS build
+RUN pnpm install --frozen-lockfile --filter "@paparazzi/api..."
 COPY tsconfig.base.json ./
+COPY docker/tsconfig.shared.json docker/build-service.sh docker/
 COPY packages/shared packages/shared
 COPY packages/api packages/api
-RUN pnpm --filter @paparazzi/api typecheck && \
-    pnpm --filter @paparazzi/api exec tsc -p tsconfig.json
+RUN sh docker/build-service.sh api
 
-FROM node:20-alpine AS runtime
+# ── prod-deps: the same lockfile, production dependencies only ──
+FROM base AS prod-deps
+RUN pnpm install --frozen-lockfile --prod --filter "@paparazzi/api..."
+
+# ── runtime: repo layout preserved so pnpm's relative symlinks stay valid ──
+FROM ${NODE_IMAGE} AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
-COPY --from=build /app/packages/api/dist ./dist
-COPY --from=build /app/packages/api/package.json ./
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/packages/api/node_modules ./node_modules_api
+COPY --from=prod-deps --chown=node:node /app/node_modules ./node_modules
+COPY --from=prod-deps --chown=node:node /app/packages/api/node_modules ./packages/api/node_modules
+COPY --from=build --chown=node:node /app/packages/shared/package.json ./packages/shared/package.json
+COPY --from=build --chown=node:node /app/packages/shared/dist ./packages/shared/dist
+COPY --from=build --chown=node:node /app/packages/api/package.json ./packages/api/package.json
+COPY --from=build --chown=node:node /app/packages/api/dist ./packages/api/dist
+# Operator scripts (mint-dev-token.mjs, mint-links.mjs) ship with the image:
+#   docker run --rm -e JWT_SECRET=... paparazzi/api node scripts/mint-dev-token.mjs --org-id <org> --role publisher_analyst
+COPY --from=build --chown=node:node /app/packages/api/scripts ./packages/api/scripts
+USER node
+WORKDIR /app/packages/api
 EXPOSE 3000
 CMD ["node", "dist/index.js"]

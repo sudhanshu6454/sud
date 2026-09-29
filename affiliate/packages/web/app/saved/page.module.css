@@ -79,3 +79,15 @@
   padding: 0.35rem 0.8rem;
   cursor: pointer;
 }
+
+.note {
+  font-size: 0.85rem;
+  color: #666;
+  margin-bottom: 0.75rem;
+}
+
+.lookRef {
+  font-size: 0.82rem;
+  color: #666;
+  margin-bottom: 0.5rem;
+}

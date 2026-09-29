@@ -1,0 +1,10 @@
+{
+  "name": "paparazzi-migrate-image",
+  "private": true,
+  "description": "Dependency manifest for docker/Dockerfile.migrate only. Versions are pinned to the ones resolved in the workspace pnpm-lock.yaml (pg, yaml, tsx) so db/migrate.mjs, db/seed.ts and db/seed-fleet.ts run inside the image exactly as in the repo.",
+  "dependencies": {
+    "pg": "8.23.0",
+    "tsx": "4.23.15",
+    "yaml": "2.9.1"
+  }
+}

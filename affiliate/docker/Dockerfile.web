@@ -1,21 +1,36 @@
-# First-cut production image for @paparazzi/web (Next.js standalone).
-# NEXT_PUBLIC_API_BASE is baked at build time via build arg.
-FROM node:20-alpine AS build
-RUN corepack enable && corepack prepare pnpm@9 --activate
+# Production image for @paparazzi/web — Next.js 14 standalone (consumer shop,
+# publisher portal, editorial console; port 3000).
+# Build from the repo root:
+#   docker build -f docker/Dockerfile.web --build-arg NEXT_PUBLIC_API_BASE=/api -t paparazzi/web:latest .
+# Runtime env (read per request, never baked): API_BASE, WEB_API_TOKEN,
+# WEB_PLACEMENT_ID, NEXT_PUBLIC_SITE_NAME — see packages/web/README.md and docker/README.md.
+ARG NODE_IMAGE=node:22-alpine
+ARG PNPM_VERSION=10.34.6
+
+# ── build: install web deps, next build (type-checks too) ──
+FROM ${NODE_IMAGE} AS build
+ARG PNPM_VERSION
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0 COREPACK_ENABLE_PROJECT_SPEC=0 CI=true NEXT_TELEMETRY_DISABLED=1
+RUN corepack enable && corepack prepare "pnpm@${PNPM_VERSION}" --activate
 WORKDIR /app
-ARG NEXT_PUBLIC_API_BASE
-ENV NEXT_PUBLIC_API_BASE=$NEXT_PUBLIC_API_BASE
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY packages/web/package.json packages/web/
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --filter "@paparazzi/web..."
+COPY tsconfig.base.json ./
 COPY packages/web packages/web
+# Browser-side API base, inlined by Next at build time. "/api" is the same-origin
+# proxy (app/api/[...path]/route.ts) that forwards to API_BASE at request time.
+ARG NEXT_PUBLIC_API_BASE=/api
+ENV NEXT_PUBLIC_API_BASE=${NEXT_PUBLIC_API_BASE}
 RUN pnpm --filter @paparazzi/web build
 
-FROM node:20-alpine AS runtime
-ENV NODE_ENV=production
+# ── runtime: the standalone bundle traced from the monorepo root ──
+FROM ${NODE_IMAGE} AS runtime
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 HOSTNAME=0.0.0.0 PORT=3000
 WORKDIR /app
-COPY --from=build /app/packages/web/.next/standalone ./
-COPY --from=build /app/packages/web/.next/static ./packages/web/.next/static
-COPY --from=build /app/packages/web/public ./packages/web/public
+COPY --from=build --chown=node:node /app/packages/web/.next/standalone ./
+COPY --from=build --chown=node:node /app/packages/web/.next/static ./packages/web/.next/static
+COPY --from=build --chown=node:node /app/packages/web/public ./packages/web/public
+USER node
 EXPOSE 3000
 CMD ["node", "packages/web/server.js"]

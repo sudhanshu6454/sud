@@ -1,0 +1,31 @@
+# Keeps the build context small and free of local state. Every docker/Dockerfile.*
+# uses the repo root as its context.
+.git
+node_modules
+**/node_modules
+.next
+**/.next
+dist
+**/dist
+out
+**/out
+**/tsconfig.tsbuildinfo
+*.log
+**/*.log
+.DS_Store
+
+# Local env files: only the committed examples may enter an image.
+.env
+.env.*
+!.env.example
+!.env.prod.example
+
+# Tests are not shipped and would drag vitest into the web build's type check.
+packages/*/test
+**/*.test.ts
+
+# Not needed inside any image.
+docs
+scripts
+docker-compose.yml
+docker-compose.prod.yml

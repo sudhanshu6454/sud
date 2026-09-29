@@ -7,6 +7,7 @@ import { authed, requireAuth, requireRole } from '../middleware.js';
 import { idempotencyCheck } from '../idempotency.js';
 import { redis } from '../redis.js';
 import { ok, parseOr400 } from './_helpers.js';
+import { redirectLinkUrl } from '../redirect-url.js';
 
 const CreateLinkBody = z.object({
   property_id: z.string().uuid(),
@@ -204,8 +205,9 @@ export async function linksRoutes(app: FastifyInstance): Promise<void> {
         [randomUUID(), envelope.event_type, JSON.stringify(envelope), envelope.payload_hash],
       );
 
-      const baseUrl = (process.env.REDIRECT_BASE_URL ?? 'http://localhost:3001').replace(/\/$/, '');
-      return reply.code(201).send(ok(req, { token, url: `${baseUrl}/r/${token}` }));
+      // URL composition is shared with GET /v1/looks/:id (src/redirect-url.ts)
+      // so the consumer shop reads back exactly the URL minted here.
+      return reply.code(201).send(ok(req, { token, url: redirectLinkUrl(token) }));
     },
   );
 }

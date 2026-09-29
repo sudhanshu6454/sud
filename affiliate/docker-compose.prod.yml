@@ -6,13 +6,28 @@
 # environment (populated from the Secure Vault at deploy time; see
 # .env.prod.example and docs/credential-setup.md).
 #
-# First-cut Dockerfiles live in ./docker/. They are intentionally simple;
-# validate the image builds on the provisioned host before launch.
+# Images are built from ./docker/Dockerfile.* (node:22-alpine, pnpm via corepack,
+# non-root `node` user); docker/README.md documents the layout and the smoke test
+# every image passed. The fleet host uses the root docker-compose.yml (profile
+# `affiliate`) instead of this file; both consume the same images and env names.
 #
-# Bring-up:
+# Bring-up (migrate runs first; api, redirect and workers wait for it to succeed):
 #   set -a; source /run/secrets/paparazzi.env; set +a   # or your vault's inject step
 #   docker compose -f docker-compose.prod.yml up -d --build
-#   node db/migrate.mjs   # run once against DATABASE_URL before first boot
+#
+# One-time seeds (all rows TEST-labelled; see db/README.md):
+#   docker compose -f docker-compose.prod.yml run --rm migrate ./node_modules/.bin/tsx db/seed-fleet.ts
+#   docker compose -f docker-compose.prod.yml run --rm migrate ./node_modules/.bin/tsx db/seed-fleet.ts --with-demo-programme
+#   (--with-demo-programme also creates the shop placement reported as web_placement_id → WEB_PLACEMENT_ID;
+#    it refuses to run with NODE_ENV=production, by design)
+#   docker compose -f docker-compose.prod.yml run --rm migrate ./node_modules/.bin/tsx db/seed.ts
+#
+# A database migrated before schema_migrations tracking existed needs, once:
+#   docker compose -f docker-compose.prod.yml run --rm migrate node db/migrate.mjs --baseline
+#
+# The web's bearer (WEB_API_TOKEN) is minted from the api image until the IdP
+# lands, and the shop placement's tracked links with the sibling script — see
+# docker/README.md ("Operator scripts") for the exact single-line commands.
 
 services:
   api:
@@ -27,7 +42,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
       REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
-      REDIRECT_BASE_URL: ${REDIRECT_BASE_URL}
+      REDIRECT_BASE_URL: ${REDIRECT_BASE_URL:?REDIRECT_BASE_URL is required (public https origin of the redirect service; links are REDIRECT_BASE_URL/r/<token>)}
       LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
       - "3000:3000"
@@ -101,19 +116,37 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # Consumer shop + publisher portal + editorial console (Next.js standalone).
+  # The browser talks to /api/* on the web origin; the web server proxies that
+  # to API_BASE at request time and calls the API itself with WEB_API_TOKEN
+  # (server-side only, never sent to the browser).
   web:
     build:
       context: .
       dockerfile: docker/Dockerfile.web
       args:
-        NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE}
+        # Baked into the browser bundle. "/api" = the same-origin proxy (default);
+        # an absolute https URL makes the browser call the API directly instead.
+        NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-/api}
     image: paparazzi/web:${IMAGE_TAG:-latest}
     environment:
       NODE_ENV: production
-      NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE}
+      API_BASE: ${API_BASE:-http://api:3000}
+      WEB_API_TOKEN: ${WEB_API_TOKEN:?WEB_API_TOKEN is required (read-only bearer for the shop; without it the shop renders TEST demo data)}
+      WEB_PLACEMENT_ID: ${WEB_PLACEMENT_ID:?WEB_PLACEMENT_ID is required (web_placement_id from seed-fleet; without it no item carries a tracked link)}
+      NEXT_PUBLIC_SITE_NAME: ${NEXT_PUBLIC_SITE_NAME:-Paparazzi Commerce}
       LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
       - "3002:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     restart: unless-stopped
     logging:
       driver: json-file
@@ -121,8 +154,11 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # One-shot migration runner. Runs `node db/migrate.mjs` against
-  # DATABASE_URL and exits; the app services wait for it to succeed.
+  # One-shot migration runner: `node db/migrate.mjs` against DATABASE_URL, then
+  # exits; the app services wait for it to succeed. The same image runs the
+  # seeds (commands in the header). NODE_ENV is intentionally unset in the image
+  # so `seed-fleet.ts --with-demo-programme` can run; pass -e NODE_ENV=production
+  # to a `run` when that guard is wanted.
   migrate:
     build:
       context: .
@@ -130,5 +166,11 @@ services:
     image: paparazzi/migrate:${IMAGE_TAG:-latest}
     environment:
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      # seed-fleet.ts reads the fleet's sites.yaml from the mounted directory.
+      FLEET_SITES_YAML: /app/config/sites.yaml
+      # When set, seed-fleet also creates the shop's own `web` property.
+      AFFILIATE_WEB_HOST: ${AFFILIATE_WEB_HOST:-}
+    volumes:
+      - ${FLEET_SITES_DIR:-../autopub/config}:/app/config:ro
     command: ["node", "db/migrate.mjs"]
     restart: "no"

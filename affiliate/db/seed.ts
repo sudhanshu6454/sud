@@ -13,7 +13,8 @@
  *   contract v1 (approved, 7000 bps publisher share, INR 100 threshold)
  *   product + variant + offer (https://shop.example.com/p/demo-sku, active,
  *     fresh for 30 days)
- *   asset + look (published) + look item
+ *   asset + look (published; source_page 'Demo Candid Frames', sponsored false,
+ *     cover_asset_id = the asset) + look item
  *   campaign + placement
  *
  * Run-once semantics: rows keyed by a natural unique key (organisations.slug,
@@ -245,13 +246,15 @@ export async function seedDemo(query: SeedQuery): Promise<SeedIds> {
     ),
   );
 
+  // 0005 columns: where the look was spotted (source_page), the ASCI
+  // "Sponsored" flag (false: not a paid placement), and the cover asset.
   const lookId = idOf(
     await one(
       query,
-      `insert into looks (org_id, title, locale, status, published_at)
-       values ($1, 'Demo festive look', 'en', 'published', $2::timestamptz)
+      `insert into looks (org_id, title, locale, status, published_at, source_page, sponsored, cover_asset_id)
+       values ($1, 'Demo festive look', 'en', 'published', $2::timestamptz, 'Demo Candid Frames', false, $3)
        returning id`,
-      [orgId, nowIso],
+      [orgId, nowIso, assetId],
     ),
   );
 

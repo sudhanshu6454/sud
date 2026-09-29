@@ -1,22 +1,47 @@
-# First-cut production image for @paparazzi/redirect. See Dockerfile.api notes.
-FROM node:20-alpine AS build
-RUN corepack enable && corepack prepare pnpm@9 --activate
+# Production image for @paparazzi/redirect — GET /r/{token} click service (port 3001).
+# Build from the repo root (the context is the workspace, trimmed by .dockerignore):
+#   docker build -f docker/Dockerfile.redirect -t paparazzi/redirect:latest .
+# See docker/README.md for the layout, the pnpm/shared decisions and the smoke test.
+ARG NODE_IMAGE=node:22-alpine
+ARG PNPM_VERSION=10.34.6
+
+# ── base: pnpm via corepack + workspace manifests (shared by build and prod-deps) ──
+FROM ${NODE_IMAGE} AS base
+ARG PNPM_VERSION
+# COREPACK_ENABLE_PROJECT_SPEC=0: use exactly PNPM_VERSION even though package.json
+# pins a packageManager; both accept the checked-in lockfile (see docker/README.md).
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0 COREPACK_ENABLE_PROJECT_SPEC=0 CI=true
+RUN corepack enable && corepack prepare "pnpm@${PNPM_VERSION}" --activate
 WORKDIR /app
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
-COPY packages/redirect/package.json packages/redirect/
 COPY packages/shared/package.json packages/shared/
-RUN pnpm install --frozen-lockfile
+COPY packages/redirect/package.json packages/redirect/
+
+# ── build: full install for redirect (+ shared), type-check, emit dist/ ──
+FROM base AS build
+RUN pnpm install --frozen-lockfile --filter "@paparazzi/redirect..."
 COPY tsconfig.base.json ./
+COPY docker/tsconfig.shared.json docker/build-service.sh docker/
 COPY packages/shared packages/shared
 COPY packages/redirect packages/redirect
-RUN pnpm --filter @paparazzi/redirect typecheck && \
-    pnpm --filter @paparazzi/redirect exec tsc -p tsconfig.json
+RUN sh docker/build-service.sh redirect
 
-FROM node:20-alpine AS runtime
+# ── prod-deps: the same lockfile, production dependencies only ──
+FROM base AS prod-deps
+RUN pnpm install --frozen-lockfile --prod --filter "@paparazzi/redirect..."
+
+# ── runtime: repo layout preserved so pnpm's relative symlinks stay valid ──
+FROM ${NODE_IMAGE} AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
-COPY --from=build /app/packages/redirect/dist ./dist
-COPY --from=build /app/packages/redirect/package.json ./
-COPY --from=build /app/node_modules ./node_modules
+COPY --from=prod-deps --chown=node:node /app/node_modules ./node_modules
+COPY --from=prod-deps --chown=node:node /app/packages/redirect/node_modules ./packages/redirect/node_modules
+COPY --from=build --chown=node:node /app/packages/shared/package.json ./packages/shared/package.json
+COPY --from=build --chown=node:node /app/packages/shared/dist ./packages/shared/dist
+COPY --from=build --chown=node:node /app/packages/redirect/package.json ./packages/redirect/package.json
+COPY --from=build --chown=node:node /app/packages/redirect/dist ./packages/redirect/dist
+
+USER node
+WORKDIR /app/packages/redirect
 EXPOSE 3001
 CMD ["node", "dist/index.js"]

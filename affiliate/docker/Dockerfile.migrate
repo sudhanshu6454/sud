@@ -1,9 +1,30 @@
-# One-shot migration runner.
-# db/migrate.mjs borrows `pg` from the api package's node_modules in the repo;
-# in this standalone image we install pg directly instead.
-# The ./db/ layout mirrors the repo so migrate.mjs finds ./db/migrations.
-FROM node:20-alpine AS runtime
+# One-shot migration / seed runner (db/migrate.mjs, db/seed.ts, db/seed-fleet.ts).
+# Build from the repo root:
+#   docker build -f docker/Dockerfile.migrate -t paparazzi/migrate:latest .
+#
+# The db/ scripts borrow pg and yaml from ../packages/api/node_modules (relative
+# to db/), so the image mirrors that path: packages/api/node_modules is a symlink
+# to the image's own node_modules, installed from docker/migrate.package.json
+# (pg, yaml, tsx pinned to the versions in the workspace pnpm-lock.yaml).
+#
+# Commands (WORKDIR is /app; DATABASE_URL required):
+#   node db/migrate.mjs                      # apply pending migrations (default CMD)
+#   node db/migrate.mjs --status | --baseline
+#   ./node_modules/.bin/tsx db/seed.ts       # TEST-labelled demo org
+#   FLEET_SITES_YAML=/app/config/sites.yaml ./node_modules/.bin/tsx db/seed-fleet.ts --with-demo-programme
+#
+# NODE_ENV is deliberately not set here: seed-fleet refuses --with-demo-programme
+# under NODE_ENV=production (sandbox rows only). Pass -e NODE_ENV=production to a
+# run when that guard is wanted.
+ARG NODE_IMAGE=node:22-alpine
+FROM ${NODE_IMAGE}
 WORKDIR /app
-COPY db ./db
-RUN npm init -y >/dev/null 2>&1 && npm install pg --no-audit --no-fund
+COPY docker/migrate.package.json ./package.json
+RUN npm install --omit=dev --no-audit --no-fund --loglevel=error \
+ && rm -rf /root/.npm \
+ && mkdir -p packages/api \
+ && ln -s ../../node_modules packages/api/node_modules \
+ && chown -R node:node /app
+COPY --chown=node:node db ./db
+USER node
 CMD ["node", "db/migrate.mjs"]

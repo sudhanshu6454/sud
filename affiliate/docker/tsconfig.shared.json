@@ -1,0 +1,12 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "sourceMap": false,
+    "rootDir": "../packages/shared/src",
+    "outDir": "../packages/shared/dist"
+  },
+  "include": ["../packages/shared/src"],
+  "exclude": ["../packages/shared/src/**/*.test.ts"]
+}

@@ -4,6 +4,8 @@
 Usage: python3 infra/gen_compose.py [--check]
 Every site gets: a WordPress container, a MariaDB database, a wp-cli helper (profile "cli"),
 TLS via nginx-proxy + acme-companion. One autopub worker serves the whole fleet.
+The affiliate platform (affiliate/) is a seven-service group behind profile "affiliate": opt in with
+COMPOSE_PROFILES=affiliate in .env, otherwise a plain `docker compose up -d` leaves it alone.
 """
 from __future__ import annotations
 
@@ -177,6 +179,160 @@ def build(sites: list[dict]) -> dict:
         "security_opt": ["no-new-privileges:true"],
     }
     volumes["pulse_worker_data"] = {}
+
+    # Affiliate platform (affiliate/, "Paparazzi"): the consumer shop, the click redirector, the v1 API and
+    # its workers on their own Postgres + Redis. Opt-in: every service carries profile "affiliate", so a
+    # plain `docker compose up -d` never starts it; COMPOSE_PROFILES=affiliate in .env switches it on.
+    # Public hosts: AFFILIATE_WEB_HOST (shop), AFFILIATE_LINK_HOST (redirector), AFFILIATE_API_HOST (API).
+    # Every ${...} has a :- default so `docker compose config` passes on .env.example; the owner fills
+    # the values before opting in (an empty POSTGRES_PASSWORD stops affiliate_db, by design).
+    aff_db_url = "postgresql://paparazzi:${AFFILIATE_DB_PASSWORD:-}@affiliate_db:5432/paparazzi"
+    aff_redis_url = "redis://affiliate_redis:6379"
+    aff_hsts = "max-age=31536000; includeSubDomains"
+    # the app images hold the JWT secret and the database URL: same hardening as autopub
+    aff_hardening = {"cap_drop": ["ALL"], "security_opt": ["no-new-privileges:true"]}
+    aff_after_migrate = {
+        "affiliate_migrate": {"condition": "service_completed_successfully"},
+        "affiliate_redis": {"condition": "service_healthy"},
+    }
+
+    def aff_build(dockerfile: str, args: dict | None = None) -> dict:
+        b: dict = {"context": "./affiliate", "dockerfile": f"docker/{dockerfile}"}
+        if args:
+            b["args"] = args
+        return b
+
+    def aff_healthz(port: int) -> dict:
+        probe = f"fetch('http://localhost:{port}/healthz').then(r=>{{if(!r.ok)process.exit(1)}}).catch(()=>process.exit(1))"
+        return {"test": ["CMD", "node", "-e", probe], "interval": "30s", "timeout": "5s", "retries": 3, "start_period": "20s"}
+
+    services["affiliate_db"] = {
+        "image": "postgres:16-alpine",
+        "container_name": "affiliate_db",
+        "profiles": ["affiliate"],
+        "restart": "unless-stopped",
+        "environment": {
+            "POSTGRES_USER": "paparazzi",
+            "POSTGRES_DB": "paparazzi",
+            "POSTGRES_PASSWORD": "${AFFILIATE_DB_PASSWORD:-}",
+        },
+        "volumes": ["affiliate_db_data:/var/lib/postgresql/data"],
+        "healthcheck": {"test": ["CMD-SHELL", "pg_isready -U paparazzi -d paparazzi"], "interval": "10s", "timeout": "5s", "retries": 5, "start_period": "10s"},
+        "networks": ["internal"],
+    }
+    services["affiliate_redis"] = {
+        "image": "redis:7-alpine",
+        "container_name": "affiliate_redis",
+        "profiles": ["affiliate"],
+        "restart": "unless-stopped",
+        "command": ["redis-server", "--appendonly", "yes"],
+        "volumes": ["affiliate_redis_data:/data"],
+        "healthcheck": {"test": ["CMD", "redis-cli", "ping"], "interval": "10s", "timeout": "5s", "retries": 5, "start_period": "5s"},
+        "networks": ["internal"],
+    }
+    # One-shot: `node db/migrate.mjs` against affiliate_db, then exits; the app services wait for it.
+    # The same image runs the seeds (`make affiliate-seed`): db/seed-fleet.ts reads the fleet's sites.yaml
+    # and, with AFFILIATE_WEB_HOST set, reports the shop's placement id for AFFILIATE_WEB_PLACEMENT_ID.
+    services["affiliate_migrate"] = {
+        "build": aff_build("Dockerfile.migrate"),
+        "profiles": ["affiliate"],
+        "restart": "no",
+        "depends_on": {"affiliate_db": {"condition": "service_healthy"}},
+        "environment": {
+            "DATABASE_URL": aff_db_url,
+            "FLEET_SITES_YAML": "/app/config/sites.yaml",
+            "AFFILIATE_WEB_HOST": "${AFFILIATE_WEB_HOST:-}",
+        },
+        "volumes": ["./autopub/config:/app/config:ro"],
+        "networks": ["internal"],
+    }
+    services["affiliate_api"] = {
+        "build": aff_build("Dockerfile.api"),
+        "container_name": "affiliate_api",
+        "profiles": ["affiliate"],
+        "restart": "unless-stopped",
+        "depends_on": aff_after_migrate,
+        "environment": {
+            "NODE_ENV": "production",
+            "API_HOST": "0.0.0.0",
+            "API_PORT": "3000",
+            "DATABASE_URL": aff_db_url,
+            "REDIS_URL": aff_redis_url,
+            "JWT_SECRET": "${AFFILIATE_JWT_SECRET:-}",
+            "REDIRECT_BASE_URL": "https://${AFFILIATE_LINK_HOST:-}",
+            "VIRTUAL_HOST": "${AFFILIATE_API_HOST:-}",
+            "VIRTUAL_PORT": "3000",
+            "LETSENCRYPT_HOST": "${AFFILIATE_API_HOST:-}",
+            "HSTS": aff_hsts,
+        },
+        "healthcheck": aff_healthz(3000),
+        "networks": ["web", "internal"],
+        **aff_hardening,
+    }
+    services["affiliate_redirect"] = {
+        "build": aff_build("Dockerfile.redirect"),
+        "container_name": "affiliate_redirect",
+        "profiles": ["affiliate"],
+        "restart": "unless-stopped",
+        "depends_on": aff_after_migrate,
+        "environment": {
+            "NODE_ENV": "production",
+            "REDIRECT_PORT": "3001",
+            "DATABASE_URL": aff_db_url,
+            "REDIS_URL": aff_redis_url,
+            "VIRTUAL_HOST": "${AFFILIATE_LINK_HOST:-}",
+            "VIRTUAL_PORT": "3001",
+            "LETSENCRYPT_HOST": "${AFFILIATE_LINK_HOST:-}",
+            "HSTS": aff_hsts,
+        },
+        "healthcheck": aff_healthz(3001),
+        "networks": ["web", "internal"],
+        **aff_hardening,
+    }
+    services["affiliate_workers"] = {
+        "build": aff_build("Dockerfile.workers"),
+        "container_name": "affiliate_workers",
+        "profiles": ["affiliate"],
+        "restart": "unless-stopped",
+        "depends_on": aff_after_migrate,
+        "environment": {
+            "NODE_ENV": "production",
+            "DATABASE_URL": aff_db_url,
+            "REDIS_URL": aff_redis_url,
+            "STUB_WEBHOOK_SECRET": "${AFFILIATE_STUB_WEBHOOK_SECRET:-}",
+            # 365-day placeholders until counsel sets the real windows (affiliate/.env.prod.example)
+            "RETENTION_CLICK_CONTEXT_DAYS": "${AFFILIATE_RETENTION_CLICK_CONTEXT_DAYS:-365}",
+            "RETENTION_CONVERSION_RAW_DAYS": "${AFFILIATE_RETENTION_CONVERSION_RAW_DAYS:-365}",
+            "RETENTION_OUTBOX_DAYS": "${AFFILIATE_RETENTION_OUTBOX_DAYS:-365}",
+            "RETENTION_CRON": "${AFFILIATE_RETENTION_CRON:-0 3 * * *}",
+        },
+        "networks": ["internal"],
+        **aff_hardening,
+    }
+    # The shop. Browser calls go to /api on its own host (baked in at build time) and the server side
+    # reaches the API over the internal network, so the API host never has to be public for the shop.
+    services["affiliate_web"] = {
+        "build": aff_build("Dockerfile.web", {"NEXT_PUBLIC_API_BASE": "/api"}),
+        "container_name": "affiliate_web",
+        "profiles": ["affiliate"],
+        "restart": "unless-stopped",
+        "depends_on": ["affiliate_api"],
+        "environment": {
+            "NODE_ENV": "production",
+            "API_BASE": "http://affiliate_api:3000",
+            "WEB_API_TOKEN": "${AFFILIATE_WEB_API_TOKEN:-}",
+            "WEB_PLACEMENT_ID": "${AFFILIATE_WEB_PLACEMENT_ID:-}",
+            "NEXT_PUBLIC_SITE_NAME": "${AFFILIATE_SITE_NAME:-Paparazzi Commerce}",
+            "VIRTUAL_HOST": "${AFFILIATE_WEB_HOST:-}",
+            "VIRTUAL_PORT": "3000",
+            "LETSENCRYPT_HOST": "${AFFILIATE_WEB_HOST:-}",
+            "HSTS": aff_hsts,
+        },
+        "networks": ["web", "internal"],
+        **aff_hardening,
+    }
+    volumes["affiliate_db_data"] = {}
+    volumes["affiliate_redis_data"] = {}
 
     return {
         "name": "marketing-fleet",

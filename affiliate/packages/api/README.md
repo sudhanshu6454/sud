@@ -49,7 +49,8 @@ JWT_SECRET=dev-secret node scripts/mint-dev-token.mjs \
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/healthz` | Liveness probe, no auth → `{ ok: true }` |
-| `GET` | `/v1/looks?page=&page_size=&locale=&category=` | Published looks, paginated |
+| `GET` | `/v1/looks?page=&page_size=&locale=&category=` | Published looks, paginated; each item carries `source_page`, `sponsored`, `cover_url`, `item_count` |
+| `GET` | `/v1/looks/{id}?placement_id=` | One look with items, the live offer per item and (with `placement_id`) the tracked link; drafts visible to `editor`/`network_admin` only, else 404 |
 | `GET` | `/v1/offers?variant_id=&programme_id=` | Live offers only (`active` + `fresh_until > now()`) |
 | `POST` | `/v1/links` | Mint a tracked link `{property_id, programme_id, offer_id, placement_id}` → `201 { token, url }` |
 | `POST` | `/v1/integrations/{connector}/events` | Provider conversion notification → `202`; connector allowlist: `stub-network` |

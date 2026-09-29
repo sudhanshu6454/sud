@@ -269,3 +269,55 @@ other agents) — flag anything that looks wrong to the owning agent.
   duplicate-protection semantics, documented here when known). The
   `TRANSFER_STATUS_UNKNOWN` 409 stays the response contract for an
   un-armed retry.
+
+## Catalogue endpoints (consumer shop) — 2026-09-29
+
+- **`GET /v1/looks` extended, not replaced.** Each item now also carries
+  `source_page`, `sponsored`, `cover_url` (`assets.public_url` of
+  `cover_asset_id`, else null — a private asset with no public copy renders
+  as null, never as its storage key) and `item_count` (count of `look_items`
+  rows). Pagination, `locale`/`category` filters and the `status='published'`
+  gate are unchanged. `published_at` is now normalised to an ISO-8601 string
+  in code (`new Date(x).toISOString()`) instead of relying on the driver's
+  `::text` form, so pg and pg-mem produce the same JSON.
+- **Pre-existing pagination bug fixed.** The original list query emitted
+  `limit $${params.length - 1} offset $${params.length}` after pushing the two
+  paging params, but `tenantQuery` prepends `org_id` as `$1`, so with no
+  filters it ran `limit $1 offset $2` (limit = the org uuid, offset =
+  page_size) and returned an empty page. No test covered the list before;
+  `test/catalogue.test.ts` now pins page 1 / page 2 / filtered results.
+- **`GET /v1/looks/:id` visibility is 404-only.** A look outside the caller's
+  org, a non-`published` look for any role other than `editor` /
+  `network_admin`, and a `placement_id` outside the org all return
+  `404 NOT_FOUND` — never 403 — so a consumer cannot probe for drafts.
+  Malformed ids are `400 VALIDATION_ERROR` (zod), as elsewhere.
+- **Live offer = active + fresh + programme active.** A paused programme's
+  offers are not shoppable even though the offer row itself is active; the
+  same three predicates gate `POST /v1/links` (`OFFER_STALE` /
+  `PROGRAMME_NOT_APPROVED`). Several live offers for a variant → lowest
+  `price_minor`, ties by `id`. The endpoint reads only; it never mints.
+- **`offer_url` is never selected.** No query in `routes/looks.ts` reads
+  `offers.offer_url`; the consumer gets the tracked `link` (`{token, url}`)
+  or `null`. The test asserts by `JSON.stringify` search that neither the
+  key nor the merchant host appears in either endpoint's body.
+- **Link read-back is the existing `links` row, not a mint.** With
+  `placement_id`, the item's `link` is the `status='active'` row for
+  `(placement_id, offer.id)`; if several exist (possible: `links` has no
+  unique on that pair) the newest by `created_at` then `id` is returned.
+  Paused links are not returned. `url` is composed by the new shared helper
+  `src/redirect-url.ts` (`redirectLinkUrl`), which `POST /v1/links` now also
+  uses, so the read-back is byte-identical to what was minted (trailing
+  slash on `REDIRECT_BASE_URL` is stripped in one place).
+- **Query shape is deliberately plain.** List: one grouped subquery join for
+  `item_count` plus a left join on `assets`; detail: one look query, one
+  placement query, one items query, then two small queries per item (live
+  offer, link). No `LATERAL`, no `= any($n)` arrays, no timestamp `::text`
+  casts on new columns — all within the pg-mem limits in `test/pgmem.ts`.
+  Items per look are single-digit, so the per-item loop is not a hot path;
+  revisit if a look ever carries dozens of items. Verified on pg-mem
+  (`test/catalogue.test.ts`) and by a one-off smoke against a scratch
+  Postgres 16 database with migrations 0001–0005 applied.
+- **Spec:** `docs/openapi.yaml` gains `GET /v1/looks/{id}` and the
+  `LookDetail` / `LookItem` / `LookItemProduct` / `LookItemVariant` /
+  `LookItemOffer` schemas; `Look` lists the four new fields. The route is in
+  `EXPECTED_ROUTES` (`test/openapi.test.ts`).

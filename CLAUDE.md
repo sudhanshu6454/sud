@@ -72,3 +72,25 @@ and citable by AI answer engines: ChatGPT, Perplexity, Gemini, Claude, Google AI
 
 Run `geo_audit` on each domain after publishing to verify AI visibility. Fix recommendations are 
 auto-generated (llms.txt, JSON-LD schema, bot access rules). See GEO_OPTIMIZER.md for examples.
+
+## Affiliate platform
+
+The affiliate platform lives in `affiliate/` (pnpm monorepo: `packages/{shared,api,redirect,workers,web}`,
+`db/`, `docker/`, `docs/`) and runs beside the fleet behind the `affiliate` compose profile with the
+`AFFILIATE_*` block of `.env`; the owner's `docker compose --profile affiliate …` lines are in
+`README.md` ("Affiliate platform"), and the `make affiliate-*` targets are those same lines for a
+machine that has `make`. `affiliate/CLAUDE.md` and its eleven invariants apply to any change under
+`affiliate/` (integer minor units, append-only double-entry ledger, every query tenant-scoped,
+idempotent ingest, never-guessed attribution, maker-checker payouts, TEST-labelled seed data). Test
+with `cd affiliate && ./node_modules/.bin/vitest run` (130 tests; a dev machine or CI — the server has
+no node). Never write an AI model name or identifier into a file there.
+
+Two rules hold fleet-wide, on the shop, on the sites, in bios and captions:
+
+- **The consumer never receives a raw merchant URL.** Every shoppable call-to-action is the tracked
+  link `/r/{token}` on the affiliate link host, minted by `POST /v1/links`; the API never returns
+  `offers.offer_url` and the shop renders a visibly disabled control when no link exists.
+  `affiliate/packages/api/test/catalogue.test.ts` asserts no merchant host appears in any response.
+- **The shop's API token is server-only.** `AFFILIATE_WEB_API_TOKEN` reaches the web container as
+  `WEB_API_TOKEN`, is read only by server code (`affiliate/packages/web/lib/server-env.ts`), is never
+  `NEXT_PUBLIC_`, never in the browser bundle, never forwarded through the `/api` proxy.

@@ -1,7 +1,11 @@
 /**
  * Typed fetch client for the Paparazzi v1 API.
  *
- * - Base URL comes from NEXT_PUBLIC_API_BASE (default http://localhost:3000).
+ * - Base URL comes from NEXT_PUBLIC_API_BASE; the default is the same-origin
+ *   `/api` prefix, which app/api/[...path]/route.ts proxies to API_BASE at
+ *   request time (so portal/console calls need no CORS and no public API
+ *   origin). Set NEXT_PUBLIC_API_BASE to an absolute URL to call the API
+ *   directly instead.
  * - Auth: `Authorization: Bearer <token>` where the token is read from
  *   localStorage key `paparazzi_token`. Portal pages call apiFetch(); if the
  *   API is unreachable (or returns a non-OK status) callers fall back to the
@@ -23,8 +27,7 @@
  * fallback until the API ships them.
  */
 
-export const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE?.replace(/\/+$/, '') || 'http://localhost:3000';
+export const API_BASE = process.env.NEXT_PUBLIC_API_BASE?.replace(/\/+$/, '') || '/api';
 
 export const TOKEN_KEY = 'paparazzi_token';
 export const PUBLISHER_ID_KEY = 'paparazzi_publisher_id';
