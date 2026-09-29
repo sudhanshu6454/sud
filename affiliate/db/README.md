@@ -14,6 +14,12 @@ Postgres schema and migration runner for the Paparazzi Affiliate Commerce Platfo
 - `seed-network.ts` — exports `seedNetwork(query, opts)` and the network-file parser
   `networkFromYaml`; Afflino's in-house publisher network, read from a network file (see
   "Network seed"). Idempotent.
+- `meta-network.ts` — turns the owner's Meta channel exports
+  (`meta-channels-28d-<platform>-<date>.csv`) into a network file on stdout:
+  Facebook pages by page ID, Instagram accounts by handle, unique names and
+  keys, checked with `networkFromYaml` before anything is written. Its output
+  is real account data and belongs on the server (`/etc/afflino/network.yaml`),
+  never in this repository (`docs/runbooks/deploy.md`, "The in-house network").
 - `network.example.yaml` — the seed's default network file: six TEST properties, one per
   platform (Instagram, Facebook, YouTube, Snapchat, Telegram, web), on reserved example.com names.
 - `../scripts/demo-money-loop.ts` — the end-to-end money-loop demo (in-process pg-mem

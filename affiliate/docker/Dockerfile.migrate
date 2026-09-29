@@ -15,6 +15,7 @@
 #   ./node_modules/.bin/tsx db/seed.ts       # TEST-labelled demo org
 #   ./node_modules/.bin/tsx db/seed-network.ts --with-demo-programme
 #     (reads NETWORK_FILE, default /app/db/network.example.yaml, and WEB_HOST)
+#   ./node_modules/.bin/tsx db/meta-network.ts /app/config/meta   # Meta exports → network file (stdout)
 #
 # NODE_ENV is deliberately not set here: seed-network refuses --with-demo-programme
 # under NODE_ENV=production (sandbox rows only). Pass -e NODE_ENV=production to a

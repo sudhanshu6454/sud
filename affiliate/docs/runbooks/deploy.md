@@ -235,32 +235,56 @@ The network file lists the owner's own accounts (format:
 `db/network.example.yaml`; Facebook pages by numeric page ID, the other
 platforms by handle). It is not in the repository: it lives on the server
 as `/etc/afflino/network.yaml`, outside the checkout, so updates keep
-working. The seed runs with `NODE_ENV=production`, which refuses the TEST
-example, so a line that lost the file fails instead of seeding TEST rows
-into the real `afflino` organisation.
+working. It is built on the server from the owner's Meta channel exports
+(`meta-channels-28d-<platform>-<date>.csv`) by `db/meta-network.ts`, which
+checks the result with the seed's own rules before writing it. The seed
+then runs with `NODE_ENV=production`, which refuses the TEST example, so a
+line that lost the file fails instead of seeding TEST rows into the real
+`afflino` organisation.
 
-1. From your own computer, in the folder where the file is saved:
+1. On the Linode, update first (the converter ships with the code):
    ```sh
-   scp afflino-network.yaml root@afflino.com:/etc/afflino/network.yaml
+   bash <(curl -fsSL https://raw.githubusercontent.com/sudhanshu6454/sud/refs/heads/claude/nifty-pasteur-flrulw/affiliate/deploy/linode/install.sh)
    ```
-2. On the Linode:
+2. On your Mac, copy the newest Facebook and Instagram exports to the
+   server (Spotlight finds them wherever they are saved; they land in
+   `/etc/afflino/meta/` as `facebook.csv` and `instagram.csv`):
    ```sh
-   cd /opt/afflino/affiliate && docker compose --env-file /etc/afflino/afflino.env -f docker-compose.prod.yml -f docker-compose.single-host.yml run --rm -T -v /etc/afflino/network.yaml:/app/config/network.yaml:ro -e NETWORK_FILE=/app/config/network.yaml -e NODE_ENV=production migrate ./node_modules/.bin/tsx db/seed-network.ts > /etc/afflino/network-seed.json
+   ssh root@afflino.com 'mkdir -p /etc/afflino/meta' && for p in facebook instagram; do f=$(mdfind -name "meta-channels-28d-$p" 2>/dev/null | grep -E '\.csv$' | awk -F/ '{print $NF "\t" $0}' | sort | tail -1 | cut -f2-); if [ -n "$f" ]; then echo "copying $f"; scp "$f" "root@afflino.com:/etc/afflino/meta/$p.csv"; else echo "no $p export found on this Mac"; fi; done
    ```
-   Expect `seed-network: <N> properties from /app/config/network.yaml, shop
-   host afflino.com`, three warnings and one line "… and <N−3> more like
-   these" (every real url warns once: the seed cannot verify an account),
-   and the note that there is no `web_placement_id` until a real programme
-   is contracted. `/etc/afflino/network-seed.json` holds every id.
+3. On the Linode, build the network file from them and seed it:
+   ```sh
+   chmod -R a+rX /etc/afflino/meta && cd /opt/afflino/affiliate && docker compose --env-file /etc/afflino/afflino.env -f docker-compose.prod.yml -f docker-compose.single-host.yml run --rm -T -v /etc/afflino/meta:/app/config/meta:ro migrate ./node_modules/.bin/tsx db/meta-network.ts /app/config/meta > /etc/afflino/network.yaml.new && mv /etc/afflino/network.yaml.new /etc/afflino/network.yaml && docker compose --env-file /etc/afflino/afflino.env -f docker-compose.prod.yml -f docker-compose.single-host.yml run --rm -T -v /etc/afflino/network.yaml:/app/config/network.yaml:ro -e NETWORK_FILE=/app/config/network.yaml -e NODE_ENV=production migrate ./node_modules/.bin/tsx db/seed-network.ts > /etc/afflino/network-seed.json
+   ```
+   Expect `meta-network: <N> properties (facebook …, instagram …) from 2
+   file(s)`, then `seed-network: <N> properties from
+   /app/config/network.yaml, shop host afflino.com`, three warnings and one
+   line "… and <N−3> more like these" (every real url warns once: the seed
+   cannot verify an account), and the note that there is no
+   `web_placement_id` until a real programme is contracted.
+   `/etc/afflino/network-seed.json` holds every id. A failed conversion
+   leaves the previous `network.yaml` in place and seeds nothing. The
+   `chmod` lets the migrate container (user `node`, uid 1000) read the
+   exports: scp keeps the Mac file's mode, which can be owner-only.
 
-Re-running the line with the same file changes nothing. Adding accounts to
-the file and re-running adds them; an account removed from the file stays
-in the database (the seed never deletes). Registering the accounts changes
-nothing on the public site: the properties earn only once a merchant
-programme exists and tracked links are minted for them. Rehearsed on
-2026-09-29 against a scratch Postgres 16 database with the owner's Meta
-list (322 Facebook pages, 82 Instagram accounts): 404 approved properties
-plus the shop's own, twice, with identical output.
+With a network file you already have, copy it to
+`/etc/afflino/network.yaml` instead of steps 2–3 (from your Mac:
+`scp afflino-network.yaml root@afflino.com:/etc/afflino/network.yaml`, in
+the folder that holds it) and seed it on the Linode:
+```sh
+chmod a+r /etc/afflino/network.yaml && cd /opt/afflino/affiliate && docker compose --env-file /etc/afflino/afflino.env -f docker-compose.prod.yml -f docker-compose.single-host.yml run --rm -T -v /etc/afflino/network.yaml:/app/config/network.yaml:ro -e NETWORK_FILE=/app/config/network.yaml -e NODE_ENV=production migrate ./node_modules/.bin/tsx db/seed-network.ts > /etc/afflino/network-seed.json
+```
+
+Re-running steps 2–3 with the same exports changes nothing. Newer exports
+add new accounts; an account missing from them stays in the database (the
+seed never deletes). Snapchat and YouTube rows are not converted yet (the
+converter says so); add those accounts to the file by hand or send their
+exports to be supported. Registering the accounts changes nothing on the
+public site: the properties earn only once a merchant programme exists and
+tracked links are minted for them. Rehearsed on 2026-09-29 with the
+owner's Meta exports (322 Facebook pages, 82 Instagram accounts), on a
+scratch Postgres 16 database and on the installer's stack in test mode:
+404 approved properties plus the shop's own, twice, with identical output.
 
 ## 1R. Rehearsal without DNS or certificates
 

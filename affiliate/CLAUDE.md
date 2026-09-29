@@ -14,8 +14,8 @@ Everything here runs from this directory; nothing outside it is needed.
 ## Verified state (2026-09-29)
 
 - `pnpm typecheck` clean on all 5 packages (`packages/*`)
-- **671/671 tests green across 36 test files** (`./node_modules/.bin/vitest run`:
-  api 128, redirect 10, shared 15, workers 15, web 503)
+- **679/679 tests green across 37 test files** (`./node_modules/.bin/vitest run`:
+  api 136, redirect 10, shared 15, workers 15, web 503)
 - Demo: **51/51 assertions** on pg-mem (`tsx scripts/demo-money-loop.ts`) **and
   51/51 on a real PostgreSQL 16.13** (`DEMO_TARGET=postgres`, scratch database
   `paparazzi_demo_<8 hex>` created and dropped, no shims) — link → click →
@@ -32,10 +32,11 @@ Everything here runs from this directory; nothing outside it is needed.
 - The owner's real in-house network (the Meta list of 2026-09-28: 322 Facebook
   pages, 82 Instagram accounts; the file is not in this repository, it goes to
   the server as `/etc/afflino/network.yaml`) seeds with `NODE_ENV=production`
-  through the documented compose line (`docs/runbooks/deploy.md`, "The
-  in-house network"): 404 approved properties plus the shop's own, identical
-  output on a second run, rehearsed on scratch Postgres 16 and on the
-  installer's stack in test mode
+  through the documented lines (`docs/runbooks/deploy.md`, "The in-house
+  network": the Meta exports copied to the server, `db/meta-network.ts`
+  builds the file there, the seed reads it): 404 approved properties plus
+  the shop's own, identical output on a second run, rehearsed on scratch
+  Postgres 16 and on the installer's stack in test mode
 - `pnpm install --frozen-lockfile` passes (pnpm 9.12.0 locally, in CI and in the
   images)
 - `pnpm --filter @paparazzi/web build` OK (all routes dynamic, standalone output);
@@ -230,6 +231,8 @@ runs and the docker smoke test.
   publisher network from a network file — `--network` / `NETWORK_FILE`, default
   `db/network.example.yaml` (six TEST properties); platforms instagram |
   facebook (by page ID or handle) | youtube | snapchat | telegram | web;
+  `db/meta-network.ts` builds a real network file from the owner's Meta
+  channel exports, on the server only;
   `WEB_HOST` adds the shop's own property;
   `--with-demo-programme` adds the TEST programme, one look per property and the
   placements; under `NODE_ENV=production` the seed refuses both the flag and the
