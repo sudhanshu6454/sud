@@ -22,7 +22,7 @@ import { platformList } from '@/lib/demo/afflino';
 import { formatCount, formatCountCompact, formatPct } from '@/lib/format';
 import { AdminLive } from './AdminLive';
 import { AdminNote, AdminSection } from './AdminSection';
-import { CREATOR_FILTERS, creatorCounts, creatorKyc, kycBucket, type CreatorFilter, type KycShown } from './adminModel';
+import { CREATOR_FILTERS, creatorCounts, creatorKyc, kycBucket, liveOffersLabel, type CreatorFilter, type KycShown } from './adminModel';
 import { FilterTags } from './FilterTags';
 import { ResponsiveTable, StackRow } from './ResponsiveTable';
 import { ReviewDialog } from './ReviewDialog';
@@ -48,33 +48,41 @@ export function AdminCreators() {
 
   const kycCell = (c: AdminCreator) => {
     const shown = kyc(c);
-    const item = c.reviewItemId ? adminReviewItem(c.reviewItemId) : undefined;
     const open = shown === 'In review';
     return (
       <span className={styles.inline}>
         <Tag variant={KYC_TAG[shown]}>{shown}</Tag>
         {c.kycNote && (open || shown === 'Info requested') ? <span className={`${styles.muted} ${styles.small}`}>{c.kycNote}</span> : null}
-        {item && queue.ready ? (
-          <Button
-            size="xs"
-            variant={open ? 'secondary' : 'ghost'}
-            data-review-action={item.id}
-            aria-label={`${open ? 'Review' : 'View decision'}: ${item.subject} KYC`}
-            onClick={() => panel.open(item)}
-          >
-            {open ? 'Review' : 'View'}
-          </Button>
-        ) : null}
       </span>
+    );
+  };
+
+  // Review / View sits in its own trailing Action column, as in 2e.
+  const actionCell = (c: AdminCreator) => {
+    const shown = kyc(c);
+    const item = c.reviewItemId ? adminReviewItem(c.reviewItemId) : undefined;
+    const open = shown === 'In review';
+    if (!item || !queue.ready) return null;
+    return (
+      <Button
+        size="xs"
+        variant={open ? 'secondary' : 'ghost'}
+        data-review-action={item.id}
+        aria-label={`${open ? 'Review' : 'View decision'}: ${item.subject} KYC`}
+        onClick={() => panel.open(item)}
+      >
+        {open ? 'Review' : 'View'}
+      </Button>
     );
   };
 
   const columns: ReadonlyArray<DataTableColumn<AdminCreator>> = [
     { key: 'name', header: 'Creator', tone: 'strong', width: '22%', cell: (c) => c.name },
     { key: 'platforms', header: 'Platforms', tone: 'muted', width: '16%', cell: (c) => platformList(c.platforms) },
-    { key: 'reach', header: 'Reach', width: '12%', cell: (c) => formatCountCompact(c.reach) },
-    { key: 'offers', header: 'Live offers', width: '12%', cell: (c) => formatCount(c.liveOffers) },
-    { key: 'kyc', header: 'KYC', cell: kycCell },
+    { key: 'reach', header: 'Reach', width: '11%', cell: (c) => formatCountCompact(c.reach) },
+    { key: 'offers', header: 'Live offers', width: '11%', cell: (c) => formatCount(c.liveOffers) },
+    { key: 'kyc', header: 'KYC', width: '28%', cell: kycCell },
+    { key: 'action', header: 'Action', cell: actionCell },
   ];
 
   return (
@@ -113,8 +121,13 @@ export function AdminCreators() {
             <StackRow
               title={c.name}
               aside={formatCountCompact(c.reach)}
-              meta={`${platformList(c.platforms)} · ${formatCount(c.liveOffers)} live offers`}
-              actions={kycCell(c)}
+              meta={`${platformList(c.platforms)} · ${liveOffersLabel(c.liveOffers)}`}
+              actions={
+                <span className={styles.inline}>
+                  {kycCell(c)}
+                  {actionCell(c)}
+                </span>
+              }
             />
           )}
         />

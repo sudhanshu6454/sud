@@ -9,9 +9,16 @@
 
 import DemoBadge from '@/components/DemoBadge';
 import { KpiCell, KpiStrip, StatusTag, Tag, type DataTableColumn } from '@/components/ui';
-import { ADMIN_QUEUE_TOTALS, ADMIN_REVIEW_ITEMS, DEMO_ADMIN_OFFER_COUNTS, DEMO_ADMIN_PERIOD } from '@/lib/demo/admin';
+import {
+  ADMIN_QUEUE_TOTALS,
+  ADMIN_REVIEW_ITEMS,
+  DEMO_ADMIN_BRAND_COUNTS,
+  DEMO_ADMIN_OFFER_COUNTS,
+  DEMO_ADMIN_PERIOD,
+} from '@/lib/demo/admin';
 import { DEMO_OFFERS, platformList, type DemoOffer } from '@/lib/demo/afflino';
 import { formatCount, formatPayout } from '@/lib/format';
+import { LIST_MODEL_TAG } from '@/components/brand/offerModel';
 import { AdminLive } from './AdminLive';
 import { AdminNote, AdminSection } from './AdminSection';
 import { queueCounts, visibleItems } from './queueModel';
@@ -26,7 +33,7 @@ const OFFER_ITEMS = visibleItems(ADMIN_REVIEW_ITEMS, 'Offer');
 const LIVE_COLUMNS: ReadonlyArray<DataTableColumn<DemoOffer>> = [
   { key: 'name', header: 'Offer', tone: 'strong', width: '22%', cell: (o) => o.name },
   { key: 'category', header: 'Category', tone: 'muted', width: '15%', cell: (o) => o.category },
-  { key: 'model', header: 'Model', width: '10%', cell: (o) => <Tag variant={o.modelTag}>{o.model}</Tag> },
+  { key: 'model', header: 'Model', width: '10%', cell: (o) => <Tag variant={LIST_MODEL_TAG}>{o.model}</Tag> },
   { key: 'payout', header: 'Payout', width: '17%', cell: (o) => formatPayout(o.payout) },
   { key: 'platforms', header: 'Platforms', tone: 'muted', width: '20%', cell: (o) => platformList(o.platforms) },
   { key: 'status', header: 'Status', cell: () => <StatusTag status="Live" /> },
@@ -42,10 +49,20 @@ export function AdminOffers() {
     <>
       <h1 className="sr-only">Admin: offers</h1>
       <KpiStrip columns={4}>
-        <KpiCell size={32} label="Live offers" value={formatCount(DEMO_ADMIN_OFFER_COUNTS.live)} />
+        <KpiCell
+          size={32}
+          label="Live offers"
+          value={formatCount(DEMO_ADMIN_OFFER_COUNTS.live)}
+          meta={`From ${formatCount(DEMO_ADMIN_BRAND_COUNTS.Active)} active brands`}
+        />
         <KpiCell size={32} label="In review" value={formatCount(counts.Offer)} meta="New offers and changes" />
         <KpiCell size={32} label="Paused" value={formatCount(DEMO_ADMIN_OFFER_COUNTS.paused)} meta="By the brand or by ops" />
-        <KpiCell size={32} label={`Rejected · ${DEMO_ADMIN_PERIOD.monthShort}`} value={formatCount(DEMO_ADMIN_OFFER_COUNTS.rejected + rejectedHere)} />
+        <KpiCell
+          size={32}
+          label={`Rejected\u00a0·\u00a0${DEMO_ADMIN_PERIOD.monthShort}`}
+          value={formatCount(DEMO_ADMIN_OFFER_COUNTS.rejected + rejectedHere)}
+          meta={`In ${DEMO_ADMIN_PERIOD.month}`}
+        />
       </KpiStrip>
 
       <AdminSection title="In review" titleId="admin-offers-review-title" badge={<DemoBadge variant="mock" />}>
@@ -72,7 +89,7 @@ export function AdminOffers() {
           rowKey={(o) => o.id}
           phoneRow={(o) => (
             <StackRow
-              eyebrow={<Tag variant={o.modelTag}>{o.model}</Tag>}
+              eyebrow={<Tag variant={LIST_MODEL_TAG}>{o.model}</Tag>}
               title={o.name}
               aside={formatPayout(o.payout)}
               meta={`${o.category} · ${platformList(o.platforms)}`}

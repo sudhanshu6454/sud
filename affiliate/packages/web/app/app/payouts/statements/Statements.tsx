@@ -6,17 +6,20 @@
  * (lib/portal-demo.ts) with <DemoBadge />; the logic (cascading filters,
  * running balance, per-currency totals, dispute history) is the HEAD page
  * unchanged, set in the app shell with the Afflino primitives (dates as
- * the 2c table prints them, dispute history in the standard table).
+ * the 2c table prints them in both tables, dispute history in the standard
+ * table; amounts exact, as a ledger prints them). On phones both tables are
+ * stacked rows (components/admin/ResponsiveTable), like the brand and admin
+ * lists, so no figure scrolls off-screen.
  */
 
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import DemoBadge from '@/components/DemoBadge';
-import { disputeStatusTag, formatLongDate, humanise } from '@/components/creator/payouts/labels';
+import { ResponsiveTable, StackRow } from '@/components/admin/ResponsiveTable';
+import { disputeStatusTag, humanise } from '@/components/creator/payouts/labels';
 import { PageBody, PageNote } from '@/components/shell/PageBody';
 import {
   Button,
-  DataTable,
   Eyebrow,
   Field,
   KpiCell,
@@ -26,7 +29,7 @@ import {
   Tag,
   type DataTableColumn,
 } from '@/components/ui';
-import { formatCount, formatDayMonth, formatINR } from '@/lib/format';
+import { formatCount, formatDayMonth, formatINRExact } from '@/lib/format';
 import {
   DEMO_DISPUTES,
   type DemoDispute,
@@ -40,8 +43,19 @@ import styles from './page.module.css';
 
 type Row = DemoLedgerEntry & { running: number };
 
+const day = (date: string) => formatDayMonth(date, { pad: true });
+
+function signedAmount(minor: number) {
+  return (
+    <span className={minor < 0 ? styles.negative : undefined}>
+      {minor < 0 ? '−' : '+'}
+      {formatINRExact(Math.abs(minor))}
+    </span>
+  );
+}
+
 const COLUMNS: ReadonlyArray<DataTableColumn<Row>> = [
-  { key: 'date', header: 'Date', width: '12%', className: styles.cell, cell: (e) => formatDayMonth(e.date, { pad: true }) },
+  { key: 'date', header: 'Date', width: '12%', className: styles.cell, cell: (e) => day(e.date) },
   {
     key: 'entry',
     header: 'Entry',
@@ -62,20 +76,33 @@ const COLUMNS: ReadonlyArray<DataTableColumn<Row>> = [
     width: '13%',
     numeric: true,
     className: styles.cell,
-    cell: (e) => (
-      <span className={e.amount_minor < 0 ? styles.negative : undefined}>
-        {e.amount_minor < 0 ? '−' : '+'}
-        {formatINR(Math.abs(e.amount_minor))}
-      </span>
-    ),
+    cell: (e) => signedAmount(e.amount_minor),
   },
-  { key: 'balance', header: 'Balance', width: '13%', numeric: true, tone: 'strong', className: styles.cell, cell: (e) => formatINR(e.running) },
+  { key: 'balance', header: 'Balance', width: '13%', numeric: true, tone: 'strong', className: styles.cell, cell: (e) => formatINRExact(e.running) },
 ];
 
+/* Phones: the entry is the heading line, the amount beside it, kind and balance under it. */
+const ledgerPhoneRow = (e: Row) => (
+  <StackRow
+    title={e.label}
+    aside={signedAmount(e.amount_minor)}
+    meta={
+      <>
+        <div>
+          {humanise(e.kind)} · Balance {formatINRExact(e.running)}
+        </div>
+        <div>
+          {day(e.date)} · {e.programme} · {e.property} · {e.placement}
+        </div>
+      </>
+    }
+  />
+);
+
 const DISPUTE_COLUMNS: ReadonlyArray<DataTableColumn<DemoDispute>> = [
-  { key: 'filed', header: 'Filed', width: '14%', className: styles.cell, cell: (d) => formatLongDate(d.filed) },
+  { key: 'filed', header: 'Filed', width: '14%', className: styles.cell, cell: (d) => day(d.filed) },
   { key: 'id', header: 'Ticket', width: '10%', tone: 'strong', className: styles.cell, cell: (d) => d.id },
-  { key: 'conversion', header: 'Conversion', width: '13%', tone: 'mono', className: styles.cell, cell: (d) => d.conversion },
+  { key: 'conversion', header: 'Conversion', width: '13%', tone: 'strong', className: styles.cell, cell: (d) => d.conversion },
   { key: 'reason', header: 'Reason', tone: 'body', className: styles.cell, cell: (d) => d.reason },
   {
     key: 'status',
@@ -85,6 +112,21 @@ const DISPUTE_COLUMNS: ReadonlyArray<DataTableColumn<DemoDispute>> = [
     cell: (d) => <Tag variant={disputeStatusTag(d.status)}>{humanise(d.status)}</Tag>,
   },
 ];
+
+const disputePhoneRow = (d: DemoDispute) => (
+  <StackRow
+    title={d.id}
+    aside={<Tag variant={disputeStatusTag(d.status)}>{humanise(d.status)}</Tag>}
+    meta={
+      <>
+        <div>
+          Filed {day(d.filed)} · conversion {d.conversion}
+        </div>
+        <div>{d.reason}</div>
+      </>
+    }
+  />
+);
 
 export function Statements() {
   const [programme, setProgramme] = useState('');
@@ -138,7 +180,12 @@ export function Statements() {
       />
       <KpiStrip columns={totals.length + 1}>
         {totals.map(([currency, total]) => (
-          <KpiCell key={currency} label={`${currency} total`} value={formatINR(total)} size={32} />
+          <KpiCell
+            key={currency}
+            label={totals.length > 1 ? `Balance · ${currency}` : 'Balance'}
+            value={formatINRExact(total)}
+            size={32}
+          />
         ))}
         <KpiCell label="Entries" value={formatCount(filtered.length)} size={32} />
       </KpiStrip>
@@ -181,13 +228,14 @@ export function Statements() {
           </Field>
         </div>
 
-        <DataTable
+        <ResponsiveTable
           className={styles.table}
           caption="Ledger entries"
           columns={COLUMNS}
           rows={rows}
           rowKey={(e) => e.id}
           empty="No entries match these filters."
+          phoneRow={ledgerPhoneRow}
         />
 
         <section className={styles.history} aria-labelledby="statements-disputes-title">
@@ -199,13 +247,14 @@ export function Statements() {
               Raise a ticket<span aria-hidden="true"> →</span>
             </Link>
           </div>
-          <DataTable
+          <ResponsiveTable
             className={styles.table}
             caption="Dispute history: filed date, ticket, conversion, reason and status"
             columns={DISPUTE_COLUMNS}
             rows={DEMO_DISPUTES}
             rowKey={(d) => d.id}
             empty="No disputes filed."
+            phoneRow={disputePhoneRow}
           />
         </section>
         <PageNote>

@@ -7,6 +7,7 @@
  * with the overview's request list.
  */
 
+import Link from 'next/link';
 import DemoBadge from '@/components/DemoBadge';
 import { Button, Eyebrow, KpiCell, KpiStrip, PageHeader, StatusTag } from '@/components/ui';
 import { DEMO_TOP_CREATORS, PLATFORM_NAME, type Platform } from '@/lib/demo/afflino';
@@ -113,11 +114,17 @@ export function BrandCreators() {
             ready={requests.ready}
             onApprove={requests.approve}
             onDecline={requests.decline}
+            pendingCount={requests.pendingCount}
             emptyAction={{ label: 'New offer', href: ws.href('/brand/offers/new') }}
           />
           <p className={shared.demoNote}>
             Demo: {requests.pending.length} of {formatCount(requests.pendingCount)} pending requests are in the demo
             data. Decisions stay in this browser; no creator is notified.
+          </p>
+          <p className={styles.more}>
+            <Link href={ws.href('/brand/conversions')}>
+              Review conversions<span aria-hidden="true"> →</span>
+            </Link>
           </p>
           <div>
             <Button variant="ghost" onClick={requests.reset} className={styles.touch}>

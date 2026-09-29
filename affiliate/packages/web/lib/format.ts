@@ -9,17 +9,52 @@ export function formatINR(minor: number): string {
   return '₹' + rupees.toLocaleString('en-IN');
 }
 
+/** ISO 4217 minor-unit exponent (INR 2, JPY 0); 2 when Intl does not know the code. */
+function currencyExponent(currency: string): number {
+  try {
+    return new Intl.NumberFormat('en-IN', { style: 'currency', currency }).resolvedOptions().maximumFractionDigits ?? 2;
+  } catch {
+    return 2;
+  }
+}
+
+/** A non-INR amount in minor units through Intl, with exactly the currency's decimals. */
+function formatForeign(minor: number, currency: string, alwaysDecimals: boolean): string {
+  const exponent = currencyExponent(currency);
+  const hasFraction = exponent > 0 && Math.abs(minor) % 10 ** exponent !== 0;
+  const digits = alwaysDecimals || hasFraction ? exponent : 0;
+  try {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    }).format(minor / 10 ** exponent);
+  } catch {
+    return `${currency} ${(minor / 10 ** exponent).toFixed(exponent)}`;
+  }
+}
+
 /**
- * Display a price given in minor units with its explicit currency.
- * INR keeps the platform's rupee style; anything else goes through Intl.
+ * Display a live price or balance given in minor units with its explicit
+ * currency, never rounded: whole units when there is no fraction
+ * (₹2,499), otherwise the exact amount (₹1,499.50). INR keeps the
+ * platform's rupee style (Indian grouping); anything else goes through Intl.
  */
 export function formatMoney(minor: number, currency: string): string {
-  if (currency === 'INR') return formatINR(minor);
-  try {
-    return new Intl.NumberFormat('en-IN', { style: 'currency', currency }).format(minor / 100);
-  } catch {
-    return `${currency} ${(minor / 100).toFixed(2)}`;
-  }
+  if (!Number.isFinite(minor)) return '—';
+  if (currency === 'INR') return formatINRExact(minor);
+  return formatForeign(minor, currency, false);
+}
+
+/**
+ * Finance-ops amounts: always the currency's decimals, never rounded, in
+ * the row's own currency (₹1,234.50, ₹150.00, US$14.99).
+ */
+export function formatMoneyExact(minor: number, currency: string): string {
+  if (!Number.isFinite(minor)) return '—';
+  if (currency === 'INR') return formatINRFromMinor(minor, { paise: true });
+  return formatForeign(minor, currency, true);
 }
 
 /**
@@ -131,6 +166,17 @@ export function formatINRFromMinor(minor: number, opts: { paise?: boolean } = {}
   const rupees = Math.round(abs / 100);
   const sign = minor < 0 && rupees !== 0 ? '-' : '';
   return `${sign}₹${groupIndian(String(rupees))}`;
+}
+
+/**
+ * A live rupee amount, never rounded: whole rupees when the paise are zero
+ * (4290000 → "₹42,900"), otherwise two decimals (4290050 → "₹42,900.50").
+ * Live balances carry arbitrary paise; the designed demo figures are whole
+ * rupees, so they print exactly as drawn.
+ */
+export function formatINRExact(minor: number): string {
+  if (!Number.isFinite(minor)) return DASH;
+  return formatINRFromMinor(minor, { paise: Math.round(Math.abs(minor)) % 100 !== 0 });
 }
 
 /** Tenths → "18.4" / "25" (whole part grouped the Indian way). */
@@ -258,4 +304,17 @@ export function formatDayMonth(date: string | Date, opts: { pad?: boolean; weekd
   if (!opts.weekday) return label;
   const weekday = WEEKDAYS[new Date(Date.UTC(parts.y, parts.m - 1, parts.d)).getUTCDay()];
   return `${weekday} ${label}`;
+}
+
+/** "21 Sep · 14:42": a timestamp as day, month and 24-hour time in India time (Asia/Kolkata). */
+export function formatDayMonthTime(date: string | Date): string {
+  const value = typeof date === 'string' ? new Date(date) : date;
+  if (Number.isNaN(value.getTime())) return DASH;
+  const time = new Intl.DateTimeFormat('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'Asia/Kolkata',
+  }).format(value);
+  return `${formatDayMonth(value)} · ${time}`;
 }

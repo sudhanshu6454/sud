@@ -1,20 +1,21 @@
 /*
- * Creator Overview loader: the one live call (GET /v1/publisher/earnings)
- * plus the TEST demo dataset for the selected range.
+ * Creator Overview loader: the one live call (GET /v1/publisher/earnings,
+ * lib/earnings.ts loadLiveEarnings) plus the TEST demo dataset for the
+ * selected range.
  */
 
-import { apiFetch, getPublisherId, withDemoFallback, type EarningsResponse } from '@/lib/api';
-import { DEMO_EARNINGS } from '@/lib/portal-demo';
+import type { FallbackNotice } from '@/lib/api';
+import { loadLiveEarnings } from '@/lib/earnings';
 import { buildOverviewDataset, mapEarningsResponse, type LiveEarnings, type OverviewDataset, type OverviewRange } from './metrics';
 
 export interface OverviewLoad {
   dataset: OverviewDataset;
-  /** The mapped live balances, or null when the call fell back to demo data. */
+  /** The mapped live balances, or null when the page shows the designed demo figures. */
   live: LiveEarnings | null;
-  /** The earnings call failed (or answered for another publisher): render <DemoBadge variant="fallback" />. */
-  fallback: boolean;
-  /** The API answered for a different publisher id than the one asked for. */
-  mismatch: boolean;
+  /** The earnings call never reached the API: <DemoBadge variant="fallback" /> ("API unreachable"). */
+  unreachable: boolean;
+  /** Why there are no live figures (the API answered with an error, no publisher id, another publisher): a top Banner. */
+  notice: FallbackNotice | null;
 }
 
 /**
@@ -22,19 +23,16 @@ export interface OverviewLoad {
  * balances come back for 7d / 30d / 90d; clicks, conversions, the chart,
  * "By platform" and "Top links" have no v1 endpoint and are always demo.
  *
- * DEMO_EARNINGS stays the fallback value of the call (the contract the old
- * /portal dashboard used), but a fallback page prints the designed demo
- * figures for the range instead of mapping it: its buckets (₹41,090 unpaid)
- * would contradict the rest of the demo page (the "By platform" rows add up
- * to ₹1,84,320).
+ * Without live balances the page prints the designed demo figures for the
+ * range (not DEMO_EARNINGS mapped: its buckets, ₹41,090 unpaid, would
+ * contradict the "By platform" rows, which add up to ₹1,84,320).
  */
 export async function loadOverview(range: OverviewRange): Promise<OverviewLoad> {
-  const publisherId = getPublisherId();
-  const { value, demo } = await withDemoFallback(
-    () => apiFetch<EarningsResponse>(`/v1/publisher/earnings?publisher_id=${encodeURIComponent(publisherId)}`),
-    DEMO_EARNINGS,
-  );
-  const mismatch = !demo && value.publisher_id !== publisherId;
-  const live = demo || mismatch ? null : mapEarningsResponse(value);
-  return { dataset: buildOverviewDataset(range), live, fallback: live === null, mismatch };
+  const call = await loadLiveEarnings();
+  return {
+    dataset: buildOverviewDataset(range),
+    live: call.response ? mapEarningsResponse(call.response) : null,
+    unreachable: call.unreachable,
+    notice: call.notice,
+  };
 }

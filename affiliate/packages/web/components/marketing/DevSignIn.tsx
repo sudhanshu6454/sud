@@ -179,7 +179,7 @@ export function DevSignIn() {
             id={PUBLISHER_ID}
             label="Publisher id"
             labelSuffix="(optional)"
-            hint="The uuid of your publisher account; the earnings views read it. Leave it empty to keep the TEST demo publisher."
+            hint="The uuid of your publisher account: Overview, Payouts and Disputes read it. Without one those pages show demo figures (no earnings call is made)."
             error={errors.publisherId}
           >
             <Input

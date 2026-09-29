@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { validateTopUp } from '../components/brand/billingModel';
+import { DEMO_BILLED_PAYOUT_MINOR, approvedPayoutsMinor, networkFeeDueMinor, validateTopUp } from '../components/brand/billingModel';
 import {
   DEMO_CSV_LABEL,
   adjustCounts,
@@ -14,7 +14,9 @@ import {
   windowDays,
 } from '../components/brand/conversionsModel';
 import { feeMinor } from '../components/brand/offerModel';
-import { allowedDomain, normaliseBrandSettings, validateBrandSettings } from '../components/brand/settingsModel';
+import { allowedDomain, brandSettingsDirty, normaliseBrandSettings, validateBrandSettings } from '../components/brand/settingsModel';
+import { emptyRequestsMessage } from '../components/brand/requestsModel';
+import { hasSeedShape } from '../components/brand/storage';
 import { DEMO_CREATOR_REQUESTS, DEMO_TOP_CREATORS } from '../lib/demo/afflino';
 import * as brand from '../lib/demo/brand';
 import { formatCount, formatINRCompactFromMinor, formatINRFromMinor, formatPct } from '../lib/format';
@@ -82,8 +84,19 @@ describe('brand demo data is TEST-labelled', () => {
     const plan = brand.DEMO_BILLING_HISTORY.filter((r) => r.description.startsWith('Network plan'));
     expect(plan.length).toBeGreaterThan(0);
     for (const r of plan) expect(r.amountMinor).toBe(PRICING.network.monthlyRupees * 100);
-    // September's fee to date on the billing page: 8% of ₹18.4L.
-    expect(formatINRFromMinor(feeMinor(S.spendMinor, PRICING.network.networkFeePct))).toBe('₹1,47,200');
+  });
+
+  it('bills the network fee on approved conversions, the base the conversions page bills', () => {
+    // Only Approved is "Billed at the offer's payout" (/brand/conversions):
+    // 8,934 × ₹180 = ₹16,08,120, and 8% of it is ₹1,28,649.60 — not 8% of
+    // the ₹18.4L spend, which counts pending, rejected and flagged sign-ups.
+    expect(DEMO_BILLED_PAYOUT_MINOR).toBe(18_000);
+    expect(approvedPayoutsMinor()).toBe(brand.DEMO_CONVERSION_COUNTS.Approved * 18_000);
+    expect(formatINRFromMinor(approvedPayoutsMinor())).toBe('₹16,08,120');
+    const fee = networkFeeDueMinor(PRICING.network.networkFeePct);
+    expect(fee).toBe(feeMinor(approvedPayoutsMinor(), 8));
+    expect(formatINRFromMinor(fee, { paise: true })).toBe('₹1,28,649.60');
+    expect(approvedPayoutsMinor()).toBeLessThan(S.spendMinor);
   });
 });
 
@@ -181,6 +194,19 @@ describe('brand settings', () => {
     expect(n.website).toBe('https://shop.example.com');
     expect(allowedDomain(n)).toBe('shop.example.com');
   });
+
+  it('is dirty only when a normalised value changed (Save stays disabled otherwise)', () => {
+    expect(brandSettingsDirty(good, good)).toBe(false);
+    expect(brandSettingsDirty({ ...good, legalName: `  ${good.legalName} ` }, good)).toBe(false);
+    expect(brandSettingsDirty({ ...good, displayName: 'Demo Other' }, good)).toBe(true);
+  });
+});
+
+describe('creator requests list', () => {
+  it('is honest about the demo sample once it is used up', () => {
+    expect(emptyRequestsMessage(0)).toBe('No creator requests waiting.');
+    expect(emptyRequestsMessage(35)).toBe('The demo requests are decided; the other 35 are not in the demo data.');
+  });
 });
 
 describe('wallet top-up (demo, no payment)', () => {
@@ -191,5 +217,20 @@ describe('wallet top-up (demo, no payment)', () => {
     expect(validateTopUp('₹5,00,000')).toEqual({ ok: true, minor: 50_000_000 });
     expect(validateTopUp('100000.50')).toEqual({ ok: true, minor: 10_000_050 });
     for (const r of brand.DEMO_TOP_UP_PRESETS_RUPEES) expect(validateTopUp(String(r))).toEqual({ ok: true, minor: r * 100 });
+  });
+});
+
+describe('brand demo storage', () => {
+  it('uses a stored partition only when it has the seed shape', () => {
+    // '{"own":null}' used to crash /brand/conversions; it now restarts from the seed.
+    expect(hasSeedShape(null, {})).toBe(false);
+    expect(hasSeedShape(undefined, {})).toBe(false);
+    expect(hasSeedShape([], {})).toBe(false);
+    expect(hasSeedShape('x', {})).toBe(false);
+    expect(hasSeedShape({ a: 1 }, {})).toBe(true);
+    expect(hasSeedShape({}, [])).toBe(false);
+    expect(hasSeedShape([1], [])).toBe(true);
+    expect(hasSeedShape(3, 0)).toBe(true);
+    expect(hasSeedShape('3', 0)).toBe(false);
   });
 });

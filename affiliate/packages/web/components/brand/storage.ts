@@ -30,6 +30,19 @@ function readAll<T>(key: string): Partitioned<T> {
   }
 }
 
+/**
+ * A stored partition is used only when it has the seed's shape (an array for
+ * an array, a non-null object for an object, else the same typeof). Anything
+ * else — null, a hand-edited or older value — reads as missing, so a bad
+ * value restarts from the demo seed instead of breaking the page.
+ */
+export function hasSeedShape<T>(stored: unknown, initial: T): stored is T {
+  if (stored === undefined || stored === null) return false;
+  if (Array.isArray(initial)) return Array.isArray(stored);
+  if (initial !== null && typeof initial === 'object') return typeof stored === 'object' && !Array.isArray(stored);
+  return typeof stored === typeof initial;
+}
+
 export function readPartition<T>(key: string, workspace: string): T | undefined {
   if (typeof window === 'undefined') return undefined;
   return readAll<T>(key)[workspace];
@@ -61,8 +74,8 @@ export function usePartition<T>(key: string, workspace: string, initial: T) {
   initialRef.current = initial;
 
   useEffect(() => {
-    const stored = readPartition<T>(key, workspace);
-    setValue(stored === undefined ? initialRef.current : stored);
+    const stored = readPartition<unknown>(key, workspace);
+    setValue(hasSeedShape(stored, initialRef.current) ? stored : initialRef.current);
     setReady(true);
   }, [key, workspace]);
 

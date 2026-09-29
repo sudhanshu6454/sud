@@ -20,6 +20,12 @@ export const CREATOR_TABS: ReadonlyArray<NavItem> = [
   { label: 'Payouts', href: '/app/payouts' },
 ];
 
+/**
+ * Creator pages whose phone layout draws no top bar (3f: the title sits
+ * straight under the status bar). Home (1e) keeps it, with the account box.
+ */
+export const CREATOR_PHONE_TOPBAR_HIDDEN_ON: ReadonlyArray<string> = ['/app/offers', '/app/payouts'];
+
 export const BRAND_NAV: ReadonlyArray<NavItem> = [
   { label: 'Overview', href: '/brand', match: 'exact' },
   { label: 'Offers', href: '/brand/offers' },

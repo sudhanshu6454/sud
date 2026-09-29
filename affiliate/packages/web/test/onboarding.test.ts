@@ -13,6 +13,10 @@ import {
   initialState,
   isStepComplete,
   joinSearch,
+  initialRole,
+  parsePlan,
+  planFor,
+  planSummary,
   onboardingReducer,
   onboardingStateLabel,
   parseRole,
@@ -99,10 +103,34 @@ describe('roles, steps and the URL', () => {
     expect(joinSearch('brand', 2)).toBe('?role=brand&step=2');
     expect(joinSearch(null, 'done')).toBe('?step=done');
     expect(joinSearch(null, 1)).toBe('');
+    // A brand keeps the plan picked on the pricing page; other roles drop it.
+    expect(joinSearch('brand', 3, 'starter')).toBe('?role=brand&plan=starter&step=3');
+    expect(joinSearch('creator', 2, 'starter')).toBe('?role=creator&step=2');
     expect(dashboardHref('creator')).toBe('/app');
     expect(dashboardHref('publisher')).toBe('/app');
     expect(dashboardHref('brand')).toBe('/brand');
     expect(dashboardHref('agency')).toBe('/agency');
+  });
+});
+
+describe('the pricing plan from the home page (?plan=)', () => {
+  it('reads the plan and preselects the brand flow', () => {
+    expect(parsePlan('starter')).toBe('starter');
+    expect(parsePlan(' Network ')).toBe('network');
+    expect(parsePlan('gold')).toBeNull();
+    expect(parsePlan(null)).toBeNull();
+    // The home page's "Start free" link: /join?role=brand&plan=starter
+    expect(initialRole('brand', 'starter')).toBe('brand');
+    expect(initialRole(null, 'starter')).toBe('brand');
+    expect(initialRole('creator', 'starter')).toBe('creator');
+    expect(initialRole(null, null)).toBeNull();
+    expect(planFor('brand', 'starter')).toBe('starter');
+    expect(planFor('agency', 'starter')).toBeNull();
+  });
+
+  it('shows the plan as the pricing section prints it', () => {
+    expect(planSummary('starter')).toBe('Starter · ₹0 / month · 15% network fee on approved payouts');
+    expect(planSummary('network')).toBe('Network · ₹24,999 / month · 8% network fee on approved payouts');
   });
 });
 

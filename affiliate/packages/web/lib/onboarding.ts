@@ -21,7 +21,8 @@
  * holds a dev token (lib/api.ts).
  */
 
-import { formatCountCompact, formatPct } from './format';
+import { formatCountCompact, formatINRWhole, formatPct } from './format';
+import { PRICING } from './site-copy';
 import {
   validateBankAccount,
   validateGstin,
@@ -116,10 +117,48 @@ export function stepIndexLabel(step: StepNumber): string {
   return String(step).padStart(2, '0');
 }
 
-/** Query string for a view: "?role=creator&step=2" (step 1 carries no step, no role carries no role). */
-export function joinSearch(role: Role | null, view: JoinView): string {
+/* ---------- the pricing plan a brand picked on the marketing page ---------- */
+
+/** The brand plans of the pricing section (lib/site-copy.ts PRICING). */
+export type PlanId = keyof typeof PRICING;
+
+const PLAN_IDS = Object.keys(PRICING) as ReadonlyArray<PlanId>;
+
+/** ?plan= → "starter" | "network", or null when absent / unknown. */
+export function parsePlan(raw: string | string[] | null | undefined): PlanId | null {
+  const value = (Array.isArray(raw) ? raw[0] : raw)?.trim().toLowerCase();
+  return value && (PLAN_IDS as ReadonlyArray<string>).includes(value) ? (value as PlanId) : null;
+}
+
+/**
+ * The role /join starts with: ?role=, or a brand when only ?plan= came
+ * (the plans are brand pricing).
+ */
+export function initialRole(role: string | string[] | null | undefined, plan: string | string[] | null | undefined): Role | null {
+  return parseRole(role) ?? (parsePlan(plan) ? 'brand' : null);
+}
+
+/** Only the brand flow carries a plan (the pricing section prices brands). */
+export function planFor(role: Role | null, plan: PlanId | null): PlanId | null {
+  return role === 'brand' ? plan : null;
+}
+
+/** "Starter · ₹0 / month · 15% network fee on approved payouts" (the pricing section's line). */
+export function planSummary(plan: PlanId): string {
+  const p = PRICING[plan];
+  return `${p.name} · ${formatINRWhole(p.monthlyRupees)} / month · ${p.networkFeePct}% network fee on approved payouts`;
+}
+
+/**
+ * Query string for a view: "?role=creator&step=2" (step 1 carries no step,
+ * no role carries no role); a brand keeps the plan it picked
+ * ("?role=brand&plan=starter&step=3").
+ */
+export function joinSearch(role: Role | null, view: JoinView, plan: PlanId | null = null): string {
   const params = new URLSearchParams();
   if (role) params.set('role', role);
+  const kept = planFor(role, plan);
+  if (kept) params.set('plan', kept);
   if (view !== 1) params.set('step', String(view));
   const query = params.toString();
   return query ? `?${query}` : '';

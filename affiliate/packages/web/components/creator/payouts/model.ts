@@ -10,7 +10,7 @@
 
 import type { EarningsResponse } from '../../../lib/api';
 import { earningsBalances } from '../../../lib/earnings';
-import { formatINRFromMinor } from '../../../lib/format';
+import { formatINRExact, formatINRFromMinor } from '../../../lib/format';
 import { MIN_WITHDRAWAL_RUPEES, TDS } from '../../../lib/site-copy';
 
 const PAISE_PER_RUPEE = 100;
@@ -75,7 +75,8 @@ export interface WithdrawEligibility {
 
 /**
  * The Withdraw button is enabled from the minimum up (₹500 exactly is
- * allowed) and disabled below it, with the reason shown.
+ * allowed) and disabled below it, with the reason shown. A live balance is
+ * printed exactly (₹499.60, never rounded up to the minimum).
  */
 export function withdrawEligibility(availableMinor: number, minRupees: number = MIN_WITHDRAWAL_RUPEES): WithdrawEligibility {
   assertMinor(availableMinor, 'available balance');
@@ -87,7 +88,7 @@ export function withdrawEligibility(availableMinor: number, minRupees: number = 
     reason:
       availableMinor === 0
         ? `Nothing to withdraw yet. The minimum withdrawal is ${minLabel}.`
-        : `The minimum withdrawal is ${minLabel}; ${formatINRFromMinor(availableMinor)} is available.`,
+        : `The minimum withdrawal is ${minLabel}; ${formatINRExact(availableMinor)} is available.`,
   };
 }
 
@@ -117,7 +118,7 @@ export function validateWithdrawAmount(
   const min = minWithdrawalMinor(minRupees);
   if (grossMinor < min) return { ok: false, message: `The minimum withdrawal is ${formatINRFromMinor(min)}.` };
   if (grossMinor > availableMinor) {
-    return { ok: false, message: `You can withdraw up to ${formatINRFromMinor(availableMinor)}.` };
+    return { ok: false, message: `You can withdraw up to ${formatINRExact(availableMinor)}.` };
   }
   return { ok: true, message: '', grossMinor };
 }

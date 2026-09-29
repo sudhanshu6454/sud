@@ -62,6 +62,12 @@ export interface CatalogueResult<T> {
   value: T;
   /** true → the page MUST render <DemoBadge />. */
   demo: boolean;
+  /**
+   * The API failed (network, 5xx, 401 …) and the demo catalogue has no entry
+   * for this id either: the page must render the outage (error boundary,
+   * "temporarily unavailable"), never a 404 — the look may well exist.
+   */
+  outage?: boolean;
 }
 
 /**

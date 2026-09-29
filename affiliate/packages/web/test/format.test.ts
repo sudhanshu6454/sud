@@ -7,8 +7,10 @@ import {
   formatINRCompact,
   formatINRCompactFromMinor,
   formatINRFromMinor,
+  formatINRExact,
   formatINRWhole,
   formatMoney,
+  formatMoneyExact,
   formatPayout,
   formatPct,
   formatRate,
@@ -47,6 +49,32 @@ describe('existing exports keep their behaviour', () => {
   it('formatINR / formatMoney', () => {
     expect(formatINR(249900)).toBe('₹2,499');
     expect(formatMoney(18432000, 'INR')).toBe('₹1,84,320');
+  });
+});
+
+describe('live money is never rounded', () => {
+  it('formatINRExact keeps paise when there are any', () => {
+    expect(formatINRExact(4290000)).toBe('₹42,900');
+    expect(formatINRExact(4290050)).toBe('₹42,900.50');
+    expect(formatINRExact(49960)).toBe('₹499.60');
+    expect(formatINRExact(-20000)).toBe('-₹200');
+    expect(formatINRExact(-2050)).toBe('-₹20.50');
+  });
+
+  it('formatMoney prints a shop price exactly, in its own currency', () => {
+    expect(formatMoney(149950, 'INR')).toBe('₹1,499.50');
+    expect(formatMoney(149900, 'INR')).toBe('₹1,499');
+    expect(formatMoney(1499, 'USD')).toBe('$14.99');
+    expect(formatMoney(1500, 'USD')).toBe('$15');
+  });
+
+  it('formatMoneyExact always shows the decimals, in the row currency', () => {
+    expect(formatMoneyExact(14950, 'INR')).toBe('₹149.50');
+    expect(formatMoneyExact(1499, 'INR')).toBe('₹14.99');
+    expect(formatMoneyExact(15000, 'INR')).toBe('₹150.00');
+    expect(formatMoneyExact(14950, 'USD')).toBe('$149.50');
+    expect(formatMoneyExact(1499, 'USD')).toBe('$14.99');
+    expect(formatMoneyExact(500, 'JPY')).toBe('JP¥500');
   });
 });
 

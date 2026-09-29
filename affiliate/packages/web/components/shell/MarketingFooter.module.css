@@ -26,3 +26,18 @@
     padding: var(--space-6) 20px;
   }
 }
+
+/* Phones: 44px-tall targets for the 13px links (the line keeps its look;
+   the footer's own padding absorbs the extra height). */
+@media (max-width: 760px) {
+  .link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .footer {
+    align-items: center;
+    padding-block: var(--space-3);
+  }
+}

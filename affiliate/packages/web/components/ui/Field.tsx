@@ -49,7 +49,7 @@ export function useFieldControl(props: {
 export interface FieldProps {
   /** Eyebrow label above the control (12px uppercase, neutral-700). */
   label: ReactNode;
-  /** Appended to the label in normal case, e.g. "(optional)". */
+  /** Appended to the label in the label's own style (uppercase eyebrow), e.g. "(optional)" → "(OPTIONAL)". */
   labelSuffix?: ReactNode;
   /** Help line under the control (12px, neutral-700; accent-700 with hintTone="accent"). */
   hint?: ReactNode;

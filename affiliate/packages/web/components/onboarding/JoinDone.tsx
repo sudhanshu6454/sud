@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import DemoBadge from '@/components/DemoBadge';
 import { Button, Eyebrow } from '@/components/ui';
 import { COPIED_MS, copyText } from '@/lib/clipboard';
-import { dashboardHref, onboardingStateLabel, type PublisherApplication, type Role } from '@/lib/onboarding';
+import { PRICING } from '@/lib/site-copy';
+import { dashboardHref, onboardingStateLabel, type PlanId, type PublisherApplication, type Role } from '@/lib/onboarding';
 import styles from './Onboarding.module.css';
 
 export type FinishResult =
@@ -17,6 +18,8 @@ export type FinishResult =
 
 interface JoinDoneProps {
   role: Role | null;
+  /** The pricing plan a brand picked (?plan=), or null. */
+  plan?: PlanId | null;
   result: FinishResult;
   /** Re-run the submission (fallback only). */
   onRetry: () => void;
@@ -26,7 +29,7 @@ interface JoinDoneProps {
 }
 
 /** The success panel after "Finish setup →": what happened (live, demo or unreachable) and the next step. */
-export function JoinDone({ role, result, onRetry, retrying, headingRef, announce }: JoinDoneProps) {
+export function JoinDone({ role, plan = null, result, onRetry, retrying, headingRef, announce }: JoinDoneProps) {
   const [copied, setCopied] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
@@ -47,14 +50,21 @@ export function JoinDone({ role, result, onRetry, retrying, headingRef, announce
     }
   }
 
-  const title = result.kind === 'live' ? 'Application received.' : 'You’re set up — as a demo.';
+  // The fallback is not a finished setup: nothing was submitted.
+  const title =
+    result.kind === 'live'
+      ? 'Application received.'
+      : result.kind === 'fallback'
+        ? 'Could not reach the API.'
+        : 'You’re set up — as a demo.';
+  const eyebrow = result.kind === 'fallback' ? 'Not submitted' : 'Setup complete';
   const lead =
     result.kind === 'live'
       ? 'Your publisher application is open. Until the network team has reviewed it, you can browse offers but cannot create tracked links.'
       : result.kind === 'fallback'
         ? 'The API could not be reached, so no application was created and nothing was saved. Try again when it is up.'
         : result.reason === 'business'
-          ? `Nothing was created: there is no ${role === 'agency' ? 'agency' : 'brand'} sign-up endpoint yet, and no payment was taken. The dashboard shows TEST demo data.`
+          ? `Nothing was created: there is no ${role === 'agency' ? 'agency' : 'brand'} sign-up endpoint yet, and no payment was taken${plan ? ` (the ${PRICING[plan].name} plan you picked is not recorded either)` : ''}. The dashboard shows TEST demo data.`
           : 'Nothing was created: you are not signed in, so this sign-up was a demo. Log in with a dev token and run the sign-up again to open a real publisher application.';
 
   return (
@@ -62,7 +72,7 @@ export function JoinDone({ role, result, onRetry, retrying, headingRef, announce
       <div>
         <div className={styles.eyebrowRow}>
           <Eyebrow tone="accent" tracking="wide">
-            Setup complete
+            {eyebrow}
           </Eyebrow>
           {result.kind === 'fallback' ? (
             <DemoBadge variant="fallback" className={styles.badge} />

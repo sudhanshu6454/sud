@@ -14,7 +14,7 @@ import { Button, Dialog, EmptyState, PageHeader, StatusTag, Tag, TagButton, cx }
 import { platformList } from '@/lib/demo/afflino';
 import type { BrandOfferStatus } from '@/lib/demo/brand';
 import { formatCount, formatDayMonth, formatINRFromMinor } from '@/lib/format';
-import { ACTION_LABEL, MODEL_TAG, OFFER_PLATFORMS, STATUS_ACTIONS, STATUS_ORDER, rowPayoutLabel, type OfferAction } from './offerModel';
+import { ACTION_LABEL, LIST_MODEL_TAG, OFFER_PLATFORMS, STATUS_ACTIONS, STATUS_ORDER, rowPayoutLabel, type OfferAction } from './offerModel';
 import { StackTable, type StackColumn } from './StackTable';
 import { useBrandOffers, type OfferRow } from './useBrandOffers';
 import { useBrandWorkspace } from './workspace';
@@ -120,7 +120,7 @@ export function BrandOffers() {
         </div>
       ),
     },
-    { key: 'model', header: 'Model', cell: (r) => <Tag variant={MODEL_TAG[r.model]}>{r.model}</Tag> },
+    { key: 'model', header: 'Model', cell: (r) => <Tag variant={LIST_MODEL_TAG}>{r.model}</Tag> },
     { key: 'payout', header: 'Payout', nowrap: true, cell: (r) => rowPayoutLabel(r) },
     {
       key: 'budget',
@@ -129,11 +129,11 @@ export function BrandOffers() {
       nowrap: true,
       cell: (r) => (r.budgetMinor > 0 ? formatINRFromMinor(r.budgetMinor) : '—'),
     },
-    { key: 'platforms', header: 'Platforms', tone: 'muted', hideMd: true, cell: (r) => platformList(OFFER_PLATFORMS.filter((p) => r.platforms.includes(p))) || '—' },
+    { key: 'platforms', header: 'Platforms', tone: 'muted', nowrap: true, hideMd: true, cell: (r) => platformList(OFFER_PLATFORMS.filter((p) => r.platforms.includes(p))) || '—' },
     { key: 'window', header: 'Window', nowrap: true, hideMd: true, cell: (r) => `${r.validationDays} days` },
     { key: 'status', header: 'Status', cell: (r) => <StatusTag status={r.status} /> },
     { key: 'updated', header: 'Updated', tone: 'muted', nowrap: true, hideMd: true, cell: (r) => formatDayMonth(r.updated, { pad: true }) },
-    { key: 'actions', header: <span className="sr-only">Actions</span>, actions: true, cell: actionCell },
+    { key: 'actions', header: 'Action', actions: true, cell: actionCell },
   ];
 
   const filters: Filter[] = ['All', ...STATUS_ORDER];

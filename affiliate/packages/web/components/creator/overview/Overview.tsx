@@ -2,14 +2,17 @@
 
 /*
  * Creator Overview — 1c (desktop) and the 1e left composition (phone,
- * ≤760px). Earnings and Next payout come from GET /v1/publisher/earnings
- * when it answers; everything else is TEST demo data (no v1 endpoint), so
- * the page always carries <DemoBadge /> ("fallback" when the call failed).
+ * ≤760px). Unpaid earnings and Next payout come from GET
+ * /v1/publisher/earnings when it answers; everything else is TEST demo data
+ * (no v1 endpoint), so the page always carries <DemoBadge /> ("fallback",
+ * "API unreachable", only when the call never reached the API; an answer
+ * the API gave is a top Banner).
  */
 
 import Link from 'next/link';
 import { Fragment, useEffect, useRef, useState } from 'react';
 import DemoBadge from '@/components/DemoBadge';
+import { FallbackBanner } from '@/components/FallbackBanner';
 import {
   Banner,
   BarChart,
@@ -27,7 +30,7 @@ import {
   type DataTableColumn,
 } from '@/components/ui';
 import type { DemoTopLink } from '@/lib/demo/afflino';
-import { formatCount, formatCountCompact, formatINRFromMinor } from '@/lib/format';
+import { formatCount, formatCountCompact, formatINRExact, formatINRFromMinor } from '@/lib/format';
 import { loadOverview, type OverviewLoad } from './data';
 import {
   DEFAULT_OVERVIEW_RANGE,
@@ -100,21 +103,19 @@ export function Overview() {
   const kpis = load ? overviewKpis(load.dataset, load.live) : null;
   const dataset = load?.dataset ?? null;
   const badge = load ? (
-    <DemoBadge variant={load.fallback ? 'fallback' : 'mock'} className={styles.badge} />
+    <DemoBadge variant={load.unreachable ? 'fallback' : 'mock'} className={styles.badge} />
   ) : null;
+  // Live balances carry arbitrary paise: print them exactly, never rounded up.
+  const money = (minor: number) => (load?.live ? formatINRExact(minor) : formatINRFromMinor(minor));
 
   return (
     <>
-      {load?.mismatch ? (
-        <Banner title="Earnings unavailable.">
-          The API answered for a different publisher than this account, so the page shows demo data.
-        </Banner>
-      ) : null}
+      <FallbackBanner notice={load?.notice} />
 
       {load?.live ? (
         <Banner tone="info">
-          Earnings and Next payout are your live balances to date (the earnings API takes no date range). Clicks,
-          conversions, the chart and the tables are demo data until their endpoints exist.
+          Unpaid earnings and Next payout are your live balances (earned and not yet paid out; the earnings API takes
+          no date range). Clicks, conversions, the chart and the tables are demo data until their endpoints exist.
         </Banner>
       ) : null}
 
@@ -138,7 +139,7 @@ export function Overview() {
         <KpiStrip columns={4} className={styles.kpis}>
           <KpiCell
             label={kpis?.earnings.label ?? 'Earnings'}
-            value={kpis ? formatINRFromMinor(kpis.earnings.valueMinor) : undefined}
+            value={kpis ? money(kpis.earnings.valueMinor) : undefined}
             meta={kpis?.earnings.meta ?? ''}
             positive={kpis?.earnings.positive}
             loading={!kpis}
@@ -157,7 +158,7 @@ export function Overview() {
           />
           <KpiCell
             label="Next payout"
-            value={kpis ? formatINRFromMinor(kpis.nextPayout.valueMinor) : undefined}
+            value={kpis ? money(kpis.nextPayout.valueMinor) : undefined}
             meta={kpis?.nextPayout.meta ?? ''}
             loading={!kpis}
           />
@@ -259,7 +260,7 @@ export function Overview() {
             {badge}
           </div>
           <div className={styles.heroValue} aria-busy={!kpis || undefined}>
-            {kpis ? formatINRFromMinor(kpis.earnings.valueMinor) : '—'}
+            {kpis ? money(kpis.earnings.valueMinor) : '—'}
           </div>
           {kpis ? (
             <p className={cx(styles.heroLine, kpis.phonePositive && styles.positive)}>{kpis.phoneLine}</p>
@@ -306,6 +307,12 @@ export function Overview() {
               </li>
             ))}
           </ul>
+          {/* The phone tab bar has no Reports tab (1e draws four tabs). */}
+          <p className={styles.phoneMore}>
+            <Link href="/app/reports">
+              Reports<span aria-hidden="true"> →</span>
+            </Link>
+          </p>
         </section>
       </div>
 

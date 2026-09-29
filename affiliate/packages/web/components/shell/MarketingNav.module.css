@@ -42,7 +42,8 @@
 
 .link:hover,
 .link[aria-current='page'] {
-  color: var(--color-accent);
+  /* The system's link hover (ASSUMPTIONS 29): accent-700, AA on the ground. */
+  color: var(--color-accent-700);
 }
 
 .actions {
@@ -79,7 +80,7 @@
 }
 
 .menuLink:hover {
-  color: var(--color-accent);
+  color: var(--color-accent-700);
   background: color-mix(in srgb, var(--color-text) 4%, transparent);
 }
 

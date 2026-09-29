@@ -66,7 +66,8 @@
 
 .ghost,
 .ghost:hover {
-  color: var(--color-accent);
+  /* accent-700 (6.4:1 on the ground): the raw accent is 3.8:1, below WCAG AA for 14px text. */
+  color: var(--color-accent-700);
 }
 .ghost.md {
   padding-inline: var(--space-1);
@@ -113,6 +114,14 @@
 /* Mobile hit area: at least 44px tall. */
 .touch {
   min-height: 44px;
+}
+
+/* "On mobile, min height is 44px" (handover README, Button): every size on
+   phones, so no page can forget `touch`. */
+@media (max-width: 760px) {
+  .btn {
+    min-height: 44px;
+  }
 }
 
 .label {

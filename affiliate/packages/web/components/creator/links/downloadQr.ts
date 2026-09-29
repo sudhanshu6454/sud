@@ -1,7 +1,7 @@
 'use client';
 
 import { downloadBlob } from '@/lib/download';
-import { qrPng } from '@/lib/links';
+import { qrPng } from '@/lib/qr';
 
 /** Save the link's QR code as a PNG (8px modules, 4-module quiet zone, error correction M). */
 export function downloadQrPng(href: string, fileName: string): void {

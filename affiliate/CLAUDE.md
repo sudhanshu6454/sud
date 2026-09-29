@@ -13,8 +13,8 @@ platform's first publisher and its five sites are the first properties
 ## Verified state (2026-09-29)
 
 - `pnpm typecheck` clean on all 5 packages (`packages/*`)
-- **558/558 tests green across 28 test files** (`./node_modules/.bin/vitest run`:
-  api 87, shared 11, workers 15, web 445)
+- **587/587 tests green across 30 test files** (`./node_modules/.bin/vitest run`:
+  api 88, shared 11, workers 15, web 473)
 - Demo: **51/51 assertions** on pg-mem (`tsx scripts/demo-money-loop.ts`) **and
   51/51 on a real PostgreSQL 16.13** (`DEMO_TARGET=postgres`, scratch database
   `paparazzi_demo_<8 hex>` created and dropped, no shims) — link → click →
@@ -52,7 +52,7 @@ not at the repo root, so the scripts that need it are given with the api package
 copy.
 
 ```bash
-./node_modules/.bin/vitest run                                        # tests (558)
+./node_modules/.bin/vitest run                                        # tests (587)
 pnpm typecheck                                                        # 5 packages
 ./packages/api/node_modules/.bin/tsx scripts/demo-money-loop.ts       # demo on pg-mem (51 assertions)
 DATABASE_URL=postgresql://paparazzi:changeme@127.0.0.1:5432/paparazzi DEMO_TARGET=postgres ./packages/api/node_modules/.bin/tsx scripts/demo-money-loop.ts   # same demo on real Postgres (scratch DB, dropped)
@@ -116,7 +116,10 @@ runs and the docker smoke test.
   catalogue API. Live v1 calls from the app areas: `GET
   /v1/publisher/earnings`, `POST /v1/links`, `GET`/`POST /v1/disputes`,
   `GET /v1/suspense` + retry / review, `POST /v1/publishers`; everything
-  else is TEST data (`lib/demo/*`) with `<DemoBadge />`. Old `/portal/*` and
+  else is TEST data (`lib/demo/*`) with `<DemoBadge />`. Without a token
+  those pages make no call; "Demo data — API unreachable" means only that
+  the API could not be reached, and any answer it gave (401 / 403 / 404 /
+  400 / 5xx) is a Banner naming it (`lib/api.ts` `fallbackNotice`). Old `/portal/*` and
   `/console/*` URLs 307 to their new routes. Marketing figures, prices,
   fees, TDS, the validation window, the minimum withdrawal and the #ad line
   are placeholders in `lib/site-copy.ts`. **Web contract:** `API_BASE` (server runtime; default `http://localhost:3000`),

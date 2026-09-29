@@ -66,7 +66,7 @@ export function OfferDetail({ offer }: { offer: DemoLinkOffer }) {
         if (err instanceof DOMException && err.name === 'AbortError') return; // the creator closed the sheet
       }
     }
-    await copy(text, 'share', 'Link and disclosure line copied. Paste them into your Instagram post.');
+    await copy(text, 'share', 'Demo link and disclosure line copied (not tracked).');
   }
 
   const facts: ReadonlyArray<[string, React.ReactNode]> = [

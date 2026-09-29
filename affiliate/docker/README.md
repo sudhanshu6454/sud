@@ -197,10 +197,12 @@ sleep 8; docker logs pz-workers 2>&1 | grep -o '"message":"[^"]*"' | sort -u
 docker rm -f pz-web pz-workers pz-redirect pz-api pz-redis pz-db && docker network rm pz-test && rm -f seed-fleet.json
 ```
 
-Observed on the last run (2026-09-29, with `paparazzi/web:test` and
-`paparazzi/migrate:test` rebuilt from this tree and the api, redirect and
-workers images of the same day — their code did not change; all containers
-running as `node`, PID 1):
+Observed on the last run (2026-09-29, re-run verbatim after the web review
+fixes with `paparazzi/web:test` (273 MB) and `paparazzi/api:test` (264 MB;
+`src/errors.ts` now answers Fastify's own 4xx as `VALIDATION_ERROR`) rebuilt
+from this tree, and the migrate, redirect and workers images of the same day —
+their code did not change; all containers running as `node`, PID 1; the
+output below was identical):
 
 - migrate: `5 migration(s) applied, 0 already applied`; `seed.ts` and `seed-fleet.ts --with-demo-programme` succeed (`seed-fleet: 5 site(s) from /app/config/sites.yaml, shop host shop.pz-test.invalid, with TEST demo programme`). Checked on the first run of the day and not repeated here: `--status` lists 0001–0005 applied and the fleet seed is byte-identical on a second run (5 looks, one per fleet site, `web_placement_id` reported).
 - `curl http://127.0.0.1:3100/healthz` → `{"ok":true}` 200; `curl http://127.0.0.1:3101/healthz` → `{"ok":true}` 200; `curl http://127.0.0.1:3200/api/healthz` (proxy) → `{"ok":true}` 200; without a bearer the proxy relays the API's 401 envelope.

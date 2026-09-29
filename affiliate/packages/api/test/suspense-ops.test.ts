@@ -382,6 +382,21 @@ describe('POST /v1/suspense/:id/retry', () => {
     expect(items.map((i) => i.id)).toContain(s1);
   });
 
+  it('answers a bodyless POST sent with a JSON content type as a 400, not a 500', async () => {
+    // Fastify's parser rejects an empty body declared as JSON before the
+    // handler runs; that is a client error (VALIDATION_ERROR), never INTERNAL.
+    const res = await app.inject({
+      method: 'POST',
+      url: `/v1/suspense/${s1}/retry`,
+      headers: { ...bearer(USERS.OP, ORG_A), 'content-type': 'application/json' },
+    });
+    expect(res.statusCode).toBe(400);
+    const body = res.json() as { error: { code: string; message: string } };
+    expect(body.error.code).toBe('VALIDATION_ERROR');
+    expect(body.error.message).toMatch(/empty/i);
+    expect(await convClickId(s1)).toBeNull();
+  });
+
   it('422s when the conversion has no returned click ref — never fuzzy-matches', async () => {
     const res = await app.inject({
       method: 'POST',

@@ -10,7 +10,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { Platform } from '@/lib/demo/afflino';
 import { DEMO_LINK_HANDLE, demoDraftDefaults, type DemoLinkOffer } from '@/lib/demo/links';
-import { composeDemoLink, linkHref, validateLandingPage } from '@/lib/links';
+import { composeDemoLink, demoLinkHref, validateLandingPage } from '@/lib/links';
 import { validateSubId, type ValidationResult } from '@/lib/validators';
 
 export interface LinkDraftValues {
@@ -94,7 +94,8 @@ export function useLinkDraft(
   const link = useMemo<DraftLink | null>(() => {
     if (!landing.ok || !subId.ok || !platformAllowed) return null;
     const display = composeDemoLink({ handle: DEMO_LINK_HANDLE, offerSlug: offer.id, subId: subId.value });
-    return { display, href: linkHref(display) };
+    // Keep the drawn display text; the payload is on a reserved host (demoLinkHref).
+    return { display, href: demoLinkHref(display) };
   }, [landing.ok, subId.ok, subId.value, platformAllowed, offer.id]);
 
   let blockedReason = '';

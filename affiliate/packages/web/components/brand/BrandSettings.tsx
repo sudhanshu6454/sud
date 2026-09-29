@@ -11,7 +11,15 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import DemoBadge from '@/components/DemoBadge';
 import { Button, Field, Input, PageHeader, Select } from '@/components/ui';
-import { BRAND_CATEGORIES, allowedDomain, normaliseBrandSettings, validateBrandSettings, type BrandSettingsErrors, type BrandSettingsForm } from './settingsModel';
+import {
+  BRAND_CATEGORIES,
+  allowedDomain,
+  brandSettingsDirty,
+  normaliseBrandSettings,
+  validateBrandSettings,
+  type BrandSettingsErrors,
+  type BrandSettingsForm,
+} from './settingsModel';
 import { useBrandSettings } from './useBrandSettings';
 import { useBrandWorkspace } from './workspace';
 import shared from './shared.module.css';
@@ -61,10 +69,13 @@ export function BrandSettings() {
     setNotice(`Saved in this browser (demo). Landing pages must now be on ${allowedDomain(next)}.`);
   };
 
+  // Save is enabled only when something changed (as on the creator's 2d settings).
+  const dirty = store.ready && brandSettingsDirty(form, store.settings);
+
   const onCancel = () => {
     setForm(store.settings);
     setErrors({});
-    setNotice('Changes discarded.');
+    setNotice(dirty ? 'Changes discarded.' : '');
   };
 
   return (
@@ -123,7 +134,7 @@ export function BrandSettings() {
             <Button variant="ghost" onClick={onCancel} className={styles.touch}>
               Cancel
             </Button>
-            <Button variant="primary" type="submit" className={styles.touch}>
+            <Button variant="primary" type="submit" className={styles.touch} disabled={!dirty}>
               Save changes
             </Button>
           </div>

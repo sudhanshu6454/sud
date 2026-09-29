@@ -19,16 +19,19 @@
     fallback is active ("demo data — API unreachable"). Pages built only against
     the documented v1 surface (`GET /v1/publisher/earnings`,
     `POST /v1/links`); no dependency on endpoints being built in parallel.
+    *Superseded in part by 64: `withDemoFallback` now returns the error, and
+    only an unreachable API is labelled "API unreachable".*
 12. **Portal dashboard** (`/portal`): stat cards for clicks, matched
     transactions, paid (no v1 endpoint yet — always demo, labelled), and
     pending/approved/collected/payable from the earnings API with demo fallback.
     Publisher id from localStorage `paparazzi_publisher_id`, else the demo
-    constant in `lib/api.ts`. Recent conversions table is mocked and labelled
+    constant in `lib/api.ts` (*superseded by 64: the demo id is never sent*). Recent conversions table is mocked and labelled
     (no v1 endpoint).
 13. **Link builder** (`/portal/links`): demo option lists (no listing endpoint
     in v1). POSTs to `/v1/links`; API error codes map to human messages
     (`PROGRAMME_NOT_APPROVED` → "programme not active", `OFFER_STALE` →
-    "offer expired", `PROPERTY_FORBIDDEN` → "property not approved"). On network
+    "offer expired", `PROPERTY_FORBIDDEN` → "property not found or not approved
+    for your organisation"; *the option lists are superseded by 67*). On network
     failure a demo `/r/{token}` URL is minted locally with a clear "not
     tracked" warning — it earns nothing.
 14. **Statements** (`/portal/statements`): programme → property → placement
@@ -166,7 +169,13 @@
     the same PWA: ≤760px the sidebar becomes a top bar (wordmark + 32px account
     box → settings) and a fixed bottom tab bar; the marketing chrome collapses
     its links into a menu below 900px. The sidebar is sticky at 100vh (the
-    artboards simply end at their content).
+    artboards simply end at their content). The phone top bar is drawn only
+    where the artboards draw it: 3f's Offers and Payouts put their title
+    straight under the status bar, so `/app/offers` and `/app/payouts` have
+    none (`AppShell` `phoneTopbarHiddenOn`, `CREATOR_PHONE_TOPBAR_HIDDEN_ON`);
+    the account box stays on Home (1e) and the other creator pages. The
+    brand's 3f Today keeps it (it is the brand's only phone entry to
+    Settings).
 35. **Agency navigation** is Workspace (`/agency`), Brand clients
     (`/agency#clients`), Roster (`/agency#roster`), plus a workspace switcher
     into `/brand?workspace=<client id>`. *Superseded in part by 39.*
@@ -239,7 +248,8 @@ catalogue: 18–22; the locale toggle is gone; Archivo: 30; wishlist key
 
 46. **One accepted visual deviation: the demo badge.** Every page that shows
     TEST data renders `<DemoBadge />` — `variant="mock"` where no endpoint
-    exists, `"fallback"` when a live call failed — in the page header's
+    exists or the API answered with an error, `"fallback"` only when a live
+    call could not reach the API (64) — in the page header's
     actions or next to a section label. The badge has no outer margin; the
     placement spaces it. Proper nouns are "Demo …" one-for-one and the
     numbers are as designed; the extra data each area needs lives in
@@ -285,13 +295,22 @@ catalogue: 18–22; the locale toggle is gone; Archivo: 30; wishlist key
     design draws one amount (₹42,900) for both. `approved` (the net
     publisher_liability) is not shown as a payout: it includes earnings the
     merchant has not paid for and earnings inside the returns window.
-    Overview "Earnings to date" = `pending` + `approved` (the route takes no
-    date range); Payouts "Pending approval" = `pending`. The contract's
-    payout threshold is not in the response and is not reflected. On
-    fallback the pages print the designed figures, not `DEMO_EARNINGS`
-    mapped (that would print ₹41,090 beside platform rows summing to
-    ₹1,84,320). A reply for another publisher id is an error Banner and demo
-    data.
+    Overview "Unpaid earnings" = `pending` + `approved`, earned and not yet
+    paid out (meta "₹X pending · ₹Y approved"; a negative `approved`, a
+    reversal after payout, reads "₹Y reversed after payout"). It is not
+    "to date": every paid batch debits `approved`, so the figure falls after
+    a payout, and the route returns no lifetime total (a true to-date figure
+    needs `paid_minor` added to the response). Payouts "Pending approval" =
+    `pending` ("Awaiting the brand's approval" when live); with live
+    balances a line under Available names approved − available ("₹X more
+    approved: not yet collected from the brand, still in the returns window,
+    or in a batch that is not paid yet"), so the page adds up to the
+    Overview. Live amounts print exactly (paise when there are any, never
+    rounded up: `formatINRExact`). The contract's payout threshold is not in
+    the response and is not reflected. Without live balances the pages print
+    the designed figures, not `DEMO_EARNINGS` mapped (that would print
+    ₹41,090 beside platform rows summing to ₹1,84,320). A reply for another
+    publisher id, like any answer the API gave, is a Banner (64).
 
 **Marketing** (`/`, `/login`, `/terms`, `/privacy`, `/contact`)
 
@@ -345,8 +364,10 @@ catalogue: 18–22; the locale toggle is gone; Archivo: 30; wishlist key
     `useSearchParams` syncing). Fields start empty (the mock draws the
     filled state); the 3a columns sit in the 5fr / 7fr shell (634px against
     the drawn 558px, so the step 2 lead wraps differently); phones show a
-    step strip with short labels. The home page's `?plan=starter` is not
-    read: the onboarding design has no plan step.
+    step strip with short labels. The home page's `?plan=starter` ("Start
+    free") is read (69): it preselects the brand flow, is shown under each
+    brand step's title and stays in the URL; the design has no plan step, so
+    nothing more is built for it.
 
 **Creator app** (`/app/*`)
 
@@ -374,9 +395,14 @@ catalogue: 18–22; the locale toggle is gone; Archivo: 30; wishlist key
     carries Review status. "Attribution 30 days / 7 days" is placeholder
     copy: no attribution window is implemented. QR: error correction M, 8px
     modules, 4-module margin, 1-bit greyscale PNG
-    (`qrcode-generator@2.0.4`, MIT). Live minting sits in an inline "Live
-    tracked link" section (not a dialog); editing the generator after a live
-    mint returns the Generated box to the demo preview. On the phone detail
+    (`qrcode-generator@2.0.4`, MIT; `lib/qr.ts`, loaded only by Download QR).
+    Live minting sits in an inline "Live tracked link" section (not a dialog)
+    with pasted uuids (67); editing the generator after a live mint returns
+    the Generated box to the demo preview. A demo link keeps the drawn
+    display text, but Copy link, Download QR and Share carry the reserved
+    host `afflino.demo.invalid` (the readable format is not implemented, so a
+    copied demo link must not look like a working afflino.com URL), and the
+    share toast says the link is not tracked. On the phone detail
     page the shell's top bar and tab bar stay (1e hides both; the sticky
     footer sits above the tab bar) and a "Disclosure text" box is added
     (every copy / share action offers the #ad line); "Sort" is hidden on
@@ -385,7 +411,12 @@ catalogue: 18–22; the locale toggle is gone; Archivo: 30; wishlist key
     ₹500 minimum (gross, inclusive) up to the available balance; TDS uses
     the site-copy rate rounded half-up to the rupee (the design's ₹513); a
     live Withdraw moves no money and explains that batches are prepared and
-    approved by a second person (there is no publisher withdrawal endpoint).
+    approved by a second person (there is no publisher withdrawal endpoint);
+    it names no destination ("the payout account the finance team holds for
+    you"), because the payout method is demo data with no payee endpoint —
+    with live balances the method cell carries its own Demo badge and the
+    phone panel drops "to <method>". The PAN line reads "PAN not checked
+    (demo)" (2c draws "PAN verified"; no check exists).
     Exports carry a TEST row first. Desktop 2c / 2d have hidden h1s (no
     drawn title); "Raise a ticket →", "Statements →" and, on phones, "Change
     payout method →" were added. Settings is one form over five sections;
@@ -407,11 +438,19 @@ catalogue: 18–22; the locale toggle is gone; Archivo: 30; wishlist key
     YouTube 10–14M, Snapchat 6–8M, Telegram 2–3M → the drawn 38–52M), not a
     forecast. Builder steps 02–04 are this build's design, not the owner's;
     the builder opens pre-filled with the drawn example; the preview card
-    also lists allowed platforms. Landing pages must be https on the
+    also lists allowed platforms. The network fee is billed on approved
+    conversions (Billing: 8% of 8,934 × ₹180 = ₹1,28,649.60, "8% of
+    ₹16,08,120 approved conversions to date"), the base /brand/conversions
+    bills ("Approved · Billed at the offer's payout", "Rejected · Not
+    billed"); the drawn ₹18.4L Spend counts all 10,212 sign-ups and is
+    labelled so. Landing pages must be https on the
     brand's website domain (subdomains allowed); creators never see them.
     GSTIN is format-checked only. Admin review is not simulated: a submitted
     offer stays "In review" and never reaches `/admin`. Agency client
-    workspaces show the same TEST figures under the client's name. On phones
+    workspaces show the same TEST figures under the client's name; the
+    sidebar footer then prints "<category> · agency client", not the client's
+    own spend, so one screen never shows two spends. Brand Settings enables
+    Save only when a normalised value changed. On phones
     `/brand` is the 3f composition (no Top creators table).
 
 **Agency and admin** (`/agency`, `/admin/*`, 3e / 2e)
@@ -431,7 +470,15 @@ catalogue: 18–22; the locale toggle is gone; Archivo: 30; wishlist key
     and 122 cases, KYC buckets to 18,406, September fees to ₹52.6L); fraud
     thresholds are demo values and the pages say that no fraud detection,
     KYC or PAN verification exists. Settlements is read-only and explains
-    the API's maker-checker flow. 2e gains two tabs (Suspense, Looks).
+    the API's maker-checker flow. 2e gains two tabs (Suspense, Looks); where
+    the eight tabs do not fit (phones, 761–900px) the strip scrolls with its
+    active tab centred on every route and an edge fade on the side that has
+    more. Every admin page follows 2e's template: no page header (suspense
+    and looks dropped theirs), the badge beside the section label, the page
+    note directly under the label, Review / View in a trailing Action
+    column. Lists and tables use one neutral model tag for every model
+    (`LIST_MODEL_TAG`); the drawn variants stay on the 1d cards and the 3b
+    preview.
 
 **Shop** (`/shop`, `/looks/*`, `/saved`)
 
@@ -446,17 +493,111 @@ catalogue: 18–22; the locale toggle is gone; Archivo: 30; wishlist key
     the layout, which printed it twice); its wording is unchanged, in one
     constant `SHOP_DISCLOSURE` (`components/Disclosure.tsx`), pending
     counsel. No price sort (the list endpoint has no prices). Demo wishlist
-    entries are recognised by a non-uuid look id.
+    entries are recognised by a non-uuid look id. Prices print exactly
+    (₹1,499.50, never rounded). When the API fails for a live look id the
+    look and item pages render the shop's error state ("temporarily
+    unavailable"), never a 404: the look may exist (`lookOrMiss`).
 
 **Open foundation items** (worked around locally, not changed): `Banner`'s
 title wraps beside a long message and its fixed role cannot pre-exist as a
 live region; `TagButton` does not forward refs; `SelectableCard` takes no
-`id` / `aria-describedby`; `EmptyState`'s action is 35px tall on phones;
+`id` / `aria-describedby`; (fixed: every Button is 44px tall on phones, so
+`EmptyState`'s action is too, and `TagButton` has a 44px hit area);
 `Kpi` has no step between 760px and the 4-cell desktop (pages add their own
 at 1000–1240px); `PageHeader` titles can wrap into the actions; `AppShell`
-has no detail mode that hides the tab bar (1e); `statusTag` has no mapping
+has no detail mode that hides the tab bar (1e) (it can now hide the phone
+top bar per path); `statusTag` has no mapping
 for "Rejected" or "Due"; `formatPayout` prints 12.5% as "13%" (the brand
 uses its own `formatBps`); `lib/demo/afflino.ts` marks every offer
 `requiresApproval: false` (overridden in `lib/demo/links.ts`); an `sr-only`
 span inside a button yields a stray space in its name (aria-label used
 instead).
+
+## Review fixes, second pass (2026-09-29)
+
+64. **An unreachable API and an answer the API gave are different states.**
+    `withDemoFallback` returns `{ value, demo, error }`. Only
+    `NETWORK_UNREACHABLE` / `UPSTREAM_UNAVAILABLE` (the proxy's 502) show
+    `<DemoBadge variant="fallback" />` ("Demo data — API unreachable"). Any
+    answer — 401 (missing or expired token: "Sign in to see …", link to
+    /login), 403 (the role cannot read it), 404 (for earnings: "This
+    publisher id is not in your organisation"), 400, 5xx — is a top Banner
+    naming it (`fallbackNotice`, `components/FallbackBanner`) with the plain
+    "Demo data" badge. Signed out (no token) the earnings, disputes and
+    suspense pages make no call at all and show their designed demo state
+    with "Demo data"; with a token but no saved publisher id the creator
+    pages ask for one (Banner) instead of sending `DEMO_PUBLISHER_ID`, which
+    is never sent any more. Payouts shows its badge from the first paint
+    (its tables are demo in every state). On `/admin/suspense` a filter the
+    API rejects (400) is an inline error that keeps the rows on screen.
+65. **Bodyless POSTs carry no JSON content type.** `apiFetch` sets
+    `Content-Type: application/json` only with a body: Fastify rejects an
+    empty body declared as JSON, which made every "Retry attribution" a 500.
+    The API now answers Fastify's own client errors (`FST_ERR_*` with a 4xx
+    status) as that status with `VALIDATION_ERROR` instead of `INTERNAL`
+    (`packages/api/src/errors.ts`).
+66. **Suspense queue.** Amounts print in each row's own currency with its
+    decimals (`formatMoneyExact`: ₹1,234.50, $14.99), never rounded; the
+    date filters are India calendar days (from 00:00 IST, to 23:59:59.999
+    IST; the API's bounds are inclusive), matching the Received column
+    ("21 Sep · 14:42"); Reviewed is "Yes" / "No"; reasons are sentence case;
+    "Retry attribution" is disabled on a row with no click reference, with
+    the reason as visible text; only the newest load writes the table.
+67. **Live minting takes pasted uuids.** No listing endpoint exists for
+    properties, programmes, offers or placements, so the four ids are typed
+    or pasted, checked for shape, remembered in this browser
+    (`afflino_live_mint_ids_v1`); the TEST ids are only suggestions (a real
+    API does not know them). Each unchanged set of ids carries one
+    `Idempotency-Key` (`lib/idempotency.ts`), so a retry after a timeout
+    replays the first link instead of minting a second.
+68. **Disputes are filed for the saved publisher.** With a publisher id
+    saved (/login, /join) the list is `GET /v1/disputes?publisher_id=` and
+    the ticket carries `publisher_id` (the API checks it belongs to the
+    token's organisation); each unchanged submission carries one
+    `Idempotency-Key`. "What happened" is a textarea; the reference hint no
+    longer shows the API field name.
+69. **`/join?plan=`** (`starter` | `network`, `lib/site-copy.ts` PRICING)
+    preselects the brand flow when no role is given, shows "Plan · Starter ·
+    ₹0 / month · 15% network fee on approved payouts, picked on the pricing
+    page. Compare plans" under each brand step's title, stays in the URL
+    while the role is brand, and is named in the demo result ("the Starter
+    plan you picked is not recorded either"). The fallback result says "Not
+    submitted" / "Could not reach the API.", not "Setup complete".
+70. **Phones and focus.** Every Button is at least 44px tall at 760px and
+    below (the handover README's rule; `touch` is no longer needed for it);
+    TagButton chips keep their drawn 25px with a transparent 44px hit area;
+    the phone top bar's wordmark and account box have 44px hit areas around
+    the drawn 32px box; statement tables stack into rows on phones. Focus
+    rings on the sidebar items, the logo row, the workspace switcher and the
+    phone tabs are drawn inside the element (`outline-offset: -4px`), since
+    the scrolling sidebar and the viewport edge clipped their sides.
+71. **Text contrast.** Text in the raw accent (#EC3013, 3.8:1 on the ground)
+    failed WCAG AA at the 11–14px it is set in: ghost buttons, outline tags
+    and filter chips, the marketing nav's hover / current link and the
+    workspace switcher's toggle now use accent-700 (6.4:1); outline borders
+    keep the accent (3:1 is enough for a non-text edge). **Open, for the
+    owner:** the primary button (ground-coloured 14px bold on the accent
+    fill, 3.8:1, as the handover's styles.css draws it) is unchanged, like
+    the 3f panel (59); an accent-700 fill or larger labels would pass.
+72. **Smaller fixes.** Field suffixes ("(optional)") inherit the uppercase
+    eyebrow, as 3a / 1e draw them; the demo PAN line is one component
+    (`components/DemoPanHint`) on onboarding and settings; Settings' phone
+    rows keep their action inline; Statements prints the ledger exactly, a
+    "Balance" KPI, IDs in one face and one date format; KPI eyebrows join
+    "· Sep" with no-break spaces; every KPI in a strip has a meta line on
+    /admin/offers and /admin/settlements; fraud signal cells reserve two
+    title lines; /admin/looks shares the width in six columns from 1100px
+    (a visible scrollbar below); the stacked-table labels are always the body
+    face; brand offer row actions and every StackTable action column are
+    flush left under an "Action" header; Platforms never wrap after a dot;
+    the demo requests list says the rest of the pending requests are not in
+    the demo data once its sample is decided; phones reach
+    `/brand/conversions` ("Review conversions →" on the 3f Today and on
+    /brand/creators) and `/app/reports` ("Reports →" on the 1e Home), which
+    have no tab. Brand demo storage ignores a stored partition that is not
+    shaped like its seed (a hand-edited `null` crashed `/brand/conversions`),
+    and `app/error.tsx` keeps any other render error inside the design
+    system. `/app`, `/brand`, `/agency`, `/admin` and `/join` are noindex
+    (no robots.txt disallow: a crawler must fetch a page to see its
+    noindex). The `/api` proxy drops cookies both ways (the API is
+    bearer-only and sets none).

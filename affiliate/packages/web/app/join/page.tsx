@@ -2,7 +2,8 @@ import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import { Onboarding } from '@/components/onboarding/Onboarding';
 
-export const metadata: Metadata = { title: 'Join' };
+/** A sign-up flow with demo steps: kept out of search indexes. */
+export const metadata: Metadata = { title: 'Join', robots: { index: false, follow: false } };
 
 /**
  * Sign-up & onboarding (2a, 3a): three steps in the accent-panel shell, no

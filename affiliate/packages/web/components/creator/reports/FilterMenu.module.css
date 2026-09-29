@@ -18,7 +18,8 @@
   border: 1px solid var(--color-accent);
   border-radius: calc(var(--radius-md) * 0.75);
   background: transparent;
-  color: var(--color-accent);
+  /* accent-700 text, as Tag's outline: the raw accent is below AA at 11px. */
+  color: var(--color-accent-700);
   white-space: nowrap;
   cursor: pointer;
   transition: background-color 120ms ease-out, color 120ms ease-out;

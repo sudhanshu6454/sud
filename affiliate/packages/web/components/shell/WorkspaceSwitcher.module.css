@@ -40,7 +40,8 @@
 }
 
 .toggle {
-  color: var(--color-accent);
+  /* accent-700: the raw accent is 3.8:1 on the ground, below AA for 13px text. */
+  color: var(--color-accent-700);
   font-family: var(--font-heading);
   font-weight: var(--font-heading-weight);
 }
@@ -69,4 +70,18 @@
 .optionMeta {
   display: block;
   color: var(--color-neutral-700);
+}
+
+/* Full-width rows inside the scrolling sidebar: keep the focus ring inside. */
+.summary:focus-visible,
+.option:focus-visible {
+  outline-offset: -4px;
+}
+
+/* Phones: on the page's 20px gutter (the sidebar's 24px inset is desktop). */
+@media (max-width: 760px) {
+  .summary,
+  .option {
+    padding-inline: 20px;
+  }
 }

@@ -2,15 +2,24 @@
 
 /*
  * Disputes — the live missing-commission tickets page that was
- * /portal/disputes. No design artboard: the logic is the HEAD page unchanged
- * (GET /v1/disputes with a demo fallback and <DemoBadge />, POST /v1/disputes
- * to file; filing is disabled on demo data), laid out on the system's
- * 5fr / 7fr grid (as 3c) with the tickets in the standard table. A ticket
- * never creates a payable sale (platform invariant 10).
+ * /portal/disputes. No design artboard: GET /v1/disputes with a demo
+ * fallback and <DemoBadge />, POST /v1/disputes to file (disabled on demo
+ * data), laid out on the system's 5fr / 7fr grid (as 3c) with the tickets in
+ * the standard table. A ticket never creates a payable sale (platform
+ * invariant 10).
+ *
+ * Signed out (no token) the page shows the demo tickets without calling the
+ * API. With a saved publisher id (/login, /join) tickets are listed and filed
+ * for that publisher (`publisher_id`; the API checks it belongs to the
+ * token's organisation), so the network team can tie a claim to its creator.
+ * Each unchanged submission carries one Idempotency-Key, so a retry after a
+ * timeout cannot file the same ticket twice.
  */
 
-import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useEffect, useRef, useState } from 'react';
 import DemoBadge from '@/components/DemoBadge';
+import { FallbackBanner } from '@/components/FallbackBanner';
 import { formatLongDate, disputeStatusTag, humanise, shortTicketId } from '@/components/creator/payouts/labels';
 import { PageNote } from '@/components/shell/PageBody';
 import {
@@ -24,10 +33,24 @@ import {
   Select,
   Skeleton,
   Tag,
+  Textarea,
   cx,
   type DataTableColumn,
 } from '@/components/ui';
-import { ApiError, apiFetch, withDemoFallback, type Dispute, type DisputeKind, type OpenDisputeBody } from '@/lib/api';
+import {
+  ApiError,
+  apiFetch,
+  fallbackNotice,
+  getStoredPublisherId,
+  getToken,
+  isUnreachable,
+  withDemoFallback,
+  type Dispute,
+  type DisputeKind,
+  type FallbackNotice,
+  type OpenDisputeBody,
+} from '@/lib/api';
+import { IdempotencyKeys } from '@/lib/idempotency';
 import { DEMO_DISPUTES } from '@/lib/portal-demo';
 import styles from './page.module.css';
 
@@ -97,10 +120,22 @@ const SKELETON_COLUMNS: ReadonlyArray<DataTableColumn<number>> = COLUMNS.map((c)
   cell: () => <Skeleton width={c.key === 'ticket' ? '80%' : '60%'} height={14} inline />,
 }));
 
+/** Why the page shows demo tickets (null: live). */
+type DemoCause = 'signed-out' | 'unreachable' | 'answered';
+
+const DEMO_HINT: Record<DemoCause, string> = {
+  'signed-out': 'Filing needs a sign-in: add your API token on the sign-in page to file real tickets.',
+  unreachable: 'Filing is disabled while the API is unreachable.',
+  answered: 'Filing is disabled while this page shows demo data.',
+};
+
 export function Disputes() {
   const [disputes, setDisputes] = useState<Dispute[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [demo, setDemo] = useState(false);
+  const [demoCause, setDemoCause] = useState<DemoCause | null>(null);
+  const [notice, setNotice] = useState<FallbackNotice | null>(null);
+  const keys = useRef(new IdempotencyKeys('dispute'));
   const [kind, setKind] = useState<DisputeKind>('missing_commission');
   const [subject, setSubject] = useState('');
   const [claimRef, setClaimRef] = useState('');
@@ -110,9 +145,21 @@ export function Disputes() {
   const [formOk, setFormOk] = useState(false);
 
   async function load() {
-    const { value, demo: isDemo } = await withDemoFallback(() => apiFetch<Dispute[]>('/v1/disputes'), demoDisputes());
+    if (!getToken()) {
+      setDisputes(demoDisputes());
+      setDemo(true);
+      setDemoCause('signed-out');
+      setNotice(null);
+      setLoaded(true);
+      return;
+    }
+    const publisherId = getStoredPublisherId();
+    const path = publisherId ? `/v1/disputes?publisher_id=${encodeURIComponent(publisherId)}` : '/v1/disputes';
+    const { value, demo: isDemo, error } = await withDemoFallback(() => apiFetch<Dispute[]>(path), demoDisputes());
     setDisputes(value);
     setDemo(isDemo);
+    setDemoCause(isDemo ? (isUnreachable(error) ? 'unreachable' : 'answered') : null);
+    setNotice(fallbackNotice(error, 'your tickets'));
     setLoaded(true);
   }
 
@@ -130,13 +177,21 @@ export function Disputes() {
       return;
     }
     setSubmitting(true);
+    const publisherId = getStoredPublisherId();
+    const body: OpenDisputeBody = {
+      kind,
+      subject: subject.trim(),
+      ...(claimRef.trim() ? { claim_ref: claimRef.trim() } : {}),
+      ...(publisherId ? { publisher_id: publisherId } : {}),
+    };
     try {
-      const body: OpenDisputeBody = {
-        kind,
-        subject: subject.trim(),
-        ...(claimRef.trim() ? { claim_ref: claimRef.trim() } : {}),
-      };
-      await apiFetch<Dispute>('/v1/disputes', { method: 'POST', body });
+      await apiFetch<Dispute>('/v1/disputes', {
+        method: 'POST',
+        body,
+        headers: { 'Idempotency-Key': keys.current.keyFor(body) },
+      });
+      // Filed: an identical ticket typed again later is a new one.
+      keys.current.forget(body);
       setSubject('');
       setClaimRef('');
       setFormOk(true);
@@ -150,13 +205,16 @@ export function Disputes() {
 
   return (
     <>
+      <FallbackBanner notice={notice} />
       <PageHeader
         eyebrow="Payouts"
         title="Disputes"
         description="Missing-commission tickets and support claims."
         actions={
           <>
-            {demo ? <DemoBadge variant="fallback" className={styles.badge} /> : null}
+            {demo ? (
+              <DemoBadge variant={demoCause === 'unreachable' ? 'fallback' : 'mock'} className={styles.badge} />
+            ) : null}
             <Button href="/app/payouts" arrow="left">
               Payouts
             </Button>
@@ -174,7 +232,8 @@ export function Disputes() {
               <Select value={kind} onChange={(e) => setKind(e.target.value as DisputeKind)} options={KINDS} />
             </Field>
             <Field label="What happened" error={subjectError ?? undefined}>
-              <Input
+              <Textarea
+                rows={3}
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
                 placeholder="e.g. Order #48210 on 2026-09-20 never appeared in earnings"
@@ -184,7 +243,7 @@ export function Disputes() {
             <Field
               label="Merchant order reference"
               labelSuffix="(optional)"
-              hint="claim_ref — helps the network team match provider records."
+              hint="Helps the network team match provider records."
             >
               <Input mono value={claimRef} onChange={(e) => setClaimRef(e.target.value)} maxLength={200} />
             </Field>
@@ -203,7 +262,19 @@ export function Disputes() {
                 {submitting ? 'Filing…' : 'File ticket'}
               </Button>
             </div>
-            {demo && <p className={styles.hint}>Filing is disabled in demo mode — connect the API to file real tickets.</p>}
+            {demo && demoCause ? (
+              <p className={styles.hint}>
+                {DEMO_HINT[demoCause]}
+                {demoCause === 'signed-out' ? (
+                  <>
+                    {' '}
+                    <Link href="/login">
+                      Sign-in page<span aria-hidden="true"> →</span>
+                    </Link>
+                  </>
+                ) : null}
+              </p>
+            ) : null}
           </form>
           <PageNote className={styles.note}>
             A ticket alone never creates a payable sale. Resolving one requires the network team to verify the claim

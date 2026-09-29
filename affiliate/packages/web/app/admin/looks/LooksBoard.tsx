@@ -11,8 +11,10 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import DemoBadge from '@/components/DemoBadge';
-import { PageBody } from '@/components/shell/PageBody';
-import { Button, Checkbox, Dialog, Eyebrow, Field, Input, PageHeader, Textarea } from '@/components/ui';
+import { AdminSection } from '@/components/admin/AdminSection';
+import adminStyles from '@/components/admin/AdminPage.module.css';
+import { PageNote } from '@/components/shell/PageBody';
+import { Button, Checkbox, Dialog, Eyebrow, Field, Input, Textarea } from '@/components/ui';
 import {
   STATES,
   loadLooks,
@@ -115,13 +117,14 @@ export function LooksBoard() {
 
   return (
     <>
-      <PageHeader
-        eyebrow="Admin · Editorial"
-        title="Looks pipeline"
-        description="Moves are saved locally in this browser (TEST demo looks, no API wiring yet)."
-        actions={<DemoBadge variant="mock" className={styles.badge} />}
-      />
-      <PageBody>
+      {/* The admin template (2e and its siblings): no page header, the badge
+          by the section label, the page note directly under it. */}
+      <h1 className="sr-only">Admin: looks pipeline</h1>
+      <AdminSection title="Looks pipeline" titleId="admin-looks-title" badge={<DemoBadge variant="mock" className={styles.badge} />}>
+        <PageNote className={adminStyles.sectionNote}>
+          Editorial looks, one column per state. Moves are saved locally in this browser (TEST demo looks, no API
+          wiring yet).
+        </PageNote>
         <div className={styles.board}>
           {STATES.map((s) => {
             const inState = looks.filter((l) => l.state === s.id);
@@ -155,7 +158,7 @@ export function LooksBoard() {
             );
           })}
         </div>
-      </PageBody>
+      </AdminSection>
 
       <Dialog
         open={pauseId !== null}

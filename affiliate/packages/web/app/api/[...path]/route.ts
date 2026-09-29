@@ -13,6 +13,9 @@ import { apiBase } from '../../../lib/server-env';
  * Trust: the browser's own Authorization header is forwarded untouched;
  * the server's WEB_API_TOKEN is NEVER attached here. Hop-by-hop headers are
  * dropped both ways; the body is buffered (the API caps uploads at 2 MB).
+ * Cookies do not cross: the API authenticates by bearer only and sets none,
+ * so the web origin's cookies are not sent upstream and an upstream
+ * set-cookie never reaches the browser.
  */
 export const dynamic = 'force-dynamic';
 
@@ -28,6 +31,7 @@ const DROP_REQUEST_HEADERS = new Set([
   'transfer-encoding',
   'upgrade',
   'accept-encoding',
+  'cookie',
 ]);
 
 const DROP_RESPONSE_HEADERS = new Set([
@@ -36,6 +40,7 @@ const DROP_RESPONSE_HEADERS = new Set([
   'content-length',
   'keep-alive',
   'transfer-encoding',
+  'set-cookie',
 ]);
 
 /** Upstream budget: a hung API must not hold the shop's request open forever. */

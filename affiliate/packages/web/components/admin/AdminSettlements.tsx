@@ -12,7 +12,7 @@ import { PageNote } from '@/components/shell/PageBody';
 import { KpiCell, KpiStrip, Tag, type DataTableColumn, type TagVariant } from '@/components/ui';
 import { DEMO_ADMIN_KPIS, DEMO_ADMIN_PERIOD, DEMO_SETTLEMENT_BATCHES, type SettlementBatch, type SettlementStatus } from '@/lib/demo/admin';
 import { formatCount, formatDayMonth, formatINRCompactFromMinor, formatINRFromMinor } from '@/lib/format';
-import { TDS } from '@/lib/site-copy';
+import { PRICING, TDS } from '@/lib/site-copy';
 import { AdminNote, AdminSection } from './AdminSection';
 import { periodLabel } from './adminModel';
 import { ResponsiveTable, StackRow } from './ResponsiveTable';
@@ -58,6 +58,8 @@ export function AdminSettlements() {
   const open = DEMO_SETTLEMENT_BATCHES.find((b) => b.status === 'Open');
   const sum = (list: ReadonlyArray<SettlementBatch>, key: 'netMinor' | 'grossMinor') => list.reduce((n, b) => n + b[key], 0);
   const month = DEMO_ADMIN_PERIOD.monthShort;
+  // No-break spaces keep "· Sep" with the word before it in a narrow cell.
+  const period = (label: string) => `${label}\u00a0·\u00a0${month}`;
 
   return (
     <>
@@ -65,7 +67,7 @@ export function AdminSettlements() {
       <KpiStrip columns={4}>
         <KpiCell
           size={32}
-          label={`Paid to creators · ${month}`}
+          label={period('Paid to creators')}
           value={formatINRCompactFromMinor(sum(paid, 'netMinor'))}
           meta={`${formatCount(paid.length)} weekly batches`}
         />
@@ -75,7 +77,12 @@ export function AdminSettlements() {
           value={formatINRCompactFromMinor(sum(awaiting, 'netMinor'))}
           meta={`${formatCount(awaiting.length)} batch · maker-checker`}
         />
-        <KpiCell size={32} label={`Network fee · ${month}`} value={formatINRCompactFromMinor(DEMO_ADMIN_KPIS.networkFeeMinor)} />
+        <KpiCell
+          size={32}
+          label={period('Network fee')}
+          value={formatINRCompactFromMinor(DEMO_ADMIN_KPIS.networkFeeMinor)}
+          meta={`${PRICING.network.networkFeePct}% ${PRICING.network.name} · ${PRICING.starter.networkFeePct}% ${PRICING.starter.name}`}
+        />
         <KpiCell
           size={32}
           label="Open batch"
@@ -84,16 +91,13 @@ export function AdminSettlements() {
         />
       </KpiStrip>
 
-      <div className={styles.noteWrap}>
-        <PageNote>
+      <AdminSection title="Weekly batches" titleId="admin-settlements-title" badge={<DemoBadge variant="mock" />}>
+        <PageNote className={styles.sectionNote}>
           This page is read-only demo data. Real payout batches run through the finance maker-checker flow in the API:
           a finance user prepares a batch (POST /v1/payout-batches), a different user approves it (…/approve; the
           preparer can never approve their own batch), and only then is it disbursed (…/disburse). An unknown transfer
           outcome is checked with a status query before any retry.
         </PageNote>
-      </div>
-
-      <AdminSection title="Weekly batches" titleId="admin-settlements-title" badge={<DemoBadge variant="mock" />}>
         <ResponsiveTable
           caption="Weekly settlement batches"
           columns={COLUMNS}

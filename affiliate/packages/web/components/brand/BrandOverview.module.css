@@ -129,3 +129,18 @@
 .phRequestsLabel {
   margin-bottom: var(--space-1);
 }
+
+/* Phone entry point to Conversions (not a drawn tab). */
+.phMore {
+  margin: 0;
+  padding: 0 20px var(--space-4);
+  font-size: 14px;
+}
+
+.phMore a {
+  /* Block, not flex: a flex item would collapse the space before " →". */
+  display: block;
+  width: fit-content;
+  min-height: 44px;
+  padding: 11px 0;
+}

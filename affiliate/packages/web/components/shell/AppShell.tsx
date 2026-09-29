@@ -41,6 +41,12 @@ export interface AppShellProps {
   navLabel: string;
   /** Optional slot under the logo row (the agency's workspace switcher). */
   switcher?: ReactNode;
+  /**
+   * Exact paths whose phone layout draws no top bar (3f: Offers and Payouts
+   * put their title straight under the status bar). The account box is then
+   * reached from the pages that keep the bar (Home, 1e).
+   */
+  phoneTopbarHiddenOn?: ReadonlyArray<string>;
   children: ReactNode;
 }
 
@@ -57,6 +63,7 @@ export function AppShell({
   settingsHref,
   navLabel,
   switcher,
+  phoneTopbarHiddenOn,
   children,
 }: AppShellProps) {
   const pathname = usePathname() ?? '/';
@@ -71,6 +78,7 @@ export function AppShell({
   const activeTab = activeNavIndex(tabs, pathname, hash);
 
   const accountLabel = account.demo ? `${account.name} (demo account)` : account.name;
+  const topbarHidden = phoneTopbarHiddenOn?.includes(pathname) ?? false;
 
   const onNavigate = (href: string) => {
     const i = href.indexOf('#');
@@ -109,7 +117,7 @@ export function AppShell({
         </div>
       </aside>
 
-      <div className={styles.topbar}>
+      <div className={cx(styles.topbar, topbarHidden && styles.topbarHidden)}>
         <Link href={homeHref} className={styles.topbarLogo} aria-label="afflino — home">
           <Wordmark size={18} />
         </Link>

@@ -9,7 +9,7 @@
 import { inflateSync } from 'node:zlib';
 import * as zlib from 'node:zlib';
 import { describe, expect, it } from 'vitest';
-import { crc32, qrMatrix, qrPng } from '../lib/links';
+import { crc32, qrMatrix, qrPng } from '../lib/qr';
 
 /* ---------- a minimal QR reader (byte mode, versions 1–6) ---------- */
 
@@ -180,12 +180,12 @@ function readPng(png: Uint8Array): { width: number; height: number; bitDepth: nu
 /* ---------- tests ---------- */
 
 const LINKS = [
-  'https://afflino.com/r/demo-priya/demo-style?s=short-diwali-02', // 3c demo link
-  'https://afflino.com/r/demo-priya/demo-payupi?s=reel-oct-01', // 1e demo link
+  'https://afflino.demo.invalid/r/demo-priya/demo-style?s=short-diwali-02', // 3c demo link
+  'https://afflino.demo.invalid/r/demo-priya/demo-payupi?s=reel-oct-01', // 1e demo link
   'http://localhost:3001/r/9f2c1ab4e5d64f7a8b9c0d1e2f3a4b5c', // a live /r/{32-hex} link (openapi example)
   'https://redirect.demo.invalid/r/demo-abc12345', // offline fallback
-  `https://afflino.com/r/demo-priya/demo-payupi?s=${'a'.repeat(32)}`, // longest sub-ID
-  'https://afflino.com/r/x',
+  `https://afflino.demo.invalid/r/demo-priya/demo-payupi?s=${'a'.repeat(32)}`, // longest sub-ID
+  'https://afflino.demo.invalid/r/x',
 ];
 
 describe('QR code for a link', () => {
@@ -200,7 +200,7 @@ describe('QR code for a link', () => {
 
   it('uses the smallest version that fits and draws the three finder patterns', () => {
     const m = qrMatrix(LINKS[0]!);
-    expect(m.length).toBe(33); // version 4: 61 bytes fit in 4-M's 62
+    expect(m.length).toBe(37); // version 5: 70 bytes fit in 5-M's 84 (4-M holds 62)
     const finderAt = (r0: number, c0: number) => {
       for (let r = 0; r < 7; r += 1) {
         for (let c = 0; c < 7; c += 1) {

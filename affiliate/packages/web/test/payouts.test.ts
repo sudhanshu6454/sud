@@ -101,6 +101,8 @@ describe('the minimum withdrawal', () => {
       reason: `The minimum withdrawal is ${formatINRFromMinor(min)}; ₹320 is available.`,
     });
     expect(withdrawEligibility(0).reason).toBe(`Nothing to withdraw yet. The minimum withdrawal is ${formatINRFromMinor(min)}.`);
+    // ₹499.60 is below the ₹500 minimum and must not read as "₹500 is available".
+    expect(withdrawEligibility(49_960).reason).toBe('The minimum withdrawal is ₹500; ₹499.60 is available.');
   });
 
   it('checks the amount typed in the dialog: whole rupees, minimum to available', () => {
@@ -112,6 +114,9 @@ describe('the minimum withdrawal', () => {
       `The minimum withdrawal is ${formatINRFromMinor(min)}.`,
     );
     expect(validateWithdrawAmount('42901', available).message).toBe('You can withdraw up to ₹42,900.');
+    // Live balances carry paise: never rounded up (₹42,900.50 is not ₹42,901).
+    expect(validateWithdrawAmount('42901', available + 50).message).toBe('You can withdraw up to ₹42,900.50.');
+    expect(validateWithdrawAmount('42900', available + 50).ok).toBe(true);
     expect(validateWithdrawAmount('', available).message).toBe('Enter an amount.');
     expect(validateWithdrawAmount('500.50', available).ok).toBe(false);
     expect(validateWithdrawAmount('-500', available).ok).toBe(false);

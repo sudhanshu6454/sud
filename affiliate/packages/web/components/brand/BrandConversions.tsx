@@ -160,7 +160,7 @@ export function BrandConversions() {
     },
     {
       key: 'actions',
-      header: <span className="sr-only">Actions</span>,
+      header: 'Action',
       actions: true,
       cell: (r) =>
         canDecide(r) ? (

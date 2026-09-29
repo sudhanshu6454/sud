@@ -22,7 +22,15 @@ import { formatCount, formatINRCompactFromMinor, formatINRFromMinor } from '@/li
 import { PRICING } from '@/lib/site-copy';
 import { AdminLive } from './AdminLive';
 import { AdminNote, AdminSection } from './AdminSection';
-import { BRAND_FILTERS, brandCounts, brandInFilter, brandStatus, type BrandFilter, type BrandStatusShown } from './adminModel';
+import {
+  BRAND_FILTERS,
+  brandCounts,
+  brandInFilter,
+  brandStatus,
+  liveOffersLabel,
+  type BrandFilter,
+  type BrandStatusShown,
+} from './adminModel';
 import { FilterTags } from './FilterTags';
 import { ResponsiveTable, StackRow } from './ResponsiveTable';
 import { ReviewDialog } from './ReviewDialog';
@@ -51,35 +59,38 @@ export function AdminBrands() {
   const rows = DEMO_ADMIN_BRANDS.filter((b) => brandInFilter(status(b), filter));
   const month = DEMO_ADMIN_PERIOD.monthShort;
 
-  const statusCell = (b: AdminBrand) => {
+  const statusTagCell = (b: AdminBrand) => {
+    const shown = status(b);
+    return <Tag variant={shown === 'Rejected' ? 'neutral' : statusTag(shown)}>{shown}</Tag>;
+  };
+
+  // Review / View sits in its own trailing Action column, as in 2e.
+  const actionCell = (b: AdminBrand) => {
     const shown = status(b);
     const item = b.reviewItemId ? adminReviewItem(b.reviewItemId) : undefined;
+    if (!item || !queue.ready) return null;
     return (
-      <span className={styles.inline}>
-        <Tag variant={shown === 'Rejected' ? 'neutral' : statusTag(shown)}>{shown}</Tag>
-        {item && queue.ready ? (
-          <Button
-            size="xs"
-            variant={shown === 'In review' ? 'secondary' : 'ghost'}
-            data-review-action={item.id}
-            aria-label={`${shown === 'In review' ? 'Review' : 'View decision'}: ${item.subject}`}
-            onClick={() => panel.open(item)}
-          >
-            {shown === 'In review' ? 'Review' : 'View'}
-          </Button>
-        ) : null}
-      </span>
+      <Button
+        size="xs"
+        variant={shown === 'In review' ? 'secondary' : 'ghost'}
+        data-review-action={item.id}
+        aria-label={`${shown === 'In review' ? 'Review' : 'View decision'}: ${item.subject}`}
+        onClick={() => panel.open(item)}
+      >
+        {shown === 'In review' ? 'Review' : 'View'}
+      </Button>
     );
   };
 
   const columns: ReadonlyArray<DataTableColumn<AdminBrand>> = [
-    { key: 'name', header: 'Brand', tone: 'strong', width: '20%', cell: (b) => b.name },
-    { key: 'category', header: 'Category', tone: 'muted', width: '14%', cell: (b) => b.category },
-    { key: 'plan', header: 'Plan', width: '15%', cell: (b) => `${b.plan} · ${PLAN_FEE[b.plan]}% fee` },
-    { key: 'wallet', header: 'Wallet', width: '12%', cell: (b) => formatINRFromMinor(b.walletMinor) },
-    { key: 'spend', header: `Spend · ${month}`, width: '13%', cell: (b) => formatINRFromMinor(b.spendMinor) },
-    { key: 'offers', header: 'Live offers', width: '10%', cell: (b) => formatCount(b.liveOffers) },
-    { key: 'status', header: 'Status', cell: statusCell },
+    { key: 'name', header: 'Brand', tone: 'strong', width: '19%', cell: (b) => b.name },
+    { key: 'category', header: 'Category', tone: 'muted', width: '13%', cell: (b) => b.category },
+    { key: 'plan', header: 'Plan', width: '14%', cell: (b) => `${b.plan} · ${PLAN_FEE[b.plan]}% fee` },
+    { key: 'wallet', header: 'Wallet', width: '11%', cell: (b) => formatINRFromMinor(b.walletMinor) },
+    { key: 'spend', header: `Spend · ${month}`, width: '12%', cell: (b) => formatINRFromMinor(b.spendMinor) },
+    { key: 'offers', header: 'Live offers', width: '9%', cell: (b) => formatCount(b.liveOffers) },
+    { key: 'status', header: 'Status', width: '12%', cell: statusTagCell },
+    { key: 'action', header: 'Action', cell: actionCell },
   ];
 
   return (
@@ -113,14 +124,20 @@ export function AdminBrands() {
             <StackRow
               title={b.name}
               aside={formatINRFromMinor(b.walletMinor)}
-              meta={`${b.category} · ${b.plan} · ${formatINRFromMinor(b.spendMinor)} spend in ${month} · ${formatCount(b.liveOffers)} live offers`}
-              actions={statusCell(b)}
+              meta={`${b.category} · ${b.plan} · ${formatINRFromMinor(b.spendMinor)} spend in ${month} · ${liveOffersLabel(b.liveOffers)}`}
+              actions={
+                <span className={styles.inline}>
+                  {statusTagCell(b)}
+                  {actionCell(b)}
+                </span>
+              }
             />
           )}
         />
         <AdminNote>
           Demo sample: {formatCount(rows.length)} of {formatCount(counts[filter])} brands. Plan fees are the pricing
-          placeholders. Wallet is the brand’s prepaid balance; spend is approved payouts this month.
+          placeholders. Wallet is the brand’s prepaid balance; spend is this month’s creator payouts on every conversion,
+          pending ones included (the brand’s own Spend figure); the network fee is billed on approved conversions only.
         </AdminNote>
       </AdminSection>
 

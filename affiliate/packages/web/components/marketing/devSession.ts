@@ -7,7 +7,7 @@
  * signature on every request — and it never sends the token anywhere.
  *
  * Storage is lib/api.ts's: TOKEN_KEY (the bearer apiFetch sends) and
- * PUBLISHER_ID_KEY (getPublisherId(), for the earnings views).
+ * PUBLISHER_ID_KEY (getStoredPublisherId(), for the earnings views and disputes).
  *
  * Relative imports on purpose: the vitest suite imports this module.
  */

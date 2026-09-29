@@ -183,6 +183,20 @@
   color: var(--color-neutral-800);
 }
 
+/* The pricing plan a brand picked on the home page (?plan=). */
+.plan {
+  margin: var(--space-3) 0 0;
+  font-size: 13px;
+  color: var(--color-neutral-700);
+}
+
+.planLabel {
+  margin-right: var(--space-1);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
 .pair {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -274,10 +288,6 @@
   font-size: 11px;
   letter-spacing: 0.02em;
   line-height: 18px;
-}
-
-.hintDemo {
-  color: var(--color-neutral-700);
 }
 
 /* ---------- supply step 2: platforms ---------- */

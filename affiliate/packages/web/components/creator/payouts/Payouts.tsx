@@ -5,13 +5,17 @@
  * ≤760px). The two balance cells come from GET /v1/publisher/earnings when
  * it answers (mapping in model.ts); the payout method, the payout history
  * and the Conversions / Clicks tables have no v1 endpoint and are TEST demo
- * data, so the page always carries <DemoBadge /> ("fallback" when the call
- * failed). The payout method follows what Settings saved in this browser.
+ * data, so the page always carries <DemoBadge />, from the first paint
+ * ("fallback", "API unreachable", only when the call never reached the API;
+ * an answer the API gave is a top Banner). The payout method follows what
+ * Settings saved in this browser; with live balances it carries its own
+ * badge and names no destination (there is no payee endpoint).
  */
 
 import Link from 'next/link';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import DemoBadge from '@/components/DemoBadge';
+import { FallbackBanner } from '@/components/FallbackBanner';
 import { Banner, Button, DataTable, Eyebrow, Segmented, StatusTag, Tag, type DataTableColumn } from '@/components/ui';
 import { DEMO_PAYOUTS, PLATFORM_NAME, type DemoPayout } from '@/lib/demo/afflino';
 import {
@@ -23,7 +27,7 @@ import {
   type DemoConversionRow,
 } from '@/lib/demo/payouts';
 import { downloadCsv } from '@/lib/download';
-import { formatCount, formatDayMonth, formatINRFromMinor, formatRate } from '@/lib/format';
+import { formatCount, formatDayMonth, formatINRExact, formatINRFromMinor, formatRate } from '@/lib/format';
 import { VALIDATION_WINDOW_DAYS } from '@/lib/site-copy';
 import { defaultSettings, loadSettings, payoutMethodSummary, type CreatorSettings } from '../settings/model';
 import {
@@ -113,10 +117,16 @@ export function Payouts() {
   const canWithdraw = eligibility?.ok === true;
   const reason = eligibility && !eligibility.ok ? eligibility.reason : '';
 
-  const panLine = `${method.panDemoVerified ? 'PAN verified' : 'PAN not verified'} · ${tdsLabel()} deducted`;
-  const pendingLine = `Clears after the brand's ${VALIDATION_WINDOW_DAYS}-day validation window`;
+  // No PAN check exists: the demo state never claims a verification.
+  const panLine = `${method.panDemoVerified ? 'PAN not checked (demo)' : 'PAN not verified'} · ${tdsLabel()} deducted`;
+  const pendingLine = live
+    ? "Awaiting the brand's approval"
+    : `Clears after the brand's ${VALIDATION_WINDOW_DAYS}-day validation window`;
+  const approvedExtraMinor = load?.approvedNotAvailableMinor ?? 0;
 
-  const badge = load ? <DemoBadge variant={live ? 'mock' : 'fallback'} className={styles.badge} /> : null;
+  // The history and method tables are demo in every state, so the badge
+  // shows from the first paint (not only once the balances settle).
+  const badge = <DemoBadge variant={load?.unreachable ? 'fallback' : 'mock'} className={styles.badge} />;
 
   const onConfirm = useCallback(
     (b: WithdrawalBreakdown) => {
@@ -211,15 +221,13 @@ export function Payouts() {
     );
   }, [table, payouts]);
 
-  const valueText = (minor: number | null) => (minor === null ? '—' : formatINRFromMinor(minor));
+  // Live balances carry arbitrary paise: print them exactly, never rounded up.
+  const money = (minor: number) => (live ? formatINRExact(minor) : formatINRFromMinor(minor));
+  const valueText = (minor: number | null) => (minor === null ? '—' : money(minor));
 
   return (
     <>
-      {load?.mismatch ? (
-        <Banner title="Balances unavailable.">
-          The API answered for a different publisher than this account, so the page shows demo data.
-        </Banner>
-      ) : null}
+      <FallbackBanner notice={load?.notice} />
       {live ? (
         <Banner tone="info">
           Balances are live. The payout method, payout history, conversions and clicks are demo data until their
@@ -240,6 +248,12 @@ export function Payouts() {
               {valueText(availableMinor)}
             </p>
             {live ? <p className={styles.liveMeta}>Collected from brands, not yet in a payout batch</p> : null}
+            {live && approvedExtraMinor > 0 ? (
+              <p className={styles.liveMeta}>
+                {formatINRExact(approvedExtraMinor)} more approved: not yet collected from the brand, still in the returns
+                window, or in a batch that is not paid yet
+              </p>
+            ) : null}
             <Button
               variant="primary"
               arrow
@@ -268,9 +282,12 @@ export function Payouts() {
           </section>
 
           <section className={styles.cell} aria-labelledby="payouts-method-label">
-            <Eyebrow as="h2" id="payouts-method-label">
-              Payout method
-            </Eyebrow>
+            <div className={styles.methodHead}>
+              <Eyebrow as="h2" id="payouts-method-label">
+                Payout method
+              </Eyebrow>
+              {live ? <DemoBadge variant="mock" /> : null}
+            </div>
             <p className={styles.method}>{method.label}</p>
             <p className={styles.methodMeta}>{panLine}</p>
             <Link href="/app/settings#payout" className={styles.change}>
@@ -319,7 +336,7 @@ export function Payouts() {
             {valueText(availableMinor)}
           </p>
           <p className={styles.panelLine}>
-            {pendingMinor === null ? '—' : formatINRFromMinor(pendingMinor)} pending · to {method.label}
+            {pendingMinor === null ? '—' : money(pendingMinor)} pending{live ? '' : ` · to ${method.label}`}
           </p>
         </section>
         <div className={styles.phoneAction}>

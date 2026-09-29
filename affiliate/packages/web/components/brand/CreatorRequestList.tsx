@@ -10,6 +10,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button, EmptyState, cx } from '@/components/ui';
 import type { DemoCreatorRequest } from '@/lib/demo/afflino';
+import { emptyRequestsMessage } from './requestsModel';
 import { requestReach } from './useCreatorRequests';
 import styles from './CreatorRequestList.module.css';
 
@@ -22,6 +23,12 @@ export interface CreatorRequestListProps {
   variant: 'desktop' | 'phone';
   /** Where the empty state's one action goes. */
   emptyAction?: { label: string; href: string };
+  /**
+   * Requests still pending in total (the KPI / "Requests · n" figure). When
+   * the demo sample is used up but this is above 0, the empty state says the
+   * rest are not in the demo data instead of "none waiting".
+   */
+  pendingCount?: number;
   /** id of the heading that names the list. */
   labelledBy: string;
   className?: string;
@@ -34,6 +41,7 @@ export function CreatorRequestList({
   onDecline,
   variant,
   emptyAction,
+  pendingCount = 0,
   labelledBy,
   className,
 }: CreatorRequestListProps) {
@@ -93,7 +101,7 @@ export function CreatorRequestList({
         </ul>
       ) : requests.length === 0 ? (
         <EmptyState className={styles.empty} action={emptyAction}>
-          No creator requests waiting.
+          {emptyRequestsMessage(pendingCount)}
         </EmptyState>
       ) : (
         <ul ref={listRef} className={styles.list} aria-labelledby={labelledBy}>

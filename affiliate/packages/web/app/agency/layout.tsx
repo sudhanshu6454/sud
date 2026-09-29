@@ -1,8 +1,12 @@
+import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { AppShell } from '@/components/shell/AppShell';
 import { WorkspaceSwitcher } from '@/components/shell/WorkspaceSwitcher';
 import { AGENCY_NAV, AGENCY_TABS } from '@/components/shell/areas';
 import { DEMO_AGENCY, DEMO_AGENCY_CLIENTS } from '@/lib/demo/afflino';
+
+/** TEST demo pages without a sign-in: kept out of search indexes (noindex, nofollow). */
+export const metadata: Metadata = { robots: { index: false, follow: false } };
 
 /**
  * Agency workspace (3e). The switcher moves into a client brand's workspace

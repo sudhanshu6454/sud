@@ -23,7 +23,10 @@
 
 .outline {
   border: 1px solid var(--color-accent);
-  color: var(--color-accent);
+  /* accent-700 text (6.4:1 on the ground): the raw accent is 3.8:1, below
+     WCAG AA for 11px type. The 1px border keeps the drawn accent (3:1 is
+     enough for a non-text edge), as on the demo badge. */
+  color: var(--color-accent-700);
 }
 
 .ink {
@@ -55,4 +58,19 @@
 
 .button.accent:hover:not(:disabled) {
   background: var(--color-accent-200);
+}
+
+/* Phones: the drawn 25px chip keeps its look; a transparent band above and
+   below makes the target 44px+ tall (rows of chips are 12px+ apart, so the
+   bands of neighbouring rows do not overlap the chips themselves). */
+@media (max-width: 760px) {
+  .button {
+    position: relative;
+  }
+
+  .button::before {
+    content: '';
+    position: absolute;
+    inset: -10px 0;
+  }
 }

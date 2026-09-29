@@ -487,7 +487,9 @@ function Preview({
 }) {
   return (
     <aside className={styles.preview} aria-labelledby="offer-preview-label">
-      <Eyebrow id="offer-preview-label">Preview — how creators see it</Eyebrow>
+      <Eyebrow as="h2" id="offer-preview-label">
+        Preview — how creators see it
+      </Eyebrow>
       <div aria-live="polite" aria-atomic="false">
         <OfferPreviewCard
           category={category}

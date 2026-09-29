@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   getLook,
   listLooks,
+  CatalogueUnavailableError,
+  lookOrMiss,
   mapLookDetail,
   mapLookItem,
   mapLookSummary,
@@ -222,7 +224,20 @@ describe('getLook', () => {
     expect(known.value?.title.startsWith('Demo')).toBe(true);
     expect(known.value?.items.every((i) => i.linkUrl === null)).toBe(true);
     const unknown = await getLook(LOOK_ID);
-    expect(unknown).toEqual({ value: null, demo: true });
+    expect(unknown).toEqual({ value: null, demo: true, outage: true });
+    // The page must not answer 404 for a look that may exist: lookOrMiss throws.
+    expect(() => lookOrMiss(unknown)).toThrow(CatalogueUnavailableError);
+  });
+
+  it('a 503 for a live id is an outage, never a miss', async () => {
+    vi.stubEnv('WEB_API_TOKEN', 'tok');
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(503, { error: { code: 'UPSTREAM_UNAVAILABLE', message: 'down' } })));
+    const result = await getLook(LOOK_ID);
+    expect(result).toEqual({ value: null, demo: true, outage: true });
+    expect(() => lookOrMiss(result)).toThrow('Catalogue temporarily unavailable');
+    // a real 404 stays a miss
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(404, { error: { code: 'NOT_FOUND', message: 'Look not found' } })));
+    expect(lookOrMiss(await getLook(LOOK_ID))).toBeNull();
   });
 
   it('serves the mock look in demo mode (no token) and null for unknown ids', async () => {

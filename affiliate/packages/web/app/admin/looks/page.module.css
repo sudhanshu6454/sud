@@ -1,6 +1,8 @@
 /* Looks pipeline board (admin, no artboard): one column per state, split by
-   2px rules; cards split by 1px rules. Scrolls sideways between 761px and
-   1400px; stacks on phones. */
+   2px rules; cards split by 1px rules. From 1100px (the 1280 desktop
+   included) the six states share the width; between 761px and 1099px the
+   board scrolls sideways with a visible scrollbar; stacks on phones. It sits
+   in the admin section under its label, with no rule of its own on top. */
 
 .badge {
   margin-bottom: 0;
@@ -11,13 +13,16 @@
   grid-auto-flow: column;
   grid-auto-columns: 250px;
   overflow-x: auto;
-  border-top: 2px solid var(--color-divider);
+  /* Visible, so a cut-off column reads as one that scrolls. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-neutral-500) transparent;
   border-bottom: 2px solid var(--color-divider);
 }
 
-@media (min-width: 1400px) {
+@media (min-width: 1100px) {
   .board {
     grid-auto-columns: minmax(0, 1fr);
+    overflow-x: visible;
   }
 }
 

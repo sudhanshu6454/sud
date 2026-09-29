@@ -1,9 +1,9 @@
 # Pre-pilot checklist
 
 What is built and proven in this sandbox vs what still needs engineering or a
-human before the pilot. Last verified test run (2026-09-29): **558/558 green
-across 28 files** (`./node_modules/.bin/vitest run`: api 87, shared 11,
-workers 15, web 445; the earlier figures of 57, 94 and 133 are stale). Legend: ✅ verified in this repo · ⏳ not done — needs
+human before the pilot. Last verified test run (2026-09-29): **587/587 green
+across 30 files** (`./node_modules/.bin/vitest run`: api 88, shared 11,
+workers 15, web 473; the earlier figures of 57, 94, 133 and 558 are stale). Legend: ✅ verified in this repo · ⏳ not done — needs
 engineering work · 👤 needs a human (see
 [EXTERNAL DEPENDENCIES](#external-dependencies) and the
 [action tracker](./action-tracker.md)).
@@ -21,7 +21,7 @@ has seen real merchants, real money, real traffic or a real host.
   `packageManager` pin, used locally, in CI and in the images
   ([`docker/README.md`](../docker/README.md) "pnpm version policy"). The old
   "known-broken" note is obsolete.
-- ✅ `vitest run` green — 558 tests in 28 files: ledger math
+- ✅ `vitest run` green — 587 tests in 30 files: ledger math
   ([`packages/shared/src/ledger.test.ts`](../packages/shared/src/ledger.test.ts)),
   money-loop API incl. idempotency ×10, revision ordering, suspense,
   reversals, payout gates, maker-checker
@@ -248,7 +248,13 @@ real infrastructure or real traffic yet:
     signed-in role today, so the offer browser does not call it — restrict
     it first), applications for approval-gated offers, settings persistence
     (profile, payout method), a statement / ledger endpoint
-    (`/app/payouts/statements`), payout history per publisher.
+    (`/app/payouts/statements`), payout history per publisher, a payee /
+    payout-method endpoint (the Withdraw dialog names no destination until
+    one exists), listing endpoints for the org's properties, programmes,
+    offers and placements (the live mint form takes pasted uuids today),
+    and a paid-to-date bucket in `GET /v1/publisher/earnings` (the overview
+    shows "Unpaid earnings", pending + approved, because the approved
+    bucket falls with every paid batch).
   - Publisher withdrawals: there is no publisher-initiated withdrawal;
     payouts are finance-prepared batches with maker-checker. Decide whether
     "Withdraw" becomes a request into the next batch.

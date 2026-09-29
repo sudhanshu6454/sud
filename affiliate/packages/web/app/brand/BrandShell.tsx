@@ -6,7 +6,6 @@ import { AppShell, type ShellAccount } from '@/components/shell/AppShell';
 import { WorkspaceSwitcher } from '@/components/shell/WorkspaceSwitcher';
 import { BRAND_NAV, BRAND_TABS, navInWorkspace, withWorkspace } from '@/components/shell/areas';
 import { DEMO_AGENCY, DEMO_AGENCY_CLIENTS, DEMO_BRAND } from '@/lib/demo/afflino';
-import { formatINRCompactFromMinor } from '@/lib/format';
 
 /**
  * The brand workspace frame. Signed in as a brand it is the 2b shell with the
@@ -26,7 +25,10 @@ export function BrandShell({ children }: { children: ReactNode }) {
   const account: ShellAccount = client
     ? {
         name: client.name,
-        meta: `${client.category} · Spend ${formatINRCompactFromMinor(client.spendMinor)}`,
+        // No spend here: the workspace's pages print the shared TEST figures
+        // (ASSUMPTIONS 60), and a second, different spend beside them would
+        // contradict the KPI strip.
+        meta: `${client.category} · agency client`,
         demo: true,
       }
     : { name: DEMO_BRAND.name, meta: DEMO_BRAND.shellMeta, demo: true };

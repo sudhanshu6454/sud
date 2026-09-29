@@ -24,7 +24,16 @@
  * imports only (tested).
  */
 
-import type { EarningsResponse } from './api';
+import {
+  apiFetch,
+  fallbackNotice,
+  getStoredPublisherId,
+  getToken,
+  isUnreachable,
+  withDemoFallback,
+  type EarningsResponse,
+  type FallbackNotice,
+} from './api';
 
 export interface EarningsBalances {
   pendingMinor: number;
@@ -51,4 +60,66 @@ export function earningsBalances(response: EarningsResponse, currency = 'INR'): 
     payableMinor,
     nextBatchMinor: Math.max(collectedMinor - payableMinor, 0),
   };
+}
+
+/* ---------- the live call, shared by Overview (1c) and Payouts (2c) ---------- */
+
+export interface LiveEarningsCall {
+  /** The API's answer for the stored publisher; null → the page shows its designed demo figures. */
+  response: EarningsResponse | null;
+  /** The call never reached the API (the only case the badge says "API unreachable"). */
+  unreachable: boolean;
+  /** Why there are no live figures, when the page should say so in a Banner. */
+  notice: FallbackNotice | null;
+}
+
+const LOGIN_ACTION = { href: '/login', label: 'Sign-in page' } as const;
+
+/** A token but no publisher id: nothing to ask the API for. */
+export const NO_PUBLISHER_NOTICE: FallbackNotice = {
+  title: 'Add your publisher id to see live earnings.',
+  message: 'No publisher id is saved in this browser, so this page shows demo data. Add it on the sign-in page.',
+  action: LOGIN_ACTION,
+};
+
+/** The API answered for another publisher id than the one asked for. */
+export const MISMATCH_NOTICE: FallbackNotice = {
+  title: 'Earnings unavailable.',
+  message: 'The API answered for a different publisher than this account, so this page shows demo data.',
+};
+
+/** 404 from the earnings route: the id is not a publisher of the token's organisation. */
+export const PUBLISHER_NOT_FOUND_NOTICE: FallbackNotice = {
+  title: 'This publisher id is not in your organisation.',
+  message: "The API found no publisher with the saved id in your token's organisation, so this page shows demo data.",
+  action: { href: '/login', label: 'Change it on the sign-in page' },
+};
+
+type Fetcher = typeof apiFetch;
+
+/**
+ * GET /v1/publisher/earnings for the publisher saved by /login or /join.
+ * No request at all without a token (a signed-out visitor sees the designed
+ * demo page, labelled "Demo data") or without a saved publisher id (a
+ * Banner asks for it; the demo id is never sent). An unreachable API is the
+ * "API unreachable" badge; any answer the API gave (401, 403, 404, 400, 5xx)
+ * is a Banner that names it.
+ */
+export async function loadLiveEarnings(fetcher: Fetcher = apiFetch): Promise<LiveEarningsCall> {
+  if (!getToken()) return { response: null, unreachable: false, notice: null };
+  const publisherId = getStoredPublisherId();
+  if (!publisherId) return { response: null, unreachable: false, notice: NO_PUBLISHER_NOTICE };
+  const { value, error } = await withDemoFallback<EarningsResponse | null>(
+    () => fetcher<EarningsResponse>(`/v1/publisher/earnings?publisher_id=${encodeURIComponent(publisherId)}`),
+    null,
+  );
+  if (error || !value) {
+    return {
+      response: null,
+      unreachable: isUnreachable(error),
+      notice: fallbackNotice(error, 'your live earnings', { 'not-found': PUBLISHER_NOT_FOUND_NOTICE }),
+    };
+  }
+  if (value.publisher_id !== publisherId) return { response: null, unreachable: false, notice: MISMATCH_NOTICE };
+  return { response: value, unreachable: false, notice: null };
 }

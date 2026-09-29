@@ -71,6 +71,11 @@ export function normaliseBrandSettings(form: BrandSettingsForm): BrandSettingsFo
   };
 }
 
+/** The form differs from what is saved (after normalising both): Save is enabled only then, as on 2d. */
+export function brandSettingsDirty(form: BrandSettingsForm, saved: BrandSettingsForm): boolean {
+  return JSON.stringify(normaliseBrandSettings(form)) !== JSON.stringify(normaliseBrandSettings(saved));
+}
+
 /** The landing-page domain the offer builder enforces. */
 export function allowedDomain(settings: Pick<BrandSettingsForm, 'website'>): string {
   return domainOf(settings.website);

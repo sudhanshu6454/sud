@@ -59,6 +59,14 @@
   letter-spacing: -0.02em;
 }
 
+/* Side-by-side cells: reserve two title lines, so a title that wraps does
+   not push its figure, bar and copy out of line with its neighbours. */
+@media (min-width: 761px) {
+  .cellTitle {
+    min-height: calc(2 * 1.2em);
+  }
+}
+
 .cellFigure {
   margin-top: var(--space-4);
   font-family: var(--font-heading);
@@ -113,12 +121,10 @@
   margin: 0 var(--space-8);
 }
 
-.noteWrap {
-  padding: var(--space-6) var(--space-8) 0;
-}
-
-.noteWrap > p {
-  margin: 0;
+/* The page's note, in one slot on every admin page: directly under the
+   section label, above the table. */
+.sectionNote {
+  margin: 0 0 var(--space-3);
 }
 
 .muted {
@@ -170,10 +176,6 @@
     border-top: 2px solid var(--color-divider);
   }
 
-  .noteWrap {
-    padding: var(--space-4) 20px 0;
-  }
-
   .bandHead {
     padding: var(--space-4) 20px var(--space-3);
   }
@@ -185,8 +187,4 @@
 
 .strongCell {
   font-weight: 600;
-}
-
-.noteWrap:last-child {
-  padding-bottom: var(--space-8);
 }

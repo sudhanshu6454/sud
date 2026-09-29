@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { DemoPanHint } from '@/components/DemoPanHint';
 import { Checkbox, Field, Input, Segmented } from '@/components/ui';
 import { DEMO_PAN_HOLDER } from '@/lib/demo/onboarding';
 import type { PayoutMethod } from '@/lib/onboarding';
@@ -33,12 +34,7 @@ export function StepPayout({ state, errors, dispatch }: StepProps) {
         required
         hintTone="accent"
         hint={
-          panOk ? (
-            <>
-              Verified · {DEMO_PAN_HOLDER}
-              <span className={styles.hintDemo}> — demo, no PAN check was made</span>
-            </>
-          ) : undefined
+          panOk ? <DemoPanHint name={DEMO_PAN_HOLDER} /> : undefined
         }
       >
         <Input

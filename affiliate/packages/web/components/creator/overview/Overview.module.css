@@ -238,3 +238,17 @@
   font-weight: 600;
   min-width: 0;
 }
+
+/* Phone entry point to Reports (the tab bar has four drawn tabs). */
+.phoneMore {
+  margin: var(--space-2) 0 0;
+  font-size: 14px;
+}
+
+.phoneMore a {
+  /* Block, not flex: a flex item would collapse the space before " →". */
+  display: block;
+  width: fit-content;
+  min-height: 44px;
+  padding: 11px 0;
+}

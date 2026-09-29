@@ -16,6 +16,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { DemoPanHint } from '@/components/DemoPanHint';
 import DemoBadge from '@/components/DemoBadge';
 import { Banner, Button, Checkbox, Eyebrow, Field, Input, Segmented, cx } from '@/components/ui';
 import { DEMO_CREATOR, PLATFORM_NAME } from '@/lib/demo/afflino';
@@ -205,9 +206,11 @@ export function Settings() {
   }, []);
 
   const method = payoutMethodSummary(draft);
-  const panHint: ReactNode = method.panDemoVerified
-    ? `Verified · ${DEMO_CREATOR.panName} (demo state: no KYC check ran)`
-    : 'Checked against your name by the KYC provider once one is connected; none is yet.';
+  const panHint: ReactNode = method.panDemoVerified ? (
+    <DemoPanHint name={DEMO_CREATOR.panName} />
+  ) : (
+    'Checked against your name by the KYC provider once one is connected; none is yet.'
+  );
 
   return (
     <>
@@ -444,7 +447,7 @@ export function Settings() {
                   </div>
                 </div>
                 <Link href="/login" className={styles.rowLink}>
-                  Sign-in page<span aria-hidden="true"> →</span>
+                  Sign-in page<span aria-hidden="true">{'\u00a0'}→</span>
                 </Link>
               </li>
               <li className={styles.row}>

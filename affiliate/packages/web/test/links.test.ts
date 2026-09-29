@@ -18,6 +18,9 @@ import {
   filterOffers,
   hostAllowed,
   linkHref,
+  validateUuid,
+  demoLinkHref,
+  DEMO_LINK_PAYLOAD_HOST,
   mintLiveLink,
   parsePayout,
   qrFileName,
@@ -63,6 +66,15 @@ describe('demo link composition (the design’s readable format, never a minted 
       'http://localhost:3001/r/9f2c1ab4e5d64f7a8b9c0d1e2f3a4b5c',
     );
     expect(linkHref('https://redirect.demo.invalid/r/demo-abc')).toBe('https://redirect.demo.invalid/r/demo-abc');
+  });
+
+  it('a demo link keeps the drawn display but copies, encodes and shares a reserved host', () => {
+    const display = composeDemoLink({ handle: 'demo-priya', offerSlug: 'demo-style', subId: 'short-diwali-02' });
+    expect(display).toBe('afflino.com/r/demo-priya/demo-style?s=short-diwali-02');
+    expect(DEMO_LINK_PAYLOAD_HOST.endsWith('.invalid')).toBe(true);
+    expect(demoLinkHref(display)).toBe('https://afflino.demo.invalid/r/demo-priya/demo-style?s=short-diwali-02');
+    expect(demoLinkHref('https://afflino.com/r/demo-priya/demo-style')).toBe('https://afflino.demo.invalid/r/demo-priya/demo-style');
+    expect(() => demoLinkHref('https://example.com/r/x')).toThrow(/not a demo link/);
   });
 
   it('QR file names are slugs', () => {
@@ -284,6 +296,30 @@ describe('live minting — POST /v1/links (the restored LinkBuilder path)', () =
     });
   });
 
+  it('sends the Idempotency-Key it is given, so a retry cannot mint a second link', async () => {
+    const calls: Array<{ path: string; options: unknown }> = [];
+    await mintLiveLink(body, {
+      idempotencyKey: 'link-abc',
+      fetcher: (async (path: string, options: unknown) => {
+        calls.push({ path, options });
+        return { token: 't', url: 'http://localhost:3001/r/t' };
+      }) as never,
+    });
+    expect(calls).toEqual([{ path: '/v1/links', options: { method: 'POST', body, headers: { 'Idempotency-Key': 'link-abc' } } }]);
+  });
+
+  it('checks each pasted id as a uuid (no listing endpoint exists)', () => {
+    expect(validateUuid(' AAAAAAAA-aaaa-4aaa-8aaa-aaaaaaaaaaaa ', 'property id')).toEqual({
+      ok: true,
+      message: '',
+      value: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    });
+    expect(validateUuid('', 'property id').message).toBe('Enter the property id.');
+    expect(validateUuid('demo-org', 'offer id').message).toBe(
+      'That is not a uuid: the offer id has 32 hex digits in groups of 8-4-4-4-12.',
+    );
+  });
+
   it.each(['NETWORK_UNREACHABLE', 'UPSTREAM_UNAVAILABLE'])(
     'an unreachable API (%s) gives a labelled, untracked .invalid link',
     async (code) => {
@@ -311,7 +347,7 @@ describe('live minting — POST /v1/links (the restored LinkBuilder path)', () =
   it.each([
     ['PROGRAMME_NOT_APPROVED', 'programme not active'],
     ['OFFER_STALE', 'offer expired'],
-    ['PROPERTY_FORBIDDEN', 'property not approved'],
+    ['PROPERTY_FORBIDDEN', 'property not found or not approved for your organisation'],
     ['PUBLISHER_NOT_ACTIVE', 'publisher onboarding incomplete — account must be active'],
     ['UNAUTHORIZED', 'not signed in — add your token first'],
     ['SOMETHING_NEW', 'link creation failed (SOMETHING_NEW)'],

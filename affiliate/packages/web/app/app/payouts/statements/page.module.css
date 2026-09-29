@@ -52,10 +52,13 @@
   font-size: 13px;
 }
 
-/* Phones: the ledger and the dispute history keep readable columns and
-   scroll sideways inside their own box (DataTable's wrapper scrolls). */
+/* Phones: both tables are stacked rows (ResponsiveTable); the ticket link
+   keeps a 44px target. */
 @media (max-width: 760px) {
-  .table table {
-    min-width: 600px;
+  /* Block, not flex: a flex item would collapse the space before " →". */
+  .historyLink {
+    display: block;
+    min-height: 44px;
+    padding: 11px 0;
   }
 }

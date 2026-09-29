@@ -10,13 +10,19 @@
  *   localStorage key `paparazzi_token`. Portal pages call apiFetch(); if the
  *   API is unreachable (or returns a non-OK status) callers fall back to the
  *   clearly-labelled demo data in lib/portal-demo.ts and render <DemoBadge />.
+ *   withDemoFallback hands back the error: only an unreachable API
+ *   (isUnreachable) is labelled "API unreachable"; an answer the API gave
+ *   (401 / 403 / 404 / 400 / 5xx) is named in a Banner (fallbackNotice).
+ * - `Content-Type: application/json` is sent only with a body: Fastify
+ *   rejects an empty body declared as JSON (a bodyless POST such as
+ *   /v1/suspense/:id/retry would never reach its handler).
  *
  * Known API surface (packages/api):
  *   success envelope: { data, request_id }
  *   error envelope:   { error: { code, message }, request_id }
  *   GET  /v1/publisher/earnings?publisher_id=<uuid> -> { publisher_id, balances }
  *   POST /v1/links {property_id, programme_id, offer_id, placement_id} -> { token, url }
- *   GET  /v1/disputes -> Dispute[] ; POST /v1/disputes {kind, subject, claim_ref?} -> Dispute
+ *   GET  /v1/disputes?publisher_id= -> Dispute[] ; POST /v1/disputes {kind, subject, claim_ref?, publisher_id?} -> Dispute
  *   POST /v1/programmes/:id/pause|resume (network_admin) -> kill switch
  *   GET  /v1/suspense?connector=&programme_id=&received_from=&received_to=&reviewed=&limit=&offset=
  *        -> { items: SuspenseItem[], limit, offset, total } (finance_operator, finance_approver, network_admin)
@@ -32,7 +38,7 @@ export const API_BASE = process.env.NEXT_PUBLIC_API_BASE?.replace(/\/+$/, '') ||
 export const TOKEN_KEY = 'paparazzi_token';
 export const PUBLISHER_ID_KEY = 'paparazzi_publisher_id';
 
-/** Used when no publisher id is stored; the earnings endpoint needs a uuid. */
+/** The TEST demo publisher of lib/portal-demo.ts. Never sent to the API (a real API answers 404). */
 export const DEMO_PUBLISHER_ID = '11111111-1111-4111-8111-111111111111';
 
 function readLocal(key: string): string | null {
@@ -48,8 +54,10 @@ export function getToken(): string | null {
   return readLocal(TOKEN_KEY);
 }
 
-export function getPublisherId(): string {
-  return readLocal(PUBLISHER_ID_KEY) || DEMO_PUBLISHER_ID;
+/** The publisher id /login (or /join) stored, or null: never the demo id. */
+export function getStoredPublisherId(): string | null {
+  const value = readLocal(PUBLISHER_ID_KEY)?.trim();
+  return value ? value : null;
 }
 
 /** Canonical error codes from @paparazzi/shared + our own network sentinel. */
@@ -104,7 +112,7 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
     res = await fetch(`${API_BASE}${path}`, {
       ...rest,
       headers: {
-        'Content-Type': 'application/json',
+        ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(headers || {}),
       },
@@ -135,19 +143,103 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
   return (parsed as SuccessEnvelope<T>).data;
 }
 
+export interface DemoFallbackResult<T> {
+  value: T;
+  /** true: `value` is the demo value (render <DemoBadge />). */
+  demo: boolean;
+  /** Why the live call failed; null when it answered. */
+  error: ApiError | null;
+}
+
 /**
  * Run a live request; on any failure (network or API error) return the demo
- * value instead. The `demo: true` flag tells the caller to render <DemoBadge />.
+ * value instead. The `demo: true` flag tells the caller to render
+ * <DemoBadge />; `error` says why, so the page can tell an unreachable API
+ * (isUnreachable → variant "fallback") from an answer it gave (a Banner
+ * from fallbackNotice, and the plain "Demo data" badge).
  */
-export async function withDemoFallback<T>(
-  live: () => Promise<T>,
-  demo: T,
-): Promise<{ value: T; demo: boolean }> {
+export async function withDemoFallback<T>(live: () => Promise<T>, demo: T): Promise<DemoFallbackResult<T>> {
   try {
-    return { value: await live(), demo: false };
-  } catch {
-    return { value: demo, demo: true };
+    return { value: await live(), demo: false, error: null };
+  } catch (err) {
+    const error =
+      err instanceof ApiError ? err : new ApiError('INTERNAL', err instanceof Error ? err.message : 'Unexpected error', 0);
+    return { value: demo, demo: true, error };
   }
+}
+
+/**
+ * The request never got an answer from the API: the browser could not reach
+ * it (NETWORK_UNREACHABLE) or the same-origin proxy could not
+ * (UPSTREAM_UNAVAILABLE, 502). Only then does a page say "API unreachable".
+ */
+export function isUnreachable(error: ApiError | null | undefined): boolean {
+  return !!error && (error.code === 'NETWORK_UNREACHABLE' || error.code === 'UPSTREAM_UNAVAILABLE');
+}
+
+export interface FallbackNotice {
+  title: string;
+  message: string;
+  /** A way out, e.g. { href: '/login', label: 'Log in again' }. */
+  action?: { href: string; label: string };
+}
+
+/** Why a live call fell back to demo data. */
+export type FallbackKind = 'unreachable' | 'unauthorized' | 'forbidden' | 'not-found' | 'invalid' | 'error';
+
+export function fallbackKind(error: ApiError | null | undefined): FallbackKind | null {
+  if (!error) return null;
+  if (isUnreachable(error)) return 'unreachable';
+  if (error.status === 401 || error.code === 'UNAUTHORIZED') return 'unauthorized';
+  if (error.status === 403 || error.code === 'FORBIDDEN') return 'forbidden';
+  if (error.status === 404 || error.code === 'NOT_FOUND') return 'not-found';
+  if (error.status === 400 || error.status === 422 || error.code === 'VALIDATION_ERROR') return 'invalid';
+  return 'error';
+}
+
+/**
+ * The Banner for a live call the API answered with an error, so the page
+ * shows demo data; null for an unreachable API (the badge says so) and for
+ * no error. `what` names the data ("your earnings", "the suspense queue");
+ * `overrides` replaces the wording for one kind (e.g. a 404 that means "this
+ * publisher id is not in your organisation").
+ */
+export function fallbackNotice(
+  error: ApiError | null | undefined,
+  what: string,
+  overrides: Partial<Record<Exclude<FallbackKind, 'unreachable'>, FallbackNotice>> = {},
+): FallbackNotice | null {
+  const kind = fallbackKind(error);
+  if (!error || !kind || kind === 'unreachable') return null;
+  const override = overrides[kind];
+  if (override) return override;
+  const said = error.message ? ` ("${error.message.replace(/[.\s]+$/, '')}")` : '';
+  switch (kind) {
+    case 'unauthorized':
+      return {
+        title: `Sign in to see ${what}.`,
+        message: 'The API did not accept your token (missing, expired or from another environment), so this page shows demo data.',
+        action: { href: '/login', label: 'Log in again' },
+      };
+    case 'forbidden':
+      return {
+        title: `This account cannot read ${what}.`,
+        message: `The API refused your role${said}, so this page shows demo data.`,
+      };
+    case 'not-found':
+      return { title: `${capitalise(what)} not found.`, message: `The API answered 404${said}, so this page shows demo data.` };
+    case 'invalid':
+      return { title: 'The API rejected the request.', message: `It answered${said || ' 400'}, so this page shows demo data.` };
+    default:
+      return {
+        title: `${capitalise(what)} unavailable.`,
+        message: `The API answered with an error (${error.code}), so this page shows demo data.`,
+      };
+  }
+}
+
+function capitalise(text: string): string {
+  return text ? text[0]!.toUpperCase() + text.slice(1) : text;
 }
 
 /* ---------- v1 types ---------- */
@@ -199,6 +291,8 @@ export interface OpenDisputeBody {
   subject: string;
   claim_ref?: string;
   conversion_id?: string;
+  /** The filer's publisher (checked against the token's organisation). */
+  publisher_id?: string;
   evidence?: Record<string, unknown>;
 }
 
@@ -210,7 +304,7 @@ export function linkErrorMessage(code: ApiCode): string {
     case 'OFFER_STALE':
       return 'offer expired';
     case 'PROPERTY_FORBIDDEN':
-      return 'property not approved';
+      return 'property not found or not approved for your organisation';
     case 'PUBLISHER_NOT_ACTIVE':
       return 'publisher onboarding incomplete — account must be active';
     case 'NOT_FOUND':

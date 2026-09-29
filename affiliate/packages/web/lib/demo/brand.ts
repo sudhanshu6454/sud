@@ -21,7 +21,7 @@ import { PRICING } from '../site-copy';
 import type { OfferModel, Platform } from './afflino';
 
 /** Reporting period of the drawn dashboard ("Demo PayUPI · September", "+31% vs Aug"). */
-export const DEMO_BRAND_PERIOD = { month: 'September', previousMonthShort: 'Aug' } as const;
+export const DEMO_BRAND_PERIOD = { month: 'September', monthShort: 'Sep', previousMonthShort: 'Aug' } as const;
 
 /** 2b KPI strip and 3f "Today". */
 export const DEMO_BRAND_SUMMARY = {

@@ -28,11 +28,15 @@ import {
   applicationBody,
   branchOf,
   firstErrorKey,
+  initialRole,
   initialState,
   joinSearch,
   onboardingReducer,
+  parsePlan,
   parseRole,
   parseStep,
+  planFor,
+  planSummary,
   reachableView,
   stepErrors,
   stepIndexLabel,
@@ -105,7 +109,14 @@ function randomKey(): string {
 export function Onboarding() {
   const searchParams = useSearchParams();
   const requested = parseStep(searchParams.get('step'));
-  const [state, dispatch] = useReducer(onboardingReducer, parseRole(searchParams.get('role')), initialState);
+  // The home page's "Start free" arrives as ?role=brand&plan=starter: the plan
+  // preselects the brand flow, is shown on its steps and stays in the URL.
+  const [plan] = useState(() => parsePlan(searchParams.get('plan')));
+  const [state, dispatch] = useReducer(
+    onboardingReducer,
+    initialRole(searchParams.get('role'), searchParams.get('plan')),
+    initialState,
+  );
   const { form } = state;
   const [result, setResult] = useState<FinishResult | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -129,11 +140,13 @@ export function Onboarding() {
   // The URL follows what is shown: a clamped step (fresh load of ?step=3, a hand-edited URL)
   // and a changed role are written back in place, so a reload keeps the role.
   const urlRole = parseRole(searchParams.get('role'));
+  const urlPlan = parsePlan(searchParams.get('plan'));
+  const shownPlan = planFor(form.role, plan);
   useEffect(() => {
-    if (view !== requested || form.role !== urlRole) {
-      window.history.replaceState(null, '', `/join${joinSearch(form.role, view)}`);
+    if (view !== requested || form.role !== urlRole || shownPlan !== urlPlan) {
+      window.history.replaceState(null, '', `/join${joinSearch(form.role, view, plan)}`);
     }
-  }, [view, requested, form.role, urlRole]);
+  }, [view, requested, form.role, urlRole, shownPlan, urlPlan, plan]);
 
   // Moving between steps puts focus on the new step's heading (not on first load).
   useEffect(() => {
@@ -153,7 +166,7 @@ export function Onboarding() {
   // State null: Next's patched pushState copies its own entry state; passing history.state
   // (which carries Next's __NA flag) would make it skip syncing useSearchParams.
   function go(next: JoinView) {
-    window.history.pushState(null, '', `/join${joinSearch(form.role, next)}`);
+    window.history.pushState(null, '', `/join${joinSearch(form.role, next, plan)}`);
   }
 
   function blockedBy(step: StepNumber): boolean {
@@ -282,6 +295,7 @@ export function Onboarding() {
         {view === 'done' && result ? (
           <JoinDone
             role={form.role}
+            plan={shownPlan}
             result={result}
             onRetry={() => void submit()}
             retrying={submitting}
@@ -311,6 +325,15 @@ export function Onboarding() {
                 {copy.title}
               </h1>
               {copy.lead ? <p className={styles.lead}>{copy.lead}</p> : null}
+              {shownPlan ? (
+                <p className={styles.plan}>
+                  <span className={styles.planLabel}>Plan</span> {planSummary(shownPlan)}, picked on the pricing
+                  page.{' '}
+                  <Link href="/#pricing" className={styles.inlineLink}>
+                    Compare plans
+                  </Link>
+                </p>
+              ) : null}
             </div>
 
             {view === 1 ? <StepAccount {...stepProps} /> : null}

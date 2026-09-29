@@ -127,3 +127,42 @@
     min-height: 44px;
   }
 }
+
+/* Why "Retry attribution" is disabled on a row (visible, and its description). */
+.blocked {
+  margin: var(--space-1) 0 0;
+  max-width: 14rem;
+  font-size: 12px;
+  color: var(--color-neutral-700);
+}
+
+/* A filter the API rejected (400): inline, across the filter row. */
+.filterError {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-accent-700);
+}
+
+/* The section's content: note, filters, table, 24px apart (16px on phones). */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+.stack > * {
+  margin: 0;
+}
+
+@media (max-width: 760px) {
+  .stack {
+    gap: var(--space-4);
+  }
+}
+
+/* "21 Sep · 14:42" never breaks at the dot. */
+.nowrap {
+  white-space: nowrap;
+}

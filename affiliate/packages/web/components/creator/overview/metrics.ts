@@ -23,7 +23,7 @@ import {
   DEMO_RANGE_TRAFFIC,
   type DemoRangeId,
 } from '../../../lib/demo/creator-overview';
-import { formatDayMonth, formatINRFromMinor, formatPct, formatRate } from '../../../lib/format';
+import { formatDayMonth, formatINRExact, formatINRFromMinor, formatPct, formatRate } from '../../../lib/format';
 
 export type OverviewRange = DemoRangeId;
 
@@ -375,7 +375,9 @@ export interface LiveEarnings {
  * buckets are explained in lib/earnings.ts, shared with Payouts 2c):
  *
  * - pending + approved is everything earned and not yet paid out
- *   → Earnings (to date: the route takes no date range).
+ *   → "Unpaid earnings". Not "to date": `approved` is the net
+ *   publisher_liability, which every paid batch debits, so the figure falls
+ *   after each payout (the route returns no lifetime total and no range).
  * - max(collected − payable, 0) is what the next payout batch can draw —
  *   the same figure Payouts prints as "Available to withdraw", as the design
  *   draws one amount (₹42,900) for both → Next payout. `approved` alone is
@@ -402,7 +404,7 @@ export interface OverviewKpis {
   conversions: { value: number; meta: string };
   conversionRate: string;
   nextPayout: { valueMinor: number; meta: string };
-  /** Phone hero (1e): "Earnings · 30d" and "+22% · payout Sat ₹42,900". */
+  /** Phone hero (1e): "Earnings · 30d" and "+22% · payout Sat ₹42,900" (live: "Unpaid earnings"). */
   phoneEyebrow: string;
   phoneLine: string;
   phonePositive: boolean;
@@ -425,13 +427,19 @@ export function overviewKpis(dataset: OverviewDataset, live: LiveEarnings | null
   };
 
   if (live) {
-    const pending = formatINRFromMinor(live.pendingMinor);
+    const pending = formatINRExact(live.pendingMinor);
+    // approved < 0: a reversal landed after the earnings were paid out (a
+    // clawback), so the sum is below the pending amount; say so.
+    const approvedPart =
+      live.approvedMinor < 0
+        ? `${formatINRExact(-live.approvedMinor)} reversed after payout`
+        : `${formatINRExact(live.approvedMinor)} approved`;
     return {
       ...shared,
-      earnings: { label: 'Earnings to date', valueMinor: live.unpaidMinor, meta: `Incl. ${pending} pending`, positive: false },
+      earnings: { label: 'Unpaid earnings', valueMinor: live.unpaidMinor, meta: `${pending} pending · ${approvedPart}`, positive: false },
       nextPayout: { valueMinor: live.nextBatchMinor, meta: 'Collected, not yet in a batch' },
-      phoneEyebrow: 'Earnings · to date',
-      phoneLine: `payout ${formatINRFromMinor(live.nextBatchMinor)} · ${pending} pending`,
+      phoneEyebrow: 'Unpaid earnings',
+      phoneLine: `payout ${formatINRExact(live.nextBatchMinor)} · ${pending} pending`,
       phonePositive: false,
     };
   }

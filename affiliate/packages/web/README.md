@@ -21,29 +21,36 @@ agency, 3f phone offers / payouts / brand). "Not drawn" pages are composed
 from the drawn parts (same grid, type and components). Data: **live** = a v1
 call, **demo** = TEST data from `lib/demo/*.ts` with `<DemoBadge
 variant="mock" />` ("Demo data"; no endpoint exists), **mixed** = both on one
-page; a live call that fails falls back to demo data with `<DemoBadge
-variant="fallback" />` ("Demo data — API unreachable").
+page. A live call that cannot reach the API falls back to demo data with
+`<DemoBadge variant="fallback" />` ("Demo data — API unreachable"); one
+the API answered with an error (401, 403, 404, 400, 5xx) falls back with a
+top Banner that names it and the plain "Demo data" badge; signed out (no
+token) the page makes no call and shows its demo state (`lib/api.ts`
+`withDemoFallback` / `fallbackNotice`, `components/FallbackBanner`).
 
 Chrome per area: `(marketing)` and `(shop)` render the marketing nav + footer
 (skip link first); `/app`, `/brand`, `/agency` render `AppShell` (220px
 sidebar; phone top bar + bottom tabs); `/admin` renders `AdminShell` (56px
 ink bar); `/join` has its own step panel. The shells show TEST demo accounts
 until sign-in exists (`account.demo` → a badge in the sidebar footer).
+`/app`, `/brand`, `/agency`, `/admin` and `/join` are noindex (their
+layouts' metadata): unauthenticated TEST-data pages stay out of search
+indexes.
 
 | Route | Screen (artboard) | Data |
 |---|---|---|
 | `/` | Marketing site (1b; nav lockup and logo sizes from 1a): hero, stats, how it works (`#brands`), pricing (`#pricing`), creator poster (`#creators`) | static — every figure from `lib/site-copy.ts` (placeholders); no badge |
 | `/login` | Dev sign-in (not drawn; the 1b hero grid): paste the API token (JWT stub) and an optional publisher id, "Continue to your dashboard →", "Sign out". Says plainly there is no sign-in yet; checks the token's shape only; noindex | local — localStorage `paparazzi_token` / `paparazzi_publisher_id` |
 | `/terms`, `/privacy`, `/contact` | Honest stubs in the marketing type ("being prepared"; contact publishes no email or phone) | static |
-| `/join` | Sign-up & onboarding, 3 steps (2a, 3a; phone: a step strip). `?role=creator\|publisher\|brand\|agency` preselects, `?step=2\|3\|done` (history-driven, Back/Forward keep input) | **mixed** — OTP, platform connect, PAN "Verified", wallet top-up are labelled demo flows (nothing verified or charged); Finish makes a **live** `POST /v1/publishers` (`Idempotency-Key`) for a creator / publisher with a dev token; brands, agencies and signed-out users get a demo result that says nothing was created |
-| `/app` | Creator overview (1c; 1e home on phones): KPIs, 7d \| 30d \| 90d, chart, platform split, top links | **mixed** — Earnings (pending + approved) and Next payout (max(collected − payable, 0), the same figure as Payouts' "Available to withdraw"; `lib/earnings.ts`) from **live** `GET /v1/publisher/earnings?publisher_id=`; the rest demo |
+| `/join` | Sign-up & onboarding, 3 steps (2a, 3a; phone: a step strip). `?role=creator\|publisher\|brand\|agency` preselects, `?step=2\|3\|done` (history-driven, Back/Forward keep input); `?plan=starter\|network` (the home page's "Start free") preselects the brand flow and is shown on its steps | **mixed** — OTP, platform connect, PAN "Verified", wallet top-up are labelled demo flows (nothing verified or charged); Finish makes a **live** `POST /v1/publishers` (`Idempotency-Key`) for a creator / publisher with a dev token; brands, agencies and signed-out users get a demo result that says nothing was created |
+| `/app` | Creator overview (1c; 1e home on phones): KPIs, 7d \| 30d \| 90d, chart, platform split, top links | **mixed** — Unpaid earnings (pending + approved: earned, not yet paid out) and Next payout (max(collected − payable, 0), the same figure as Payouts' "Available to withdraw"; `lib/earnings.ts`) from **live** `GET /v1/publisher/earnings?publisher_id=` (only with a token and a saved publisher id; live amounts exact to the paisa); the rest demo; phones link to Reports |
 | `/app/offers` | Offer browser (1d; 3f left on phones): search, category tags, sort, Apply for approval-gated offers | demo — `GET /v1/offers` is the shop's price feed and returns the raw merchant `offer_url`, so the browser never calls it |
 | `/app/offers/[id]` | Offer detail + get link (1e on phones; desktop composed from 1d / 3c), terms, promo code, disclosure text | demo; unknown id → 404 inside the app shell (`app/app/not-found.tsx`) |
-| `/app/links` | My links + link generator (3c): offer picker, landing page, sub-ID, Generated box (Copy link, Download QR, Disclosure text, Share), "My links" table; plus a "Live tracked link" section | **mixed** — generator and table demo (no link-listing endpoint); **live** `POST /v1/links` mints the real `/r/{32-hex}` link (guard errors inline); API unreachable → a labelled, untracked `redirect.demo.invalid` link |
+| `/app/links` | My links + link generator (3c): offer picker, landing page, sub-ID, Generated box (Copy link, Download QR, Disclosure text, Share), "My links" table; plus a "Live tracked link" section | **mixed** — generator and table demo (no link-listing endpoint); **live** `POST /v1/links` mints the real `/r/{32-hex}` link from four pasted uuids (no listing endpoint; TEST ids as suggestions; one `Idempotency-Key` per unchanged set; guard errors inline); API unreachable → a labelled, untracked `redirect.demo.invalid` link. A demo link's Copy / QR / Share payload is on the reserved host `afflino.demo.invalid` |
 | `/app/reports` | Reports (3d): funnel, cities, sub-IDs, filters, a by-day/week/month table, Export CSV | demo |
-| `/app/payouts` | Payouts (2c; 3f middle on phones): balances, Withdraw dialog (₹500 minimum, TDS placeholder), Payouts \| Conversions \| Clicks tables, Export CSV | **mixed** — the two balances from **live** `GET /v1/publisher/earnings` (Available = max(collected − payable, 0), Pending = pending); tables and payout method demo; there is no withdrawal endpoint, so a live Withdraw only explains batches |
-| `/app/payouts/disputes` | Missing-commission tickets (not drawn; 3c grid) | **live** `GET /v1/disputes` (demo fallback), `POST /v1/disputes` (disabled on demo data) |
-| `/app/payouts/statements` | Ledger drilldown + dispute history (not drawn) | demo (`lib/portal-demo.ts`): no statement endpoint |
+| `/app/payouts` | Payouts (2c; 3f middle on phones): balances, Withdraw dialog (₹500 minimum, TDS placeholder), Payouts \| Conversions \| Clicks tables, Export CSV | **mixed** — the two balances from **live** `GET /v1/publisher/earnings` (Available = max(collected − payable, 0), Pending = pending, and a line naming approved earnings in neither; exact to the paisa); tables and payout method demo (the method cell carries its own badge with live balances); there is no withdrawal endpoint, so a live Withdraw only explains batches and names no destination |
+| `/app/payouts/disputes` | Missing-commission tickets (not drawn; 3c grid) | **live** `GET /v1/disputes?publisher_id=` (demo fallback), `POST /v1/disputes` with the saved `publisher_id` and an `Idempotency-Key` (disabled on demo data) |
+| `/app/payouts/statements` | Ledger drilldown + dispute history (not drawn) | demo (`lib/portal-demo.ts`): no statement endpoint; both tables stack into rows on phones |
 | `/app/settings` | Settings & profile (2d): profile, platforms, payout, notifications, security in one form | demo — localStorage `afflino_demo_creator_settings` |
 | `/brand` | Brand dashboard (2b; 3f right on phones): KPIs, creator requests (Approve / Decline), top creators | demo |
 | `/brand/offers/new` | Offer builder (3b; steps 02–04 are not drawn): Basics, Payout, Audience, Assets; live preview card; Save draft / Submit | demo — localStorage `afflino_brand_offers_v1` |
@@ -52,8 +59,8 @@ until sign-in exists (`account.demo` → a badge in the sidebar footer).
 | `/agency` | Agency workspace (3e): brand clients (`#clients`), roster (`#roster`) with the agency share, Invite creator / Add brand client dialogs | demo — localStorage `afflino_agency_{share,invites,clients}_v1` |
 | `/admin` | Admin review queue (2e): KPIs, filters, Review dialog (Request info / Reject / Approve) | demo — decisions in localStorage `afflino_admin_review_v1`, shared by every admin page; nothing is sent |
 | `/admin/brands` · `/admin/creators` · `/admin/offers` · `/admin/fraud` · `/admin/settlements` | Admin lists in the 2e style (not drawn); fraud says no detection runs, creators says there is no KYC / PAN check, settlements is read-only and explains the API's maker-checker | demo |
-| `/admin/suspense` | Suspense queue (not drawn) | **live** `GET /v1/suspense` (filters; demo fallback), `POST /v1/suspense/:id/retry` and `/review` (disabled on demo data) |
-| `/admin/looks` · `/admin/looks/[id]` | Editorial looks pipeline board and product match review (not drawn) | local — `lib/console.ts` (localStorage `paparazzi_console_looks`, TEST demo looks); no review API |
+| `/admin/suspense` | Suspense queue (not drawn) | **live** `GET /v1/suspense` (filters as India calendar days; a rejected filter keeps the rows; demo fallback), `POST /v1/suspense/:id/retry` (disabled on demo data and on rows with no click reference) and `/review`; amounts in each row's own currency, exact |
+| `/admin/looks` · `/admin/looks/[id]` | Editorial looks pipeline board (six equal columns from 1100px) and product match review (not drawn) | local — `lib/console.ts` (localStorage `paparazzi_console_looks`, TEST demo looks); no review API |
 | `/shop` | The fleet's consumer shop (no artboard; 1d's ruled grid on the 40px marketing gutters): search (Esc clears), category tags, sort (Newest, Most products, Title A–Z) | **live** `GET /v1/looks` (all pages), server-side with `WEB_API_TOKEN` |
 | `/looks/[id]` | Look detail (5fr / 7fr like an offer detail): cover (grayscale, whole photo), Sponsored, source-page attribution, disclosure panel, item rows (match tag, price 24px / 800, merchant · stock, freshness, CTA) | **live** `GET /v1/looks/:id?placement_id=WEB_PLACEMENT_ID` |
 | `/looks/[id]/items/[itemId]` | Product detail (1e's get-link layout on phones, sticky CTA + Save): match tag, price 36px, merchant + stock, freshness, variant facts, CTA, "Payment, delivery and returns are handled by the merchant.", disclosure | **live** — same detail call; `itemId` is the `look_items` id |
@@ -70,7 +77,11 @@ Redirects (`next.config.mjs`, temporary 307): `/portal` → `/app`,
 404s: an unmatched URL renders `app/not-found.tsx` in the bare root layout;
 the shop (`app/(shop)/not-found.tsx`) and the creator app
 (`app/app/not-found.tsx`) have their own so a miss keeps their chrome. Unknown
-look or item ids are HTTP 404 in live mode (a non-uuid id too). The look and
+look or item ids are HTTP 404 in live mode (a non-uuid id too); when the API
+fails for a live look id the page is the shop's error state
+(`app/(shop)/error.tsx`, "temporarily unavailable"), never a 404. Any other
+render error stays in the system through `app/error.tsx` (Banner + "Try
+again"). The look and
 item routes deliberately have no `loading.tsx`: in Next 14.2 a `loading.tsx`
 turns a `notFound()` into a 200 (only `/shop` has a route skeleton).
 
@@ -82,7 +93,8 @@ turns a `notFound()` into a 200 (only `/shop` has a route skeleton).
   the first request after the window may still serve the previous body
   while the cache refreshes in the background).
 - **Shop, demo** when `WEB_API_TOKEN` is missing or the API fails (network
-  error, non-2xx other than a clean 404): the TEST-labelled catalogue in
+  error, non-2xx other than a clean 404; for a live look id the look and
+  item pages show the outage instead, above): the TEST-labelled catalogue in
   `lib/mock-data.ts` (titles "Demo …", merchants "Demo Merchant …",
   `linkUrl: null` everywhere) with `<DemoBadge />` in the page header. Demo
   items never carry a link, so their CTA is the disabled "Link not available
@@ -100,9 +112,10 @@ turns a `notFound()` into a 200 (only `/shop` has a route skeleton).
   screen data, "Demo"-renamed one-for-one; `creator-overview`, `links`,
   `payouts`, `brand`, `agency`, `admin`, `onboarding` add what the undrawn
   states need, under the same rule). Demo rows print the design's readable
-  link format (`afflino.com/r/demo-priya/demo-payupi?s=…`); the platform
-  only mints `/r/{32-hex token}` (no cookies, hashed IPs) and a live link
-  always shows the API's URL. Offer copy says "attribution window", never
+  link format (`afflino.com/r/demo-priya/demo-payupi?s=…`), while what a
+  demo link copies, encodes in its QR or shares is on the reserved host
+  `afflino.demo.invalid`; the platform only mints `/r/{32-hex token}` (no
+  cookies, hashed IPs) and a live link always shows the API's URL. Offer copy says "attribution window", never
   "cookie": the platform sets none.
 - Demo flows are labelled and never pretend to verify: no SMS is sent (any
   6-digit code passes), "Connect" fills in a TEST account (no OAuth), the PAN
@@ -132,7 +145,9 @@ Where the catalogue token comes from today: the JWT dev stub —
 
 `app/api/[...path]/route.ts` forwards `/api/<path>?<query>` to
 `${API_BASE}/<path>?<query>` for every method, streaming the response back
-with hop-by-hop headers dropped. It resolves `API_BASE` **at request time**
+with hop-by-hop headers dropped, and cookies dropped both ways (the API is
+bearer-only and sets none: the web origin's `cookie` is not sent upstream
+and an upstream `set-cookie` never reaches the browser). It resolves `API_BASE` **at request time**
 (a `rewrites()` entry in `next.config.mjs` would be frozen into the routes
 manifest at `next build`, which breaks deployments that pass `API_BASE` at
 container start, as `docker-compose.yml` does). The browser's own
@@ -191,7 +206,7 @@ every page renders its demo state — that is what the handover draws.
 
 ## Tests
 
-`packages/web/test/` (19 files, run by the root `vitest run`; `lib/` and the
+`packages/web/test/` (21 files, run by the root `vitest run`; `lib/` and the
 tested component models use relative imports because the root vitest config
 has no `@/` alias):
 
@@ -221,6 +236,12 @@ has no `@/` alias):
 - `shop.test.ts` — filters, sort, the three CTA states rendered to HTML, and
   source scans (no hex colours or raw radii, no "cookie", no `offer_url`,
   `rel="sponsored…"` only in `MerchantCta`).
+- `live-api.test.ts`, `api-proxy.test.ts` — `apiFetch` (no JSON content type
+  without a body), the fallback states (unreachable vs 401 / 403 / 404 /
+  mismatch; no call without a token or publisher id), `Idempotency-Key`
+  reuse, the suspense query's India-day bounds; the `/api` proxy's headers
+  (bearer forwarded, cookies dropped both ways, `WEB_API_TOKEN` never
+  added).
 
 ## Design system (Afflino "Modernist")
 
@@ -250,7 +271,9 @@ has no `@/` alias):
   models and `withWorkspace()` / `navInWorkspace()` in `areas.ts` (nav
   matching ignores `?query`).
 - **Breakpoints**: 760px is the one app breakpoint (sidebar → top bar +
-  fixed bottom tabs, phone compositions 1e / 3f, ≥44px targets); the
+  fixed bottom tabs, phone compositions 1e / 3f, ≥44px targets: every
+  Button is 44px tall on phones, TagButton chips have a 44px hit area; the
+  top bar is hidden where 3f draws none, `/app/offers` and `/app/payouts`); the
   marketing chrome collapses its links into a menu below 900px. Pages add
   local steps where their content needs them between 761px and 1280px (KPI
   strips go 2 × 2, grids drop a column, panels stack); none scrolls
@@ -264,7 +287,10 @@ has no `@/` alias):
   from integer paise; every Export CSV), `lib/download.ts` (Blob downloads,
   CSV with a UTF-8 BOM), `lib/clipboard.ts` (copy with an execCommand
   fallback; "Copied" for 2s), `lib/earnings.ts` (the earnings buckets →
-  balances), `lib/links.ts` (link composition, QR, live minting),
+  balances, and `loadLiveEarnings`, the one earnings call), `lib/links.ts`
+  (link composition, the QR file name, live minting), `lib/qr.ts` (the QR
+  code and PNG, loaded only by Download QR), `lib/idempotency.ts` (one
+  `Idempotency-Key` per unchanged payload),
   `lib/onboarding.ts`.
 - **Area components**: `components/{marketing,onboarding,creator/*,brand,agency,admin,shop}`
   hold each area's screens and their pure models (the models are what the

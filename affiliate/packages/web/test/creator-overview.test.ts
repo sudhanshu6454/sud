@@ -167,19 +167,31 @@ describe('Overview datasets', () => {
 });
 
 describe('live earnings mapping (GET /v1/publisher/earnings)', () => {
-  it('Earnings = pending + approved, Next payout = max(collected − payable, 0)', () => {
+  it('Unpaid earnings = pending + approved, Next payout = max(collected − payable, 0)', () => {
     const live = mapEarningsResponse(DEMO_EARNINGS);
     expect(live).toEqual({ pendingMinor: 1_845_000, approvedMinor: 2_264_000, unpaidMinor: 4_109_000, nextBatchMinor: 0 });
     const k = overviewKpis(buildOverviewDataset('30d'), live);
-    expect(k.earnings.label).toBe('Earnings to date');
+    // Not "to date": approved is the net liability, which a paid batch debits.
+    expect(k.earnings.label).toBe('Unpaid earnings');
     expect(formatINRFromMinor(k.earnings.valueMinor)).toBe('₹41,090');
-    expect(k.earnings.meta).toBe('Incl. ₹18,450 pending');
+    expect(k.earnings.meta).toBe('₹18,450 pending · ₹22,640 approved');
     expect(k.earnings.positive).toBe(false);
     // DEMO_EARNINGS: collected 0, payable ₹9,600 → nothing left for the next batch.
     expect(formatINRFromMinor(k.nextPayout.valueMinor)).toBe('₹0');
     expect(k.nextPayout.meta).toBe('Collected, not yet in a batch');
-    expect(k.phoneEyebrow).toBe('Earnings · to date');
+    expect(k.phoneEyebrow).toBe('Unpaid earnings');
     expect(k.phoneLine).toBe('payout ₹0 · ₹18,450 pending');
+    for (const text of [k.earnings.label, k.earnings.meta, k.phoneEyebrow, k.phoneLine]) expect(text).not.toMatch(/to date/i);
+  });
+
+  it('prints live paise exactly and names a clawback instead of summing below pending', () => {
+    const live = mapEarningsResponse({
+      publisher_id: 'x',
+      balances: { INR: { pending: 1_234_550, approved: -20_000, collected: 4_290_050, payable: 0 } },
+    });
+    const k = overviewKpis(buildOverviewDataset('30d'), live);
+    expect(k.earnings.meta).toBe('₹12,345.50 pending · ₹200 reversed after payout');
+    expect(k.phoneLine).toBe('payout ₹42,900.50 · ₹12,345.50 pending');
   });
 
   it('Next payout is the same figure as the Payouts screen\'s "Available to withdraw"', () => {

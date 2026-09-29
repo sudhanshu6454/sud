@@ -8,6 +8,7 @@
  * approval" and "Active creators" figures.
  */
 
+import Link from 'next/link';
 import DemoBadge from '@/components/DemoBadge';
 import { Button, DataTable, Eyebrow, KpiCell, KpiStrip, PageHeader, ProgressBar, type DataTableColumn } from '@/components/ui';
 import { DEMO_TOP_CREATORS, PLATFORM_NAME, type DemoCreatorRow } from '@/lib/demo/afflino';
@@ -106,6 +107,7 @@ export function BrandOverview() {
               ready={requests.ready}
               onApprove={requests.approve}
               onDecline={requests.decline}
+              pendingCount={requests.pendingCount}
               emptyAction={{ label: 'View creators', href: ws.href('/brand/creators') }}
             />
           </section>
@@ -153,9 +155,16 @@ export function BrandOverview() {
             ready={requests.ready}
             onApprove={requests.approve}
             onDecline={requests.decline}
+            pendingCount={requests.pendingCount}
             emptyAction={{ label: 'View creators', href: ws.href('/brand/creators') }}
           />
         </section>
+        {/* The phone tab bar has no Conversions tab (3f draws four tabs). */}
+        <p className={styles.phMore}>
+          <Link href={ws.href('/brand/conversions')}>
+            Review conversions<span aria-hidden="true"> →</span>
+          </Link>
+        </p>
       </div>
     </>
   );

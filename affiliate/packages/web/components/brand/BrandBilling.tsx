@@ -15,7 +15,7 @@ import { DEMO_BRAND } from '@/lib/demo/afflino';
 import { DEMO_BILLING_HISTORY, DEMO_BRAND_PERIOD, DEMO_BRAND_SUMMARY, type DemoBillingRow } from '@/lib/demo/brand';
 import { formatDayMonth, formatINRCompactFromMinor, formatINRFromMinor, formatINRWhole } from '@/lib/format';
 import { PRICING } from '@/lib/site-copy';
-import { feeMinor } from './offerModel';
+import { approvedPayoutsMinor, networkFeeDueMinor } from './billingModel';
 import { StackTable, type StackColumn } from './StackTable';
 import { TopUpDialog } from './TopUpDialog';
 import { useBrandSettings } from './useBrandSettings';
@@ -57,7 +57,11 @@ export function BrandBilling() {
 
   const walletMinor = DEMO_BRAND.walletMinor;
   const spend = DEMO_BRAND_SUMMARY.spendMinor;
-  const feeToDate = feeMinor(spend, PLAN.networkFeePct);
+  // The fee is billed on approved conversions (the plan cell and
+  // /brand/conversions say so), not on the month's spend, which counts every
+  // sign-up, pending, rejected and flagged included.
+  const approvedMinor = approvedPayoutsMinor();
+  const feeToDate = networkFeeDueMinor(PLAN.networkFeePct);
   const history: DemoBillingRow[] = [
     {
       date: '2026-09-30',
@@ -89,14 +93,14 @@ export function BrandBilling() {
             </Button>
           </KpiCell>
           <KpiCell
-            label={`Spend · ${DEMO_BRAND_PERIOD.month}`}
+            label={`Spend\u00a0·\u00a0${DEMO_BRAND_PERIOD.monthShort}`}
             value={formatINRCompactFromMinor(spend)}
-            meta={`of ${formatINRCompactFromMinor(DEMO_BRAND_SUMMARY.budgetMinor)} budget`}
+            meta={`of ${formatINRCompactFromMinor(DEMO_BRAND_SUMMARY.budgetMinor)} budget · all sign-ups`}
           />
           <KpiCell
             label="Network fee due"
-            value={formatINRFromMinor(feeToDate)}
-            meta={`${PLAN.networkFeePct}% of ${DEMO_BRAND_PERIOD.month} spend so far`}
+            value={formatINRFromMinor(feeToDate, { paise: feeToDate % 100 !== 0 })}
+            meta={`${PLAN.networkFeePct}% of ${formatINRFromMinor(approvedMinor)} approved conversions to date`}
           />
         </KpiStrip>
       </section>

@@ -2,27 +2,60 @@
 
 /*
  * Live minting — the restored LinkBuilder's POST /v1/links path, kept
- * reachable on 3c. The four ids (property, programme, offer, placement) are
- * chosen from TEST demo option lists (lib/portal-demo.ts; no listing
- * endpoint in v1). mintLiveLink() (lib/links.ts) does the call: a live
- * result is the URL the API composed; an unreachable API gives the
- * labelled, untracked redirect.demo.invalid link; guard errors show inline.
- * The result goes to the Generated box through onMinted().
+ * reachable on 3c. There is no listing endpoint for properties, programmes,
+ * offers or placements, so the four ids are typed or pasted as uuids
+ * (checked for shape, remembered in this browser for next time); the TEST
+ * demo ids (lib/portal-demo.ts) are only offered as suggestions. A real
+ * account uses its own ids (e.g. from db/seed-fleet.ts or the API).
+ * mintLiveLink() (lib/links.ts) does the call, with one Idempotency-Key per
+ * unchanged set of ids: a live result is the URL the API composed; an
+ * unreachable API gives the labelled, untracked redirect.demo.invalid link;
+ * guard errors show inline. The result goes to the Generated box through
+ * onMinted().
  */
 
-import { useId, useState, type FormEvent } from 'react';
-import { Button, Field, Select } from '@/components/ui';
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
+import { Button, Field, Input } from '@/components/ui';
 import type { CreateLinkBody } from '@/lib/api';
-import { mintLiveLink, type MintResult } from '@/lib/links';
+import { IdempotencyKeys } from '@/lib/idempotency';
+import { LIVE_MINT_IDS_KEY, mintLiveLink, validateUuid, type MintResult } from '@/lib/links';
 import { DEMO_OFFERS, DEMO_PLACEMENTS, DEMO_PROGRAMMES, DEMO_PROPERTIES, type DemoOption } from '@/lib/portal-demo';
 import styles from './LiveMintForm.module.css';
 
-const FIELDS: { key: keyof CreateLinkBody; label: string; options: DemoOption[] }[] = [
-  { key: 'property_id', label: 'Property', options: DEMO_PROPERTIES },
-  { key: 'programme_id', label: 'Programme', options: DEMO_PROGRAMMES },
-  { key: 'offer_id', label: 'Offer', options: DEMO_OFFERS },
-  { key: 'placement_id', label: 'Placement', options: DEMO_PLACEMENTS },
+type Ids = Record<keyof CreateLinkBody, string>;
+
+const FIELDS: { key: keyof CreateLinkBody; label: string; what: string; suggestions: DemoOption[] }[] = [
+  { key: 'property_id', label: 'Property id', what: 'property id', suggestions: DEMO_PROPERTIES },
+  { key: 'programme_id', label: 'Programme id', what: 'programme id', suggestions: DEMO_PROGRAMMES },
+  { key: 'offer_id', label: 'Offer id', what: 'offer id', suggestions: DEMO_OFFERS },
+  { key: 'placement_id', label: 'Placement id', what: 'placement id', suggestions: DEMO_PLACEMENTS },
 ];
+
+const EMPTY: Ids = { property_id: '', programme_id: '', offer_id: '', placement_id: '' };
+
+function readSaved(): Ids {
+  try {
+    const raw = window.localStorage.getItem(LIVE_MINT_IDS_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : null;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return EMPTY;
+    const out = { ...EMPTY };
+    for (const f of FIELDS) {
+      const v = (parsed as Record<string, unknown>)[f.key];
+      if (typeof v === 'string') out[f.key] = v;
+    }
+    return out;
+  } catch {
+    return EMPTY;
+  }
+}
+
+function save(ids: Ids): void {
+  try {
+    window.localStorage.setItem(LIVE_MINT_IDS_KEY, JSON.stringify(ids));
+  } catch {
+    // storage blocked: the ids are simply not remembered
+  }
+}
 
 export type MintedLink = Extract<MintResult, { kind: 'live' | 'fallback' }>;
 
@@ -35,25 +68,35 @@ export interface LiveMintFormProps {
 export function LiveMintForm({ onMinted, last }: LiveMintFormProps) {
   const formId = `mint${useId().replace(/:/g, '')}`;
   const [open, setOpen] = useState(false);
-  const [values, setValues] = useState<Record<keyof CreateLinkBody, string>>({
-    property_id: '',
-    programme_id: '',
-    offer_id: '',
-    placement_id: '',
-  });
+  const [values, setValues] = useState<Ids>(EMPTY);
+  const [touched, setTouched] = useState(false);
   const [minting, setMinting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState('');
+  const keys = useRef(new IdempotencyKeys('link'));
 
-  const allChosen = FIELDS.every((f) => values[f.key] !== '');
+  // The last ids used in this browser (client-only storage, read after hydration).
+  useEffect(() => {
+    setValues(readSaved());
+  }, []);
+
+  const checks = FIELDS.map((f) => ({ field: f, result: validateUuid(values[f.key], f.what) }));
+  const firstInvalid = checks.find((c) => !c.result.ok);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!allChosen || minting) return;
+    setTouched(true);
+    if (minting) return;
+    if (firstInvalid) {
+      document.getElementById(`${formId}-${firstInvalid.field.key}`)?.focus();
+      return;
+    }
+    const body = Object.fromEntries(checks.map((c) => [c.field.key, c.result.value ?? ''])) as unknown as CreateLinkBody;
     setMinting(true);
     setError(null);
     setStatus('');
-    const result = await mintLiveLink(values satisfies CreateLinkBody);
+    save(body as Ids);
+    const result = await mintLiveLink(body, { idempotencyKey: keys.current.keyFor(body) });
     setMinting(false);
     if (result.kind === 'error') {
       setError(result.message);
@@ -74,8 +117,9 @@ export function LiveMintForm({ onMinted, last }: LiveMintFormProps) {
       </h2>
       <p className={styles.copy}>
         The generator above makes demo links in the design’s format; they are not tracked. Mint a real tracked link
-        through the API (POST /v1/links) for a property, programme, offer and placement: it returns a /r/{'{token}'} URL.
-        The option lists are TEST demo data until listing endpoints exist.
+        through the API (POST /v1/links) for a property, programme, offer and placement of your organisation: it
+        returns a /r/{'{token}'} URL. Paste their ids (uuids); there is no list to pick from yet. The suggested ids are
+        TEST demo data, which a real API does not know.
       </p>
       <div>
         <Button arrow={!open} aria-expanded={open} aria-controls={formId} onClick={() => setOpen((v) => !v)}>
@@ -83,29 +127,46 @@ export function LiveMintForm({ onMinted, last }: LiveMintFormProps) {
         </Button>
       </div>
 
-      <form id={formId} className={styles.form} hidden={!open} onSubmit={onSubmit}>
+      <form id={formId} className={styles.form} hidden={!open} onSubmit={onSubmit} noValidate>
         <div className={styles.grid}>
-          {FIELDS.map((f) => (
-            <Field key={f.key} label={f.label} required>
-              <Select
+          {checks.map(({ field: f, result }) => (
+            <Field
+              key={f.key}
+              id={`${formId}-${f.key}`}
+              label={f.label}
+              required
+              error={touched && !result.ok ? result.message : undefined}
+            >
+              <Input
+                mono
                 value={values[f.key]}
+                list={`${formId}-${f.key}-suggestions`}
+                autoComplete="off"
+                spellCheck={false}
+                placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                 onChange={(e) => {
-                  setValues((v) => ({ ...v, [f.key]: e.target.value }));
+                  const value = e.target.value;
+                  setValues((v) => ({ ...v, [f.key]: value }));
                   setError(null);
                 }}
-                placeholder={`Choose ${f.label.toLowerCase()}…`}
-                options={f.options.map((o) => ({ value: o.id, label: o.label }))}
               />
             </Field>
           ))}
         </div>
+        {FIELDS.map((f) => (
+          <datalist key={f.key} id={`${formId}-${f.key}-suggestions`}>
+            {f.suggestions.map((o) => (
+              <option key={o.id} value={o.id} label={`${o.label} (TEST demo id)`} />
+            ))}
+          </datalist>
+        ))}
         {error ? (
           <p className={styles.error} role="alert">
             {error}
           </p>
         ) : null}
         <div>
-          <Button type="submit" variant="primary" arrow disabled={!allChosen || minting}>
+          <Button type="submit" variant="primary" arrow disabled={minting}>
             {minting ? 'Minting…' : 'Mint tracked link'}
           </Button>
         </div>

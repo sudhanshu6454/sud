@@ -11,7 +11,7 @@
 
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Button, Dialog, Field, Input } from '@/components/ui';
-import { formatINRFromMinor } from '@/lib/format';
+import { formatINRExact, formatINRFromMinor } from '@/lib/format';
 import { MIN_WITHDRAWAL_RUPEES } from '@/lib/site-copy';
 import { tdsLabel, validateWithdrawAmount, withdrawalBreakdown, type WithdrawalBreakdown } from './model';
 import styles from './WithdrawDialog.module.css';
@@ -22,7 +22,7 @@ export interface WithdrawDialogProps {
   /** demo: the designed flow on TEST data; live: an explanation, no money moves. */
   mode: 'demo' | 'live';
   availableMinor: number;
-  /** "demo.priya@upi" / "Bank account ····4321". */
+  /** Demo only: "demo.priya@upi" / "Bank account ····4321" (live names no destination: no payee endpoint). */
   destination: string;
   /** "Withdraw to UPI". */
   title: string;
@@ -74,8 +74,9 @@ export function WithdrawDialog({ open, onClose, mode, availableMinor, destinatio
           it goes out.
         </p>
         <p className={styles.copy}>
-          Your available {formatINRFromMinor(availableMinor)} goes into the next batch when it is above your payout
-          threshold, and reaches {destination} after TDS.
+          Your available {formatINRExact(availableMinor)} goes into the next batch when it is above your payout
+          threshold, and reaches the payout account the finance team holds for you, after TDS. (The payout method on
+          this page is demo data: there is no payee endpoint yet.)
         </p>
       </Dialog>
     );
@@ -137,7 +138,7 @@ export function WithdrawDialog({ open, onClose, mode, availableMinor, destinatio
       <form id="withdraw-form" className={styles.form} onSubmit={onSubmit} noValidate>
         <Field
           label="Amount (₹)"
-          hint={`${formatINRFromMinor(MIN_WITHDRAWAL_RUPEES * 100)} minimum · up to ${formatINRFromMinor(availableMinor)}`}
+          hint={`${formatINRFromMinor(MIN_WITHDRAWAL_RUPEES * 100)} minimum · up to ${formatINRExact(availableMinor)}`}
           error={showError ? check.message : undefined}
         >
           <Input

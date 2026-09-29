@@ -238,16 +238,20 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .row {
-    flex-wrap: wrap;
+  /* Rows keep their action inline on the right (Connect and Disconnect line
+     up on every platform); the detail line wraps instead. */
+  .rowText {
+    flex: 1 1 auto;
   }
 
   .rowAction {
     min-height: 44px;
   }
 
+  /* The arrow's span starts with a no-break space: as a flex item a plain
+     leading space would collapse ("Sign-in page→"). */
   .rowLink {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     min-height: 44px;
   }

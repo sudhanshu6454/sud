@@ -21,9 +21,10 @@
   white-space: nowrap;
 }
 
+/* Flush left like every other column (2e's Action column). */
 .actions {
   white-space: nowrap;
-  text-align: right;
+  text-align: left;
 }
 
 .emptyCell {
@@ -68,10 +69,13 @@
     text-align: right;
   }
 
+  /* The label is always the body face, even on a mono-toned cell. */
   .table td[data-label]::before {
     content: attr(data-label);
     flex: none;
     text-align: left;
+    font-family: var(--font-body);
+    letter-spacing: normal;
     font-size: 12px;
     color: var(--color-neutral-700);
     padding-top: 2px;

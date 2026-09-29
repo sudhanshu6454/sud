@@ -6,7 +6,7 @@
  */
 
 import type { AdminBrand, AdminCreator, SettlementBatch } from '../../lib/demo/admin';
-import { formatDayMonth } from '../../lib/format';
+import { formatCount, formatDayMonth } from '../../lib/format';
 import type { Decisions } from './queueModel';
 
 /* ---------- brands ---------- */
@@ -102,4 +102,9 @@ export function periodLabel(batch: Pick<SettlementBatch, 'from' | 'to'>): string
   const [fromDay, fromMonth] = from.split(' ');
   const [toDay, toMonth] = to.split(' ');
   return fromMonth === toMonth ? `${fromDay}–${toDay} ${toMonth}` : `${from} – ${to}`;
+}
+
+/** "1 live offer" / "3 live offers" (the phone rows' meta line). */
+export function liveOffersLabel(n: number): string {
+  return `${formatCount(n)} live offer${n === 1 ? '' : 's'}`;
 }

@@ -1,5 +1,9 @@
+import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { BrandShell } from './BrandShell';
+
+/** TEST demo pages without a sign-in: kept out of search indexes (noindex, nofollow). */
+export const metadata: Metadata = { robots: { index: false, follow: false } };
 
 /**
  * Brand / advertiser workspace (2b). BrandShell reads ?workspace= (an agency

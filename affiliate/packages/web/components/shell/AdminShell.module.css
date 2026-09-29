@@ -52,6 +52,20 @@
   display: none;
 }
 
+/* More tabs past an edge (AdminShell sets these while the strip scrolls):
+   that edge fades out, so a cut-off strip reads as one that scrolls. */
+.moreEnd {
+  mask-image: linear-gradient(to right, black calc(100% - 40px), transparent);
+}
+
+.moreStart {
+  mask-image: linear-gradient(to left, black calc(100% - 40px), transparent);
+}
+
+.moreStart.moreEnd {
+  mask-image: linear-gradient(to right, transparent, black 40px, black calc(100% - 40px), transparent);
+}
+
 .tab {
   display: flex;
   align-items: center;

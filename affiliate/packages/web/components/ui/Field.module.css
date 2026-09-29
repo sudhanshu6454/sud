@@ -33,7 +33,9 @@
   color: var(--color-accent-700);
 }
 
+/* The suffix is part of the eyebrow label, as drawn ("GSTIN (OPTIONAL)"
+   in 3a, "SUB-ID (OPTIONAL)" in 1e): it inherits the case and tracking. */
 .optional {
-  text-transform: none;
-  letter-spacing: 0;
+  text-transform: inherit;
+  letter-spacing: inherit;
 }

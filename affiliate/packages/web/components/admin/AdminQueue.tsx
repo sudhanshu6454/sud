@@ -35,7 +35,7 @@ export function AdminQueue() {
     <>
       <h1 className="sr-only">Admin console: review queue</h1>
       <KpiStrip columns={5} className={styles.kpis}>
-        <KpiCell size={32} label={`GMV · ${DEMO_ADMIN_PERIOD.monthShort}`} value={formatINRCompactFromMinor(K.gmvMinor)} />
+        <KpiCell size={32} label={`GMV\u00a0·\u00a0${DEMO_ADMIN_PERIOD.monthShort}`} value={formatINRCompactFromMinor(K.gmvMinor)} />
         <KpiCell size={32} label="Network fee" value={formatINRCompactFromMinor(K.networkFeeMinor)} />
         <KpiCell size={32} label="Live offers" value={formatCount(K.liveOffers)} />
         <KpiCell size={32} label="Creators" value={formatCount(K.creators)} />

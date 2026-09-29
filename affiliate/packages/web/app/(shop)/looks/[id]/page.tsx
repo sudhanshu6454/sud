@@ -10,7 +10,7 @@ import { ItemRow } from '@/components/shop/ItemRow';
 import { productCount, publishedLabel } from '@/components/shop/model';
 import styles from '@/components/shop/detail.module.css';
 import { EmptyState, Eyebrow, PageHeader, Tag } from '@/components/ui';
-import { getLook } from '@/lib/catalogue';
+import { getLook, lookOrMiss } from '@/lib/catalogue';
 
 interface Params {
   params: { id: string };
@@ -19,7 +19,8 @@ interface Params {
 export const dynamic = 'force-dynamic';
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
-  const { value: look } = await getLook(params.id);
+  // An outage throws (the shop's error state), never a 404 for a look that exists.
+  const look = lookOrMiss(await getLook(params.id));
   // A miss is a 404 here too. No loading.tsx on this route: a Suspense
   // boundary would start the stream before notFound(), turning it into 200.
   if (!look) notFound();
@@ -36,7 +37,9 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
  * Live GET /v1/looks/:id?placement_id=; TEST demo data + badge on fallback.
  */
 export default async function LookDetailPage({ params }: Params) {
-  const { value: look, demo } = await getLook(params.id);
+  const result = await getLook(params.id);
+  const look = lookOrMiss(result);
+  const { demo } = result;
   if (!look) notFound();
 
   const published = publishedLabel(look.publishedAt);

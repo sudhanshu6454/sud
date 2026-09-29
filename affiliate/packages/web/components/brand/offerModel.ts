@@ -54,6 +54,14 @@ export const MODEL_TAG: Readonly<Record<OfferModel, 'accent' | 'neutral' | 'outl
   CPI: 'neutral',
 };
 
+/**
+ * The model tag in tables and lists (/brand/offers, /admin/offers): neutral
+ * for every model, one look for one model, and the Status column keeps the
+ * colour (an outline tag is the Review / Scheduled status look). The drawn
+ * per-offer variants stay on the 1d offer-browser cards and the 3b preview.
+ */
+export const LIST_MODEL_TAG = 'neutral' as const;
+
 export type OfferStep = 'basics' | 'payout' | 'audience' | 'creative';
 
 export const OFFER_STEPS: ReadonlyArray<{ id: OfferStep; number: string; label: string }> = [

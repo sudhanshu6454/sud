@@ -53,6 +53,14 @@
   color: inherit;
 }
 
+/* The sidebar scrolls (overflow clips on both axes) and its rows are full
+   width, so the global 2px ring (offset 2px outside) would lose its sides:
+   draw it inside, clear of the active item's 4px left border. */
+.logoRow:focus-visible,
+.item:focus-visible {
+  outline-offset: -4px;
+}
+
 .nav {
   display: flex;
   flex-direction: column;
@@ -134,21 +142,43 @@
     border-bottom: 2px solid var(--color-divider);
   }
 
+  /* 3f Offers / Payouts draw no top bar (AppShell phoneTopbarHiddenOn). */
+  .topbar.topbarHidden {
+    display: none;
+  }
+
+  /* The drawn wordmark keeps its place; the hit area grows to 44px+. */
   .topbarLogo {
     display: flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 8px;
+    margin: -8px;
     color: inherit;
     text-decoration: none;
+  }
+
+  .topbarLogo:focus-visible {
+    outline-offset: -2px;
   }
 
   .topbarLogo:hover {
     color: inherit;
   }
 
+  /* The drawn 32px box; a transparent ring makes the target 44×44. */
   .avatar {
+    position: relative;
     display: block;
     width: 32px;
     height: 32px;
     background: var(--color-neutral-300);
+  }
+
+  .avatar::after {
+    content: '';
+    position: absolute;
+    inset: -6px;
   }
 
   .mobileSwitcher {
@@ -161,9 +191,9 @@
     border-bottom: 0;
   }
 
-  /* Lined up with the switcher summary's 24px inset. */
+  /* On the page's 20px gutter, like the switcher summary above it. */
   .mobileBadgeRow {
-    padding: 0 var(--space-6) var(--space-3);
+    padding: 0 20px var(--space-3);
   }
 
   .mobileBadgeRow .mobileBadge {
@@ -195,6 +225,11 @@
 
   .tab:hover {
     color: var(--color-accent-700);
+  }
+
+  /* The bar sits on the viewport's bottom edge: keep the ring inside it. */
+  .tab:focus-visible {
+    outline-offset: -4px;
   }
 
   .tabActive,

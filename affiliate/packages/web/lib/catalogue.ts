@@ -175,7 +175,9 @@ export async function listLooks(): Promise<CatalogueResult<LookSummary[]>> {
 
 /**
  * One look with items, live offers and (with WEB_PLACEMENT_ID) tracked links.
- * Live 404 → `{ value: null, demo: false }` so the page can notFound().
+ * Live 404 → `{ value: null, demo: false }` so the page can notFound(). An
+ * outage → the demo look for a demo id, else `{ value: null, demo: true,
+ * outage: true }` (lookOrMiss throws, the page is the shop's error state).
  */
 export async function getLook(id: string): Promise<CatalogueResult<LookDetail | null>> {
   const token = webApiToken();
@@ -190,6 +192,27 @@ export async function getLook(id: string): Promise<CatalogueResult<LookDetail | 
     if (err instanceof CatalogueApiError && (err.status === 404 || err.status === 400)) {
       return { value: null, demo: false };
     }
-    return { value: mockLook(id), demo: true };
+    // An outage. A demo id still gets its demo look; a live id has none, and
+    // that is not a miss: the page shows the outage, not a 404.
+    const mock = mockLook(id);
+    return mock ? { value: mock, demo: true } : { value: null, demo: true, outage: true };
   }
+}
+
+/** Thrown by the look / item pages when the catalogue is down for a live id (app/(shop)/error.tsx renders it). */
+export class CatalogueUnavailableError extends Error {
+  constructor() {
+    super('Catalogue temporarily unavailable');
+    this.name = 'CatalogueUnavailableError';
+  }
+}
+
+/**
+ * The look, or null for a real miss (the page calls notFound()). Throws
+ * CatalogueUnavailableError on an outage, so a look that exists is never
+ * answered with a 404 while the API is down.
+ */
+export function lookOrMiss(result: CatalogueResult<LookDetail | null>): LookDetail | null {
+  if (result.outage) throw new CatalogueUnavailableError();
+  return result.value;
 }
