@@ -38,7 +38,18 @@ const DROP_RESPONSE_HEADERS = new Set([
   'transfer-encoding',
 ]);
 
+/** Upstream budget: a hung API must not hold the shop's request open forever. */
+const UPSTREAM_TIMEOUT_MS = 30_000;
+
 async function proxy(req: NextRequest, ctx: { params: { path: string[] } }): Promise<Response> {
+  // '.' and '..' survive encodeURIComponent and would be collapsed by URL parsing,
+  // so /api/v1/../x could climb out of a path-prefixed API_BASE: refuse them.
+  if (ctx.params.path.some((seg) => seg === '.' || seg === '..')) {
+    return Response.json(
+      { error: { code: 'VALIDATION_ERROR', message: 'Invalid path segment' }, request_id: null },
+      { status: 400 },
+    );
+  }
   const path = ctx.params.path.map(encodeURIComponent).join('/');
   const target = `${apiBase()}/${path}${req.nextUrl.search}`;
 
@@ -58,6 +69,7 @@ async function proxy(req: NextRequest, ctx: { params: { path: string[] } }): Pro
       body,
       redirect: 'manual',
       cache: 'no-store',
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     });
   } catch (err) {
     return Response.json(

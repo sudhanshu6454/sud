@@ -123,3 +123,12 @@
     pass (out of this package's ownership); the standalone layout it expects
     (`.next/standalone/packages/web/server.js`) was confirmed to exist after
     `next build`.
+
+## Review fixes (2026-09-29)
+
+- **The `/api` proxy refuses `.` and `..` segments** (400): they survive `encodeURIComponent`
+  and URL parsing would collapse them, climbing out of a path-prefixed `API_BASE`. Upstream
+  calls time out after 30 s.
+- **The proxy makes the API reachable from the public shop host.** That is no wider than
+  `AFFILIATE_API_HOST` already is, but it means the API's own auth (the JWT stub) is the only
+  gate on both hosts.

@@ -389,6 +389,18 @@ async function bootPostgres(): Promise<Booted> {
 
   if (DEMO_DATABASE_URL) {
     scratchUrl = DEMO_DATABASE_URL;
+    // Checked BEFORE migrating: a caller-supplied database must be empty, or the demo would apply
+    // migrations (and a tracking table) to someone else's database before refusing it.
+    const tables = await withAdmin(scratchUrl, (q) =>
+      q(`select count(*)::int as n from information_schema.tables where table_schema = 'public'`),
+    );
+    const n = Number((tables as { rows: Array<{ n: number }> }).rows[0]?.n ?? 0);
+    if (n > 0) {
+      throw new Error(
+        `demo: ${describeDbUrl(scratchUrl)} is not empty (${n} table(s) in public) — ` +
+          'DEMO_DATABASE_URL must point at an empty database; nothing was changed.',
+      );
+    }
   } else {
     const base = new URL(USER_DATABASE_URL as string);
     const name = `${SCRATCH_DB_PREFIX}${randomBytes(4).toString('hex')}`;

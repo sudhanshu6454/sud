@@ -1,7 +1,7 @@
 # Pre-pilot checklist
 
 What is built and proven in this sandbox vs what still needs engineering or a
-human before the pilot. Last verified test run (2026-09-29): **130/130 green
+human before the pilot. Last verified test run (2026-09-29): **133/133 green
 across 11 files** (`./node_modules/.bin/vitest run`; the earlier figures of 57
 and 94 are stale). Legend: ✅ verified in this repo · ⏳ not done — needs
 engineering work · 👤 needs a human (see
@@ -21,7 +21,7 @@ has seen real merchants, real money, real traffic or a real host.
   `packageManager` pin, used locally, in CI and in the images
   ([`docker/README.md`](../docker/README.md) "pnpm version policy"). The old
   "known-broken" note is obsolete.
-- ✅ `vitest run` green — 130 tests in 11 files: ledger math
+- ✅ `vitest run` green — 133 tests in 11 files: ledger math
   ([`packages/shared/src/ledger.test.ts`](../packages/shared/src/ledger.test.ts)),
   money-loop API incl. idempotency ×10, revision ordering, suspense,
   reversals, payout gates, maker-checker

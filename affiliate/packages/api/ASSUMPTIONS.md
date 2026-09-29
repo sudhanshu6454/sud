@@ -321,3 +321,19 @@ other agents) — flag anything that looks wrong to the owning agent.
   `LookDetail` / `LookItem` / `LookItemProduct` / `LookItemVariant` /
   `LookItemOffer` schemas; `Look` lists the four new fields. The route is in
   `EXPECTED_ROUTES` (`test/openapi.test.ts`).
+
+## Review fixes (2026-09-29)
+
+- **Expired cover licences are withheld.** `cover_url` is returned only while the cover asset's
+  `expires_at` is null or in the future (list and detail). Serving an image past its licence is
+  a rights problem, not a display choice; `license` and `territory` are recorded but not
+  enforced here, because what they permit is a counsel decision (docs/action-tracker.md).
+- **`page` is bounded (≤ 1 000 000)** so an absurd value is a 400, not an out-of-range OFFSET 500.
+- **`placement_id` on `GET /v1/looks/:id` is org-scoped, not publisher-scoped.** Any role in the
+  org can read another placement's link tokens and ids. The fleet org has one publisher, so this
+  leaks nothing today; a multi-publisher org needs a publisher check here.
+- **`scripts/mint-links.mjs` and stored replays.** The API stores every response below 500 under
+  its idempotency key. mint-links retries once under a fresh key after a replayed 4xx (that key
+  minted nothing, so no second link can result), and after a replayed 201 whose link the look
+  detail no longer shows as active (paused since). Tested against a stub API
+  (`packages/web/test/mint-links.test.ts`).

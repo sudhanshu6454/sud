@@ -460,6 +460,40 @@ describe('GET /v1/looks/:id (consumer detail)', () => {
     expect(res.json().data).toMatchObject({ id: lookPub2, items: [], cover_url: null, sponsored: false, source_page: null });
   });
 
+  it('cover_url is withheld once the cover asset licence has expired (list and detail)', async () => {
+    const expired = await insertReturningId(
+      `insert into assets (org_id, storage_key, license, public_url, expires_at)
+       values ($1, 'demo/expired.jpg', 'demo', 'https://cdn.example.com/demo-expired.jpg', $2::timestamptz) returning id`,
+      [ORG_A, daysFromNow(-1)],
+    );
+    const future = await insertReturningId(
+      `insert into assets (org_id, storage_key, license, public_url, expires_at)
+       values ($1, 'demo/future.jpg', 'demo', 'https://cdn.example.com/demo-future.jpg', $2::timestamptz) returning id`,
+      [ORG_A, daysFromNow(30)],
+    );
+    const lookExpired = await insertReturningId(
+      `insert into looks (org_id, title, locale, category, status, published_at, cover_asset_id)
+       values ($1, 'Demo look (expired cover)', 'en-IN', 'licence-check', 'published', now(), $2) returning id`,
+      [ORG_A, expired],
+    );
+    const lookFuture = await insertReturningId(
+      `insert into looks (org_id, title, locale, category, status, published_at, cover_asset_id)
+       values ($1, 'Demo look (licensed cover)', 'en-IN', 'licence-check', 'published', now(), $2) returning id`,
+      [ORG_A, future],
+    );
+    expect((await getLook(lookExpired)).json().data.cover_url).toBeNull();
+    expect((await getLook(lookFuture)).json().data.cover_url).toBe('https://cdn.example.com/demo-future.jpg');
+    const list = (await getLooks('?category=licence-check')).json().data.items as Array<{ id: string; cover_url: string | null }>;
+    expect(list.find((l) => l.id === lookExpired)?.cover_url).toBeNull();
+    expect(list.find((l) => l.id === lookFuture)?.cover_url).toBe('https://cdn.example.com/demo-future.jpg');
+  });
+
+  it('an absurd page number is a 400, not a database error', async () => {
+    const res = await getLooks('?page=100000000000000000000');
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe('VALIDATION_ERROR');
+  });
+
   it('never leaks the raw merchant offer_url', async () => {
     const res = await getLook(lookPub, `?placement_id=${placementA}`);
     const body = JSON.stringify(res.json());

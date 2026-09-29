@@ -13,7 +13,7 @@ platform's first publisher and its five sites are the first properties
 ## Verified state (2026-09-29)
 
 - `pnpm typecheck` clean on all 5 packages (`packages/*`)
-- **130/130 tests green across 11 test files** (`./node_modules/.bin/vitest run`)
+- **133/133 tests green across 11 test files** (`./node_modules/.bin/vitest run`)
 - Demo: **51/51 assertions** on pg-mem (`tsx scripts/demo-money-loop.ts`) **and
   51/51 on a real PostgreSQL 16.13** (`DEMO_TARGET=postgres`, scratch database
   `paparazzi_demo_<8 hex>` created and dropped, no shims) — link → click →
@@ -44,7 +44,7 @@ not at the repo root, so the scripts that need it are given with the api package
 copy.
 
 ```bash
-./node_modules/.bin/vitest run                                        # tests (130)
+./node_modules/.bin/vitest run                                        # tests (133)
 pnpm typecheck                                                        # 5 packages
 ./packages/api/node_modules/.bin/tsx scripts/demo-money-loop.ts       # demo on pg-mem (51 assertions)
 DATABASE_URL=postgresql://paparazzi:changeme@127.0.0.1:5432/paparazzi DEMO_TARGET=postgres ./packages/api/node_modules/.bin/tsx scripts/demo-money-loop.ts   # same demo on real Postgres (scratch DB, dropped)

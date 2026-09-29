@@ -186,6 +186,10 @@ def build(sites: list[dict]) -> dict:
     # Public hosts: AFFILIATE_WEB_HOST (shop), AFFILIATE_LINK_HOST (redirector), AFFILIATE_API_HOST (API).
     # Every ${...} has a :- default so `docker compose config` passes on .env.example; the owner fills
     # the values before opting in (an empty POSTGRES_PASSWORD stops affiliate_db, by design).
+    # Network: the affiliate containers get a bridge of their own ("affiliate"). Postgres, Redis, the
+    # migrate job and the workers are on it and nothing else, so no WordPress container, plugin or
+    # helper can reach them (the redirector trusts route:{token} in Redis). Only the three services
+    # nginx-proxy fronts (api, redirect, web) also join "web".
     aff_db_url = "postgresql://paparazzi:${AFFILIATE_DB_PASSWORD:-}@affiliate_db:5432/paparazzi"
     aff_redis_url = "redis://affiliate_redis:6379"
     aff_hsts = "max-age=31536000; includeSubDomains"
@@ -202,8 +206,8 @@ def build(sites: list[dict]) -> dict:
             b["args"] = args
         return b
 
-    def aff_healthz(port: int) -> dict:
-        probe = f"fetch('http://localhost:{port}/healthz').then(r=>{{if(!r.ok)process.exit(1)}}).catch(()=>process.exit(1))"
+    def aff_healthz(port: int, path: str = "/healthz") -> dict:
+        probe = f"fetch('http://localhost:{port}{path}').then(r=>{{if(!r.ok)process.exit(1)}}).catch(()=>process.exit(1))"
         return {"test": ["CMD", "node", "-e", probe], "interval": "30s", "timeout": "5s", "retries": 3, "start_period": "20s"}
 
     services["affiliate_db"] = {
@@ -218,7 +222,7 @@ def build(sites: list[dict]) -> dict:
         },
         "volumes": ["affiliate_db_data:/var/lib/postgresql/data"],
         "healthcheck": {"test": ["CMD-SHELL", "pg_isready -U paparazzi -d paparazzi"], "interval": "10s", "timeout": "5s", "retries": 5, "start_period": "10s"},
-        "networks": ["internal"],
+        "networks": ["affiliate"],
     }
     services["affiliate_redis"] = {
         "image": "redis:7-alpine",
@@ -228,7 +232,7 @@ def build(sites: list[dict]) -> dict:
         "command": ["redis-server", "--appendonly", "yes"],
         "volumes": ["affiliate_redis_data:/data"],
         "healthcheck": {"test": ["CMD", "redis-cli", "ping"], "interval": "10s", "timeout": "5s", "retries": 5, "start_period": "5s"},
-        "networks": ["internal"],
+        "networks": ["affiliate"],
     }
     # One-shot: `node db/migrate.mjs` against affiliate_db, then exits; the app services wait for it.
     # The same image runs the seeds (`make affiliate-seed`): db/seed-fleet.ts reads the fleet's sites.yaml
@@ -244,7 +248,7 @@ def build(sites: list[dict]) -> dict:
             "AFFILIATE_WEB_HOST": "${AFFILIATE_WEB_HOST:-}",
         },
         "volumes": ["./autopub/config:/app/config:ro"],
-        "networks": ["internal"],
+        "networks": ["affiliate"],
     }
     services["affiliate_api"] = {
         "build": aff_build("Dockerfile.api"),
@@ -266,7 +270,7 @@ def build(sites: list[dict]) -> dict:
             "HSTS": aff_hsts,
         },
         "healthcheck": aff_healthz(3000),
-        "networks": ["web", "internal"],
+        "networks": ["web", "affiliate"],
         **aff_hardening,
     }
     services["affiliate_redirect"] = {
@@ -286,7 +290,7 @@ def build(sites: list[dict]) -> dict:
             "HSTS": aff_hsts,
         },
         "healthcheck": aff_healthz(3001),
-        "networks": ["web", "internal"],
+        "networks": ["web", "affiliate"],
         **aff_hardening,
     }
     services["affiliate_workers"] = {
@@ -306,17 +310,18 @@ def build(sites: list[dict]) -> dict:
             "RETENTION_OUTBOX_DAYS": "${AFFILIATE_RETENTION_OUTBOX_DAYS:-365}",
             "RETENTION_CRON": "${AFFILIATE_RETENTION_CRON:-0 3 * * *}",
         },
-        "networks": ["internal"],
+        "networks": ["affiliate"],
         **aff_hardening,
     }
-    # The shop. Browser calls go to /api on its own host (baked in at build time) and the server side
-    # reaches the API over the internal network, so the API host never has to be public for the shop.
+    # The shop. Server-side pages reach the API over the affiliate network. Browser calls (portal, console)
+    # go to /api on the shop's own host, a proxy to the API, so the API is reachable from the public shop
+    # host as well as from AFFILIATE_API_HOST; its auth is the JWT stub either way (affiliate/CLAUDE.md).
     services["affiliate_web"] = {
         "build": aff_build("Dockerfile.web", {"NEXT_PUBLIC_API_BASE": "/api"}),
         "container_name": "affiliate_web",
         "profiles": ["affiliate"],
         "restart": "unless-stopped",
-        "depends_on": ["affiliate_api"],
+        "depends_on": {"affiliate_api": {"condition": "service_healthy"}},
         "environment": {
             "NODE_ENV": "production",
             "API_BASE": "http://affiliate_api:3000",
@@ -328,7 +333,8 @@ def build(sites: list[dict]) -> dict:
             "LETSENCRYPT_HOST": "${AFFILIATE_WEB_HOST:-}",
             "HSTS": aff_hsts,
         },
-        "networks": ["web", "internal"],
+        "healthcheck": aff_healthz(3000, "/api/healthz"),
+        "networks": ["web", "affiliate"],
         **aff_hardening,
     }
     volumes["affiliate_db_data"] = {}
@@ -337,7 +343,7 @@ def build(sites: list[dict]) -> dict:
     return {
         "name": "marketing-fleet",
         "services": services,
-        "networks": {"web": {}, "internal": {}},
+        "networks": {"web": {}, "internal": {}, "affiliate": {}},
         "volumes": volumes,
     }
 

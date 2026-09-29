@@ -118,8 +118,14 @@ third-party publisher still goes through the state machine.
 
 **Idempotence:** every row is merged on the natural key in the table above (`on conflict`
 where a unique constraint exists, select-then-insert otherwise), so a second run creates
-zero new rows and converges mutable columns (status, canonical_url, offer `fresh_until`,
-look `cover_asset_id`, …). Verified on a fresh database: two consecutive
+zero new rows and converges descriptive columns (canonical_url, offer price and
+`fresh_until`, look `cover_asset_id`, …). **Status is set on insert only**: a re-run never
+lifts a suspended publisher or property, un-pauses a programme (the kill switch), un-revokes
+an offer, republishes a withdrawn look (a rights takedown), rewrites an existing contract
+version or re-grants a membership role. `(platform, external_account_id)` and
+`placement_key` are unique across all organisations, so the seed refuses (and rolls back)
+rather than take over a property or placement another organisation owns. Verified on a
+fresh database: two consecutive
 `--with-demo-programme` runs give identical counts (organisations 1, users 4, publishers 1,
 properties 5 (+1 with a shop host), verifications 5 (+1), programmes 1, looks 5,
 look_items 5, placements 5 (+1), offers 1) and identical ids.

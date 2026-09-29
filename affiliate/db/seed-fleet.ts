@@ -268,10 +268,11 @@ export async function seedFleet(query: FleetQuery, opts: SeedFleetOptions): Prom
         [email, displayName],
       ),
     );
+    // role is set on insert only: a re-run never re-grants a role an operator changed.
     await query(
       `insert into memberships (user_id, org_id, role)
        values ($1, $2, $3)
-       on conflict (user_id, org_id) do update set role = excluded.role`,
+       on conflict (user_id, org_id) do nothing`,
       [id, orgId, role],
     );
     return { id, email, role };
@@ -298,7 +299,8 @@ export async function seedFleet(query: FleetQuery, opts: SeedFleetOptions): Prom
       params: [orgId, FLEET_PUBLISHER_LEGAL_NAME],
     },
     {
-      sql: `update publishers set country = 'IN', status = 'approved', onboarding_state = 'active'
+      // status / onboarding_state are set on insert only: a re-run never lifts a suspension.
+      sql: `update publishers set country = 'IN'
             where org_id = $1 and id = $2`,
       params: (id) => [orgId, id],
     },
@@ -307,19 +309,25 @@ export async function seedFleet(query: FleetQuery, opts: SeedFleetOptions): Prom
 
   // -- properties + verifications ----------------------------------------------
   async function seedWebProperty(host: string): Promise<{ propertyId: string; verificationId: string }> {
-    const propertyId = idOf(
-      await one(
-        query,
-        `insert into properties (org_id, publisher_id, platform, external_account_id, canonical_url, status)
-         values ($1, $2, 'web', $3, $4, 'approved')
-         on conflict (platform, external_account_id)
-           do update set status = excluded.status,
-                         publisher_id = excluded.publisher_id,
-                         canonical_url = excluded.canonical_url
-         returning id`,
-        [orgId, publisherId, host, `https://${host}`],
-      ),
+    // (platform, external_account_id) is unique across ALL orgs. The update is guarded to this org, so
+    // a hostname another organisation already owns is never taken over (zero rows → loud error), and
+    // status is set on insert only, so a re-run never lifts a suspension.
+    const propertyRes = await query(
+      `insert into properties (org_id, publisher_id, platform, external_account_id, canonical_url, status)
+       values ($1, $2, 'web', $3, $4, 'approved')
+       on conflict (platform, external_account_id)
+         do update set publisher_id = excluded.publisher_id,
+                       canonical_url = excluded.canonical_url
+         where properties.org_id = excluded.org_id
+       returning id`,
+      [orgId, publisherId, host, `https://${host}`],
     );
+    if (!propertyRes.rows[0]) {
+      throw new Error(
+        `seed-fleet: property web/${host} already belongs to another organisation; refusing to take it over`,
+      );
+    }
+    const propertyId = idOf(propertyRes.rows[0]);
     // One verification per property, created only when none exists yet.
     const verification = await findOrInsert(
       query,
@@ -382,8 +390,9 @@ export async function seedFleet(query: FleetQuery, opts: SeedFleetOptions): Prom
         params: [orgId, merchant.id, DEMO.connector, DEMO.programme, nowIso],
       },
       {
+        // status is set on insert only: a re-run never undoes the kill switch (pause/resume).
         sql: `update programmes
-                 set connector = $3, status = 'active',
+                 set connector = $3,
                      attribution_window_days = 30, validation_delay_days = 7, returns_window_days = 30,
                      commission_basis = 'order_value'
                where org_id = $1 and id = $2`,
@@ -409,9 +418,9 @@ export async function seedFleet(query: FleetQuery, opts: SeedFleetOptions): Prom
             publisher_share_bps, payout_threshold_minor, status, effective_from)
          values ($1, $2, $3, 1, 7000, 5000, 'approved', $4::timestamptz)
          on conflict (publisher_id, programme_id, version)
-           do update set status = excluded.status,
-                         publisher_share_bps = excluded.publisher_share_bps,
-                         payout_threshold_minor = excluded.payout_threshold_minor
+           -- no-op update so RETURNING yields the existing id: an existing contract version's
+           -- terms and approval are never rewritten by a re-run
+           do update set version = contracts.version
          returning id`,
         [orgId, publisherId, programme.id, nowIso],
       ),
@@ -459,8 +468,9 @@ export async function seedFleet(query: FleetQuery, opts: SeedFleetOptions): Prom
         params: [orgId, variant.id, programme.id, merchant.id, DEMO.priceMinor, DEMO.offerUrl, freshUntil],
       },
       {
-        // Re-running refreshes the offer so it stays mintable for another 30 days.
-        sql: `update offers set price_minor = $3, currency = 'INR', fresh_until = $4::timestamptz, status = 'active'
+        // Re-running refreshes the offer so it stays mintable for another 30 days. status is set on
+        // insert only: a revoked offer stays revoked.
+        sql: `update offers set price_minor = $3, currency = 'INR', fresh_until = $4::timestamptz
                where org_id = $1 and id = $2`,
         params: (id) => [orgId, id, DEMO.priceMinor, freshUntil],
       },
@@ -481,19 +491,24 @@ export async function seedFleet(query: FleetQuery, opts: SeedFleetOptions): Prom
     );
 
     async function seedPlacement(propertyId: string, placementKey: string, channel: string): Promise<string> {
-      return idOf(
-        await one(
-          query,
-          `insert into placements (org_id, campaign_id, property_id, channel, placement_key)
-           values ($1, $2, $3, $4, $5)
-           on conflict (placement_key)
-             do update set campaign_id = excluded.campaign_id,
-                           property_id = excluded.property_id,
-                           channel = excluded.channel
-           returning id`,
-          [orgId, campaign.id, propertyId, channel, placementKey],
-        ),
+      // placement_key is unique across ALL orgs: the update is guarded to this org (zero rows → loud error).
+      const res = await query(
+        `insert into placements (org_id, campaign_id, property_id, channel, placement_key)
+         values ($1, $2, $3, $4, $5)
+         on conflict (placement_key)
+           do update set campaign_id = excluded.campaign_id,
+                         property_id = excluded.property_id,
+                         channel = excluded.channel
+           where placements.org_id = excluded.org_id
+         returning id`,
+        [orgId, campaign.id, propertyId, channel, placementKey],
       );
+      if (!res.rows[0]) {
+        throw new Error(
+          `seed-fleet: placement_key ${placementKey} already belongs to another organisation; refusing to take it over`,
+        );
+      }
+      return idOf(res.rows[0]);
     }
 
     const looks: FleetDemoProgrammeSummary['looks'] = [];
@@ -531,8 +546,9 @@ export async function seedFleet(query: FleetQuery, opts: SeedFleetOptions): Prom
           params: [orgId, lookTitle, DEMO.lookCategory, nowIso, site.name, asset.id],
         },
         {
+          // status is set on insert only: a paused or withdrawn look (e.g. a rights takedown) stays so.
           sql: `update looks
-                   set locale = 'en', category = $3, status = 'published',
+                   set locale = 'en', category = $3,
                        published_at = coalesce(published_at, $4::timestamptz),
                        source_page = $5, sponsored = false, cover_asset_id = $6
                  where org_id = $1 and id = $2`,

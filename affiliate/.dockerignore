@@ -17,6 +17,8 @@ out
 # Local env files: only the committed examples may enter an image.
 .env
 .env.*
+**/.env
+**/.env.*
 !.env.example
 !.env.prod.example
 

@@ -16,6 +16,10 @@ const PROPERTY = '6aa2f2d1-c553-48c2-883e-fd395abd144c';
 const OFFER_LINKED = '11111111-1111-4111-8111-111111111111';
 const OFFER_OPEN = '22222222-2222-4222-8222-222222222222';
 const OFFER_BAD = '33333333-3333-4333-8333-333333333333';
+/** Base key replays a stored 422 OFFER_STALE; a fresh key mints. */
+const OFFER_STALE_REPLAY = '44444444-4444-4444-8444-444444444444';
+/** Base key replays a stored 201 whose link is no longer active; a fresh key mints. */
+const OFFER_PAUSED_REPLAY = '55555555-5555-4555-8555-555555555555';
 
 interface Mint {
   body: Record<string, unknown>;
@@ -56,7 +60,7 @@ function readBody(req: IncomingMessage): Promise<string> {
   });
 }
 
-async function startStub(): Promise<Stub> {
+async function startStub(looks = LOOKS): Promise<Stub> {
   const mints: Mint[] = [];
   const detailCalls: string[] = [];
   const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
@@ -69,13 +73,13 @@ async function startStub(): Promise<Stub> {
       const page = Number(url.searchParams.get('page') ?? '1');
       const pageSize = Number(url.searchParams.get('page_size') ?? '100');
       const start = (page - 1) * pageSize;
-      const items = LOOKS.slice(start, start + pageSize).map((l) => ({ id: l.id, title: `Demo ${l.id}`, locale: 'en', category: null, published_at: null, source_page: null, sponsored: false, cover_url: null, item_count: l.items.length }));
-      return send(200, { data: { items, page, page_size: pageSize, total: LOOKS.length }, request_id: 'r' });
+      const items = looks.slice(start, start + pageSize).map((l) => ({ id: l.id, title: `Demo ${l.id}`, locale: 'en', category: null, published_at: null, source_page: null, sponsored: false, cover_url: null, item_count: l.items.length }));
+      return send(200, { data: { items, page, page_size: pageSize, total: looks.length }, request_id: 'r' });
     }
     const detail = /^\/v1\/looks\/([^/]+)$/.exec(url.pathname);
     if (req.method === 'GET' && detail) {
       detailCalls.push(url.search);
-      const look = LOOKS.find((l) => l.id === detail[1]);
+      const look = looks.find((l) => l.id === detail[1]);
       if (!look) return send(404, { error: { code: 'NOT_FOUND', message: 'Look not found' }, request_id: 'r' });
       const placement = url.searchParams.get('placement_id') === PLACEMENT ? { id: PLACEMENT, property_id: PROPERTY, campaign_id: 'c' } : null;
       return send(200, { data: { id: look.id, items: look.items, placement }, request_id: 'r' });
@@ -84,6 +88,18 @@ async function startStub(): Promise<Stub> {
       const body = JSON.parse(await readBody(req)) as Record<string, unknown>;
       const idem = req.headers['idempotency-key'];
       mints.push({ body, idempotencyKey: Array.isArray(idem) ? idem[0] : idem, auth: req.headers.authorization });
+      const key = Array.isArray(idem) ? idem[0] : idem;
+      const baseKey = `mint-links:${PLACEMENT}:${String(body.offer_id)}`;
+      const replay = (status: number, payload: unknown) => {
+        res.writeHead(status, { 'content-type': 'application/json', 'x-idempotent-replay': 'true' });
+        res.end(JSON.stringify(payload));
+      };
+      if (body.offer_id === OFFER_STALE_REPLAY && key === baseKey) {
+        return replay(422, { error: { code: 'OFFER_STALE', message: 'Offer is not active or is stale' }, request_id: 'old' });
+      }
+      if (body.offer_id === OFFER_PAUSED_REPLAY && key === baseKey) {
+        return replay(201, { data: { token: 'e'.repeat(32), url: `http://127.0.0.1:3101/r/${'e'.repeat(32)}` }, request_id: 'old' });
+      }
       if (body.offer_id === OFFER_BAD) {
         return send(403, { error: { code: 'PROGRAMME_NOT_APPROVED', message: 'Programme is not active' }, request_id: 'r' });
       }
@@ -131,6 +147,29 @@ describe('mint-links.mjs', () => {
     expect(out.stdout).toContain('summary: looks=3 items=5 minted=1 replayed=0 skipped_linked=1 skipped_no_offer=1 skipped_duplicate_offer=1 failed=1');
     expect(out.stderr).toContain(`FAILED look=${LOOKS[2]!.id} item=i5 offer=${OFFER_BAD}: HTTP 403 PROGRAMME_NOT_APPROVED: Programme is not active`);
     expect(out.stderr).toContain('dev stub');
+  });
+
+  it('never repeats a stale replay: a stored 4xx or a paused link is retried once under a fresh key', async () => {
+    const looks = [
+      { id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', items: [{ id: 'i6', offer: offer(OFFER_STALE_REPLAY), link: null }] },
+      { id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', items: [{ id: 'i7', offer: offer(OFFER_PAUSED_REPLAY), link: null }] },
+    ];
+    stub = await startStub(looks);
+    const out = await run(['--placement', PLACEMENT], { API_BASE: stub.base, API_TOKEN: 'dev-token' });
+    expect(out.code).toBe(0);
+    const keysFor = (o: string) => stub!.mints.filter((m) => m.body.offer_id === o).map((m) => m.idempotencyKey ?? '');
+    for (const o of [OFFER_STALE_REPLAY, OFFER_PAUSED_REPLAY]) {
+      const keys = keysFor(o);
+      expect(keys).toHaveLength(2);
+      expect(keys[0]).toBe(`mint-links:${PLACEMENT}:${o}`);
+      expect(keys[1]).toMatch(new RegExp(`^mint-links:${PLACEMENT}:${o}:[0-9a-z]+$`));
+    }
+    expect(out.stderr).toContain('replayed an earlier HTTP 422 OFFER_STALE; retrying under a fresh key');
+    expect(out.stderr).toContain('replayed a link that is no longer active; minting a new one');
+    expect(out.stdout).toContain(`offer=${OFFER_PAUSED_REPLAY} token=${'f'.repeat(32)}`);
+    expect(out.stdout).not.toContain('e'.repeat(32));
+    expect(out.stdout).toContain('minted=2 replayed=0');
+    expect(out.stdout).toContain('failed=0');
   });
 
   it('--dry-run performs no POST and exits 0', async () => {

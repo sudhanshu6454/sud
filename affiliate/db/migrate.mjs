@@ -144,6 +144,19 @@ export async function runMigrations(databaseUrl, opts = {}) {
       return result;
     }
 
+    // --baseline marks files applied WITHOUT running them. On a database with no schema that would
+    // record a fiction, so it is refused unless 0001's first table exists (checked before the tracking
+    // table is created, so a refused run leaves nothing behind).
+    if (mode === 'baseline') {
+      const { rows } = await client.query(`select to_regclass('public.organisations') is not null as present`);
+      if (!rows[0]?.present) {
+        throw new MigrationError(
+          'migrate: --baseline refused: this database has no schema (no organisations table). ' +
+            '--baseline is only for a database whose schema is already current; run node db/migrate.mjs instead.',
+        );
+      }
+    }
+
     await client.query(TRACKING_TABLE_SQL);
     result.trackingTable = true;
     const already = new Set((await readApplied(client)).map((a) => a.filename));

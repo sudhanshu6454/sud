@@ -14,6 +14,15 @@
  *        offer_id, placement_id } with a deterministic Idempotency-Key
  *      'mint-links:<placement>:<offer_id>' — re-running is safe.
  *
+ * Replays. The API stores every response below 500 under its key and replays
+ * it (X-Idempotent-Replay: true), so a fixed key alone would repeat an old
+ * answer forever. Two cases are handled:
+ *   - a replayed 4xx (e.g. OFFER_STALE since fixed): that key minted nothing,
+ *     so one retry under a fresh key cannot create a second link;
+ *   - a replayed 201: trusted only if the look detail now shows an active
+ *     link for that offer (a concurrent run minted it). Otherwise the stored
+ *     link was paused since, and a new one is minted under a fresh key.
+ *
  * Every id comes from the API; nothing is guessed. API error codes are
  * printed verbatim. Exit codes: 0 all good, 1 any mint failed (or a list /
  * detail call failed), 2 usage error.
@@ -54,10 +63,11 @@ console.error(`mint-links: API ${apiBase}, placement ${placementId}${dryRun ? ' 
 console.error('mint-links: NOTE the bearer token is the dev stub (scripts/mint-dev-token.mjs) until the IdP lands.');
 
 class ApiFailure extends Error {
-  constructor(status, code, message) {
+  constructor(status, code, message, replayed = false) {
     super(message);
     this.status = status;
     this.code = code;
+    this.replayed = replayed;
   }
 }
 
@@ -78,12 +88,42 @@ async function call(method, path, { body, headers } = {}) {
   } catch {
     parsed = null;
   }
+  const replayed = res.headers.get('x-idempotent-replay') === 'true';
   if (!res.ok) {
     const code = parsed?.error?.code ?? 'INTERNAL';
     const message = parsed?.error?.message ?? `HTTP ${res.status}`;
-    throw new ApiFailure(res.status, code, message);
+    throw new ApiFailure(res.status, code, message, replayed);
   }
-  return { data: parsed?.data, replayed: res.headers.get('x-idempotent-replay') === 'true' };
+  return { data: parsed?.data, replayed };
+}
+
+/** The active link the API reports right now for (this placement, offerId) in one look, or null. */
+async function activeLinkFor(lookId, offerId) {
+  const { data } = await call('GET', `/v1/looks/${encodeURIComponent(lookId)}?placement_id=${encodeURIComponent(placementId)}`);
+  const item = (Array.isArray(data?.items) ? data.items : []).find((i) => i?.offer?.id === offerId && i?.link);
+  return item ? item.link : null;
+}
+
+/**
+ * POST /v1/links under `baseKey`; on a stale replay (see the header) retry once
+ * under a fresh key. Returns { data, replayed, freshKey }.
+ */
+async function mintLink(body, baseKey, lookId, offerId) {
+  let key = baseKey;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const res = await call('POST', '/v1/links', { body, headers: { 'Idempotency-Key': key } });
+      if (!res.replayed) return { ...res, freshKey: attempt > 0 };
+      const live = await activeLinkFor(lookId, offerId);
+      if (live) return { data: live, replayed: true, freshKey: false };
+      console.error(`note: offer=${offerId}: key ${key} replayed a link that is no longer active; minting a new one`);
+    } catch (err) {
+      if (!(err instanceof ApiFailure) || !err.replayed || err.status >= 500 || attempt > 0) throw err;
+      console.error(`note: offer=${offerId}: key ${key} replayed an earlier HTTP ${err.status} ${err.code}; retrying under a fresh key`);
+    }
+    key = `${baseKey}:${Date.now().toString(36)}`;
+  }
+  throw new Error(`fresh idempotency key for offer ${offerId} was replayed too; giving up`);
 }
 
 async function listAllLooks() {
@@ -174,10 +214,11 @@ for (const summary of looks) {
       continue;
     }
     try {
-      const { data, replayed } = await call('POST', '/v1/links', { body, headers: { 'Idempotency-Key': idempotencyKey } });
+      const { data, replayed, freshKey } = await mintLink(body, idempotencyKey, look.id, offer.id);
       counts.minted += 1;
       if (replayed) counts.replayed += 1;
-      console.log(`minted look=${look.id} item=${item.id} offer=${offer.id} token=${data?.token ?? '?'} url=${data?.url ?? '?'}${replayed ? ' (idempotent replay)' : ''}`);
+      const note = replayed ? ' (idempotent replay)' : freshKey ? ' (fresh key after a stale replay)' : '';
+      console.log(`minted look=${look.id} item=${item.id} offer=${offer.id} token=${data?.token ?? '?'} url=${data?.url ?? '?'}${note}`);
     } catch (err) {
       counts.failed += 1;
       const line =

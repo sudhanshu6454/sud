@@ -82,7 +82,7 @@ The affiliate platform lives in `affiliate/` (pnpm monorepo: `packages/{shared,a
 machine that has `make`. `affiliate/CLAUDE.md` and its eleven invariants apply to any change under
 `affiliate/` (integer minor units, append-only double-entry ledger, every query tenant-scoped,
 idempotent ingest, never-guessed attribution, maker-checker payouts, TEST-labelled seed data). Test
-with `cd affiliate && ./node_modules/.bin/vitest run` (130 tests; a dev machine or CI — the server has
+with `cd affiliate && ./node_modules/.bin/vitest run` (133 tests; a dev machine or CI — the server has
 no node). Never write an AI model name or identifier into a file there.
 
 Two rules hold fleet-wide, on the shop, on the sites, in bios and captions:

@@ -9,7 +9,7 @@ user.** This runbook is the procedure to follow once they exist.
 ## 0. Preconditions (do not deploy without these)
 
 - [ ] `pnpm typecheck` and `pnpm test` green on the release commit
-      (130/130 tests in 11 files; `pnpm demo` and `pnpm demo:pg` green).
+      (133/133 tests in 11 files; `pnpm demo` and `pnpm demo:pg` green).
 - [ ] `docs/runbooks/dependency-review.md` re-run for the release; no
       unaddressed high/critical findings.
 - [ ] Fresh database backup exists and is restorable (see

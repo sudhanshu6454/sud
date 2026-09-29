@@ -150,3 +150,20 @@ the API so the API's default pool can never touch the caller's real database.
 No assertion differs between pg-mem and Postgres 16; the demo's
 `bigint`-as-string handling (`::text` + `Number`/`BigInt`) already covered
 the one known driver difference.
+
+## 2026-09-29 (review fixes)
+
+15. **Seed re-runs never change status.** `db/seed-fleet.ts` sets `status`, `onboarding_state`,
+    contract terms and membership roles on insert only. Operators' suspensions, programme pauses
+    (the kill switch), offer revocations, look withdrawals (rights takedowns) and role changes
+    survive `make affiliate-seed`. Verified on Postgres 16: all seven operator changes held
+    across a re-run, with identical row counts and a byte-identical summary.
+16. **No cross-organisation takeover.** `properties (platform, external_account_id)` and
+    `placements.placement_key` are unique across all organisations. The seed's upserts are
+    guarded to its own org; a row owned elsewhere makes the whole seed fail and roll back, with
+    the other org's row untouched (verified).
+17. **`--baseline` refuses a database without schema.** It records files without running them,
+    so it now requires 0001's `organisations` table and leaves nothing behind when it refuses.
+18. **`DEMO_DATABASE_URL` is checked before migrating.** A caller-supplied database with any
+    table in `public` is refused before anything runs against it (verified: the local database's
+    `schema_migrations` stayed at 5 rows).

@@ -238,7 +238,8 @@ components:
       description: |
         List item of the consumer catalogue (`GET /v1/looks`). `cover_url` is
         `assets.public_url` of the look's `cover_asset_id` (null when there is
-        no public copy); `item_count` is the number of `look_items` rows;
+        no public copy, or once the asset's licence `expires_at` has passed);
+        `item_count` is the number of `look_items` rows;
         `sponsored` drives the paid-placement disclosure label.
       required: [id, title, locale, category, published_at, source_page, sponsored, cover_url, item_count]
       properties:
@@ -595,7 +596,7 @@ paths:
       parameters:
         - name: page
           in: query
-          schema: { type: integer, minimum: 1, default: 1 }
+          schema: { type: integer, minimum: 1, maximum: 1000000, default: 1 }
         - name: page_size
           in: query
           schema: { type: integer, minimum: 1, maximum: 100, default: 20 }

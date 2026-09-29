@@ -460,8 +460,9 @@ publisher** and the **five sites are its properties** (`affiliate/db/seed-fleet.
   loop is asserted by a 51-step demo on pg-mem and on real Postgres 16 (`affiliate/README.md`).
 
 Everything runs beside the fleet from this compose file, behind the `affiliate` profile: its own
-Postgres 16 and Redis 7 (volumes `affiliate_db_data`, `affiliate_redis_data`), three public hosts
-through the same nginx-proxy + Let's Encrypt. **Off until `COMPOSE_PROFILES=affiliate` is set.**
+Postgres 16 and Redis 7 (volumes `affiliate_db_data`, `affiliate_redis_data`) on a network of their
+own that no WordPress container joins, three public hosts through the same nginx-proxy + Let's
+Encrypt. **Off until `COMPOSE_PROFILES=affiliate` is set.**
 
 ### Switching it on (on the server, in `/opt/marketing-fleet`)
 
@@ -527,7 +528,7 @@ docker compose --profile affiliate logs -f --tail=200 affiliate_api affiliate_re
 
 `docker compose --profile affiliate rm --stop --force affiliate_db affiliate_redis affiliate_migrate affiliate_api affiliate_redirect affiliate_workers affiliate_web`
 stops and removes only the affiliate containers (volumes kept); `docker compose down` would take the
-WordPress stack with it. The 130 unit tests need node and run on a dev machine or in CI
+WordPress stack with it. The 133 unit tests need node and run on a dev machine or in CI
 (`cd affiliate && ./node_modules/.bin/vitest run`, or `make affiliate-test`), not on the server.
 
 ### What is still sandbox

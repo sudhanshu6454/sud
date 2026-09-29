@@ -50,3 +50,14 @@
    way to reach the npm registry from inside a build here). The Dockerfiles
    contain no proxy or CA settings; the `:test` images built in the sandbox
    carry a `NODE_EXTRA_CA_CERTS` env from that base and must not be shipped.
+
+## 2026-09-29 (review fixes)
+
+9. **Nested env files stay out of every image.** `.dockerignore` excludes `**/.env` and
+   `**/.env.*` as well as the root ones; a probe build confirmed a `packages/web/.env.local`
+   no longer enters the context while `.env.example` still does.
+10. **The fleet compose gives the affiliate stack its own network.** Postgres, Redis, migrate
+    and workers are on the `affiliate` bridge only; api, redirect and web also join `web` for
+    nginx-proxy. No WordPress container can reach Redis, whose `route:{token}` entries the
+    redirector trusts. Redis has no password on that private bridge; add `--requirepass` and a
+    password in `REDIS_URL` if anything else ever joins it.

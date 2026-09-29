@@ -34,8 +34,8 @@ jobs:
           docker compose config -q
   # The affiliate platform (affiliate/): typecheck, unit tests and the pg-mem money-loop demo, then the
   # same migrations + seeds + demo against a real Postgres 16, and a production build of the shop.
-  # pnpm's version comes from affiliate/package.json ("packageManager"); pnpm/action-setup fails on a
-  # second, different version in its own config, so none is given here.
+  # pnpm's version comes from affiliate/package.json ("packageManager"). `uses:` steps ignore the job's
+  # working-directory, so pnpm/action-setup is pointed at that file explicitly (the repo root has none).
   affiliate:
     runs-on: ubuntu-latest
     defaults:
@@ -61,6 +61,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: affiliate/package.json
       - uses: actions/setup-node@v4
         with:
           node-version: "22"

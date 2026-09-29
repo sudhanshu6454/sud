@@ -19,7 +19,8 @@ import { ok, parseOr400 } from './_helpers.js';
 // ---------------------------------------------------------------------------
 
 const LooksQuery = z.object({
-  page: z.coerce.number().int().min(1).default(1),
+  // bounded so an absurd page is a 400, not an out-of-range OFFSET (500) from Postgres
+  page: z.coerce.number().int().min(1).max(1_000_000).default(1),
   page_size: z.coerce.number().int().min(1).max(100).default(20),
   locale: z.string().min(2).max(10).optional(),
   category: z.string().min(1).max(100).optional(),
@@ -117,7 +118,8 @@ export async function looksRoutes(app: FastifyInstance): Promise<void> {
   /**
    * GET /v1/looks — paginated list of published looks for the tenant.
    * Any authenticated role may browse. Each item carries the cover image
-   * URL (assets.public_url of cover_asset_id, else null), the sponsored
+   * URL (assets.public_url of cover_asset_id while its licence has not
+   * expired, i.e. assets.expires_at null or in the future; else null), the sponsored
    * flag, the source page and the number of look_items rows.
    */
   app.get('/v1/looks', { preHandler: [requireAuth] }, async (req) => {
@@ -142,9 +144,10 @@ export async function looksRoutes(app: FastifyInstance): Promise<void> {
       params,
     );
 
-    // $1 is org_id (prepended by tenantQuery), so the Nth pushed param is $(N+1).
+    // $1 is org_id (prepended by tenantQuery), so the Nth pushed param is $(N+1):
+    // after the push, page_size is $limitIdx and the offset is $(limitIdx + 1).
     params.push(q.page_size, (q.page - 1) * q.page_size);
-    const limitIdx = params.length; // page_size → $(limitIdx + 1)
+    const limitIdx = params.length;
     const rows = await tenantQuery<LookListRow>(
       tenant.org_id,
       `select l.id, l.title, l.locale, l.category, l.published_at,
@@ -152,6 +155,7 @@ export async function looksRoutes(app: FastifyInstance): Promise<void> {
               coalesce(ic.item_count, 0) as item_count
          from looks l
          left join assets a on a.id = l.cover_asset_id and a.org_id = l.org_id
+                           and (a.expires_at is null or a.expires_at > now())
          left join (select look_id, count(*) as item_count
                       from look_items where org_id = $1 group by look_id) ic
                 on ic.look_id = l.id
@@ -206,6 +210,7 @@ export async function looksRoutes(app: FastifyInstance): Promise<void> {
               l.source_page, l.sponsored, a.public_url as cover_url
          from looks l
          left join assets a on a.id = l.cover_asset_id and a.org_id = l.org_id
+                           and (a.expires_at is null or a.expires_at > now())
         where l.org_id = $1 and l.id = $2`,
       [id],
     );
