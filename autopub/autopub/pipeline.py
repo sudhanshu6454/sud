@@ -225,16 +225,14 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
     cards_by_shape = rendered
 
     # 3b. the card Instagram will actually accept, trimmed out of the 3:4 master; and the same card
-    # framed 9:16 for the story publishers, drawn from the master before it is cropped
-    # Instagram counts every story frame against the account's 100 publishes a day, so the news gets a
-    # story every `story_every`th article; the features that are the day's showpieces always do
+    # framed 9:16 for the story publishers, drawn from the master before it is cropped. A Story is a
+    # bigger claim on the reader's attention than a feed post, so the news only gets one when the
+    # writer flagged the story genuinely significant (post.is_major); the features that are the
+    # day's showpieces (scorecards, watchlists, buzz meter...) always do, via force_story.
     story_frames: list[Path] = []
-    every = max(1, int(settings.story_every or 1))
-    counter = int(state.note(site.key, "story_counter") or 0)
-    want_story = force_story or every == 1 or counter % every == 0
-    state.set_note(site.key, "story_counter", str(counter + 1))
+    want_story = force_story or bool(post.is_major)
     if not want_story:
-        log.info("[%s] no story for this article (one every %d); next one is due", site.key, every)
+        log.info("[%s] no story for this article: not flagged major", site.key)
     if cards_by_shape.get("portrait") and want_story:
         try:
             cards_by_shape["story"] = images.story_asset(cards_by_shape["portrait"], site, work_dir / site.slug / f"{stem}-story.jpg")

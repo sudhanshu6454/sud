@@ -250,18 +250,29 @@ def test_the_inverse_card_carries_a_standfirst_under_the_hook(site, tmp_path):
         assert a.tobytes() != b.tobytes(), "the standfirst is drawn"
 
 
-def test_stories_go_out_for_every_second_news_article_and_always_for_a_forced_one(monkeypatch, settings, site, tmp_path):
+def test_stories_go_out_only_for_articles_flagged_major_and_always_for_a_forced_one(monkeypatch, settings, site, tmp_path):
     settings.carousel_hours = settings.reel_hours = []
     settings.steal_hour = settings.debate_hour = None
-    settings.story_every = 2
     state = State(tmp_path / "s.db")
     StoryRec.seen.clear(); FeedRec.seen.clear()
-    report, wp = _run(monkeypatch, settings, site, tmp_path, state, HookRewriter(), [FeedRec({}), StoryRec({})], n=3)
+
+    class SelectiveRewriter:
+        def __init__(self):
+            self.calls = 0
+
+        def rewrite(self, site, article, carousel=False, keywords=None):
+            self.calls += 1
+            return CuratedPost(
+                title=f"Curated: {article.title}", category="Campaigns", slug=article.title.lower(), excerpt="e" * 120,
+                body_html="<p>x</p>", tags=["a"], image_headline="Kantar: price is no longer the first filter", image_kicker="Pricing",
+                captions=Captions(twitter="tw", facebook="fb body", instagram="ig body #tag", linkedin="li", pinterest_title="pt",
+                                  pinterest="pi", telegram="tg", threads="th"), is_major=self.calls != 2)
+
+    report, wp = _run(monkeypatch, settings, site, tmp_path, state, SelectiveRewriter(), [FeedRec({}), StoryRec({})], n=3)
     assert len(report.published) == 3
-    assert len(StoryRec.seen) == 2, "articles one and three get a story; two does not"
+    assert len(StoryRec.seen) == 2, "articles one and three are flagged major; two is routine and gets no story"
     assert all(p.story_urls for p in StoryRec.seen)
     assert len(FeedRec.seen) == 3, "every article still gets its feed post"
-    assert state.note(site.key, "story_counter") == "3"
     assert report.social_failed == 0, "a story publisher with no story is idle, not failed"
 
 

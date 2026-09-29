@@ -156,10 +156,6 @@ class Settings:
     buzz_meter_hours: list[int] = field(default_factory=lambda: [9])
     buzz_meter_max_tracked: int = 10    # subjects tracked (and shown in the digest) at once
     buzz_meter_retire_days: int = 14    # days after release a subject stays on the meter
-    # Instagram allows 100 API publishes per account a day and every story frame counts as one, so a
-    # story sequence goes out for every Nth news article (1 = every article). Throwbacks and
-    # scorecards always get theirs.
-    story_every: int = 3
     steal_hour: int | None = 11
     debate_hour: int | None = 17
     followup_delay_minutes: int = 120
