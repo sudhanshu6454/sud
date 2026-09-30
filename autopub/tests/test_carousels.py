@@ -348,5 +348,5 @@ def test_carousels_off_when_no_hours_are_configured(monkeypatch, settings, site,
 
 def test_settings_normalise_the_hours(settings):
     from autopub import config
-    assert settings.carousel_hours == [9, 18] and settings.timezone == "Asia/Kolkata"
-    assert config.Settings(sites=settings.sites).carousel_hours == [9, 18]
+    assert settings.carousel_hours == [9, 12, 15, 18, 21] and settings.timezone == "Asia/Kolkata"
+    assert config.Settings(sites=settings.sites).carousel_hours == [9, 12, 15, 18, 21]

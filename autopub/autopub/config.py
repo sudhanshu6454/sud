@@ -100,9 +100,9 @@ class Settings:
     # (error 36003/2207009). The cards are drawn 3:4; this says which shape actually gets posted.
     # Flip to "3:4" once `python -m autopub instagram-probe` shows Meta accepting 0.75.
     instagram_ratio: str = "4:5"
-    # Twice a day the Instagram post is a carousel instead of a single card: the first article a site
-    # publishes at or after each of these hours, in `timezone`. [] switches carousels off.
-    carousel_hours: list[int] = field(default_factory=lambda: [9, 18])
+    # Five times a day the Instagram post is a carousel instead of a single card: the first article a
+    # site publishes at or after each of these hours, in `timezone`. [] switches carousels off.
+    carousel_hours: list[int] = field(default_factory=lambda: [9, 12, 15, 18, 21])
     # Likewise for video: the first article at or after each of these hours also goes out as a reel
     # (Instagram) and a video post (Facebook Page), built from its story frames. [] switches it off.
     reel_hours: list[int] = field(default_factory=lambda: [12, 21])
