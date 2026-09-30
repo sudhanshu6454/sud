@@ -256,7 +256,10 @@ sites:
     tone: Data-first, sharp, plain-spoken; explains what a number means for the business.
     category: Streaming
     categories: [Streaming, Box Office, Television, Platforms, Ratings and Data, Deals]
-    max_posts_per_run: 1
+    # raised from 1 towards the ~50 posts/reels/carousels a day target: up to 3 news articles per
+    # hourly cycle (spaced inside the run, still 20 min apart at minimum), on top of the 5 scorecard
+    # slots and the daily Buzz Meter digest, which are unaffected by this setting
+    max_posts_per_run: 3
     max_age_hours: 36
     min_words: 200
     include_keywords: []
