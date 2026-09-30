@@ -98,9 +98,10 @@ def cmd_check(settings, args) -> int:
         where = f"{'Kokoro' if _speech.is_kokoro(v) else 'Piper'}, in {settings.data_dir / 'voices'}"
     print(f"reel voice: {v or 'none (silent reels)'}" + (f" ({where})" if v else ""))
     print(f"reel music: {'on, own tracks from ' + str(settings.data_dir / 'music') + '/<mood>/ else composed' if settings.reel_music else 'off'}")
-    print(f"follow-ups: steal card at or after {settings.steal_hour:02d}:00, debate story at or after {settings.debate_hour:02d}:00 "
+    debate_times = ", ".join(f"{h:02d}:00" for h in settings.debate_hours)
+    print(f"follow-ups: steal card at or after {settings.steal_hour:02d}:00, debate story at or after {debate_times} "
           f"{settings.timezone}, posted {settings.followup_delay_minutes} min after their article"
-          if settings.steal_hour is not None and settings.debate_hour is not None else "follow-ups: partly off")
+          if settings.steal_hour is not None and settings.debate_hours else "follow-ups: partly off")
     if settings.scorecard_hours:
         on = [s.key for s in settings.sites if s.scorecards]
         print(f"scorecards: at or after {', '.join(f'{h:02d}:00' for h in settings.scorecard_hours)} {settings.timezone} on {on or 'no site'}")

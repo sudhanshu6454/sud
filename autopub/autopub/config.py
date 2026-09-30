@@ -157,7 +157,10 @@ class Settings:
     buzz_meter_max_tracked: int = 10    # subjects tracked (and shown in the digest) at once
     buzz_meter_retire_days: int = 14    # days after release a subject stays on the meter
     steal_hour: int | None = 11
-    debate_hour: int | None = 17
+    # Debate stories: the closest thing to a poll the platforms' APIs allow (neither exposes a real
+    # poll sticker to third-party publishing) - a genuinely two-sided question posted as its own
+    # Story at the first article after each of these hours that raises one. [] switches it off.
+    debate_hours: list[int] = field(default_factory=lambda: [10, 15, 20])
     followup_delay_minutes: int = 120
     timezone: str = "Asia/Kolkata"
     data_dir: Path = DEFAULT_DATA_DIR
@@ -204,6 +207,7 @@ def load(path: str | os.PathLike | None = None) -> Settings:
     settings.scene_hours = sorted({int(h) % 24 for h in (settings.scene_hours or [])})
     settings.deepdive_hours = sorted({int(h) % 24 for h in (settings.deepdive_hours or [])})
     settings.buzz_meter_hours = sorted({int(h) % 24 for h in (settings.buzz_meter_hours or [])})
+    settings.debate_hours = sorted({int(h) % 24 for h in (settings.debate_hours or [])})
     for site in settings.sites:
         if site.news_hours is not None:
             site.news_hours = sorted({int(h) % 24 for h in site.news_hours})

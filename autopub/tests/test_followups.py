@@ -22,6 +22,16 @@ def test_the_caption_opens_with_its_hook_unless_it_already_does():
     assert pipeline._hooked(None, "Body") == "Body" and pipeline._hooked("Short", "Body") == "Body"
 
 
+def test_a_two_sided_debate_becomes_a_comment_vote_prompt():
+    """Neither Instagram nor Facebook exposes a real poll sticker to third-party publishing, so a
+    genuinely two-sided question is appended as the closest thing the API allows."""
+    debate = Debate(question="Should brands take sides?", options=["Brave", "Reckless"])
+    assert pipeline._polled(debate, "Body #tag") == "Body #tag\n\nShould brands take sides?\nBrave or Reckless? Vote in the comments!"
+    assert pipeline._polled(None, "Body") == "Body", "no debate, caption untouched"
+    assert pipeline._polled(Debate(question="Not a question.", options=["A", "B"]), "Body") == "Body", "must end with a '?'"
+    assert pipeline._polled(Debate(question="Really?", options=["A", "B", "C"]), "Body") == "Body", "needs exactly two real sides"
+
+
 def test_the_schema_asks_for_hooks_steal_and_debate_and_the_model_parses_them():
     props = OUTPUT_SCHEMA["properties"]
     assert {"hook", "caption_hook", "steal", "debate"} <= set(props)
@@ -79,7 +89,7 @@ def _run(monkeypatch, settings, site, tmp_path, state, rewriter, publishers, n=1
 
 def test_the_hook_is_set_large_on_the_card_and_opens_the_caption(monkeypatch, settings, site, tmp_path):
     settings.carousel_hours = settings.reel_hours = []
-    settings.steal_hour = settings.debate_hour = None
+    settings.steal_hour, settings.debate_hours = None, []
     drawn = {}
     real = images.render_set
 
@@ -101,7 +111,7 @@ def test_the_hook_is_set_large_on_the_card_and_opens_the_caption(monkeypatch, se
 
 def test_without_a_hook_the_card_reads_as_before(monkeypatch, settings, site, tmp_path):
     settings.carousel_hours = settings.reel_hours = []
-    settings.steal_hour = settings.debate_hour = None
+    settings.steal_hour, settings.debate_hours = None, []
     drawn = {}
     real = images.render_set
     monkeypatch.setattr(images, "render_set", lambda h, k, s_, o, st, **kw: drawn.update(headline=h, standfirst=kw.get("standfirst")) or real(h, k, s_, o, st, **kw))
@@ -165,7 +175,7 @@ def test_a_follow_up_that_fails_is_dropped_not_retried_forever(settings, site, t
 
 def test_the_first_article_with_a_tactic_after_the_hour_queues_the_steal_card_and_spends_the_slot(monkeypatch, settings, site, tmp_path):
     settings.carousel_hours = settings.reel_hours = []
-    settings.steal_hour, settings.debate_hour = 0, 0
+    settings.steal_hour, settings.debate_hours = 0, [0]
     state = State(tmp_path / "s.db")
     rw = HookRewriter(steal=Steal(idea="Anchor on the premium tier first", how="Show the dearest plan first, always. " * 2),
                       debate=Debate(question="Should brands take sides?", options=["Brave", "Reckless"]))
@@ -181,7 +191,7 @@ def test_the_first_article_with_a_tactic_after_the_hour_queues_the_steal_card_an
 
 def test_an_article_without_the_material_leaves_the_slot_open(monkeypatch, settings, site, tmp_path):
     settings.carousel_hours = settings.reel_hours = []
-    settings.steal_hour, settings.debate_hour = 0, 0
+    settings.steal_hour, settings.debate_hours = 0, [0]
     state = State(tmp_path / "s.db")
     _run(monkeypatch, settings, site, tmp_path, state, HookRewriter(debate=Debate(question="No question mark", options=["A", "B"])), [FeedRec({}), StoryRec({})])
     assert followups.load(state, site.key) == []
@@ -190,7 +200,7 @@ def test_an_article_without_the_material_leaves_the_slot_open(monkeypatch, setti
 
 def test_no_matching_publisher_means_nothing_is_queued(monkeypatch, settings, site, tmp_path):
     settings.carousel_hours = settings.reel_hours = []
-    settings.steal_hour, settings.debate_hour = 0, 0
+    settings.steal_hour, settings.debate_hours = 0, [0]
     state = State(tmp_path / "s.db")
     rw = HookRewriter(steal=Steal(idea="Anchor on the premium tier first", how="Show the dearest plan first, always. " * 2))
     _run(monkeypatch, settings, site, tmp_path, state, rw, [StoryRec({})])   # a story publisher cannot carry a feed card
@@ -203,7 +213,7 @@ def test_the_throwback_queues_its_hot_take(monkeypatch, settings, site, tmp_path
     settings.ad_hours = [0]
     monkeypatch.setattr(nostalgia, "kind_for_slot", lambda settings, now=None: "nostalgic")
     settings.reel_hours = settings.carousel_hours = []
-    settings.steal_hour = settings.debate_hour = None
+    settings.steal_hour, settings.debate_hours = None, []
     site.nostalgia = True
     _quick_render(monkeypatch)
     monkeypatch.setattr(youtube, "find_ad", lambda *a, **k: dict(FILM))
@@ -252,7 +262,7 @@ def test_the_inverse_card_carries_a_standfirst_under_the_hook(site, tmp_path):
 
 def test_stories_go_out_only_for_articles_flagged_major_and_always_for_a_forced_one(monkeypatch, settings, site, tmp_path):
     settings.carousel_hours = settings.reel_hours = []
-    settings.steal_hour = settings.debate_hour = None
+    settings.steal_hour, settings.debate_hours = None, []
     state = State(tmp_path / "s.db")
     StoryRec.seen.clear(); FeedRec.seen.clear()
 

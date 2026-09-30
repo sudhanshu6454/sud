@@ -11,7 +11,7 @@ from slugify import slugify
 
 from . import adclip, buzzmeter, cards, carousels, deepdives, extract, followups, images, music, nostalgia, poster, rank, scenes, scorecards, seo, sources, speech, trailers, video, watchlists, tmdb
 from .config import Settings, Site
-from .rewrite import CuratedPost, Mention, Rewriter, RewriteSkipped, effective_model
+from .rewrite import CuratedPost, Debate, Mention, Rewriter, RewriteSkipped, effective_model
 from .social import SocialPost, build_publishers, dispatch
 from .social import mentions as mentions_mod
 from .state import State
@@ -64,6 +64,19 @@ def _hooked(hook: str | None, caption: str) -> str:
     if len(hook) < 12 or hook.lower() in caption.lower()[:200]:
         return caption
     return f"{hook}\n\n{caption.strip()}"
+
+
+def _polled(debate: Debate | None, caption: str) -> str:
+    """A genuinely two-sided question, appended as a comment-vote prompt: neither Instagram nor
+    Facebook exposes a real tap-to-vote poll sticker to third-party publishing, so a question the
+    reader answers in the comments is the closest the API allows - on every post that raises one,
+    not only the day's dedicated debate story."""
+    if debate is None or not debate.question.strip().endswith("?"):
+        return caption
+    options = [o.strip() for o in debate.options if o.strip()]
+    if len(options) != 2:
+        return caption
+    return f"{caption.strip()}\n\n{debate.question.strip()}\n{options[0]} or {options[1]}? Vote in the comments!"
 
 
 def _story_texts(post: CuratedPost) -> list[tuple[str, str]]:
@@ -123,8 +136,9 @@ def publish_one(site: Site, settings: Settings, state: State, cand: sources.Cand
 
 
 def _queue_followups(site: Site, settings: Settings, state: State, post: CuratedPost, link: str, publishers) -> None:
-    """One 'Steal this' card and one debate story a day: the first article after each hour that has
-    the material takes the slot, and the piece is queued to go out after the article."""
+    """One 'Steal this' card a day and a debate story at each of settings.debate_hours: the first
+    article after each hour that has the material takes the slot, and the piece is queued to go
+    out after the article."""
     now = time.time()
     due = now + settings.followup_delay_minutes * 60
     names = {p.platform for p in publishers}
@@ -135,10 +149,10 @@ def _queue_followups(site: Site, settings: Settings, state: State, post: Curated
             followups.schedule(state, site.key, "steal", due, {"idea": post.steal.idea.strip(), "how": post.steal.how.strip(),
                                                                 "link": link, "title": post.title})
             state.set_note(site.key, followups.STEAL_NOTE, carousels.dump_log(log_ + [now]))
-    if settings.debate_hour is not None and names & set(followups.STORY) and post.debate \
+    if settings.debate_hours and names & set(followups.STORY) and post.debate \
             and post.debate.question.strip().endswith("?") and len([o for o in post.debate.options if o.strip()]) == 2:
         log_ = carousels.parse_log(state.note(site.key, followups.DEBATE_NOTE))
-        if carousels.due(now, log_, [settings.debate_hour], settings.timezone):
+        if carousels.due(now, log_, settings.debate_hours, settings.timezone):
             followups.schedule(state, site.key, "debate", now + settings.followup_delay_minutes * 30,
                                {"question": post.debate.question.strip(), "options": [o.strip() for o in post.debate.options][:2],
                                 "link": link, "title": post.title})
@@ -431,10 +445,13 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
         # every platform leads with the hook, not just Facebook and Instagram: the scroll-stopper
         # comes first everywhere, then the platform's own caption, then (for link platforms) the
         # CTA into the link (base.Publisher._text_with_link) or (Instagram) the CTA to the website
+        # a genuinely two-sided question also gets a comment-vote prompt on Instagram and Facebook
+        # (the platforms with a comment section worth prompting), on every post that raises one -
+        # not only the article picked for the day's dedicated debate story
         captions={
             "twitter": _hooked(post.caption_hook, post.captions.twitter),
-            "facebook": _hooked(post.caption_hook, post.captions.facebook) + credit_line,
-            "instagram": _hooked(post.caption_hook, post.captions.instagram) + credit_line,
+            "facebook": _polled(post.debate, _hooked(post.caption_hook, post.captions.facebook)) + credit_line,
+            "instagram": _polled(post.debate, _hooked(post.caption_hook, post.captions.instagram)) + credit_line,
             "linkedin": _hooked(post.caption_hook, post.captions.linkedin),
             "pinterest": _hooked(post.caption_hook, post.captions.pinterest),
             "telegram": _hooked(post.caption_hook, post.captions.telegram),

@@ -104,7 +104,7 @@ def test_the_slot_tracks_a_new_subject_and_publishes_the_digest(monkeypatch, set
     site = settings.site("SCREENSTAT")
     settings.buzz_meter_hours = [0]
     settings.reel_hours = settings.carousel_hours = settings.scorecard_hours = []
-    settings.steal_hour = settings.debate_hour = None
+    settings.steal_hour, settings.debate_hours = None, []
     settings.ad_hours = []
     settings.min_relevance = 0
     monkeypatch.setattr(sources, "collect", lambda s, timeout=30: [])

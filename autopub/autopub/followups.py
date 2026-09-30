@@ -1,9 +1,9 @@
 """Follow-up posts: the pieces that go out a while after the article they belong to.
 
 Three kinds today. `steal`: the 'Steal this' swipe-file card, one a day per site, lifted from the
-first article after `steal_hour` that offered a reusable tactic. `debate`: the debate story, one a
-day, from the first article after `debate_hour` that raised an arguable question. `hot_take`: the
-throwback's bold line, posted as a quote card two hours after the feature.
+first article after `steal_hour` that offered a reusable tactic. `debate`: the debate story, at
+each of `debate_hours`, from the first article after it that raised an arguable question. `hot_take`:
+the throwback's bold line, posted as a quote card two hours after the feature.
 
 Each is queued in `site_notes` as JSON when its article publishes and posted by a later cycle once
 its time has come, so a day's posts spread out instead of stacking. A follow-up is tried once: if

@@ -56,9 +56,12 @@ settings:
   ad_clip_player_clients: [web_embedded, web]
   ad_clip_cookies: /data/youtube-cookies.txt
   # Follow-ups: one "Steal this" card a day (the first article after steal_hour that offers a reusable
-  # tactic) and one debate story a day (the first after debate_hour that raises an arguable question),
-  # each posted a while after its article so the day's posts spread out. The throwback's hot take
-  # follows the same way. The debate story goes out at half the delay.
+  # tactic) and a debate story at each of debate_hours (the first article after it that raises an
+  # arguable question), each posted a while after its article so the day's posts spread out. The
+  # throwback's hot take follows the same way. The debate story goes out at half the delay. Every
+  # post that raises a genuine two-sided question also gets a comment-vote prompt in its own Instagram
+  # and Facebook caption - neither platform exposes a real poll sticker to third-party publishing, so
+  # this is the closest thing to a poll the API allows.
   # ScreenStat's actor scorecards: five a day, an actor's career in numbers (films, hits, flops, return
   # on budget) with every figure read from Wikipedia. The first cycle at or after each hour publishes one.
   scorecard_hours: [8, 11, 14, 17, 20]
@@ -88,7 +91,7 @@ settings:
   # bigger claim on a reader's attention than a feed post, so the news only gets one when the writer
   # flags it genuinely significant (CuratedPost.is_major); the ad features and scorecards always do.
   steal_hour: 11
-  debate_hour: 17
+  debate_hours: [10, 15, 20]
   followup_delay_minutes: 120
   timezone: Asia/Kolkata
 

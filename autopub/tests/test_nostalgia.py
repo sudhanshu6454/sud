@@ -200,7 +200,7 @@ def test_a_current_ad_comes_from_this_weeks_stories_and_claims_its_source(monkey
     from autopub import extract as ex, sources as src, youtube
     settings.ad_hours = [0]
     settings.reel_hours = settings.carousel_hours = []
-    settings.steal_hour = settings.debate_hour = None
+    settings.steal_hour, settings.debate_hours = None, []
     settings.scorecard_hours = []
     site.nostalgia = True
     _quick_render(monkeypatch)
