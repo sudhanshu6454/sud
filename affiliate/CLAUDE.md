@@ -14,8 +14,8 @@ Everything here runs from this directory; nothing outside it is needed.
 ## Verified state (2026-09-29)
 
 - `pnpm typecheck` clean on all 5 packages (`packages/*`)
-- **784/784 tests green across 45 test files** (`./node_modules/.bin/vitest run`:
-  api 199, redirect 10, shared 28, workers 24, web 523; re-run 2026-09-29 after
+- **788/788 tests green across 46 test files** (`./node_modules/.bin/vitest run`:
+  api 203, redirect 10, shared 28, workers 24, web 523; re-run 2026-09-29 after
   the Amazon review fixes)
 - Demo: **51/51 assertions** on pg-mem (`tsx scripts/demo-money-loop.ts`) **and
   51/51 on a real PostgreSQL 16.13** (`DEMO_TARGET=postgres`, scratch database

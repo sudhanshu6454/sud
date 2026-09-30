@@ -6,6 +6,9 @@
 #   bash /opt/afflino/affiliate/deploy/linode/amazon.sh keys       Store ID, the in-house share, optional Creators API keys
 #   bash /opt/afflino/affiliate/deploy/linode/amazon.sh template   a starting tracking-ID file of the in-house Facebook /
 #                                                                  Instagram pages and afflino.com
+#   bash /opt/afflino/affiliate/deploy/linode/amazon.sh plan 50    tracking-ids.csv for the 50 most-viewed pages (the Meta
+#                                                                  exports in /etc/afflino/meta) and afflino.com, and the
+#                                                                  list of tracking IDs to create in Associates Central
 #   bash /opt/afflino/affiliate/deploy/linode/amazon.sh setup      the programme, the account, placements, tracking IDs;
 #                                                                  the Associate statement in every page's footer
 #   bash /opt/afflino/affiliate/deploy/linode/amazon.sh offers     the ASIN list (and the shop's looks)
@@ -44,6 +47,7 @@
 #   AFFLINO_DIR=/opt/afflino  AFFLINO_ENV_FILE=/etc/afflino/afflino.env  AFFLINO_PROJECT=afflino
 #   AFFLINO_EDGE_TEST=1  AFFLINO_EXTRA_COMPOSE_FILE=f     as for install.sh
 #   AFFLINO_AMAZON_DIR=/etc/afflino/amazon                the files above
+#   AFFLINO_META_DIR=/etc/afflino/meta                    the Meta exports plan ranks pages by
 #   AFFLINO_REDIRECT_URL=http://127.0.0.1:3001            where check asks the redirect
 #   AFFLINO_WEB_URL=http://127.0.0.1:3002                 where links / shop read /privacy
 #   AFFLINO_AMAZON_ALLOW_TEST_VALUES=1                    let the CLI accept TEST values (demo-21,
@@ -80,9 +84,9 @@ main() {
   is_on() { case "${1:-}" in 1|yes|true|on) return 0 ;; *) return 1 ;; esac; }
 
   case "$cmd" in
-    keys|template|setup|offers|links|shop|import|returns|check|pause|resume) ;;
+    keys|template|plan|setup|offers|links|shop|import|returns|check|pause|resume) ;;
     *)
-      say "usage: $SELF_LINE keys|template|setup|offers|links|shop|import|returns|check|pause|resume"
+      say "usage: $SELF_LINE keys|template|plan <pages>|setup|offers|links|shop|import|returns|check|pause|resume"
       say "(docs/runbooks/deploy.md, \"Amazon.in Associates\", has the order)"
       [ -z "$cmd" ] && exit 2
       die "unknown step '$cmd'"
@@ -313,6 +317,39 @@ print("" if v is None else v)' "$1" "$2"; }
       info "Snapchat, Telegram or WhatsApp)"
       info "Keep only the rows of the pages listed on your Associates account (at most 100 tracking IDs"
       info "per account), write one tracking ID per row, and save it as $AMZ/tracking-ids.csv."
+      ;;
+
+    # ------------------------------------------------------------------ plan
+    # plan <N>: tracking-ids.csv for the N most-viewed Facebook / Instagram
+    # pages of the template (views from the Meta exports the network was built
+    # from) plus afflino.com. The IDs are numbered under the Store ID, after
+    # the pattern Amazon's own help gives ("storeid-1-21 ... storeid-2-21"), as
+    # <store>-p01-21 ... (the "p" keeps page 21's name from being the Store ID
+    # itself), so no other Associate holds them and they carry no Amazon term. Tracking IDs are
+    # public by nature (every link carries its tag), so the list is printed; the
+    # Store ID itself is not.
+    plan)
+      local n="${2:-}" meta="${AFFLINO_META_DIR:-/etc/afflino/meta}" tpl="$AMZ/tracking-ids.template.csv" out="$AMZ/tracking-ids.csv" store
+      if ! printf '%s' "$n" | grep -Eq '^[0-9]{1,2}$' || [ "$((10#$n))" -lt 1 ] || [ "$((10#$n))" -gt 99 ]; then
+        die "usage: $SELF_LINE plan <pages, 1-99> (afflino.com takes one more tracking ID; Amazon allows 100 per account)"
+      fi
+      n="$((10#$n))"
+      store="$(env_get AMAZON_STORE_ID)"
+      [ -n "$store" ] || die "no Store ID yet: run $SELF_LINE keys first"
+      [ -f "$tpl" ] || die "no $tpl yet: run $SELF_LINE template first"
+      ls "$meta"/*.csv >/dev/null 2>&1 || die "no Meta exports in $meta to rank the pages by (docs/runbooks/deploy.md, \"The in-house network\", step 2)"
+      if [ -f "$out" ]; then
+        out="$AMZ/tracking-ids.plan.csv"
+        warn "$AMZ/tracking-ids.csv already exists and is kept; this plan is written to $out instead"
+      fi
+      AFFLINO_PLAN_STORE="$store" python3 "$APP/deploy/linode/amazon-plan.py" "$tpl" "$meta" "$n" "$out.new" || { rm -f "$out.new"; die "the plan could not be written (above); nothing changed"; }
+      mv -f "$out.new" "$out"; chmod 0644 "$out"
+      info "written: $out"
+      if [ "$out" = "$AMZ/tracking-ids.csv" ]; then
+        next "create those tracking IDs and list those pages on the Associates account, then: $SELF_LINE setup"
+      else
+        next "compare $out with $AMZ/tracking-ids.csv; to use the plan: mv $out $AMZ/tracking-ids.csv"
+      fi
       ;;
 
     # ----------------------------------------------------------------- setup

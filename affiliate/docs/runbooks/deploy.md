@@ -421,6 +421,25 @@ onto a command line. Every step can be re-run safely.
      ```sh
      scp root@afflino.com:/etc/afflino/amazon/tracking-ids.template.csv ~/Downloads/afflino-amazon-tracking-ids.csv
      ```
+     **Or let the server build it** from the network's Meta exports
+     (`/etc/afflino/meta`, "The in-house network" step 2): `plan <N>` keeps
+     the N most-viewed Facebook / Instagram pages of the template (1–99;
+     Amazon allows 100 tracking IDs and afflino.com takes one), numbers
+     their tracking IDs under your Store ID after the pattern Amazon's help
+     gives (`<store>-p01-21` … `<store>-pNN-21`, and `<store>-web-21` for
+     afflino.com), writes `tracking-ids.csv` directly (or
+     `tracking-ids.plan.csv` if one already exists, which is kept) and
+     prints each tracking ID with its page, views and URL:
+     ```sh
+     bash /opt/afflino/affiliate/deploy/linode/amazon.sh template && bash /opt/afflino/affiliate/deploy/linode/amazon.sh plan 50
+     ```
+     Then, in Associates Central, create every printed tracking ID
+     (Account settings → Manage tracking IDs → Add; type the part before
+     `-21`) and list every printed URL on the account (Account settings →
+     Edit your website and mobile app list). If Amazon refuses a name, edit
+     that row of `/etc/afflino/amazon/tracking-ids.csv` to the one it gave
+     you before `setup`. Measured on the owner's export of 2026-09-28: the
+     top 50 pages had 97.8% of the network's 28-day views (top 25: 93%).
    - `asins.csv` — the products: `asin_or_url,brand,model,category,look`.
      `asin_or_url` is the ASIN or the amazon.in product URL (any
      `/dp/<ASIN>` form; short `amzn` links are refused, nothing here opens
