@@ -1,0 +1,62 @@
+/* The whole still at its own aspect (never cropped, never blown up past its
+   size: the markers' 0..1 positions are of the image itself). Markers: 28px
+   ink squares with the piece number, a 2px ground outline so they read on
+   any tone; a 44px hit area on phones and on every touch screen (the ::after
+   is measured from the 24px padding box inside the 2px border: 24 + 2 × 10). */
+
+.figure {
+  margin: 0;
+}
+
+.frame {
+  position: relative;
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto;
+  background: var(--color-surface);
+}
+
+.img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--color-bg);
+  background: var(--color-text);
+  color: var(--color-bg);
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 13px;
+  line-height: 1;
+  text-decoration: none;
+}
+
+.marker:hover,
+.marker:focus-visible {
+  background: var(--color-accent-700);
+  color: var(--color-bg);
+}
+
+.credit {
+  margin-top: var(--space-2);
+  font-size: 12px;
+  color: var(--color-neutral-700);
+}
+
+@media (max-width: 760px), (pointer: coarse) {
+  .marker::after {
+    content: '';
+    position: absolute;
+    inset: -10px;
+  }
+}

@@ -215,6 +215,8 @@ function filesUnder(dir: string): string[] {
 const SHOP_COMPONENTS = ['LookCard', 'LookGrid', 'MerchantCta', 'MatchBadge', 'SaveButton', 'Disclosure'];
 const SHOP_SOURCES = [
   ...filesUnder(join(WEB, 'app/(shop)')),
+  // The storefronts (/s/<slug>, their own slim layout) are shop pages too.
+  ...filesUnder(join(WEB, 'app/s')),
   ...filesUnder(join(WEB, 'components/shop')),
   ...readdirSync(join(WEB, 'components'))
     .filter((f) => SHOP_COMPONENTS.some((c) => f.startsWith(`${c}.`)))

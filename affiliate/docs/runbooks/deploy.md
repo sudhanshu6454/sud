@@ -489,7 +489,16 @@ onto a command line. Every step can be re-run safely.
    extends it; the price refresh extends it for every product Amazon still
    lists). A product Amazon's product API reported not accessible stays
    paused when you list it again (the step says which); the price refresh
-   brings it back when Amazon lists it again.
+   brings it back when Amazon lists it again. Brand, model, category and
+   the optional `look` column are your own plain words: a row that names a
+   celebrity or uses endorsement wording ("worn by", "dupe", "for less",
+   "<Brand> style", "inspired", "first copy" …) refuses the whole file,
+   nothing written (a product can stand in a celebrity's outfit, and its
+   text is what every look shows). The `look` column makes a **product
+   shelf** in the shop (items without a match verdict: "Unverified
+   match"); it never names or joins a celebrity look — those come only
+   from the library (§1C), with EXACT only by evidence and a second
+   person.
 6. **The links**, one per (page with its own tracking ID) × product, minted
    through the API with every guard; the sheet goes to
    `/etc/afflino/amazon/links.csv` (`platform,account,tracking_id,asin,
@@ -647,8 +656,9 @@ the TEST values (yours will show your own IDs and counts):
   second run `0 tracking ID(s) added now` and `every page's footer already
   shows the Associate statement`.
 - `offers`: `2 offer(s): 2 new, 2 active; no prices until the product API
-  supplies them` and `look 'Demo Kitchen picks': published, 2 product(s)
-  added`.
+  supplies them` and `shelf 'Demo Kitchen picks': published, 2 product(s)
+  added (no match verdict: celebrity looks come from the library)` (the
+  wording from 2026-09-30; a shelf's items carry no EXACT claim since then).
 - `links` and `shop` while `/privacy` was the stub: `STOPPED: afflino.com/privacy
   is still the stub page. Amazon requires a privacy notice … nothing was
   changed` (no link minted, no sheet written). With the test-only
@@ -702,6 +712,343 @@ redirect, a real earnings download, the Creators API (the workers were never
 given credentials in the rehearsal), a published privacy notice (the
 rehearsal skipped that check with its test-only setting after showing both
 refusals).
+
+## 1C. Celebrity looks, storefronts and Engage (comment replies)
+
+What this sets up: the owner's paparazzi library as **draft** looks (each a
+moment: a celebrity, an event or place, a date, the source video, a still,
+the in-house page and post that published it) with the outfit piece by
+piece; counsel's decision per celebrity; products tagged into each piece as
+EXACT (the same item: evidence and a second person's approval) or SIMILAR
+(a similar style; the default); publishing; the public pages (the Spotted
+feed on `/shop`, a celebrity's hub `/c/<slug>`, the look piece by piece
+`/looks/<id>`, a storefront per in-house page `/s/<slug>` for its bio);
+takedowns; comment replies (the product's name for what you asked for as
+"Engage": a keyword in a comment → one private message with the look's
+afflino.com page). Nothing about a celebrity appears on afflino.com before
+counsel's review allows it (the default is `unreviewed`: nothing is shown),
+and celebrity pages stay out of search engines until `CELEBRITY_INDEXING=on`
+(off by default; counsel's call). **Nothing here says it is lawful**: the
+open questions are `docs/counsel-briefing.md` §10 and `docs/action-tracker.md`
+"Celebrity looks".
+
+### What you need first
+- The library file, never in the repository: a CSV named
+  `afflino-library….csv` on your Mac (Spotlight finds the newest), one row
+  per outfit piece of a moment (a row without piece columns is a moment with
+  no piece yet). The columns:
+
+  | Column | Required | What goes in it |
+  |---|---|---|
+  | `video_ref` | yes | the source video in the library (one look per video; `moment_ref` for several moments in one video) |
+  | `celebrity` | yes | the full name; a new name is created **unreviewed** |
+  | `moment_date` | yes | `YYYY-MM-DD`, in the past (never live whereabouts) |
+  | `still_ref` | yes | the still in the library |
+  | `licence` | no: blank = **owned** | leave every licence column blank (or leave the columns out) and the row takes your **ownership statement** (step 2: commercial use, worldwide, no end, your company as the copyright owner, the statement as the chain of title); fill it only for a clip that is *not* yours outright (an agency's licence reference), with the next three |
+  | `commercial_reuse` | with a licence of its own | `yes`, `no` or `unknown` (only `yes` lets the still be shown) |
+  | `territory` | with a licence of its own | `IN`, `WW` or a list such as `IN,AE` |
+  | `licence_expires` | with a licence of its own | `YYYY-MM-DD` or `none` (the still disappears when it expires) |
+  | `moment_ref`, `aliases` (`;`-separated), `celebrity_minor` (`yes`/`no`: a minor is never published) | no | |
+  | `event`, `place`, `place_kind` | no | a public event or venue, coarse — never a home, a building or society, a hospital or clinic, a school or class, a place of worship; `place_kind` `event`, `venue`, `airport`, `street`, `studio` or `other` (a `street` or `other` look is published only after the rights reviewer confirms its place in the admin); in your own words, never a celebrity's name |
+  | `platform`, `account` | no | the in-house page that posted it (`facebook` + the page ID, or `instagram` + the handle) |
+  | `post_permalink`, `platform_post_id` | no | the post (https) and its id (comment replies need the id) |
+  | `still_url` | no | the still's public copy (https) |
+  | `copyright_owner`, `acquisition`, `assignment_ref` | with a licence of its own and `commercial_reuse` `yes` | the chain of title: who owns the footage, how it was acquired (`staff`, `freelance`, `agency`, `licensed` or `other`) and, for anything but `staff`, the written assignment or licence's reference; a row claiming commercial reuse without them refuses the file, and a still without them is never shown (blank with the other licence columns: your ownership statement) |
+  | `source_ref`, `author` | no | the library's own reference and who filmed it |
+  | `live_performance`, `minor_in_frame`, `bystanders`, `sensitive_location` | no | `yes`/`no`: any `yes` keeps the still off every page |
+  | `celebrity_display` | no | `name_only` or `name_and_image` (never more than the review allows) |
+  | `piece_label`, `piece_category`, `piece_order`, `piece_x`, `piece_y` | no | one row per piece: the label in your words ("The shirt"; never a name), the garment category (`top`, `shirt`, `t_shirt`, `kurta`, `dress`, `saree`, `lehenga`, `outerwear`, `suit`, `trousers`, `jeans`, `skirt`, `shorts`, `co_ord_set`, `ethnic_set`, `footwear`, `bag`, `eyewear`, `watch`, `jewellery`, `belt`, `headwear`, `scarf`, `other`), the order, the marker's position on the still (0 to 1 across and down, both or neither; eyewear, headwear and jewellery get no marker on the page) |
+
+  A TEST example (fictional people, example.com; every column:
+  `db/fixtures/library.example.csv`), two pieces of one moment:
+
+  ```
+  video_ref,celebrity,moment_date,event,place,place_kind,platform,account,post_permalink,platform_post_id,still_ref,still_url,licence,commercial_reuse,territory,licence_expires,copyright_owner,author,acquisition,assignment_ref,live_performance,minor_in_frame,bystanders,sensitive_location,celebrity_display,piece_label,piece_category,piece_order,piece_x,piece_y
+  demo-vid-0101,Demo Star One,2026-09-12,Demo Film Premiere,Demo City,event,instagram,demo.afflino,https://instagram.example.com/p/demo-0101,17900000000000101,demo-stills/0101.jpg,https://cdn.example.com/demo-stills/0101.jpg,TEST staff footage,yes,IN,2027-12-31,Demo Media (TEST),Demo Shooter,staff,TEST-ASSIGN-001,no,no,no,no,name_and_image,The shirt,shirt,0,0.42,0.35
+  demo-vid-0101,Demo Star One,2026-09-12,Demo Film Premiere,Demo City,event,instagram,demo.afflino,https://instagram.example.com/p/demo-0101,17900000000000101,demo-stills/0101.jpg,https://cdn.example.com/demo-stills/0101.jpg,TEST staff footage,yes,IN,2027-12-31,Demo Media (TEST),Demo Shooter,staff,TEST-ASSIGN-001,no,no,no,no,name_and_image,The shoes,footwear,1,0.47,0.9
+  ```
+  Your own clips need no licence columns at all. The same moment, owned
+  (the licence from your ownership statement):
+
+  ```
+  video_ref,celebrity,moment_date,event,place,place_kind,platform,account,post_permalink,platform_post_id,still_ref,still_url,celebrity_display,piece_label,piece_category,piece_order,piece_x,piece_y
+  demo-vid-0101,Demo Star One,2026-09-12,Demo Film Premiere,Demo City,event,instagram,demo.afflino,https://instagram.example.com/p/demo-0101,17900000000000101,demo-stills/0101.jpg,https://cdn.example.com/demo-stills/0101.jpg,name_and_image,The shirt,shirt,0,0.42,0.35
+  ```
+  The whole file is refused (nothing written) when a row without licence
+  columns comes before any ownership statement is recorded, a row fills
+  some licence columns but not `licence`, `commercial_reuse`, `territory`
+  and `licence_expires`, or lacks its chain of title, has a bad value, names a page that is not
+  yours, a sensitive place, endorsement wording ("worn by", "dupe", "for
+  less", "inspired", "replica", "7A", "lookalike", "as seen", …) or a
+  celebrity's name in its event, place or piece label (a name appears on a
+  page only in the credit line of that person's own look); a second run
+  changes nothing. A frame flag (`minor_in_frame`, `bystanders`,
+  `sensitive_location`) once `yes` stays `yes` (a later file cannot clear
+  it), and `celebrity_minor` `yes` pauses that person's links at once.
+- Counsel's decision for each celebrity you want to publish (the evidence
+  reference: counsel's written advice or the licence).
+
+### The steps (each is one line; values are asked at prompts)
+
+1. **On your Mac**, copy the newest library file to the server:
+
+   ```bash
+   ssh root@afflino.com 'install -d -m 0755 /etc/afflino/library' && f=$(mdfind -name "afflino-library" 2>/dev/null | grep -E '\.csv$' | while IFS= read -r p; do printf '%s\t%s\n' "$(stat -f %m "$p")" "$p"; done | sort -n | tail -1 | cut -f2-); if [ -n "$f" ]; then echo "copying $f"; scp "$f" root@afflino.com:/etc/afflino/library/library.csv; else echo "no afflino-library….csv found on this Mac"; fi
+   ```
+2. As root on the Linode, **the first time only**, record your statement
+   that you own the library's footage (asks the legal name of the company
+   or person that owns it, who shot the clips — `1` your own employees
+   only, `2` employees and freelancers or agencies working for you — shows
+   the statement's words and records it, dated, when you type `yes`):
+
+   ```bash
+   bash /opt/afflino/affiliate/deploy/linode/looks.sh owned
+   ```
+   Every row without licence columns then takes it; a row with its own
+   licence keeps that. It covers the footage only: each celebrity's own
+   rights still go through step 4, and nothing about a celebrity is shown
+   without it. Run it again to correct the name (the new statement replaces
+   the old one at the next import); `looks.sh owned withdraw` ends it, and
+   every clip licensed by it stops showing its image at once.
+
+   Then import the file (drafts; new celebrities unreviewed):
+
+   ```bash
+   bash /opt/afflino/affiliate/deploy/linode/looks.sh import
+   ```
+   It prints the looks created (drafts), updated and unchanged, the
+   celebrities created (unreviewed) or matched, the assets and the pieces,
+   and how many looks took their licence from your statement. A clip whose
+   licence a person changed in the admin is never widened by a file (the
+   line "kept as a person set it" names it; the rights reviewer changes it
+   in the admin). (Small files can also be checked and imported in the
+   admin: Library.)
+3. Each celebrity's page name (slug), status and what it may show:
+
+   ```bash
+   bash /opt/afflino/affiliate/deploy/linode/looks.sh celebrities
+   ```
+4. **Only after counsel's decision**, record it, one celebrity at a time
+   (asks the slug, the status — `unreviewed`, `editorial` (name only, no
+   products), `cleared` (counsel cleared a page with products) or `blocked`
+   — whether the photo may be shown, whether products may be shown, the
+   evidence reference and a note; `editorial` and `cleared` need the
+   reference):
+
+   ```bash
+   bash /opt/afflino/affiliate/deploy/linode/looks.sh review
+   ```
+5. Storefronts: a draft for every in-house Facebook / Instagram page and
+   each page's bio link (`https://afflino.com/s/<slug>`; optional
+   `/etc/afflino/library/storefronts.csv` with
+   `platform,account,slug,display_name[,bio][,status]` for your own slugs and
+   bios):
+
+   ```bash
+   bash /opt/afflino/affiliate/deploy/linode/looks.sh storefronts
+   ```
+   then make them public (a live storefront shows only public looks; the
+   bio link of a draft is a 404):
+
+   ```bash
+   bash /opt/afflino/affiliate/deploy/linode/looks.sh storefronts live
+   ```
+   Put each page's printed bio link in that page's bio.
+6. A sign-in for the admin (8 hours; written to a root-only file, never
+   shown), then **on your Mac** copy it to the clipboard and paste it at
+   `https://afflino.com/login`:
+
+   ```bash
+   bash /opt/afflino/affiliate/deploy/linode/looks.sh signin
+   ```
+   ```bash
+   ssh root@afflino.com 'cat /etc/afflino/admin-sign-in.token' | pbcopy && echo "copied: paste it at https://afflino.com/login"
+   ```
+   (Choose 1, the network admin, for tagging and publishing; 2, the rights
+   reviewer, only for counsel's decisions in the admin's Celebrities screen;
+   3, the second editor, for the person who approves EXACT tags — never the
+   one who tagged them. The sign-in cannot tell people apart, so give each
+   one only to its person. A new sign-in replaces the file.)
+7. In the admin (`https://afflino.com/admin/looks`): open a look, check the
+   moment and the still's licence panel (pass the frame screen), then the
+   outfit piece by piece — add / rename / reorder pieces, place each marker
+   on the garment, and tag products per piece: paste the amazon.in link or
+   ASIN, name it in your own words (the brand, model and category too:
+   never a celebrity's name or an endorsement word — "inspired", "replica",
+   "<name> style", "as seen" are refused), choose SIMILAR (the default) or
+   EXACT (the evidence and its source are required; a **second** editor,
+   signed in with choice 3, approves it — the tagger cannot; "Needs a second
+   person" in the looks list shows what waits). A look whose place is a
+   `street` or `other` needs the rights reviewer (choice 2) to confirm the
+   place (the look's Moment panel: "Confirm the place") before it can be
+   published. The publish gate lists, in plain words, what is still
+   missing; Publish when every check passes. Instant links (the admin's
+   Instant links) always tag the product into a piece you choose, as
+   SIMILAR unless you tag it EXACT (then its links wait for the second
+   person's approval: run it again after the approval), and give the
+   tracked link for each chosen page (a post on that page carries it with
+   its label; the look's own page shows its web link, never a post's) and
+   the look's afflino.com URL — the only URL a message may carry. A
+   storefront's name, slug and bio name nobody (a storefront that names a
+   celebrity cannot go live).
+8. Counts at any time:
+
+   ```bash
+   bash /opt/afflino/affiliate/deploy/linode/looks.sh status
+   ```
+
+### Takedown (a rights holder's request, a legal notice, a court order)
+
+Act at once; the benchmark is **3 hours** for an order and 36 hours for a
+privacy request (IT Rules; counsel confirms Afflino's own timelines). In the
+admin (Takedowns) or here:
+
+```bash
+bash /opt/afflino/affiliate/deploy/linode/looks.sh takedown
+```
+It asks: a whole celebrity or one look, which one, the reason, the notice's
+reference (no names) and when it arrived. From that moment every public page
+of it answers **410** (the look, its item pages, the hub; the feed, the
+storefronts and the sitemap drop it), its links serve the paused page, its
+comment replies stop (queued ones are cancelled) and the caches are cleared
+(the redirect's routes; the web's pages through `/internal/revalidate`; the
+public API's own answers at once). A whole celebrity also withdraws the
+other looks whose text names that person, and pauses the plain links of
+those looks' products on their pages. The still's afflino.com address
+(`/img/looks/<id>`) answers 410 too. It prints, in order: 1. the in-house
+posts **you delete on Facebook / Instagram yourself** (Afflino cannot);
+2. the addresses to paste into Meta's Sharing Debugger
+(developers.facebook.com/tools/debug, "Scrape Again") so the link previews
+already shared refresh; 3. the stills, by their library reference (remove
+the origin files too if counsel asks). The list, with the time each took to
+act (the 1 h and 3 h marks):
+
+```bash
+bash /opt/afflino/affiliate/deploy/linode/looks.sh takedowns
+```
+Lifting one needs a new review recorded after the takedown (`review`, then;
+only a look that is public and allowed products gets its links back, the
+rest stay paused for a rights review):
+
+```bash
+bash /opt/afflino/affiliate/deploy/linode/looks.sh restore
+```
+
+### Engage: comment replies (off until you turn them on)
+
+A comment with a rule's keyword on a rule's post gets one private reply with
+the look's afflino.com URL (never a tracked link or an Amazon URL), an "Ad"
+label, an automated-message line and "Reply STOP" (the text, exactly: the
+admin's Comment replies screen, or `reply-test` below). Meta's side first
+(`docs/action-tracker.md` "Meta app for comment replies": Business
+Verification, App Review with Advanced Access, Live mode; counsel's privacy
+notice on `/privacy`). Then, as root on the Linode:
+
+1. The app secret, a verify token **you make up** (16 or more letters or
+   digits; you type the same string into Meta's dashboard in the next step;
+   it is never shown) and the system user's token, each at a hidden prompt:
+
+   ```bash
+   bash /opt/afflino/affiliate/deploy/linode/looks.sh keys
+   ```
+2. The webhook: it prints what to set in Meta's App Dashboard and shows no
+   secret — Webhooks: the Page object with the fields `feed`, `messages` and
+   `messaging_policy_enforcement`, the Instagram object with `comments` and
+   `messages` (`messages` carries a STOP sent in reply;
+   `messaging_policy_enforcement` Meta's warnings and blocks), the callback
+   address, and the verify token you made up in step 1 (type it again
+   there); App settings > Basic > Data deletion: the callback address
+   `https://afflino.com/api/v1/integrations/meta/data-deletion` (a signed
+   request from Meta deletes that person's reply events and answers a
+   confirmation code; the opt-out list keeps their hash, so no message ever
+   goes to them again — counsel's question Q14); each Page's messaging response mode:
+   hybrid, so a person answers what the automation does not. Every delivery
+   is checked against the app secret:
+
+   ```bash
+   bash /opt/afflino/affiliate/deploy/linode/looks.sh webhook
+   ```
+3. The update line, so the api and the workers read them:
+
+   ```bash
+   bash <(curl -fsSL https://raw.githubusercontent.com/sudhanshu6454/sud/refs/heads/claude/nifty-pasteur-flrulw/affiliate/deploy/linode/install.sh)
+   ```
+4. Map the pages to their Meta ids and subscribe their webhooks:
+
+   ```bash
+   bash /opt/afflino/affiliate/deploy/linode/looks.sh accounts
+   ```
+5. A test against the stub (asks for a look's id): whether replies may go
+   out for it (only while the look is public and carries products on a live
+   offer), the exact message for that look, handed to a stub sender (nothing
+   is sent to Meta), and the webhook's own checks — the verify handshake, a
+   correctly signed TEST delivery for an account no page is mapped to (200,
+   nothing stored), a wrongly signed one (401) and a signed STOP message
+   (`messaging stop: ok`: the TEST suppression written and removed):
+
+   ```bash
+   bash /opt/afflino/affiliate/deploy/linode/looks.sh reply-test
+   ```
+6. Turn replies on per post in the admin (Comment replies: keywords, the
+   optional public answer — one of three fixed texts, "We sent you a
+   message with the link." and two like it, never a link, a name or a
+   product — on/off; a rule can be turned on only for a look that may send),
+   run in shadow first (every check, nothing sent), then on (refused while
+   `/privacy` is the stub page):
+
+   ```bash
+   bash /opt/afflino/affiliate/deploy/linode/looks.sh replies shadow
+   ```
+   ```bash
+   bash /opt/afflino/affiliate/deploy/linode/looks.sh replies on
+   ```
+   and back off at any time:
+
+   ```bash
+   bash /opt/afflino/affiliate/deploy/linode/looks.sh replies off
+   ```
+7. The latest events (when, which page, which keyword, what happened — no
+   comment text, username or commenter id):
+
+   ```bash
+   bash /opt/afflino/affiliate/deploy/linode/looks.sh events
+   ```
+
+### Search engines
+Celebrity pages (looks, hubs, storefronts, and `/shop` while its feed shows
+a look) carry `noindex` and stay out of the sitemap until both
+`SITE_INDEXING=on` and `CELEBRITY_INDEXING=on` are set in
+`/etc/afflino/afflino.env`. Turning `CELEBRITY_INDEXING` on is counsel's
+call (`docs/counsel-briefing.md` §10).
+
+### What was checked (sandbox, TEST data)
+Stage 1: the CLI in the built api image, the workers' queues, the public API
+and the webhook's verification, the edge's 404 for `/internal/*`, the story
+and its races on a real Postgres 16 (`pnpm looks:pg`). Stage 2 (2026-09-30):
+the web pages and admin screens on a local stack (a scratch Postgres 16 with
+the TEST library, the tsx api and redirect, `next start` on the build):
+the feed, a hub, a look piece by piece, a storefront, a withdrawn look 410
+from the middleware and its item pages, a hub 404 for a celebrity with no
+public look, the revalidation call after a takedown and after its restore
+(`web: attempted, ok, 200`), a wrong revalidation secret 401, the 410 from
+a look's page 5.0 s after its takedown; the looks CLI's `storefronts` (bio
+links), `events`, `reply-test` (verify ok, wrong token 403, signed delivery
+200 with nothing stored, wrong signature 401), `sign-in --role editor` (an
+EXACT tag: its tagger's approval 403, the second editor's 200); the new
+steps of `looks.sh` in the installer's rehearsal (`deploy/linode/README.md`
+"What was checked"); ShellCheck 0.11.0 and 0.9.0. After three independent
+reviews (2026-09-30): the fixes above (names only in a look's own credit
+line, name-free headlines, the product-text rule, chain of title, place
+confirmation, the still at its own address, the public API's rate limit and
+epoch cache, EXACT links after approval, look links on the web page only,
+the data-deletion callback, fixed public answers) re-checked by `pnpm
+looks:pg` and the local stack: a withdrawn look answered 410 on `next
+start` and on the standalone server (the page in the shop's layout, no
+script), 5.5 s after a takedown on a page probed just before; its still
+410; `/r/` the paused page; the restore 409 without a new review, then 200
+and `/r/` 302 with afflino.com's tag; a visitor over the public API's limit
+429 while another visitor and the pages stayed 200. Not run on the Linode,
+and no Meta call was made.
 
 ## 1R. Rehearsal without DNS or certificates
 

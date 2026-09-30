@@ -761,3 +761,138 @@ instead).
     attribution" is allowed with either reference (the API retries against
     both, exact matches only). A test pins the labels against
     `docs/openapi.yaml`'s enum.
+
+## Celebrity looks on the web (2026-09-30, stage 2)
+
+87. **The public read API, not the token.** The celebrity pages read
+    `/v1/public/{PUBLIC_ORG_SLUG}/…` (`lib/public-catalogue.ts`, server-only;
+    `PUBLIC_ORG_SLUG` default `afflino`) with no bearer, `revalidate: 30` and
+    cache tags (`spotted`, `look:<id>`, `celebrity:<slug>`,
+    `storefront:<slug>`, `sitemap`). `WEB_API_TOKEN` is not used for them.
+    An answer (200, 404, 410) is always what the page shows; only an
+    unreachable API (network error, 5xx) brings the TEST demo (`lib/mock-spotted.ts`,
+    "Demo Star …", with the badge) — for the feed and the trending row, and
+    for hubs / storefronts / looks only under the demo's own slugs and ids.
+    The sitemap never lists demo data.
+88. **What the web trusts from the wire** (`lib/spotted.ts`). A product's
+    button is rendered only for `https?://<host>/r/<32 hex>` (anything else,
+    including a merchant URL, becomes the disabled control); "View the
+    original post" only for an https Facebook / Instagram (or example.com
+    TEST) URL; a slug only for `[a-z0-9-]`. The wording ("The same item",
+    the SIMILAR line, the non-endorsement line, the commercial label) is the
+    API's, never recomposed; the page's own labels are `CELEBRITY_WEB` in
+    `lib/site-copy.ts` (drafts pending counsel).
+89. **No marker on a face.** The still keeps every text off the image; the
+    numbered markers go on garments only, and eyewear, headwear and
+    jewellery get none (`NO_MARKER_CATEGORIES`, in the page's mapping and in
+    the admin editor's preview and "Place marker" button). A still is shown
+    in grayscale at its natural size on the look page (never cropped or
+    blown up), cropped from the top to 4:5 on cards.
+90. **Where the non-endorsement line sits.** In the same paragraph as the
+    name (the name linked to the hub), under the headline of the look and
+    the hub, on every feed and trending card; og / twitter descriptions are
+    the line, and the preview image stays Afflino's icon (never the still).
+    Counsel may move or enlarge it (`docs/counsel-briefing.md` §10 Q21, Q26).
+91. **The feed.** `/shop` shows the Spotted feed first (24 per page, the
+    trending row only on the unfiltered first page, filters by celebrity and
+    by in-house page from the API's facets), then the network's looks as
+    "More looks" (hidden when the live catalogue is empty); "Nothing spotted
+    yet." when no celebrity look is public. Trending shows no numbers.
+92. **Withdrawn pages answer 410.** `middleware.ts` asks the public API
+    (HEAD, 2 s) before `/looks/*` and `/c/*` render and, for a withdrawn
+    look or hub, answers 410 itself (no-store, noindex) with the web's own
+    `/withdrawn` page as the body: the shop's layout with the withdrawn
+    notice (`WithdrawnNotice`, the design system's type and CSS), rendered
+    once a minute per process from `WEB_INTERNAL_ORIGIN` (default
+    `http://127.0.0.1:$PORT`) with its scripts taken out, so it is static
+    markup under the withdrawn URL; a plain notice with the same words if
+    that render fails. A rewrite to `/withdrawn` was tried during the
+    reviews of 2026-09-30 and answered 200 (Next gives a rewritten page its
+    own status, on `next start` and the standalone server alike), so the
+    middleware answers directly; checked on both servers (410, the notice,
+    no script). A client-side navigation to a withdrawn look gets this
+    non-RSC answer and falls back to a full page load, which shows it. Per web
+    process it keeps "not withdrawn" for 5 s and "withdrawn" for 30 s, so the
+    status code can lag a takedown by up to 5 s; in that window the page
+    itself (revalidated by the takedown) shows only "This page was
+    withdrawn." with `noindex`. An unreachable API lets the request through
+    to the page (its error state).
+93. **`/internal/revalidate`.** POST `{tags: [...]}` with
+    `x-revalidate-secret`; 503 without a `WEB_REVALIDATE_SECRET` of 16+
+    characters, 401 for a wrong one (HMAC compare), 400 for an unknown tag
+    shape or more than 2000; each tag revalidated once. The edge answers 404
+    for `/internal/*`; the api calls it on the compose network
+    (`WEB_REVALIDATE_URL`).
+94. **`CELEBRITY_INDEXING`** (runtime, exactly `on`) only narrows
+    `SITE_INDEXING`: with it off (the default) every celebrity page and
+    `/shop` while its feed shows a look are `noindex`, and the sitemap
+    leaves them out (it reads the public sitemap only when it is on).
+95. **Storefronts** (`/s/<slug>`, own slim layout: the lockup, "Spotted",
+    the marketing footer). A live storefront shows the page's public looks
+    with the same rules; share uses `navigator.share` or copies the URL; the
+    QR code is drawn on the server as SVG from `https://afflino.com/s/<slug>`
+    (no third-party QR service). A draft storefront is a 404.
+96. **The admin screens** (`components/admin/celebrity/`) use the `/login`
+    bearer (`localStorage`, as the other admin screens) and answer with the
+    TEST demo (`lib/demo/celebrity.ts`, a fixed clock so server and browser
+    render the same) and the badge when signed out or unreachable; an API
+    refusal is shown with its reasons (the publish gate's list, the library
+    check's problems). Client-side checks (`lib/celebrity-admin.ts`) mirror
+    the API's (a note on every review; evidence for editorial / cleared;
+    EXACT evidence 10+ characters and a source; no merchant hostname in a
+    product's name) but the API decides. The rights reviewer's controls
+    are enabled by the token's role; the second editor approves EXACT tags
+    with a sign-in of their own (`looks.sh signin`, choice 3).
+
+## Celebrity looks after three independent reviews (2026-09-30)
+
+97. **The still at its own address.** The page's `<img>` is
+    `/img/looks/<id>?v=<10 hex>` (`app/img/looks/[id]/route.ts`), never the
+    origin file: every request asks `GET /v1/public/<org>/looks/<id>/still`,
+    which re-applies every rule; 410 after a takedown of a look that was
+    public, 404 otherwise, `max-age=30`, nothing kept in the web. The
+    route forwards no client address: the api does not count the web's own
+    calls against a visitor's rate limit, and bounds them with its own
+    epoch-keyed still cache (api ASSUMPTIONS, "After three independent
+    reviews"). `lib/spotted.ts` accepts only that address shape (or an
+    https URL for the TEST demo).
+98. **Headlines never carry the name.** The API composes "Spotted at
+    <event>" / "Spotted in <place>" / "Spotted"; the name is only in the
+    credit line with the non-endorsement line, at body size (15 px on
+    pages, 14 px on cards), under a larger heading (28 / 24 px pages, 22 px
+    cards). The hub's heading is "Spotted looks" (`CELEBRITY_WEB.hubTitle`);
+    its page title (tab, link preview) is the name (counsel Q21, Q26).
+99. **The commercial label only with products.** The API sends
+    `commercial_label` only for a look that is shoppable and has products
+    (the feed, hub and storefront: when a listed look is); the look page
+    and the hub render it only when present.
+100. **A name-only look has no image box.** `StillImage` draws a type-only
+    block (the moment's text, no 4:5 grey box) when the still may not be
+    shown; on the look page there is no media region at all without an
+    image, and the still is at most 60 % of the viewport's height, so the
+    outfit starts on the first screen of a phone (a "The pieces" index of
+    anchors on phones).
+101. **Phone targets and states.** Hotspot hit areas `inset: -10px` under
+    760 px or a coarse pointer; the storefront's missing page is its own
+    `not-found` in the slim layout; the storefront shows its looks first,
+    two per row on phones, with share and the QR code (+ / − and Show /
+    Hide labels) after them; cards on a storefront do not link back to the
+    same storefront; the moment line is clamped to two lines, so the date
+    shows; the hub's duplicate eyebrow link is only on desktop.
+102. **Filters are a form.** `SpottedFilters` is a server GET form (two
+    compact selects and a "Show looks" button), so changing a select never
+    navigates by itself (WCAG 3.2.2) and it works without JavaScript.
+103. **The admin, after the reviews.** One "Celebrity looks" tab with its
+    own sub-navigation (Celebrities, Library, Looks, Takedowns, Instant
+    links, Comment replies, Analytics; `NavItem.also` keeps the tab active
+    on each), so the top bar fits at 1280; the looks list shows "Needs a
+    second person" per look and a filter for it (`pending_exact`); the
+    editor scrolls the still into view when placing a marker (sticky on
+    desktop, "Placing the marker for …" with Cancel, focus back on the
+    piece's button, X / Y % inputs as the keyboard route, context in every
+    control's accessible name); the tag form names what is missing for
+    SIMILAR too; the rights reviewer confirms a street / other place; the
+    takedown result links the posts to delete, the Sharing Debugger per
+    share URL and the affected pages; the library's file input is the
+    system's button; spacing uses the tokens (no inline px styles); the
+    public comment answer is a choice of the three fixed texts.

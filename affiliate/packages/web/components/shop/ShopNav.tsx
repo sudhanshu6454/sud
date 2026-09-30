@@ -7,7 +7,7 @@ import { useSavedCount } from './savedEvents';
 import styles from './ShopNav.module.css';
 
 const TABS = [
-  { href: '/shop', label: 'Shop the looks', match: (p: string) => p === '/shop' || p.startsWith('/looks/') },
+  { href: '/shop', label: 'Spotted', match: (p: string) => p === '/shop' || p.startsWith('/looks/') || p.startsWith('/c/') },
   { href: '/saved', label: 'Saved', match: (p: string) => p === '/saved' },
 ] as const;
 

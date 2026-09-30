@@ -9,6 +9,8 @@ export interface NavItem {
    * 'prefix' (default) — also active on sub-routes (/app/payouts → /app/payouts/disputes).
    */
   match?: 'exact' | 'prefix';
+  /** Other path prefixes this item also stands for (one tab for a group of screens, each with a sub-nav). */
+  also?: ReadonlyArray<string>;
 }
 
 /** Path and #fragment of an href; a ?query (e.g. ?workspace=) never affects matching. */
@@ -42,6 +44,12 @@ export function activeNavIndex(items: ReadonlyArray<NavItem>, pathname: string, 
     if (hit && p.length > bestLength) {
       best = i;
       bestLength = p.length;
+    }
+    for (const extra of item.also ?? []) {
+      if ((path === extra || path.startsWith(`${extra}/`)) && extra.length > bestLength) {
+        best = i;
+        bestLength = extra.length;
+      }
     }
   });
   return best;

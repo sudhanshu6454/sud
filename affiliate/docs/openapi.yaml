@@ -68,6 +68,19 @@ info:
     A wrong role yields `403 FORBIDDEN`; a missing/invalid token yields
     `401 UNAUTHORIZED`.
 
+    Celebrity looks (0007) add `rights_reviewer` (counsel's reviewer: the
+    only role that sets a celebrity's rights status beyond `blocked` and
+    restores a takedown).
+
+    ## Public reads and the Meta webhook (no token)
+
+    `GET /v1/public/{org}/…` (the celebrity looks' public read API: the
+    organisation is its public slug) and `/v1/integrations/meta/webhook`
+    (Meta's verification GET and signed POST deliveries) take no bearer
+    token. Public answers carry `cache-control: public, max-age=30`; they
+    never show more than the celebrity's rights allow at that moment and
+    never a raw merchant URL (links are `/r/{token}` only).
+
     ## Error codes
 
     | code | typical meaning |
@@ -78,6 +91,7 @@ info:
     | `PUBLISHER_NOT_ACTIVE` | publisher onboarding not `active`; monetised link minting disabled |
     | `PROPERTY_NOT_OWNER_OPERATED` | the programme (Amazon.in Associates) only allows the operator's own properties: the placement's property has no live `owner_operated` verification |
     | `NOT_FOUND` | unknown route, or resource not in this org |
+    | `GONE` | 410: the content was withdrawn by a takedown (a celebrity or a look); never used for content that was never public |
     | `VALIDATION_ERROR` | zod/request validation failed (400) or semantic rejection (422) |
     | `UNAUTHORIZED` | missing/invalid/claim-deficient Bearer token |
     | `FORBIDDEN` | role not allowed, or maker-checker violation |
@@ -115,6 +129,18 @@ tags:
     description: Missing-commission / support tickets.
   - name: Contracts
     description: Publisher–programme contract versioning.
+  - name: Public
+    description: The public read API of celebrity looks (no token; the organisation by its slug).
+  - name: Celebrities
+    description: Celebrities and their counsel-owned rights reviews.
+  - name: Editorial
+    description: Celebrity looks, their outfit piece by piece, product tagging, instant links, storefronts.
+  - name: Takedowns
+    description: Withdraw a celebrity or a look at once (410 everywhere, links paused), and restore after a new review.
+  - name: Replies
+    description: Comment replies (keyword → one private reply with the look's afflino.com URL) and the Meta webhook.
+  - name: Analytics
+    description: Click and reply counts from the daily rollups.
 components:
   securitySchemes:
     bearerAuth:
@@ -175,6 +201,7 @@ components:
         - PUBLISHER_NOT_ACTIVE
         - PROPERTY_NOT_OWNER_OPERATED
         - NOT_FOUND
+        - GONE
         - VALIDATION_ERROR
         - UNAUTHORIZED
         - FORBIDDEN
@@ -227,7 +254,7 @@ components:
       format: date-time
     Role:
       type: string
-      enum: [network_admin, editor, publisher_owner, finance_operator, finance_approver]
+      enum: [network_admin, editor, publisher_owner, publisher_analyst, finance_operator, finance_approver, rights_reviewer]
     InternalConversionStatus:
       type: string
       enum: [received, pending, approved, declined]
@@ -237,6 +264,202 @@ components:
       description: |
         `posted` — ledger entries were written; `skipped` — conversion left
         unposted (unattributed click or no approved contract; never guessed).
+    # ---- celebrity looks (0007) ----
+    RightsStatus:
+      type: string
+      enum: [unreviewed, editorial, cleared, blocked]
+      description: |
+        Counsel-owned (default unreviewed). The capability matrix
+        (@paparazzi/shared CELEBRITY_RIGHTS_MATRIX, defaults pending counsel)
+        caps each: unreviewed / blocked allow nothing; editorial the name
+        only, no products; cleared name, image and products at most. The
+        review's own max_display / shoppable narrow it further.
+    DisplayLevel:
+      type: string
+      enum: [none, name_only, name_and_image]
+    GarmentCategory:
+      type: string
+      enum: [top, shirt, t_shirt, kurta, dress, saree, lehenga, outerwear, suit, trousers, jeans, skirt, shorts, co_ord_set, ethnic_set, footwear, bag, eyewear, watch, jewellery, belt, headwear, scarf, other]
+    Celebrity:
+      type: object
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        name: { type: string }
+        slug: { type: string }
+        aliases: { type: array, items: { type: string } }
+        is_minor: { type: boolean }
+        never_list: { type: boolean }
+        rights_status: { $ref: '#/components/schemas/RightsStatus' }
+        max_display: { $ref: '#/components/schemas/DisplayLevel' }
+        shoppable: { type: boolean }
+        rights_note: { type: [string, 'null'] }
+        rights_evidence_ref: { type: [string, 'null'] }
+        rights_reviewed_by: { type: [string, 'null'], format: uuid }
+        rights_reviewed_at: { type: [string, 'null'], format: date-time }
+        takedown_id: { type: [string, 'null'], format: uuid }
+        effective:
+          type: object
+          properties:
+            display: { $ref: '#/components/schemas/DisplayLevel' }
+            shoppable: { type: boolean }
+    PublicItem:
+      type: object
+      description: One tagged product of a piece. `link.url` is the tracked /r/{token} URL (the look page's own placement); never a merchant URL.
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        match: { type: string, enum: [exact, similar] }
+        label: { type: string, example: Similar styles }
+        detail: { type: string, example: 'Similar style. Demo Star One did not wear or endorse this product.' }
+        product:
+          type: object
+          properties: { brand: { type: string }, model: { type: string }, category: { type: string } }
+        variant:
+          type: object
+          properties: { size_text: { type: [string, 'null'] }, colour: { type: [string, 'null'] } }
+        offer:
+          oneOf:
+            - type: 'null'
+            - type: object
+              properties:
+                id: { $ref: '#/components/schemas/Uuid' }
+                connector: { type: string }
+                merchant: { type: object, properties: { name: { type: string } } }
+                price_minor: { oneOf: [{ $ref: '#/components/schemas/MinorUnits' }, { type: 'null' }] }
+                price_as_of: { type: [string, 'null'], format: date-time }
+                currency: { $ref: '#/components/schemas/Currency' }
+                stock_status: { type: string }
+                disclosure: { type: [string, 'null'] }
+        link:
+          oneOf:
+            - type: 'null'
+            - type: object
+              properties: { url: { type: string, format: uri } }
+    PublicPiece:
+      type: object
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        label: { type: string, example: The shirt }
+        category: { $ref: '#/components/schemas/GarmentCategory' }
+        position: { type: integer }
+        hotspot:
+          description: Only while the still may be shown.
+          oneOf:
+            - type: 'null'
+            - type: object
+              properties: { x: { type: number }, y: { type: number } }
+        products_shown: { type: boolean }
+        exact: { oneOf: [{ type: 'null' }, { $ref: '#/components/schemas/PublicItem' }] }
+        similar_heading: { type: string }
+        similar: { type: array, items: { $ref: '#/components/schemas/PublicItem' } }
+    PublicLook:
+      type: object
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        headline: { type: string, example: Spotted at Demo Film Premiere, description: 'Composed from the event and place; never the celebrity''s name (that is in celebrity and non_endorsement).' }
+        commercial_label: { type: [string, 'null'], description: 'Null when the page carries no products (a name-only look).' }
+        celebrity: { type: object, properties: { name: { type: string }, slug: { type: string } } }
+        non_endorsement: { type: string }
+        moment:
+          type: object
+          properties: { event: { type: [string, 'null'] }, place: { type: [string, 'null'] }, date: { type: [string, 'null'], format: date } }
+        image:
+          oneOf:
+            - type: 'null'
+            - type: object
+              properties: { url: { type: string, format: uri }, credit: { type: [string, 'null'] } }
+        source:
+          type: object
+          properties:
+            platform: { type: [string, 'null'] }
+            post_permalink: { type: [string, 'null'] }
+            storefront: { oneOf: [{ type: 'null' }, { type: object, properties: { slug: { type: string }, name: { type: string } } }] }
+        display:
+          type: object
+          properties: { name: { type: boolean }, image: { type: boolean }, shoppable: { type: boolean } }
+        disclosure:
+          type: object
+          properties: { sponsored: { type: boolean }, affiliate_links: { type: boolean }, amazon_associate: { type: boolean } }
+        pieces: { type: array, items: { $ref: '#/components/schemas/PublicPiece' } }
+        published_at: { type: [string, 'null'], format: date-time }
+    SpottedCard:
+      type: object
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        headline: { type: string }
+        celebrity: { type: object, properties: { name: { type: string }, slug: { type: string } } }
+        non_endorsement: { type: string }
+        moment: { type: object }
+        image: { oneOf: [{ type: 'null' }, { type: object, properties: { url: { type: string } } }] }
+        source: { type: object }
+        pieces: { type: integer }
+        shoppable: { type: boolean }
+        published_at: { type: [string, 'null'], format: date-time }
+    SpottedPage:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/SpottedCard' } }
+        page: { type: integer }
+        page_size: { type: integer }
+        total: { type: integer }
+        commercial_label: { type: [string, 'null'], description: 'The label at the top of the page (a draft pending counsel); null when no listed look carries products.' }
+        facets:
+          description: |
+            Only on /spotted: the celebrities and live storefronts that have
+            public looks now (the same read gate), each with its look count,
+            for the feed's filter row.
+          type: object
+          properties:
+            celebrities:
+              type: array
+              items: { type: object, properties: { slug: { type: string }, name: { type: string }, looks: { type: integer } } }
+            storefronts:
+              type: array
+              items: { type: object, properties: { slug: { type: string }, name: { type: string }, looks: { type: integer } } }
+    GateReport:
+      type: object
+      description: Every check of the publish gate, failing or not.
+      properties:
+        ok: { type: boolean }
+        checks:
+          type: array
+          items:
+            type: object
+            properties: { code: { type: string }, ok: { type: boolean }, detail: { type: string } }
+    Takedown:
+      type: object
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        scope: { type: string, enum: [celebrity, look] }
+        celebrity_id: { type: [string, 'null'], format: uuid }
+        look_id: { type: [string, 'null'], format: uuid }
+        reason_code: { type: string, enum: [rights_holder_request, legal_notice, court_order, licence_expired, privacy_request, counsel_instruction, operator_error, other] }
+        reason_note: { type: [string, 'null'] }
+        requester_ref: { type: [string, 'null'] }
+        requested_at: { type: string, format: date-time }
+        actioned_at: { type: string, format: date-time }
+        completed_at: { type: [string, 'null'], format: date-time }
+        actioned_by: { $ref: '#/components/schemas/Uuid' }
+        status: { type: string, enum: [active, restored] }
+        restored_at: { type: [string, 'null'], format: date-time }
+        restored_by: { type: [string, 'null'], format: uuid }
+        restore_note: { type: [string, 'null'] }
+        looks_withdrawn: { type: integer }
+        links_paused: { type: integer }
+        rules_disabled: { type: integer }
+        minutes_to_action: { type: [integer, 'null'] }
+        sla: { type: [string, 'null'], enum: [ok, warn, breach, null] }
+    ReplyRule:
+      type: object
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        look_id: { $ref: '#/components/schemas/Uuid' }
+        property_id: { $ref: '#/components/schemas/Uuid' }
+        platform_post_id: { type: string }
+        keywords: { type: array, items: { type: string } }
+        public_reply: { type: [string, 'null'] }
+        enabled: { type: boolean }
+        disabled_by_takedown_id: { type: [string, 'null'], format: uuid }
+        created_at: { type: [string, 'null'], format: date-time }
     # ---- domain models ----
     Look:
       type: object
@@ -607,6 +830,29 @@ components:
       description: '422 — semantic rejection (VALIDATION_ERROR): stale offer (OFFER_STALE), no one above payout threshold, missing click reference on suspense retry, unresolved provider verification on dispute resolve, bad CSV rows.'
       headers:
         X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Gone:
+      description: '410 — withdrawn by a takedown (GONE).'
+      headers:
+        X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Unavailable:
+      description: '503 — the feature is not configured (UPSTREAM_UNAVAILABLE): a secret is unset.'
+      headers:
+        X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    TooManyRequests:
+      description: '429 — the per-client limit of an unauthenticated route (RATE_LIMITED); Retry-After says when to try again.'
+      headers:
+        X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+        Retry-After:
+          schema: { type: integer }
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorEnvelope' }
@@ -2412,3 +2658,1846 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '500': { $ref: '#/components/responses/InternalError' }
+
+  /v1/public/{org}/spotted:
+    get:
+      tags: [Public]
+      summary: 'The Spotted feed: the latest public celebrity looks'
+      description: |
+        No token. Published looks whose celebrity's rights allow the name at
+        this moment (the read gate: not under takedown, not a minor or
+        never-listed, a status and a review that allow at least the name).
+        Filters: a celebrity's slug, a storefront's slug (live only). The image
+        of each card only while its licence, territory, expiry and frame screen
+        allow it. `cache-control: public, max-age=30`.
+      security: []
+      parameters:
+        - name: org
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$', maxLength: 63, example: afflino }
+        - name: page
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: page_size
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 48, default: 24 }
+        - name: celebrity
+          in: query
+          required: false
+          schema: { type: string }
+        - name: storefront
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { $ref: '#/components/schemas/SpottedPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /v1/public/{org}/trending:
+    get:
+      tags: [Public]
+      summary: 'The trending row: public looks ranked by clicks'
+      description: |
+        No token. Public looks (the read gate of /spotted) ranked by the human
+        clicks on their products' tracked links over the last `days` IST days
+        (the workers' hourly rollup, click_daily); ties by publication time.
+        The counts are not returned. Empty until the rollup has clicks.
+        `cache-control: public, max-age=30`.
+      security: []
+      parameters:
+        - name: org
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$', maxLength: 63, example: afflino }
+        - name: days
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 30, default: 7 }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 12, default: 8 }
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          items: { type: array, items: { $ref: '#/components/schemas/SpottedCard' } }
+                          days: { type: integer }
+                          from: { type: string, format: date }
+                          to: { type: string, format: date }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /v1/public/{org}/celebrities/{slug}:
+    get:
+      tags: [Public]
+      summary: 'A celebrity''s hub'
+      description: |
+        No token. Only while the celebrity's rights allow the name and at least
+        one of their looks is public (404 otherwise); `410 GONE` under a
+        takedown. Carries the commercial label and the non-endorsement line.
+      security: []
+      parameters:
+        - name: org
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$', maxLength: 63, example: afflino }
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string, maxLength: 80 }
+        - name: page
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: page_size
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 48, default: 24 }
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { type: object }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '410': { $ref: '#/components/responses/Gone' }
+  /v1/public/{org}/looks/{id}:
+    get:
+      tags: [Public]
+      summary: 'One look, piece by piece'
+      description: |
+        No token. The outfit piece by piece: the EXACT product first (approved
+        by a second person, with evidence on record; "The same item"), then the
+        SIMILAR ones ("Similar style. {name} did not wear or endorse this
+        product."). Products and their tracked links only while a shoppable page
+        is allowed; the still and the hotspots only while the image may be shown;
+        a pending EXACT tag never; an item whose product text names anyone or
+        uses endorsement wording never. The headline never names the celebrity
+        ("Spotted at <event>"): the name is in `celebrity` and in
+        `non_endorsement`, which the page shows as one line at body size.
+        `image.url` is the still's own afflino.com path (`/img/looks/<id>?v=…`,
+        served by the web from `/looks/{id}/still`); the origin URL never
+        appears. `commercial_label` is null when the page carries no products.
+        Prices only from the product API inside the programme's age limit.
+        `410 GONE` for a withdrawn look that was public once or one whose
+        celebrity is under takedown; `404` for anything never public (under a
+        takedown too) and for a look whose own text names anyone. Answers are
+        kept up to 30 s per URL under the invalidation epoch (every takedown,
+        review, publish and edit clears them). Rate-limited per client (429).
+      security: []
+      parameters:
+        - name: org
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$', maxLength: 63, example: afflino }
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { $ref: '#/components/schemas/PublicLook' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '410': { $ref: '#/components/responses/Gone' }
+  /v1/public/{org}/looks/{id}/still:
+    get:
+      tags: [Public]
+      summary: 'The still of a look (its own address)'
+      description: |
+        No token. The image bytes, only while the look page may show the image
+        (the celebrity's rights, the look's mode, the licence, the territory,
+        the expiry, the chain of title, the frame screen, the exclusion flags —
+        every rule, on every request); fetched by the api from the origin file,
+        whose address never reaches the public. `max-age=30`. `410` after a
+        takedown of a look that was public; `404` otherwise; `502` when the
+        origin cannot be read. The web serves it as `/img/looks/<id>`.
+      security: []
+      parameters:
+        - name: org
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$', maxLength: 63, example: afflino }
+        - $ref: '#/components/parameters/PathId'
+        - name: v
+          in: query
+          required: false
+          schema: { type: string, pattern: '^[0-9a-f]{1,16}$' }
+      responses:
+        '200':
+          description: The image.
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+            image/png:
+              schema: { type: string, format: binary }
+            image/webp:
+              schema: { type: string, format: binary }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '410': { $ref: '#/components/responses/Gone' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '502':
+          description: '502 — the origin file could not be read (UPSTREAM_UNAVAILABLE).'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+  /v1/public/{org}/storefronts/{slug}:
+    get:
+      tags: [Public]
+      summary: 'An in-house page''s storefront (link in bio)'
+      description: |
+        No token. A live storefront of an approved, owner-operated in-house page,
+        with that page's public looks (the same read gate as the feed).
+      security: []
+      parameters:
+        - name: org
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$', maxLength: 63, example: afflino }
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string, maxLength: 80 }
+        - name: page
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: page_size
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 48, default: 24 }
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { type: object }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /v1/public/{org}/sitemap:
+    get:
+      tags: [Public]
+      summary: 'What a sitemap may list'
+      description: |
+        No token. Public looks (id, updated_at), the celebrity hubs that have
+        one, live storefronts. A taken-down or downgraded celebrity is absent at
+        once. Whether celebrity pages are indexed is the web's decision.
+      security: []
+      parameters:
+        - name: org
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$', maxLength: 63, example: afflino }
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { type: object }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /v1/celebrities:
+    get:
+      tags: [Celebrities]
+      summary: 'List celebrities'
+      description: |
+        Roles: network_admin, editor, rights_reviewer. Includes the capability matrix.
+      parameters:
+        - name: rights_status
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/RightsStatus' }
+        - name: q
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { type: object }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Celebrities]
+      summary: 'Create a celebrity (always unreviewed)'
+      description: |
+        Roles: network_admin, editor. 409 when the name exists.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 120 }
+                aliases: { type: array, maxItems: 20, items: { type: string } }
+                is_minor: { type: boolean }
+                never_list: { type: boolean }
+      responses:
+        '201':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { $ref: '#/components/schemas/Celebrity' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /v1/celebrities/{id}:
+    get:
+      tags: [Celebrities]
+      summary: 'One celebrity with every rights review'
+      description: |
+        Roles: network_admin, editor, rights_reviewer.
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { type: object }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Celebrities]
+      summary: 'Edit a celebrity'
+      description: |
+        Roles: network_admin, editor, rights_reviewer. A rename or a minor /
+        never-list flag sends an editorial / cleared celebrity back to
+        unreviewed (a review row records it). A minor flag is never removed
+        through the API; only the rights reviewer takes a celebrity off the
+        never-list.
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, minLength: 1, maxLength: 120 }
+                aliases: { type: array, maxItems: 20, items: { type: string } }
+                is_minor: { type: boolean }
+                never_list: { type: boolean }
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { $ref: '#/components/schemas/Celebrity' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /v1/celebrities/{id}/rights-review:
+    post:
+      tags: [Celebrities]
+      summary: 'Record a rights decision'
+      description: |
+        The rights reviewer sets any status (editorial and cleared need the
+        evidence reference and a note); network_admin / editor may only set
+        `blocked`. max_display / shoppable default to the narrow end (name only,
+        not shoppable) and never exceed the matrix. Append-only history + audit.
+        Turning the shoppable page off pauses the links of the celebrity's looks at
+        once; turning it back on reactivates them (published looks).
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rights_status]
+              properties:
+                rights_status: { $ref: '#/components/schemas/RightsStatus' }
+                max_display: { $ref: '#/components/schemas/DisplayLevel' }
+                shoppable: { type: boolean }
+                note: { type: [string, 'null'], maxLength: 1000 }
+                evidence_ref: { type: [string, 'null'], maxLength: 300 }
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { type: object }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /v1/editorial/looks:
+    get:
+      tags: [Editorial]
+      summary: 'List celebrity looks'
+      description: |
+        Roles: network_admin, editor, rights_reviewer.
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema: { type: string }
+        - name: celebrity_id
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: page
+          in: query
+          required: false
+          schema: { type: integer }
+        - name: page_size
+          in: query
+          required: false
+          schema: { type: integer, maximum: 100 }
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { type: object }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Editorial]
+      summary: 'Create a draft look'
+      description: |
+        Roles: network_admin, editor. Wording and sensitive-place checks (400).
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [celebrity_id]
+              properties:
+                celebrity_id: { $ref: '#/components/schemas/Uuid' }
+                title: { type: string, maxLength: 200, description: 'internal; the public headline is composed from the fields' }
+                event_name: { type: [string, 'null'], maxLength: 120 }
+                place: { type: [string, 'null'], maxLength: 120, description: 'coarse (an event or a public venue), never a residence' }
+                place_kind: { type: [string, 'null'], enum: [event, venue, airport, street, studio, other, null] }
+                moment_date: { type: [string, 'null'], format: date }
+                property_id: { type: [string, 'null'], format: uuid, description: 'the in-house Facebook / Instagram page that published the moment' }
+                post_permalink: { type: [string, 'null'], format: uri }
+                platform_post_id: { type: [string, 'null'], maxLength: 100 }
+                still_asset_id: { type: [string, 'null'], format: uuid }
+                source_video_asset_id: { type: [string, 'null'], format: uuid }
+                celebrity_display: { type: string, enum: [name_only, name_and_image] }
+                sponsored: { type: boolean }
+      responses:
+        '201':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { type: object }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /v1/editorial/looks/{id}:
+    get:
+      tags: [Editorial]
+      summary: 'The editors'' view of a look, with the publish gate report'
+      description: |
+        Roles: network_admin, editor, rights_reviewer. Every field, pending EXACT tags with their evidence, the links, `gate`, `look_url`.
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { type: object }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Editorial]
+      summary: 'Edit a look''s moment'
+      description: |
+        Roles: network_admin, editor. Not while published (409); 410 after a takedown.
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                celebrity_id: { $ref: '#/components/schemas/Uuid' }
+                title: { type: string, maxLength: 200, description: 'internal; the public headline is composed from the fields' }
+                event_name: { type: [string, 'null'], maxLength: 120 }
+                place: { type: [string, 'null'], maxLength: 120, description: 'coarse (an event or a public venue), never a residence' }
+                place_kind: { type: [string, 'null'], enum: [event, venue, airport, street, studio, other, null] }
+                moment_date: { type: [string, 'null'], format: date }
+                property_id: { type: [string, 'null'], format: uuid, description: 'the in-house Facebook / Instagram page that published the moment' }
+                post_permalink: { type: [string, 'null'], format: uri }
+                platform_post_id: { type: [string, 'null'], maxLength: 100 }
+                still_asset_id: { type: [string, 'null'], format: uuid }
+                source_video_asset_id: { type: [string, 'null'], format: uuid }
+                celebrity_display: { type: string, enum: [name_only, name_and_image] }
+                sponsored: { type: boolean }
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { type: object }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '410': { $ref: '#/components/responses/Gone' }
+  /v1/editorial/looks/{id}/transition:
+    post:
+      tags: [Editorial]
+      summary: 'Publish or unpublish'
+      description: |
+        Roles: network_admin, editor. `published` runs the publish gate (409
+        with `gate`, the whole report, when any check fails): the celebrity's
+        rights allow the look's display mode; a shown still has a licence
+        allowing commercial reuse in India that has not expired and a passed
+        frame screen; the moment has a past date and an approved owner-operated
+        Facebook / Instagram page; every piece has an approved product; every
+        EXACT tag is reviewed; no takedown; the link rules (Amazon) hold. Then
+        the look's own links are minted. Unpublishing pauses them at once.
+        `withdrawn` is reached only by a takedown (410).
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [to]
+              properties:
+                to: { type: string, enum: [draft, in_review, ready, published, paused] }
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { type: object }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '410': { $ref: '#/components/responses/Gone' }
+  /v1/editorial/looks/{id}/confirm-place:
+    post:
+      tags: [Editorial]
+      summary: 'The rights reviewer confirms a street or other place'
+      description: |
+        Role: rights_reviewer only. A look whose place kind is `street` or
+        `other` is published only after this confirmation (the gate's
+        `place_kind` check); refused when the place reads as a sensitive place.
+        Any later change to the event, the place or its kind clears it.
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [note]
+              properties:
+                note: { type: string, minLength: 3, maxLength: 300, description: 'What the place is.' }
+      responses:
+        '200':
+          description: OK (the editors' view of the look).
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { type: object }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '410': { $ref: '#/components/responses/Gone' }
+  /v1/editorial/looks/{id}/links:
+    post:
+      tags: [Editorial]
+      summary: '(Re)mint a published look''s own links'
+      description: |
+        Roles: network_admin, editor. Reactivates links paused by unpublishing or a rights review, mints the missing ones on afflino.com's own (web) placement and its tracking ID (the look page is on afflino.com; the Facebook / Instagram pages' links are instant links, printed in their posts).
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { type: object }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /v1/editorial/looks/{id}/pieces:
+    post:
+      tags: [Editorial]
+      summary: 'Add an outfit piece'
+      description: |
+        Roles: network_admin, editor. A label in the owner's words, a garment category, an order, an optional hotspot (x, y in 0..1). Not on a published look (409).
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [label, garment_category]
+              properties:
+                label: { type: string, minLength: 1, maxLength: 60 }
+                garment_category: { $ref: '#/components/schemas/GarmentCategory' }
+                position: { type: integer, minimum: 0, maximum: 1000 }
+                hotspot: { oneOf: [{ type: 'null' }, { type: object, required: [x, y], properties: { x: { type: number, minimum: 0, maximum: 1 }, y: { type: number, minimum: 0, maximum: 1 } } }] }
+      responses:
+        '201':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { type: object }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '410': { $ref: '#/components/responses/Gone' }
+  /v1/editorial/pieces/{id}:
+    post:
+      tags: [Editorial]
+      summary: 'Edit a piece'
+      description: |
+        Roles: network_admin, editor. On a published look only the order and the hotspot change (409 for label / category).
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                label: { type: string, maxLength: 60 }
+                garment_category: { $ref: '#/components/schemas/GarmentCategory' }
+                position: { type: integer }
+                hotspot: { type: [object, 'null'] }
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { type: object }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '410': { $ref: '#/components/responses/Gone' }
+  /v1/editorial/pieces/{id}/remove:
+    post:
+      tags: [Editorial]
+      summary: 'Remove a piece (and its products)'
+      description: |
+        Roles: network_admin, editor. Not on a published look. Its links pause.
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { type: object }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '410': { $ref: '#/components/responses/Gone' }
+  /v1/editorial/pieces/{id}/items:
+    post:
+      tags: [Editorial]
+      summary: 'Tag a product into a piece'
+      description: |
+        Roles: network_admin, editor. SIMILAR (the default): several per piece,
+        ordered; the product's own text may not name the celebrity or use an
+        endorsement phrase (422). EXACT: at most one per piece (409), only with
+        evidence (what it shows, its source; 422 otherwise), `pending` until a
+        different person approves it. A product once per piece (409).
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                variant_id: { $ref: '#/components/schemas/Uuid' }
+                offer_id: { $ref: '#/components/schemas/Uuid' }
+                match_type: { type: string, enum: [exact, similar], default: similar }
+                evidence: { type: [string, 'null'], maxLength: 2000 }
+                evidence_source: { type: [string, 'null'], maxLength: 500 }
+                evidence_captured_at: { type: [string, 'null'], format: date-time }
+                position: { type: integer }
+      responses:
+        '201':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { type: object }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '410': { $ref: '#/components/responses/Gone' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /v1/editorial/look-items/{id}/review:
+    post:
+      tags: [Editorial]
+      summary: 'The second person''s decision on an EXACT tag'
+      description: |
+        Roles: network_admin, editor. approve (the tagger cannot: 403), downgrade (to SIMILAR, text checks apply), reject (removed). Only a pending EXACT (409).
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision: { type: string, enum: [approve, downgrade, reject] }
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { type: object }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /v1/editorial/look-items/{id}/remove:
+    post:
+      tags: [Editorial]
+      summary: 'Remove a tagged product'
+      description: |
+        Roles: network_admin, editor. Its links pause at once (the redirect serves the paused page).
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { type: object }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /v1/editorial/assets/{id}:
+    post:
+      tags: [Editorial]
+      summary: 'An asset''s licence metadata and frame screen'
+      description: |
+        Roles: network_admin, editor, rights_reviewer. Licence (commercial
+        reuse, territory, expiry, source, copyright owner, author, acquisition,
+        assignment reference), exclusion flags (live performance, minor in
+        frame, bystanders, sensitive location) and the editor's frame screen
+        (passed / rejected: no voyeuristic or body-zoom framing). Anything that
+        widens what may be shown (commercial reuse to yes, a territory that
+        newly covers India, a later or no expiry, a live performance cleared,
+        the licence text or the chain of title recorded or changed) is the
+        rights reviewer's alone (403 otherwise; `widened` lists it, with its
+        own audit row); minor in frame, bystanders and sensitive location are
+        never cleared (403). A new `public_url` sends the frame screen back to
+        `unscreened` unless the same request records it.
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                public_url: { type: [string, 'null'], format: uri }
+                license: { type: string }
+                commercial_reuse: { type: string, enum: [yes, no, unknown] }
+                territory: { type: [string, 'null'], example: IN }
+                expires_at: { type: [string, 'null'] }
+                screen_status: { type: string, enum: [unscreened, passed, rejected] }
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { type: object }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /v1/editorial/instant-links:
+    post:
+      tags: [Editorial]
+      summary: 'Instant links: an amazon.in URL or ASIN → offer + tagged into a piece + tracked links'
+      description: |
+        Roles: network_admin, editor. `piece_id` is required (422 without):
+        every link printed in a look's post is scoped to its tagged item, so a
+        takedown pauses it. The product text (the operator's own words) is
+        checked before anything is written: never a celebrity's name (any in
+        the organisation), never endorsement wording, for SIMILAR never the
+        piece's own celebrity (422, no product text changed). The offer
+        through the Amazon offers path (canonical /dp/<ASIN>, no price until the
+        product API gives one); the product tagged SIMILAR (default) or EXACT
+        (evidence required; pending until a second person approves); the same
+        product in the same piece again reuses its item. Tracked links for the
+        chosen in-house pages (owner-operated Facebook / Instagram / web
+        declared to the account, each with its own tracking ID; refusals per
+        page) — withheld while the celebrity's rights do not allow a shoppable
+        page, and while an EXACT tag waits for its second person
+        (`links_withheld` says why; call again after the approval). `look_url`
+        is the ONLY URL a message may carry.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [asin_or_url, brand, model, category, piece_id]
+              properties:
+                asin_or_url: { type: string }
+                brand: { type: string }
+                model: { type: string }
+                category: { type: string }
+                size: { type: [string, 'null'] }
+                colour: { type: [string, 'null'] }
+                property_ids: { type: array, maxItems: 50, items: { $ref: '#/components/schemas/Uuid' } }
+                piece_id: { type: [string, 'null'], format: uuid }
+                match_type: { type: string, enum: [exact, similar] }
+                evidence: { type: [string, 'null'] }
+                evidence_source: { type: [string, 'null'] }
+                ttl_days: { type: integer, minimum: 1, maximum: 365 }
+      responses:
+        '201':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { type: object }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '410': { $ref: '#/components/responses/Gone' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /v1/editorial/properties:
+    get:
+      tags: [Editorial]
+      summary: 'The in-house pages (Facebook, Instagram, web) for instant links and storefronts'
+      description: |
+        Roles: network_admin, editor, rights_reviewer. Each property with its
+        status, whether it is owner-operated (the Amazon rule), its Amazon
+        tracking ID (null = only the store ID: no Amazon links there) and its
+        storefront.
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { type: object }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /v1/editorial/library/import:
+    post:
+      tags: [Editorial]
+      summary: 'Check (dry run) or import a paparazzi library file'
+      description: |
+        Roles: network_admin, editor. `csv_text` is the library file (the
+        columns of src/looks/library-import.ts; the TEST example
+        db/fixtures/library.example.csv), at most 900000 characters (bigger
+        files go through the owner's server line, looks.sh import).
+        `dry_run` (default true) parses and runs the database pre-pass and
+        writes nothing: `{ok, problems, rows, looks, looks_new,
+        looks_existing, pieces, licence_from_statement, ownership_statement,
+        celebrities}`. `dry_run: false` imports
+        (draft looks, new celebrities unreviewed, under the import's lock; a
+        second run changes nothing) or answers 422 with `problems` and writes
+        nothing. Under NODE_ENV=production TEST rows are refused. A row
+        without licence columns takes the owner's ownership statement in
+        force (recorded on the server only: looks.sh owned), else is refused;
+        an asset whose licence a person edited is never widened by a file
+        (the summary's `licence_kept`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [csv_text]
+              properties:
+                csv_text: { type: string, minLength: 1, maxLength: 900000 }
+                dry_run: { type: boolean, default: true }
+      responses:
+        '200':
+          description: The check, or the import's summary.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { type: object }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /v1/editorial/storefronts:
+    get:
+      tags: [Editorial]
+      summary: 'List storefronts'
+      description: |
+        Roles: network_admin, editor, rights_reviewer.
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { type: object }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Editorial]
+      summary: 'Create a storefront for an in-house page'
+      description: |
+        Roles: network_admin, editor. One per Facebook / Instagram property.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                property_id: { $ref: '#/components/schemas/Uuid' }
+                slug: { type: string, maxLength: 80 }
+                display_name: { type: string, maxLength: 80 }
+                bio: { type: [string, 'null'], maxLength: 300 }
+                status: { type: string, enum: [draft, live, hidden] }
+      responses:
+        '201':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { type: object }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /v1/editorial/storefronts/{id}:
+    post:
+      tags: [Editorial]
+      summary: 'Edit a storefront'
+      description: |
+        Roles: network_admin, editor.
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                property_id: { $ref: '#/components/schemas/Uuid' }
+                slug: { type: string, maxLength: 80 }
+                display_name: { type: string, maxLength: 80 }
+                bio: { type: [string, 'null'], maxLength: 300 }
+                status: { type: string, enum: [draft, live, hidden] }
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { type: object }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /v1/takedowns:
+    get:
+      tags: [Takedowns]
+      summary: 'List takedowns'
+      description: |
+        Roles: network_admin, editor, rights_reviewer. Each with minutes_to_action and its SLA mark (warn > 60 min, breach > 180 min).
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema: { type: string, enum: [active, restored] }
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { type: object }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Takedowns]
+      summary: 'Take down a celebrity (every look) or one look'
+      description: |
+        Roles: network_admin, editor, rights_reviewer. One transaction: every
+        affected look withdrawn (410 on every public endpoint at once), their
+        links paused (the redirect serves the paused page), comment-reply rules
+        off and queued replies cancelled, a snapshot for the restore, audit rows
+        and an outbox event; after commit the route cache is deleted (twice) and
+        the web revalidated. Answers the counts, the SLA timestamps and the
+        in-house posts the owner deletes on Meta. A second pull of an active
+        takedown answers it again (200).
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [scope, reason_code]
+              properties:
+                scope: { type: string, enum: [celebrity, look] }
+                celebrity_id: { $ref: '#/components/schemas/Uuid' }
+                look_id: { $ref: '#/components/schemas/Uuid' }
+                reason_code: { type: string, enum: [rights_holder_request, legal_notice, court_order, licence_expired, privacy_request, counsel_instruction, operator_error, other] }
+                reason_note: { type: [string, 'null'], maxLength: 500 }
+                requester_ref: { type: [string, 'null'], maxLength: 200, description: 'an opaque reference to the notice; no personal data' }
+                requested_at: { type: [string, 'null'], format: date-time, description: 'when the notice was received' }
+      responses:
+        '201':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { type: object }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /v1/takedowns/{id}:
+    get:
+      tags: [Takedowns]
+      summary: 'One takedown with its looks and the posts to delete'
+      description: |
+        Roles: network_admin, editor, rights_reviewer.
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { $ref: '#/components/schemas/Takedown' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /v1/takedowns/{id}/restore:
+    post:
+      tags: [Takedowns]
+      summary: 'Restore a takedown'
+      description: |
+        rights_reviewer only (403 otherwise), and only after a rights review of
+        the affected celebrity recorded after the takedown (409). Looks return to
+        their snapshot status (a published one only if the publish gate passes,
+        else paused); only the links this takedown paused return; comment-reply
+        rules stay off.
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [note]
+              properties:
+                note: { type: string, minLength: 3, maxLength: 1000 }
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { type: object }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /v1/takedowns/{id}/posts-removed:
+    post:
+      tags: [Takedowns]
+      summary: 'Record that the in-house posts were deleted on Meta'
+      description: |
+        Roles: network_admin, editor, rights_reviewer.
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [look_ids]
+              properties:
+                look_ids: { type: array, minItems: 1, items: { $ref: '#/components/schemas/Uuid' } }
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { type: object }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /v1/replies/rules:
+    get:
+      tags: [Replies]
+      summary: 'List comment-reply rules'
+      description: |
+        Roles: network_admin, editor. Every rule (here and in the answers of
+        POST /v1/replies/rules and /v1/replies/rules/{id}) carries `look_url`
+        (the look's afflino.com page, the only URL a message carries),
+        `dm_preview` (the exact private reply the workers would send,
+        @paparazzi/shared buildReplyText, a draft pending counsel) with
+        `dm_bytes`, or `dm_preview: null` with `dm_refusal` when the site's
+        origin makes it unsendable (e.g. not https).
+      parameters:
+        - name: look_id
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { type: object }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Replies]
+      summary: 'Create a comment-reply rule'
+      description: |
+        Roles: network_admin, editor. One per (in-house page, post); keywords
+        normalised (1–10, never an opt-out word); an optional text-only public
+        answer (no link); disabled unless `enabled: true`, which needs the look
+        to be public (409).
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [look_id, keywords]
+              properties:
+                look_id: { $ref: '#/components/schemas/Uuid' }
+                platform_post_id: { type: [string, 'null'], maxLength: 100 }
+                keywords: { type: array, minItems: 1, maxItems: 10, items: { type: string } }
+                public_reply: { type: [string, 'null'], maxLength: 300 }
+                enabled: { type: boolean }
+      responses:
+        '201':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { $ref: '#/components/schemas/ReplyRule' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '410': { $ref: '#/components/responses/Gone' }
+  /v1/replies/rules/{id}:
+    post:
+      tags: [Replies]
+      summary: 'Edit a rule'
+      description: |
+        Roles: network_admin, editor. A rule a takedown turned off stays off until the takedown is restored (410).
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                keywords: { type: array, items: { type: string } }
+                public_reply: { type: [string, 'null'] }
+                enabled: { type: boolean }
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { $ref: '#/components/schemas/ReplyRule' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '410': { $ref: '#/components/responses/Gone' }
+  /v1/replies/rules/{id}/events:
+    get:
+      tags: [Replies]
+      summary: 'A rule''s reply counts by status'
+      description: |
+        Roles: network_admin, editor. Counts only: no commenter data is stored beyond keyed hashes.
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { type: object }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /v1/replies/events:
+    get:
+      tags: [Replies]
+      summary: 'The latest comment-reply events, without personal data'
+      description: |
+        Roles: network_admin, editor. Newest first: the event's id, rule, look,
+        in-house page, platform, matched keyword, status, attempts, error
+        code, public-reply status and times. Never the comment id, the
+        commenter's hash, the media id or Meta's message id.
+      parameters:
+        - name: rule_id
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/Uuid' }
+        - name: status
+          in: query
+          required: false
+          schema: { type: string, enum: [queued, sending, sent, unknown, skipped_suppressed, skipped_expired, skipped_disabled, skipped_shadow, failed_permanent, failed_transient] }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { type: object }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /v1/replies/accounts:
+    get:
+      tags: [Replies]
+      summary: 'The mapped Meta accounts and their messaging status'
+      description: |
+        Roles: network_admin, editor.
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { type: object }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Replies]
+      summary: 'Map an in-house property to its Meta account id'
+      description: |
+        Roles: network_admin, editor. The workers' accounts sync fills these from Meta.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [property_id, meta_account_id]
+              properties:
+                property_id: { $ref: '#/components/schemas/Uuid' }
+                meta_account_id: { type: string, pattern: '^[0-9]{1,64}$' }
+                linked_page_id: { type: [string, 'null'], pattern: '^[0-9]{1,64}$' }
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { type: object }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /v1/integrations/meta/webhook:
+    get:
+      tags: [Replies]
+      summary: 'Meta''s webhook verification'
+      description: |
+        No token. `hub.mode=subscribe` and `hub.verify_token` equal to META_VERIFY_TOKEN (constant-time) → the `hub.challenge` as text/plain; 403 otherwise; 503 while unset.
+      security: []
+      parameters:
+        - name: hub.mode
+          in: query
+          required: false
+          schema: { type: string }
+        - name: hub.verify_token
+          in: query
+          required: false
+          schema: { type: string }
+        - name: hub.challenge
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            text/plain:
+              schema: { type: string }
+        '503': { $ref: '#/components/responses/Unavailable' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Replies]
+      summary: 'Meta webhook deliveries (comments, messages)'
+      description: |
+        No bearer token: `X-Hub-Signature-256` = sha256 HMAC of the RAW body
+        with META_APP_SECRET (401 when missing or wrong; 503 while META_APP_SECRET
+        or COMMENT_ID_HASH_KEY is unset). Instagram `comments` (both payload
+        shapes) and Facebook `feed` comments (verb add only) on a rule's post
+        with one of its keywords become one reply event each (idempotent on the
+        comment id); the account's own comments are dropped; STOP adds the author
+        to the opt-out list. Only keyed hashes are stored. Answers 200 at once.
+      security: []
+      parameters:
+        - name: X-Hub-Signature-256
+          in: header
+          required: true
+          schema: { type: string, pattern: '^sha256=[0-9a-f]{64}$' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Meta's delivery, read as raw bytes (the signature covers them).
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { type: object }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /v1/integrations/meta/data-deletion:
+    post:
+      tags: [Replies]
+      summary: 'Meta''s data deletion callback'
+      description: |
+        No bearer token (App settings > Basic > Data deletion). The form field
+        `signed_request` = base64url(signature) "." base64url(payload), the
+        signature HMAC-SHA256(META_APP_SECRET, the encoded payload), checked in
+        constant time (401 otherwise; 503 while META_APP_SECRET or
+        COMMENT_ID_HASH_KEY is unset). Every reply event whose commenter hash is
+        that person's (on any mapped in-house account) is deleted; the opt-out
+        list keeps its hash (it stops any message to them; counsel's question).
+        Answers `{ url, confirmation_code }` as Meta requires (no envelope).
+        Rate-limited per client (429).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [signed_request]
+              properties:
+                signed_request: { type: string }
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [url, confirmation_code]
+                properties:
+                  url: { type: string, format: uri }
+                  confirmation_code: { type: string, pattern: '^[0-9a-f]{16}$' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /v1/analytics/clicks:
+    get:
+      tags: [Analytics]
+      summary: 'Human clicks from the daily rollups'
+      description: |
+        Roles: network_admin, editor (the whole organisation's figures: a creator's are GET /v1/publisher/earnings). IST days, at most 366; grouped by day, look, celebrity, piece, property (the in-house page), link or via (the page surface), summed in SQL.
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: group_by
+          in: query
+          required: false
+          schema: { type: string, enum: [day, look, celebrity, piece, property, link, via], default: day }
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { type: object }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /v1/analytics/replies:
+    get:
+      tags: [Analytics]
+      summary: 'Comment-reply counts from the daily rollups'
+      description: |
+        Roles: network_admin, editor. Per day and per rule: received, sent, skipped, failed.
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { type: object }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }

@@ -23,6 +23,12 @@ export const DEFAULT_CLICK_CONTEXT_DAYS = 365;
 export const DEFAULT_CONVERSION_RAW_DAYS = 365;
 /** Sandbox default: published outbox rows (relay completed). */
 export const DEFAULT_OUTBOX_DAYS = 365;
+/**
+ * Placeholder pending counsel: comment-reply events (reply_events: hashes,
+ * the keyword, the reply's status). Short on purpose — Meta's reply window is
+ * 7 days and the daily counts are kept in reply_daily.
+ */
+export const DEFAULT_REPLY_EVENTS_DAYS = 30;
 /** Sandbox default: daily at 03:00 server time (BullMQ cron pattern). */
 export const DEFAULT_RETENTION_CRON = '0 3 * * *';
 
@@ -33,6 +39,8 @@ export interface RetentionConfig {
   conversionRawDays: number;
   /** Days after outbox.published_at before published outbox rows are deleted. */
   outboxDays: number;
+  /** Days after reply_events.received_at before comment-reply events are deleted (default 30). */
+  replyEventsDays?: number;
   /** BullMQ repeat pattern for the scheduled purge. */
   cron: string;
 }
@@ -70,6 +78,11 @@ export function loadRetentionConfig(env: NodeJS.ProcessEnv = process.env): Reten
       env.RETENTION_OUTBOX_DAYS,
       'RETENTION_OUTBOX_DAYS',
       DEFAULT_OUTBOX_DAYS,
+    ),
+    replyEventsDays: parseWindowDays(
+      env.RETENTION_REPLY_EVENTS_DAYS,
+      'RETENTION_REPLY_EVENTS_DAYS',
+      DEFAULT_REPLY_EVENTS_DAYS,
     ),
     cron: env.RETENTION_CRON?.trim() || DEFAULT_RETENTION_CRON,
   };

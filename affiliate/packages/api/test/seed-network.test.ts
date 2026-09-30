@@ -76,12 +76,12 @@ describe('networkFromYaml — rejected files', () => {
 
   it('accepts a Facebook page by its numeric page ID (real accounts warn, still seeded)', () => {
     const { properties, warnings } = networkFromYaml(
-      file(ig({ key: 'fb-596165523816494', name: 'Page (Facebook)', platform: 'facebook', account: '596165523816494', url: 'https://www.facebook.com/596165523816494' })),
+      file(ig({ key: 'fb-100000000000001', name: 'Page (Facebook)', platform: 'facebook', account: '100000000000001', url: 'https://www.facebook.com/100000000000001' })),
     );
     expect(properties).toEqual([
-      { key: 'fb-596165523816494', name: 'Page (Facebook)', platform: 'facebook', account: '596165523816494', url: 'https://www.facebook.com/596165523816494' },
+      { key: 'fb-100000000000001', name: 'Page (Facebook)', platform: 'facebook', account: '100000000000001', url: 'https://www.facebook.com/100000000000001' },
     ]);
-    expect(placementKeyFor('fb-596165523816494', 'facebook')).toBe('network-fb-596165523816494-facebook_post');
+    expect(placementKeyFor('fb-100000000000001', 'facebook')).toBe('network-fb-100000000000001-facebook_post');
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toMatch(/www\.facebook\.com' is not a reserved example name/);
   });

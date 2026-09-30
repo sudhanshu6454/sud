@@ -205,3 +205,56 @@ environment, not code.
 6. The ledger mirror (`src/ledger-mirror.ts`) does not know `conversions.placement_id`: Amazon
    conversions never enter through the provider-events queue (they come from the report import
    in the api). The suspense read model (`src/suspense.ts`) does: `placement_id IS NULL`.
+
+## Comment replies and rollups (0007, 2026-09-30)
+
+- **Queue `comment-replies`**: a repeatable `sweep` (every `COMMENT_REPLIES_SWEEP_MS`, default
+  5 s) expires events past Meta's 7-day window (whatever the mode) and enqueues one `send` job
+  per ready event (job id `reply-<event>-<attempt>`); `send` runs `processReplyEvent`
+  (src/replies/sender.ts). The api has no BullMQ dependency: the webhook writes the row, the
+  sweep turns it into the job.
+- **One message per comment**: the claim is a conditional update (queued / failed_transient →
+  sending); 5 workers on one event on real Postgres → one send. An outcome that is not known
+  (no Graph error body, or Meta's code 1 / 2) is `unknown` and never resent; a worker that dies
+  mid-send leaves `sending`, also never resent (the payout rule's spirit).
+- **Checks before the send**: the account's messaging status (token_invalid / disabled /
+  not_linked wait, unclaimed; `paused_until` after throttling), the hourly ceiling (700 < Meta's
+  750 per account), the window, the opt-out list, the rule enabled, the look still public (the
+  api's read gate in SQL + `effectiveCelebrityRights`) and still carrying products
+  (`lookSendState`: `look_not_public` / `look_not_shoppable`, since the reviews of 2026-09-30 —
+  a name-only look, or one whose review turned products off, sends nothing), the mode (off:
+  nothing; shadow: `skipped_shadow`).
+- **The text** is `buildReplyText` (@paparazzi/shared): the look page's `SITE_URL/looks/<id>`
+  only, an "Ad" label, the automated-message line, "Reply STOP"; `replyTextRefusal` is checked
+  again right before the send — a /r/ link, a merchant host, a second URL, a query string, a
+  non-https or foreign host, or more than 1000 UTF-8 bytes can never go out (tested, including a
+  misconfigured SITE_URL).
+- **Errors** (`classifyMetaError`): 190 → the account `token_invalid`, the event back to queued
+  (attempt not counted); throttling (4, 17, 32, 613, 80001–80014, 10/1893063) →
+  `failed_transient`, backoff 1 / 5 / 25 min, 2 h, 6 h (or Meta's regain time, which also pauses
+  the account), permanent after 8 attempts; the brief's permanent pairs and anything else with an
+  error body → `failed_permanent`.
+- **Graph client** (src/meta/graph.ts): v26.0, `appsecret_proof` on every call, Page tokens from
+  the system user's `/me/accounts` held in memory for an hour (never stored or logged; dropped
+  on a 190). Private reply `POST /{account}/messages` with `recipient.comment_id`; public reply
+  Instagram `/{comment}/replies`, Facebook `/{comment}/comments`. Not called in any test
+  (the stub sender is used); no Meta call has ever been made.
+- **Accounts** (src/meta/sync-accounts.ts, `node dist/meta/sync-accounts-once.js
+  [--subscribe]`): maps Facebook properties by page ID or username and Instagram properties by
+  the linked account's username; messaging `ok` only when the system user's tasks include
+  MESSAGING; `--subscribe` subscribes each Page to `feed,messages,messaging_policy_enforcement`
+  (Instagram fields: App Dashboard only).
+- **Settings**: `COMMENT_REPLIES_SENDING` off (default) | shadow | on; 'on' without both
+  `META_APP_SECRET` and `META_SYSTEM_USER_TOKEN` behaves as off (logged once at boot).
+- **Queue `analytics`**: `runRollups` hourly (`ANALYTICS_ROLLUP_CRON`, default `7 * * * *`;
+  `node dist/analytics/rollup-once.js [--days n]` by hand): click_daily recomputed for the
+  last 2 IST days, reply_daily for the last 8, upserted — idempotent; day bounds in JS (pg-mem
+  has no AT TIME ZONE), `sum(case …)` (pg-mem miscounts `count(*) filter`). Money is never read.
+  Only days wholly inside the retention windows are recomputed (`daysWithinWindow`:
+  `RETENTION_REPLY_EVENTS_DAYS` for reply_daily, `RETENTION_CLICK_CONTEXT_DAYS` for
+  click_daily's `via`), so a day whose events were purged keeps its counts instead of being
+  overwritten with zeros (since the reviews of 2026-09-30; `rollup-once.js --days n` is
+  bounded the same way).
+- **Retention**: a fourth class `reply_events` (whole rows older than
+  `RETENTION_REPLY_EVENTS_DAYS`, default 30, a placeholder pending counsel); `reply_daily` and
+  `reply_suppressions` are kept. The retention tests now expect four audit rows per run.

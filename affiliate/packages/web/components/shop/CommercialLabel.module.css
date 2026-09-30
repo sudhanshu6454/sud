@@ -1,0 +1,26 @@
+/* The commercial label: a 13px line on the surface fill across the page's
+   top, on the 40px marketing gutters (20px on phones), 2px rule under it. */
+
+.label {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-2) 40px;
+  font-size: 13px;
+  line-height: 1.55;
+  background: var(--color-surface);
+  border-bottom: 2px solid var(--color-divider);
+}
+
+.text {
+  color: var(--color-neutral-800);
+  font-weight: 600;
+}
+
+@media (max-width: 899px) {
+  .label {
+    padding-inline: 20px;
+  }
+}

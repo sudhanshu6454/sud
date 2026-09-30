@@ -1,11 +1,11 @@
 # Pre-pilot checklist
 
 What is built and proven in this sandbox vs what still needs engineering or a
-human before the pilot. Last verified test run (2026-09-29): **784/784 green
-across 45 files** (`./node_modules/.bin/vitest run`: api 199, redirect 10,
-shared 28, workers 24, web 523, with the Amazon.in Associates build after its
-review fixes; the earlier figures of 57, 94, 133, 558, 587, 612, 616, 660,
-669 and 768 are stale). Legend: ✅ verified in this repo · ⏳ not done — needs
+human before the pilot. Last verified test run (2026-09-30): **986/986 green
+across 61 files** (`./node_modules/.bin/vitest run`: api 300, redirect 13,
+shared 52, workers 39, web 582, with the celebrity looks' backend and web and
+the fixes of three independent reviews; the earlier figures of 57, 94, 133,
+558, 587, 612, 616, 660, 669, 768, 784, 878 and 937 are stale). Legend: ✅ verified in this repo · ⏳ not done — needs
 engineering work · 👤 needs a human (see
 [EXTERNAL DEPENDENCIES](#external-dependencies) and the
 [action tracker](./action-tracker.md)).
@@ -198,6 +198,68 @@ has seen real merchants, real money, real traffic or a real host.
   sufficient — see [`docs/counsel-briefing.md`](./counsel-briefing.md) §1
   [DECISION] markers and the [action tracker](./action-tracker.md).
 
+- ✅ **Celebrity looks backend (2026-09-30, TEST data only; nothing on
+  afflino.com).** Migration 0007 on a fresh Postgres 16 and on a
+  production-like database at 0006 (network seed under
+  `NODE_ENV=production`, an Amazon setup): `1 migration(s) applied, 6 already
+  applied`, row counts unchanged, a second network seed byte-identical. The
+  library import (drafts, unreviewed celebrities, assets with licences,
+  pieces; idempotent; whole-file refusal; TEST rows refused under
+  production), the capability matrix and rights reviews, outfit pieces with
+  EXACT (evidence + a second person) / SIMILAR tagging, the publish gate, the
+  public read API (feed, hub, look piece by piece, storefront, sitemap: never
+  more than the rights allow, only `/r/` links), instant links, takedowns
+  (410 everywhere, links paused → the paused page, caches cleared, replies
+  off, restore after a new review), comment replies (signed webhook, one
+  message per comment with only the afflino URL, opt-outs, hashes only) and
+  daily rollups with analytics — [`celebrity-looks.test.ts`](../packages/api/test/celebrity-looks.test.ts),
+  [`takedowns.test.ts`](../packages/api/test/takedowns.test.ts),
+  [`comment-replies.test.ts`](../packages/api/test/comment-replies.test.ts),
+  [`look-pieces.test.ts`](../packages/api/test/look-pieces.test.ts),
+  [`library-import.test.ts`](../packages/api/test/library-import.test.ts),
+  [`comment-replies-worker.test.ts`](../packages/workers/test/comment-replies-worker.test.ts),
+  [`analytics-rollup.test.ts`](../packages/workers/test/analytics-rollup.test.ts);
+  on real Postgres the whole story plus the races
+  ([`scripts/celebrity-looks-pg.ts`](../scripts/celebrity-looks-pg.ts),
+  `pnpm looks:pg`, in CI).
+- ✅ **Celebrity looks web (2026-09-30, stage 2, TEST data only).** `/shop`
+  as the Spotted feed (trending row, filters, pager, empty state), the hub
+  `/c/<slug>`, the look page piece by piece (numbered markers, none on a
+  face; EXACT first, then similar styles; "Buy on Amazon.in" through `/r/`
+  only, "See price on Amazon.in", the Associate statement beside every
+  button; the non-endorsement line wherever a celebrity is named), the
+  storefront `/s/<slug>` with share and QR, the withdrawn state (410 from
+  `middleware.ts`), `/internal/revalidate`, `CELEBRITY_INDEXING`; the admin
+  screens (Celebrities, Library, Looks + pieces editor, Takedowns, Instant
+  links, Comment replies, Analytics with CSV) — [`spotted.test.ts`](../packages/web/test/spotted.test.ts),
+  [`celebrity-web.test.ts`](../packages/web/test/celebrity-web.test.ts),
+  [`celebrity-web-support.test.ts`](../packages/api/test/celebrity-web-support.test.ts);
+  on a local stack and the installer's rehearsal
+  ([runbook §1C](./runbooks/deploy.md) "What was checked").
+- ✅ **Celebrity looks after three independent reviews (2026-09-30, TEST
+  data only).** A name only in its own look's credit line (every other text
+  checked against every name and alias when written and at every read:
+  storefronts, event / place / piece labels, product text, Amazon shelves),
+  name-free headlines, the product-text rule, the chain of title, a
+  `street` / `other` place confirmed by the rights reviewer, asset licence
+  facts widened only by the rights reviewer, a new image re-screened,
+  EXACT links only after approval, look links on the web page's placement
+  only, aliases resetting a review, links paused inside the review's and
+  the minor flag's transaction, a restore that brings links back only where
+  products are allowed, a celebrity takedown also withdrawing looks that
+  name the person and listing stills and share URLs, 410 only for what was
+  public, the still at its own address, the public API's rate limit and
+  epoch cache, the Meta data deletion callback, fixed public comment
+  answers, the webhook's `messages` field and a hidden verify token, the
+  request log without query strings, batched revalidation, analytics
+  summed in SQL for network admins and editors, the reply counts kept
+  inside retention; the web's review fixes (the withdrawn page in the
+  design, the label only with products, the editor's keyboard placing, the
+  admin sub-navigation, the second editor's queue) —
+  [`celebrity-controls.test.ts`](../packages/api/test/celebrity-controls.test.ts)
+  and the suites above; `pnpm looks:pg` (with a race of a mint against a
+  review turning products off).
+
 ## OUTSTANDING ENGINEERING
 
 Code-side work still buildable in this repo; none of it has been run against
@@ -309,12 +371,36 @@ real infrastructure or real traffic yet:
     0) without them); its payable filter names a `cancelled` status the
     0001 migration does not allow.
 
+- ⏳ Celebrity looks: alerting on the takedown SLA marks and on Meta's
+  `messaging_policy_enforcement` deliveries (they reach the webhook; nothing
+  alerts on them); a rate limit at the edge (the api's own per-process
+  limit covers the public API and the Meta webhook, not `/r/` or the web's
+  pages); a Hindi endorsement-wording list and Hindi page labels; a
+  retention class for celebrity data once counsel sets it; a real identity
+  provider so the rights reviewer and the second editor are people, not
+  stub roles.
+
 ## EXTERNAL DEPENDENCIES
 
 Items only a human can clear. Every row also appears in the
 [action tracker](./action-tracker.md) with exact input, owner, dependency,
 and acceptance criteria.
 
+- 👤 Celebrity looks: counsel's capability matrix and wording (§10 Q1–Q30:
+  incl. the web's placement of the non-endorsement line, the page labels,
+  storefronts, trending and search indexing, the place kinds needing a
+  confirmation, the public comment answers, analytics), a second editor for EXACT tags,
+  a rights review with evidence per celebrity before anything about them is
+  published, the library's chain of title (assignments and licences per
+  batch), a 3-hour takedown contact, Amazon's view of links near a celebrity
+  still, the Meta app (Business Verification, App Review with Advanced
+  Access, Live mode; the webhook fields incl. `messages` and
+  `messaging_policy_enforcement`; the data deletion callback URL; each
+  Page's hybrid response mode; each Instagram account's message access),
+  the privacy notice before comment replies, the reel / branded-content /
+  boosted-post rules, a watch for court orders and the Delhi HC hearing,
+  and celebrity data retention
+  ([action tracker](./action-tracker.md) "Celebrity looks").
 - 👤 Merchant programme approvals: signed insertion terms per pilot merchant
   (commission basis, attribution window, validation delay, payment terms,
   allowed domains). **No merchant programme exists today**; the only

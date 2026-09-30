@@ -30,3 +30,18 @@ describe('withWorkspace', () => {
     expect(navInWorkspace(BRAND_NAV, undefined)).toBe(BRAND_NAV);
   });
 });
+
+describe('the admin bar: one tab for the celebrity-look screens, with a sub-nav', () => {
+  it('marks "Celebrity looks" active on every one of its screens, and the sub-nav its own', async () => {
+    const { ADMIN_TABS, CELEBRITY_TABS } = await import('../components/shell/AdminShell');
+    expect(ADMIN_TABS.length).toBeLessThanOrEqual(8);
+    const celeb = ADMIN_TABS.findIndex((t) => t.label === 'Celebrity looks');
+    for (const path of ['/admin/looks', '/admin/looks/abc', '/admin/celebrities', '/admin/library', '/admin/takedowns', '/admin/instant-links', '/admin/replies', '/admin/analytics']) {
+      expect(activeNavIndex(ADMIN_TABS, path), path).toBe(celeb);
+    }
+    expect(activeNavIndex(ADMIN_TABS, '/admin')).toBe(0);
+    expect(activeNavIndex(ADMIN_TABS, '/admin/brands')).toBe(1);
+    expect(CELEBRITY_TABS[activeNavIndex(CELEBRITY_TABS, '/admin/takedowns')]?.label).toBe('Takedowns');
+    expect(activeNavIndex(CELEBRITY_TABS, '/admin/brands')).toBe(-1);
+  });
+});

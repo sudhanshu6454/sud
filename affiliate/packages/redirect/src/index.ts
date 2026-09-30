@@ -136,6 +136,8 @@ interface RouteCache {
 export interface RouteRow {
   link_id: string;
   org_id: string;
+  /** links.status: a paused link (a takedown, a rights review, an unpublished look) serves the paused page. */
+  link_status?: string | null;
   destination_url: string;
   allowed_hosts: string[] | null;
   programme_status: string;
@@ -172,14 +174,18 @@ export function routeFromRow(row: RouteRow): RouteCache {
     org_id: row.org_id,
     link_id: row.link_id,
   };
+  const linkPaused = row.link_status !== undefined && row.link_status !== null && row.link_status !== 'active';
+  if (linkPaused) route.route_block = 'link_paused';
   if (!row.amazon_account_id) return route;
 
   const params = amazonRouteParams({
     storeId: String(row.amazon_store_id ?? ''),
     placementTrackingId: row.amazon_placement_tracking_id ?? null,
   });
-  let block: string | null = null;
-  if (row.amazon_account_status !== 'active' || !row.amazon_store_id) block = 'amazon_account_disabled';
+  let block: string | null = linkPaused ? 'link_paused' : null;
+  if (block) {
+    // keep the first reason
+  } else if (row.amazon_account_status !== 'active' || !row.amazon_store_id) block = 'amazon_account_disabled';
   else if (row.property_status !== 'approved') block = 'property_not_approved';
   else if (!row.owner_verification_id) block = 'property_not_owner_operated';
   else if (!isAmazonAcceptedPlatform(row.property_platform)) block = 'property_platform_not_accepted';
@@ -195,12 +201,15 @@ export function routeFromRow(row: RouteRow): RouteCache {
 
 /**
  * The DB fallback: one query across the route graph, by token alone (see
- * the file docstring). The Amazon joins are LEFT joins that match nothing
- * for any other programme; each is keyed to the link's own organisation.
+ * the file docstring). A paused link (links.status 'paused': a takedown, a
+ * rights review, an unpublished look, a removed item) is found too and
+ * serves the paused page (route_block 'link_paused'), never a redirect.
+ * The Amazon joins are LEFT joins that match nothing for any other
+ * programme; each is keyed to the link's own organisation.
  * The verification join keeps only live owner_operated rows, so a duplicate
  * row can only repeat the same answer (`limit 1`).
  */
-export const ROUTE_SQL = `select l.id as link_id, l.org_id as org_id,
+export const ROUTE_SQL = `select l.id as link_id, l.org_id as org_id, l.status as link_status,
             o.offer_url as destination_url,
             pc.allowed_domains as allowed_hosts,
             p.status as programme_status,
@@ -226,10 +235,24 @@ export const ROUTE_SQL = `select l.id as link_id, l.org_id as org_id,
               on v.property_id = pl.property_id and v.org_id = l.org_id
              and v.method = 'owner_operated' and v.verified_at is not null
              and (v.expires_at is null or v.expires_at > now())
-      where l.token = $1 and l.status = 'active'
+      where l.token = $1
       limit 1`;
 
 const TOKEN_RE = /^[0-9a-f]{32}$/;
+
+/**
+ * `?via=<surface>` on a /r/ link: the page surface the click came from (e.g.
+ * 's-<storefront slug>', 'look', 'reply'), for per-surface counts without a
+ * tracking ID per surface. Kept in clicks.context only when it matches this
+ * pattern; it names a page, never a person, and never reaches the merchant
+ * (the destination is built from the stored offer URL alone).
+ */
+export const VIA_RE = /^[a-z0-9-]{1,40}$/;
+
+export function viaOf(query: unknown): string | null {
+  const v = typeof query === 'object' && query !== null ? (query as Record<string, unknown>).via : undefined;
+  return typeof v === 'string' && VIA_RE.test(v) ? v : null;
+}
 
 /**
  * IP_HASH_KEY: the secret for the keyed client-address hash. Unset or empty
@@ -371,10 +394,11 @@ async function handleRedirect(pool: Pool, ipHashKey: string | null, req: Fastify
     const ua = req.headers['user-agent'];
     // Never store the raw address: only its (keyed) hash. req.ip honours TRUST_PROXY.
     const ipHash = hashClientAddress(req.ip, ipHashKey);
+    const via = viaOf(req.query);
     await pool.query(
       `insert into clicks (id, org_id, link_id, click_id, occurred_at, context)
        values ($1, $2, $3, $4, now(), $5::jsonb)`,
-      [randomUUID(), route.org_id, route.link_id, clickId, JSON.stringify({ ua, ip_hash: ipHash })],
+      [randomUUID(), route.org_id, route.link_id, clickId, JSON.stringify(via ? { ua, ip_hash: ipHash, via } : { ua, ip_hash: ipHash })],
     );
     const q = queue();
     if (q) {

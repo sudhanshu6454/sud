@@ -16,6 +16,13 @@ import { publishersRoutes } from './routes/publishers.js';
 import { disputesRoutes } from './routes/disputes.js';
 import { contractsRoutes } from './routes/contracts.js';
 import { suspenseRoutes } from './routes/suspense.js';
+import { publicRoutes } from './routes/public.js';
+import { celebritiesRoutes } from './routes/celebrities.js';
+import { editorialRoutes } from './routes/editorial.js';
+import { takedownsRoutes } from './routes/takedowns.js';
+import { repliesRoutes } from './routes/replies.js';
+import { metaWebhookRoutes } from './routes/meta-webhook.js';
+import { analyticsRoutes } from './routes/analytics.js';
 
 /**
  * TRUST_PROXY (unset = trust nothing: `req.ip` is the TCP peer) becomes
@@ -60,6 +67,15 @@ export async function buildApp(opts: { logStream?: { write(line: string): void }
   await app.register(disputesRoutes);
   await app.register(contractsRoutes);
   await app.register(suspenseRoutes);
+  // Celebrity looks (0007): public reads, the editors' API, takedowns,
+  // comment replies and their Meta webhook, analytics.
+  await app.register(publicRoutes);
+  await app.register(celebritiesRoutes);
+  await app.register(editorialRoutes);
+  await app.register(takedownsRoutes);
+  await app.register(repliesRoutes);
+  await app.register(metaWebhookRoutes);
+  await app.register(analyticsRoutes);
 
   return app;
 }

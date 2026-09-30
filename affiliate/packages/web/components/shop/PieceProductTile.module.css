@@ -1,0 +1,93 @@
+/* A product of a piece. EXACT: a full-width row with a 4px accent rule on
+   the left; SIMILAR: a ruled tile in the "Similar styles" row. Type as the
+   shop's item rows: name 18px / 800, meta 13–14px, price 24px / 800. */
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.exact {
+  padding: var(--space-4) var(--space-4) var(--space-4) var(--space-6);
+  border-left: 4px solid var(--color-accent);
+  background: var(--color-surface);
+}
+
+.similar {
+  padding: var(--space-4);
+  border: 1px solid var(--color-divider);
+  background: var(--color-bg);
+}
+
+.tile > :first-child {
+  align-self: flex-start;
+}
+
+.name {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 18px;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+}
+
+.wording {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-text);
+}
+
+.variant,
+.merchant {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-neutral-800);
+}
+
+.price {
+  display: flex;
+  flex-direction: column;
+}
+
+.priceLabel,
+.fresh {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--color-neutral-700);
+}
+
+.amount {
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 24px;
+  line-height: 1.4;
+  letter-spacing: -0.02em;
+}
+
+.noPrice {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-neutral-800);
+}
+
+.out {
+  color: var(--color-accent-700);
+  font-weight: 600;
+}
+
+.cta {
+  margin-top: auto;
+}
+
+.disclosure {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--color-neutral-700);
+}

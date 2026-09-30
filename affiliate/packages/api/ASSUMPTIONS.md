@@ -603,3 +603,279 @@ listed for the owner / counsel below.
 9. Amazon's written word on the /r/ redirect; counsel on the items listed above; the
    accountant on GST / TDS; whether Amazon's payments are recorded as merchant settlements
    (nothing writes `merchant_settlements` in production yet, so payouts stay capped at 0).
+
+## Celebrity looks (0007, 2026-09-30)
+
+The owner's direction: celebrity looks from the paparazzi library, the outfit
+tagged piece by piece (EXACT = the product the celebrity wore; SIMILAR = a
+similar style, the default), storefronts per in-house page, comment replies,
+instant links, analytics — under the rights brief of 2026-09-30 (controls, not
+legal conclusions; the questions are `docs/counsel-briefing.md` §10).
+
+**Model** (`db/migrations/0007_celebrity_looks.sql`, extending looks and look_items; no parallel model)
+- `celebrities`: `rights_status` unreviewed (default) | editorial | cleared | blocked;
+  `max_display` / `shoppable` = what the review allowed for this person; `is_minor`,
+  `never_list` (both force unreviewed / blocked, a CHECK); `takedown_id`. Every decision is a
+  row of `celebrity_rights_reviews` (append-only) + an audit row.
+- The capability matrix is ONE constant (`CELEBRITY_RIGHTS_MATRIX`, @paparazzi/shared
+  celebrity.ts): unreviewed / blocked nothing; editorial name only, no products; cleared name,
+  image and products at most. **Defaults pending counsel.** The review route defaults
+  max_display to `name_only` and shoppable to false: an image or products need the reviewer
+  to say so. The database stores only the per-person decision and enforces the floor.
+- `looks` gained the moment (`celebrity_id`, `event_name`, coarse `place` + `place_kind`,
+  `moment_date`, `source_video_asset_id`, `still_asset_id`, `property_id` = the in-house page,
+  `post_permalink`, `platform_post_id`, `library_ref`), `celebrity_display` (the operator's
+  mode, capped by the rights at every read) and `takedown_id`.
+- `look_pieces` (label in the owner's words, `garment_category` = GARMENT_CATEGORIES, tested
+  equal to the CHECK; position; optional hotspot x, y in 0..1). `look_items.piece_id`,
+  `position`, `review_state`, evidence source / time, `tagged_by`, `match_reviewed_by/at`,
+  `removed_at`; CHECKs scoped to piece items (legacy and Amazon shelf items untouched): a
+  SIMILAR item is approved; an EXACT item has evidence (≥ 10 characters + a source) and, once
+  approved, a reviewer other than its tagger. Partial unique indexes: one EXACT per piece, a
+  product once per piece (rows not removed). The API pre-checks both (409).
+- Assets: licence metadata (`commercial_reuse`, `territory`, `expires_at`, `source_ref`,
+  `copyright_owner`, `author`, `acquisition`, `assignment_ref`), exclusion flags
+  (`live_performance`, `minor_in_frame`, `bystanders`, `sensitive_location`) and the editor's
+  `screen_status`. An image is shown only when `assetImageRefusals` is empty (public copy,
+  still/cover, licence, commercial reuse `yes`, territory covering IN (or WW), not expired,
+  screen passed, no flag) AND the celebrity's rights and the look's mode allow images.
+- `storefronts`, `takedowns` (+ `takedown_looks` snapshot), `meta_accounts`, `reply_rules`,
+  `reply_events`, `reply_suppressions`, `reply_daily`, `click_daily`; `links.look_item_id`,
+  `paused_by_takedown_id`, `paused_reason`.
+
+**Reads: never more than the rights allow at this moment**
+- One read gate, in SQL for every list (`readGateSql`, src/looks/public.ts) and in JS for one
+  look (`publicVisibility` / `publicLook`, src/looks/bundle.ts): published, no takedown on the
+  look or the celebrity, not a minor / never-listed, a status whose capability allows the name
+  and a review that allows at least the name. Then per look `effectiveLookDisplay`: the name,
+  the image (asset rules), products and links only when shoppable; a pending EXACT never.
+  A downgrade, an expiry or a takedown applies at the next read without re-publishing.
+- The legacy catalogue (`GET /v1/looks`, `GET /v1/looks/:id`) never serves a celebrity look
+  to a consumer role (the current shop keeps its non-celebrity looks; editors still see
+  everything by id).
+- The public API (`/v1/public/:org/…`, routes/public.ts) takes no token: the organisation is
+  its public slug, resolved by `orgBySlug` — the one public query not tenant-scoped (the slug
+  is the tenant's public name; the same kind of documented exception as the redirect's lookup
+  by token). Everything after it is `tenantQuery`. Answers carry `cache-control: public,
+  max-age=30`; since the reviews the api also keeps each answer 30 s per process under a Redis
+  epoch every invalidation increments (below). 410 GONE only for content a takedown withdrew
+  that was public once; 404 for anything never public or hidden by a downgrade.
+- Headlines are composed from the event or place the editors typed, never the name
+  (`lookHeadline`: "Spotted at {event}", "Spotted in {place}", "Spotted"; since the reviews);
+  the look's `title` column never reaches a page. The wording (`CELEBRITY_COPY`: commercial
+  label, non-endorsement line, "The same item", "Similar style. {name} did not wear or endorse
+  this product.") is a draft pending counsel.
+
+**Publishing** (`publishGate`, src/looks/gate.ts; 409 with the whole report): celebrity set;
+no takedown; not a minor / never-list; the rights allow the look's mode; a shown still passes
+the asset rules; a moment date before today (IST: never live whereabouts); an approved,
+owner-operated Facebook / Instagram page; no endorsement / Amazon / sensitive-place wording in
+event, place or piece labels, and no celebrity's name in them (`no_names_in_text`); a `street`
+/ `other` place confirmed by the rights reviewer (`place_kind`); product text without names or
+endorsement wording (`product_text`); ≥ 1 piece, each with ≥ 1 approved product; no pending EXACT; when
+shoppable, a live offer per piece and the mint guards passing for every product's link
+(`checkMintGuards` dry run: the Amazon rules of POST /v1/links).
+
+**Links** (src/links/mint.ts, src/looks/look-links.ts)
+- POST /v1/links' guards were moved, unchanged, into `checkMintGuards` / `insertLink` /
+  `warmRouteCache`; the route is a thin wrapper (its tests unchanged).
+- A look's own link per approved product goes on afflino.com's web placement in the offer's
+  programme's campaign (for Amazon only a placement with its own tracking ID), since the
+  reviews: a link shown on afflino.com carries afflino.com's tag, never the posting page's
+  (`chooseLookPlacement`; before, the look's own in-house page's placement came first). The
+  in-house pages' own links for their posts are the instant links' (below).
+- Minting takes the look's row lock (`select … for update`) and re-checks published / not
+  taken down; a takedown updates that row first. On real Postgres 10 rounds of the race never
+  left an active link on a withdrawn look (scripts/celebrity-looks-pg.ts R2). Look-scoped
+  links do not warm the route cache (the redirect rebuilds from the committed state).
+- Pauses record their reason (`takedown`, `rights_review`, `item_removed`,
+  `look_unpublished`); publishing again or an upgrade reactivates only `look_unpublished` /
+  `rights_review` pauses; a restore only its own takedown's.
+- Instant links (src/looks/instant-links.ts) reuse `addAmazonOffers` (the operator's words;
+  its new `orgId` option); product text with endorsement wording is refused for any use;
+  links for a piece are withheld while the celebrity may not have a shoppable page.
+
+**Takedowns** (src/looks/takedown.ts): one transaction (looks locked, snapshot, withdrawn,
+celebrity flagged, links paused, reply rules off, queued replies cancelled, outbox, audit);
+after commit the route keys are deleted twice and the web revalidated (`WEB_REVALIDATE_URL` +
+`WEB_REVALIDATE_SECRET`, best-effort, 3 s timeout; unset = skipped); `completed_at` + a
+`takedown.completed` audit row. The answer lists the in-house posts the owner deletes on Meta
+(no API permission to delete posts is held). SLA marks: warn > 60 min, breach > 180 min
+between `requested_at` and `actioned_at` (alarms are not wired: open). Restore: rights
+reviewer only, and only with a `review` row of every affected celebrity newer than the
+takedown; published looks come back only if the gate passes (else paused).
+
+**Comment replies, api side** (src/looks/replies.ts, routes/meta-webhook.ts)
+- The webhook route lives in its own plugin whose content-type parser keeps the raw bytes; the
+  signature is checked over them (`timingSafeEqual`). Meta signs the escaped-unicode payload,
+  so re-serialised JSON would not match (tested). Missing `META_APP_SECRET` or
+  `COMMENT_ID_HASH_KEY` → 503.
+- The account is resolved through `meta_accounts` by (platform, Meta id) — the webhook's one
+  cross-organisation read (a Meta id is unique to one property). Own comments (from the
+  account or its Page) are dropped; `on conflict (platform, comment_id) do nothing` makes
+  retries and duplicate deliveries one event (10 concurrent deliveries → 1 on real Postgres).
+- Opt-out: a comment or a message that is exactly an opt-out word adds the author's hash.
+  CAVEAT: on Facebook the id in a comment and the PSID in a message may differ, so a "STOP"
+  message may not match a later comment of the same person (open; counsel/Meta).
+- The answer body carries counts only (Meta ignores it).
+
+**Library import** (src/looks/library-import.ts): whole-file refusal (parse checks, then a
+read-only pre-pass of what only the database can tell: pages, ambiguous aliases, a look whose
+celebrity would change), then one transaction under a per-organisation advisory lock. Key:
+`library_ref` = video_ref (+ `#moment_ref`). Drafts only; descriptive fields and pieces change
+only while a look is a draft; a changed `still_url` sends the still back to the frame screen;
+a minor flag is applied, never removed. Under `NODE_ENV=production` "Demo …" names and
+example.com / .invalid / .test URLs are refused.
+
+**CLI** (src/cli/looks.ts): `review` / `restore` act as the organisation's rights reviewer —
+its first `rights_reviewer` member, else a placeholder `rights_reviewer@<org>.invalid`
+created the first time. That is the owner recording counsel's written decision on the server
+(root); the API's role separation is unchanged. `takedown` acts as the first network_admin.
+
+**pg-mem** (test/pgmem.ts, scripts/demo-money-loop.ts): `char_length` registered; the
+memberships role CHECK renamed; pg-mem answers any query sharing a predicate with a partial
+index's WHERE from that index alone (verified), so the two `is not null` partial indexes become
+plain unique ones and the two look_items partial indexes are not created there (proven on real
+Postgres, R1).
+
+**Stage 2 (2026-09-30): what the web needs** (`test/celebrity-web-support.test.ts`):
+- `GET /v1/public/{org}/spotted` also answers `facets` (celebrities with a public look and
+  live storefronts, each with its count, through the read gate) and `commercial_label`.
+- `GET /v1/public/{org}/trending?days=1..30&limit=1..12` (default 7 days, 12): `click_daily`
+  of the organisation in the window joined to `links` and `look_items` to find each click's
+  look, summed and ranked in JS (ties by the newer publish), then the top ids re-read as cards
+  through `readGateSql` (`l.id = any($2)`), so a takedown or a downgrade drops a look at once.
+  No count leaves the API. Empty until the rollup has run.
+- `GET /v1/editorial/properties`: the organisation's Facebook / Instagram / web properties with
+  `owner_operated`, the Amazon tracking ID and the storefront (the admin's page pickers).
+- `POST /v1/editorial/library/import {csv_text ≤ 900000, dry_run = true}`: `checkLibrary` runs
+  the import's own checks (`libraryPrecheck`, shared with `importLibrary`) without writing and
+  answers `ok`, the problems, the rows, looks new / existing, pieces and celebrities (200);
+  `dry_run: false` imports (actor = the caller), and a refused file is 422
+  `VALIDATION_ERROR` with `problems`, nothing written. The organisation's slug is read from
+  the tenant's own row.
+- `GET /v1/replies/events?rule_id&status&limit≤200`: the latest events with the page, the
+  keyword, the status and the times; never the comment id, the commenter hash, the media id
+  or the message id. Every reply rule in the list / create / update answers carries
+  `look_url`, `dm_preview` (`buildReplyText`), `dm_bytes` and `dm_refusal` (the send-time
+  check), so the admin shows the exact message.
+- CLI: `storefronts` answers each storefront with `bio_url` (`SITE_URL/s/<slug>`) and takes
+  `--publish yes` (every draft made live, counted as `published`); `events [--limit]`;
+  `reply-test --look <uuid> [--webhook <base>]` (the message and its refusal check, a stub
+  sender, the matching rules; with `--webhook` the verify handshake, a wrong verify token 403,
+  a signed delivery for the TEST account `990000000000000001` that no page is mapped to 200
+  with nothing stored, a wrongly signed one 401); `sign-in --role network_admin | editor |
+  rights_reviewer [--hours 1..24]` (the JWT stub signed with `JWT_SECRET`: the first
+  network_admin, the first `editor` member or a placeholder `editor@<org>.invalid` "Second
+  editor", the rights reviewer as above). The second editor exists so the EXACT maker-checker
+  (`match_reviewed_by <> tagged_by`) can be met with the owner's own steps; the stub cannot tell
+  who holds a token, so the owner hands each sign-in to its person.
+
+**After three independent reviews (2026-09-30)** (`test/celebrity-controls.test.ts`, 30 tests,
+one per finding the reviews probed; `scripts/celebrity-looks-pg.ts` on real Postgres):
+- Names (`src/looks/names.ts`, @paparazzi/shared `namedCelebrities`): every celebrity's name
+  and aliases, matched as words (also glued, hyphenated, a handle of 8+ characters, numbers 0–20
+  spelled out). A name appears only in the credit line of that person's own look: the look's
+  event, place and piece labels, product brand / model / category, a storefront's slug, name
+  and bio, an Amazon shelf's title and a public comment reply are refused when they name
+  anyone (422) and hidden at every read (a look 404s, a product is left out, a storefront
+  404s, a card loses its storefront link, facets and the sitemap drop it). One query per
+  public answer (the organisation's celebrities), kept by the answer cache.
+- Product text (`productTextRefusals`): the endorsement list widened ("inspired", "inspo",
+  "replica", "first copy", "7A", "lookalike", "as seen", "spotted wearing", "steal / get the
+  look", "budget version", "<word> style", "<someone>'s <belonging>", "rocked", "the star",
+  "bollywood"), applied to every product row of `amazon.sh offers`, instant links, tagging
+  and editing, and the SIMILAR downgrade. `word_style`, `possessive` and `rocked` apply to
+  product text only (not to a look's event or place). A shelf title may not reuse a
+  celebrity look's title; the lookup for a shelf ignores celebrity looks.
+- Chain of title: `copyright_owner`, `acquisition` and, for anything but `staff`, an
+  `assignment_ref` (`chainOfTitleRefusals`, part of `assetImageRefusals`); the library refuses
+  `commercial_reuse=yes` without them.
+- Places: `street` / `other` need `looks.place_confirmed_by/at` (`POST
+  /v1/editorial/looks/:id/confirm-place`, rights reviewer only, an optional note); a change
+  of event, place or kind clears it; the sensitive-place list widened (medical words,
+  residences incl. building / tower / society / villa / colony, classes, coaching, worship).
+- Assets (`updateAsset`): the frame flags are one-way (clearing one is 403); widening a
+  licence fact (commercial reuse, territory covering India, a later or no expiry, the chain of
+  title) needs the rights reviewer (403 for an editor) and writes `asset.widen:<fields>`; a
+  new `public_url` resets the frame screen unless the same call passes it; every change
+  invalidates.
+- The still at its own address (`GET /v1/public/:org/looks/:id/still`, `src/looks/still.ts`):
+  the page's image is `/img/looks/<id>?v=<10 hex of the origin URL's sha256>`; the origin URL
+  never leaves the api; bounds in `still.ts` (https only and no private host in production,
+  no redirect, 8 s, 12 MB, image types). Kept 30 s under the epoch within 64 MB, keyed by the
+  look (a made-up `v` cannot force a fetch); an origin failure (502) is never kept.
+- Guards (`src/public-guard.ts`): `PUBLIC_RATE_PER_MINUTE` (240) on `/v1/public/*` and
+  `WEBHOOK_RATE_PER_MINUTE` (1200) on the two Meta POSTs, per client (an HMAC of `req.ip`, in
+  memory), 429 `RATE_LIMITED` with Retry-After; the web's own server-side calls (no
+  X-Forwarded-For, a loopback / private TCP peer) are not counted — every visitor reaches the
+  api through the edge, which always sets X-Forwarded-For, so counting the web's own calls
+  would put every visitor in one bucket. The answer cache: 30 s per URL under `public:epoch`
+  (Redis, incremented by `invalidateAfterCommit`), 1000 entries; off without Redis or with
+  `PUBLIC_API_CACHE=off`; `x-public-cache: hit | miss`.
+- Links: `mintItemLink` mints only for an approved item (409 for a pending EXACT) and while
+  the celebrity's rights allow a shoppable page (409), under the look's row lock; instant
+  links require a piece (422), reuse the item for the same (piece, product) and withhold the
+  links of a pending EXACT (run again after the approval). A review turning products off, an
+  alias change and the library's minor flag pause the links inside their own transaction
+  (`lockAndPauseCelebrityLinks`; real Postgres R5: 10 rounds of a mint racing such a review,
+  never an active link left).
+- Aliases: adding a name (by normalised key) sends a reviewed celebrity back to unreviewed
+  (a `rename` review row), like a rename.
+- Takedowns: a celebrity's takedown also withdraws the other looks whose text names that
+  person (`looks_named_in_text`) and pauses the plain page links of the affected looks'
+  products (`other_links_paused`); the answer lists `stills` (asset id, library reference)
+  and `share_urls` (the look and hub addresses for Meta's Sharing Debugger); content never
+  public stays 404. Restore: a new review is required of the target celebrity only; links
+  come back only for looks that are published and allowed products (the rest `rights_review`).
+- 410 only for what was public: `publicVisibility` answers `gone` only for a look with
+  `published_at`; a hub only if one of its looks was published.
+- Comment replies: the public answer is one of `PUBLIC_REPLY_TEMPLATES`; a rule can be
+  enabled only for a look that may send (`lookSendable`: public, shoppable, an approved item
+  with a live offer), and the workers re-check it before each send; `reply-test` also sends
+  a signed messaging STOP (a TEST suppression written, then removed). Meta's data deletion
+  callback `POST /v1/integrations/meta/data-deletion` (`parseSignedRequest`,
+  `deleteMetaUserData`: the org of each Meta account resolved first, the deletes
+  tenant-scoped; the opt-out hash kept).
+- The request log records the path without its query string (Meta's verify token travels
+  in the GET's query). The web revalidation goes in batches of 1000 tags. Analytics sums in
+  SQL (`group by`) and is open to network admins and editors only (a publisher owner's token
+  would have seen every page's clicks).
+
+### The owned default (2026-09-30)
+
+The owner: "all clips are owned by us"; "all footages captured in public place of any celebrity
+they dont own the rights we own it". Built as the owner's recorded statement, not as a silent
+default (`src/looks/ownership.ts`, `looks.sh owned`, `test/library-import.test.ts` "the owned
+default"):
+
+- The statement is recorded on the server only (the CLI, as the organisation's first network
+  admin; no API route), with the legal owner's name and who shot the clips (`staff`: own
+  employees only; `other`: employees and freelancers or agencies working for it), the words the
+  owner confirmed at the prompt, the date and an audit row. Append-only; a new statement
+  supersedes the old; a withdrawal is a row of its own.
+- A library row that leaves all seven licence columns blank (or a file without them) takes the
+  statement in force: `commercial_reuse` yes, `territory` WW, no end, the statement's copyright
+  owner and acquisition, `assignment_ref` `owner-statement:<id> <date>` (so `other` still has a
+  reference), `licence_via` `statement`. No statement in force: such a row refuses the file,
+  as before. A row that fills any licence column is its own licence and needs `licence`,
+  `commercial_reuse`, `territory` and `licence_expires` (the per-row override).
+- The widening rule of the API (only the rights reviewer widens) now holds against files too:
+  an asset whose licence a person edited (`licence_via` `review`, set by `updateAsset`) takes
+  a file's narrowing but never its widening (`mergeOverReviewed`, field by field with
+  `assetWidenings`); the import lists what it kept (`licence_kept`). Before this, a re-import
+  silently reverted a person's narrowing.
+- Recording or withdrawing takes the import's advisory lock, and the import reads the
+  statement after taking it: no import writes a statement's licence after its withdrawal.
+  Withdrawing narrows every `statement` asset to `commercial_reuse` unknown in the same
+  transaction and clears the look, hub and storefront caches after it.
+- What it does not do: it says nothing about the celebrity's own rights. Nothing about a
+  celebrity is published without their review, whatever the licence (the gate is unchanged).
+  The statement's truth is the owner's; the build records it and checks that it exists, as it
+  does for every other chain-of-title reference (counsel-briefing §4, §10 Q30).
+
+**Open (engineering)**: no rate limit at the edge or on `/r/`; the api's limit is per process;
+the name and endorsement checks are English word lists and do not read text inside images;
+nothing alerts on Meta's `messaging_policy_enforcement` deliveries; the JWT stub trusts the
+`rights_reviewer` and `editor` claims like any other (a leaked `JWT_SECRET` could forge them),
+and a sign-in cannot be revoked before it expires.

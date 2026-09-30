@@ -1,0 +1,506 @@
+/* The celebrity-look admin screens (no artboard): the 2e section rhythm,
+   a list / detail split (5fr / 7fr, 2px rule between; stacked on phones),
+   surface panels, forms on an 8px grid, ruled lists. Tokens only. */
+
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: 0;
+  border-top: 2px solid var(--color-divider);
+}
+
+.split > :first-child {
+  padding-right: var(--space-6);
+  border-right: 2px solid var(--color-divider);
+}
+
+.split > :last-child {
+  padding-left: var(--space-6);
+}
+
+.split > * {
+  min-width: 0;
+  padding-top: var(--space-4);
+}
+
+.panel {
+  padding: var(--space-4);
+  background: var(--color-surface);
+}
+
+.panel + .panel,
+.stack > * + * {
+  margin-top: var(--space-4);
+}
+
+.form {
+  display: grid;
+  gap: var(--space-3);
+  max-width: 720px;
+}
+
+.formRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-3);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.inline.inline {
+  width: auto;
+  min-width: 160px;
+  max-width: 260px;
+  flex: 0 1 auto;
+}
+
+.muted {
+  color: var(--color-neutral-700);
+  font-size: 13px;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.error {
+  margin: 0;
+  color: var(--color-accent-700);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.okLine {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.problems {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--color-accent-800);
+  font-size: 13px;
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--color-divider);
+}
+
+.list > li {
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.pick {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-3) var(--space-2);
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pick:hover {
+  background: var(--color-neutral-200);
+}
+
+.pick {
+  border-left: 4px solid transparent;
+}
+
+.picked {
+  background: var(--color-accent-100);
+  border-left-color: var(--color-accent);
+}
+
+.pickTitle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 600;
+}
+
+.h3 {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.h4 {
+  margin: 0 0 var(--space-2);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-neutral-700);
+}
+
+.matrix {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.matrix th,
+.matrix td {
+  padding: 6px var(--space-2);
+  border-bottom: 1px solid var(--color-divider);
+  text-align: left;
+  vertical-align: top;
+}
+
+.matrix th {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-neutral-700);
+}
+
+.checks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+
+.checks li {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: var(--space-2);
+  padding: 6px 0;
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.pass {
+  color: var(--color-text);
+  font-weight: 700;
+}
+
+.fail {
+  color: var(--color-accent-700);
+  font-weight: 700;
+}
+
+.pre {
+  margin: 0;
+  padding: var(--space-3);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-divider);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px var(--space-4);
+  margin: 0;
+  font-size: 13px;
+}
+
+.facts dt {
+  color: var(--color-neutral-700);
+}
+
+.facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The still with piece markers, where the editor places a marker by clicking. */
+.stillBox {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  cursor: crosshair;
+}
+
+.stillBox img {
+  display: block;
+  max-width: 100%;
+  max-height: 520px;
+  height: auto;
+}
+
+.stillEmpty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 280px;
+  max-width: 100%;
+  aspect-ratio: 4 / 5;
+  background: var(--color-neutral-300);
+  color: var(--color-neutral-700);
+  font-size: 13px;
+  text-align: center;
+  padding: var(--space-3);
+}
+
+.marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 2px solid var(--color-bg);
+  background: var(--color-text);
+  color: var(--color-bg);
+  font-size: 12px;
+  font-weight: 800;
+  pointer-events: none;
+}
+
+.markerActive {
+  background: var(--color-accent-700);
+}
+
+.piece {
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.pieceHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  background: var(--color-text);
+  color: var(--color-bg);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-3) 0 var(--space-3) var(--space-4);
+  border-left: 2px solid var(--color-divider);
+  margin-top: var(--space-2);
+  font-size: 14px;
+}
+
+.itemExact {
+  border-left-color: var(--color-accent);
+}
+
+.board {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(200px, 1fr);
+  overflow-x: auto;
+  border-top: 2px solid var(--color-divider);
+  border-bottom: 2px solid var(--color-divider);
+}
+
+.column {
+  min-width: 0;
+  padding: var(--space-3);
+  border-right: 2px solid var(--color-divider);
+}
+
+.column:last-child {
+  border-right: 0;
+}
+
+.columnTitle {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 0 0 var(--space-2);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-neutral-700);
+}
+
+.card {
+  display: block;
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--color-divider);
+  font-size: 14px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.card:hover .cardTitle {
+  color: var(--color-accent-700);
+  text-decoration: underline;
+}
+
+.cardTitle {
+  font-weight: 600;
+}
+
+.chart {
+  margin: var(--space-3) 0;
+}
+
+@media (max-width: 760px) {
+  .split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .split > :first-child {
+    padding-right: 0;
+    border-right: 0;
+    padding-bottom: var(--space-4);
+  }
+
+  .split > :last-child {
+    padding-left: 0;
+    border-top: 2px solid var(--color-divider);
+  }
+
+  .board {
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
+  }
+
+  .column {
+    border-right: 0;
+    border-bottom: 2px solid var(--color-divider);
+  }
+
+  .item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Spacing steps for the screens' own blocks (tokens only: no inline spacing). */
+.gapTop1 {
+  margin-top: var(--space-1);
+}
+
+.gapTop2 {
+  margin-top: var(--space-2);
+}
+
+.gapTop3 {
+  margin-top: var(--space-3);
+}
+
+.gapTop4 {
+  margin-top: var(--space-4);
+}
+
+.pad3 {
+  padding: var(--space-3);
+}
+
+.listRow {
+  padding: var(--space-2) 0;
+}
+
+.spaced {
+  margin: var(--space-3) 0 var(--space-4);
+}
+
+.noMargin {
+  margin: 0;
+}
+
+.noRuleTop {
+  border-top: 0;
+}
+
+.strong {
+  font-weight: 600;
+}
+
+/* A disclosure row ("Add a celebrity by hand", "+ A rule …"): its marker kept, a 44px target on phones. */
+.summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+@media (max-width: 760px) {
+  .summary {
+    display: list-item;
+    min-height: 44px;
+    padding-block: var(--space-3);
+  }
+}
+
+/* The library file picker: the native input hidden (sr-only), its label drawn as the secondary button. */
+.fileRow {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.fileButton {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: var(--space-2) 14px;
+  border: 1px solid var(--color-divider);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.fileButton:hover {
+  background: color-mix(in srgb, var(--color-text) 7%, var(--color-bg));
+}
+
+input:focus-visible + .fileButton {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 760px) {
+  .fileButton {
+    min-height: 44px;
+  }
+}
+
+/* While a marker is being placed the still stays in view (desktop: sticky in its column, over the form below it). */
+.stickyPanel {
+  position: sticky;
+  top: var(--space-4);
+  z-index: 2;
+  box-shadow: 0 0 0 2px var(--color-accent);
+}
+
+.numberInput.numberInput {
+  width: 88px;
+  min-width: 0;
+  flex: none;
+}
+
+@media (max-width: 760px) {
+  .stickyPanel {
+    position: static;
+  }
+}

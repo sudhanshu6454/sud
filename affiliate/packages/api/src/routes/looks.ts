@@ -6,6 +6,7 @@ import { authed, requireAuth } from '../middleware.js';
 import { redirectLinkUrl } from '../redirect-url.js';
 import { displayablePrice, displayableStock } from '../offer-price.js';
 import { ok, parseOr400 } from './_helpers.js';
+import { LIVE_OFFER_SQL, type LiveOfferRow } from '../catalogue-offer.js';
 
 // ---------------------------------------------------------------------------
 // Catalogue endpoints (consumer shop)
@@ -49,6 +50,8 @@ interface LookListRow {
 }
 
 interface LookDetailRow {
+  celebrity_id: string | null;
+  takedown_id: string | null;
   id: string;
   title: string;
   locale: string;
@@ -80,53 +83,12 @@ interface LookItemRow {
   product_category: string;
 }
 
-interface LiveOfferRow {
-  id: string;
-  programme_id: string;
-  merchant_id: string;
-  merchant_name: string;
-  price_minor: string | number | null;
-  price_as_of: string | Date | null;
-  price_max_age_hours: number | null;
-  disclosure_text: string | null;
-  connector: string;
-  currency: string;
-  stock_status: string;
-  fresh_until: string | Date;
-}
 
 /** timestamptz → ISO-8601 string (pg returns Date, pg-mem returns Date, `::text` casts return pg text). */
 function toIso(value: string | Date | null): string | null {
   if (value === null || value === undefined) return null;
   return new Date(value).toISOString();
 }
-
-/**
- * The live offer for a variant: offer active + fresh AND its programme
- * active (a paused programme's offers are not shoppable). Several live
- * offers → the cheapest, ties broken by id; an offer without a price (an
- * Amazon offer before or after its price's hour) sorts last. `offer_url`
- * is deliberately NOT in the select list. The price shown is
- * displayablePrice (src/offer-price.ts), and so is the stock status
- * (displayableStock: availability is under the same age limit);
- * `disclosure_text` is the programme's own disclosure (Amazon: the Operating
- * Agreement's statement) and `connector` tells the shop which merchant copy
- * to show (Amazon: "Buy on Amazon.in", the price disclaimer).
- */
-const LIVE_OFFER_SQL = `
-  select o.id, o.programme_id, o.merchant_id, m.name as merchant_name, pr.connector as connector,
-         o.price_minor::text as price_minor, o.price_as_of, o.currency, o.stock_status, o.fresh_until,
-         pc.price_max_age_hours as price_max_age_hours, aa.disclosure_text as disclosure_text
-    from offers o
-    join programmes pr on pr.id = o.programme_id and pr.org_id = $1
-    join merchants m on m.id = o.merchant_id and m.org_id = $1
-    left join programme_capabilities pc on pc.programme_id = o.programme_id
-    left join amazon_associates_accounts aa on aa.programme_id = o.programme_id and aa.org_id = $1
-   where o.org_id = $1 and o.variant_id = $2
-     and o.status = 'active' and o.fresh_until > now()
-     and pr.status = 'active'
-   order by o.price_minor asc nulls last, o.id asc
-   limit 1`;
 
 export async function looksRoutes(app: FastifyInstance): Promise<void> {
   /**
@@ -140,7 +102,9 @@ export async function looksRoutes(app: FastifyInstance): Promise<void> {
     const tenant = authed(req);
     const q = parseOr400(LooksQuery, req.query);
 
-    const filters: string[] = [`l.org_id = $1`, `l.status = 'published'`];
+    // Celebrity looks (0007) are served only by the public read API
+    // (routes/public.ts), which applies the rights gate: never here.
+    const filters: string[] = [`l.org_id = $1`, `l.status = 'published'`, `l.celebrity_id is null`, `l.takedown_id is null`];
     const params: unknown[] = [];
     if (q.locale) {
       params.push(q.locale);
@@ -171,7 +135,7 @@ export async function looksRoutes(app: FastifyInstance): Promise<void> {
          left join assets a on a.id = l.cover_asset_id and a.org_id = l.org_id
                            and (a.expires_at is null or a.expires_at > now())
          left join (select look_id, count(*) as item_count
-                      from look_items where org_id = $1 group by look_id) ic
+                      from look_items where org_id = $1 and removed_at is null group by look_id) ic
                 on ic.look_id = l.id
         ${where}
         order by l.published_at desc nulls last, l.id
@@ -221,7 +185,7 @@ export async function looksRoutes(app: FastifyInstance): Promise<void> {
     const lookRes = await tenantQuery<LookDetailRow>(
       orgId,
       `select l.id, l.title, l.locale, l.category, l.status, l.published_at,
-              l.source_page, l.sponsored, a.public_url as cover_url
+              l.source_page, l.sponsored, a.public_url as cover_url, l.celebrity_id, l.takedown_id
          from looks l
          left join assets a on a.id = l.cover_asset_id and a.org_id = l.org_id
                            and (a.expires_at is null or a.expires_at > now())
@@ -229,7 +193,10 @@ export async function looksRoutes(app: FastifyInstance): Promise<void> {
       [id],
     );
     const look = lookRes.rows[0];
-    if (!look || (look.status !== 'published' && !UNPUBLISHED_VISIBLE_ROLES.has(tenant.role))) {
+    // A celebrity look (0007) is never served here to a consumer role: the
+    // public read API applies its rights gate. Editors see it (internal).
+    const consumerHidden = !!look && (look.celebrity_id !== null || look.takedown_id !== null) && !UNPUBLISHED_VISIBLE_ROLES.has(tenant.role);
+    if (!look || consumerHidden || (look.status !== 'published' && !UNPUBLISHED_VISIBLE_ROLES.has(tenant.role))) {
       throw new AppError('NOT_FOUND', 'Look not found', 404);
     }
 
@@ -254,7 +221,7 @@ export async function looksRoutes(app: FastifyInstance): Promise<void> {
          from look_items li
          join variants v on v.id = li.variant_id and v.org_id = $1
          join products p on p.id = v.product_id and p.org_id = $1
-        where li.org_id = $1 and li.look_id = $2
+        where li.org_id = $1 and li.look_id = $2 and li.removed_at is null
         order by li.created_at, li.id`,
       [look.id],
     );

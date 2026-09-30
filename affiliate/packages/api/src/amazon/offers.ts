@@ -17,13 +17,26 @@
  *
  * Looks (optional `look` column): the shop (GET /v1/looks) shows products
  * only inside published looks, so rows naming a look are grouped into one
- * look per title — created published, no category, no source page, not
+ * PRODUCT SHELF per title (never a celebrity look: those are the library's,
+ * src/looks/) — created published, no category, no source page, not
  * sponsored, and with a placeholder cover (an `owned` asset with no public
  * URL: the shop draws its gradient artwork; no Amazon image is ever stored,
- * OA §11) — and each row's variant becomes an 'exact' item of it. A look's
- * status is set on insert only (a look paused or withdrawn later stays so);
- * nothing is ever removed from a look. Rows without a look are linkable
- * offers only (posts on the operator's own pages), not shown in the shop.
+ * OA §11) — and each row's variant becomes an item of it WITHOUT a match
+ * verdict (match_type null, "Unverified match": no shelf claims the same
+ * item as anything; EXACT exists only in an outfit piece, with evidence
+ * and a second person). A shelf's title names nobody and uses no
+ * endorsement wording ("her favourite …"), and a title that is a celebrity
+ * look's is refused. A look's status is set on insert only (a look paused
+ * or withdrawn later stays so); nothing is ever removed from a look. Rows
+ * without a look are linkable offers only (posts on the operator's own
+ * pages), not shown in the shop.
+ *
+ * Product text (brand / model / category, the operator's words) never names
+ * a celebrity and never uses an endorsement phrase ("worn by", "dupe",
+ * "<Brand> style" …; @paparazzi/shared productTextRefusals): a product may
+ * stand in a celebrity's outfit, and re-declaring an ASIN rewrites the text
+ * every look shows, so a row that fails refuses the whole run (nothing is
+ * written).
  *
  * Idempotent; status is set on insert only. A 'stale' offer that Amazon's
  * product API reported not accessible (stale_reason
@@ -40,7 +53,11 @@ import {
   AMAZON_IN_MARKETPLACE_HOST,
   asinFromAmazonUrl,
   canonicalAmazonUrl,
+  endorsementFindings,
+  lookTextFindings,
+  namedCelebrities,
   normaliseAsin,
+  productTextRefusals,
 } from '@paparazzi/shared';
 import { getPool } from '../db.js';
 import { parseCsv } from '../delimited.js';
@@ -142,6 +159,8 @@ export function lookAssetKey(title: string): string {
 
 export interface AddOffersOptions {
   orgSlug: string;
+  /** The organisation by id instead of slug (the API's instant links: the caller's tenant). */
+  orgId?: string;
   offers: OfferDeclaration[];
   /** Days the offer stays linkable without a refresh (1..365, default 30). */
   ttlDays?: number;
@@ -201,7 +220,9 @@ export async function addAmazonOffers(opts: AddOffersOptions, env: NodeJS.Proces
   try {
     await client.query('BEGIN');
     const db: Db = client;
-    const org = (await rows<{ id: string }>(db, `select id from organisations where slug = $1`, [opts.orgSlug]))[0];
+    const org = opts.orgId
+      ? (await rows<{ id: string }>(db, `select id from organisations where id = $1`, [opts.orgId]))[0]
+      : (await rows<{ id: string }>(db, `select id from organisations where slug = $1`, [opts.orgSlug]))[0];
     if (!org) throw new SetupRefusal([`no organisation '${opts.orgSlug}'`]);
     const orgId = org.id;
     const account = (
@@ -215,6 +236,26 @@ export async function addAmazonOffers(opts: AddOffersOptions, env: NodeJS.Proces
       )
     )[0];
     if (!account) throw new SetupRefusal([`no ${host} Associates account in '${opts.orgSlug}' (run the setup first)`]);
+
+    // Every celebrity's name (product text and shelf titles never name anyone), and the text checks, before any write.
+    const celebs = (await rows<{ id: string; name: string; aliases: string[] | null }>(db, `select id, name, aliases from celebrities where org_id = $1`, [orgId])).map((c) => ({
+      id: c.id,
+      name: c.name,
+      aliases: c.aliases ?? [],
+    }));
+    const textProblems: string[] = [];
+    for (const o of opts.offers) {
+      const r = productTextRefusals([o.brand, o.model, o.category], celebs);
+      if (r.length) textProblems.push(`row ${o.row} (${o.asin}): the product text ${r.includes('names_a_celebrity') ? 'names a celebrity' : 'uses endorsement wording'} (${r.join(', ')}); product text is the operator's plain description`);
+    }
+    for (const title of new Set(opts.offers.map((o) => o.look ?? null).filter((t): t is string => t !== null))) {
+      const words = [...new Set([...lookTextFindings(title), ...endorsementFindings(title)])].filter((w) => w !== 'word_style' && w !== 'possessive');
+      if (words.length) textProblems.push(`look '${title}': ${words.join(', ')} (a shelf title never says or implies anyone wore, owns or recommends its products)`);
+      if (namedCelebrities(title, celebs).length) textProblems.push(`look '${title}': names a celebrity (a celebrity look comes from the library, never from the offers file)`);
+      const celebLook = (await rows<{ id: string }>(db, `select id from looks where org_id = $1 and title = $2 and celebrity_id is not null limit 1`, [orgId, title]))[0];
+      if (celebLook) textProblems.push(`look '${title}': a celebrity look has this title (the offers file never adds to a celebrity look)`);
+    }
+    if (textProblems.length) throw new SetupRefusal(textProblems);
 
     const out: AddOffersSummary['offers'] = [];
     const keptNotAccessible: string[] = [];
@@ -315,7 +356,7 @@ export async function addAmazonOffers(opts: AddOffersOptions, env: NodeJS.Proces
       const found = (
         await rows<{ id: string; status: string; cover_asset_id: string | null }>(
           db,
-          `select id, status, cover_asset_id from looks where org_id = $1 and title = $2 order by created_at, id limit 1`,
+          `select id, status, cover_asset_id from looks where org_id = $1 and title = $2 and celebrity_id is null order by created_at, id limit 1`,
           [orgId, title],
         )
       )[0];
@@ -357,7 +398,7 @@ export async function addAmazonOffers(opts: AddOffersOptions, env: NodeJS.Proces
         );
         if (has.length > 0) continue;
         await db.query(
-          `insert into look_items (org_id, look_id, asset_id, variant_id, match_type) values ($1, $2, $3, $4, 'exact')`,
+          `insert into look_items (org_id, look_id, asset_id, variant_id, match_type) values ($1, $2, $3, $4, null)`,
           [orgId, lookId, assetId, o.variant_id],
         );
         added += 1;

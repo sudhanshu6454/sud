@@ -11,12 +11,146 @@ at the repository root) and its own in-house publisher network, seeded from a
 network file (`db/seed-network.ts`, default `db/network.example.yaml`, TEST data).
 Everything here runs from this directory; nothing outside it is needed.
 
-## Verified state (2026-09-29)
+## Verified state (2026-09-30)
 
 - `pnpm typecheck` clean on all 5 packages (`packages/*`)
-- **788/788 tests green across 46 test files** (`./node_modules/.bin/vitest run`:
-  api 203, redirect 10, shared 28, workers 24, web 523; re-run 2026-09-29 after
-  the Amazon review fixes)
+- **994/994 tests green across 61 test files** (`./node_modules/.bin/vitest run`:
+  api 308, redirect 13, shared 52, workers 39, web 582; re-run 2026-09-30 after
+  the owned default; 986 after the fixes of three independent reviews of the
+  celebrity looks, 937 in 59 files after stage 2, 878 in 56 after the
+  backend, 788 in 46 before it)
+- **The owned default** (2026-09-30; the owner: "all clips are owned by us",
+  "all footages captured in public place of any celebrity they dont own the
+  rights we own it"; `packages/api/src/looks/ownership.ts`, 0007 section 11
+  `library_ownership_statements` and `assets.licence_via`, edited in place;
+  `packages/api/ASSUMPTIONS.md` "The owned default"). The owner records a
+  dated statement on the server (`looks.sh owned`: the legal owner's name,
+  who shot the clips, the words confirmed with `yes`; audited; append-only;
+  `owned withdraw` ends it and narrows everything it licensed to an unknown
+  licence at once). A library row without licence columns takes it
+  (commercial reuse, WW, no end, the statement as the chain of title); a row
+  with its own licence keeps it; with no statement such a row refuses the
+  file as before. A person's licence edit through the API is never widened
+  by a later file (`licence_kept`; before this a re-import silently undid a
+  person's narrowing). Recording / withdrawing takes the import's lock. It
+  covers the footage only: the celebrity gate is unchanged. Tests:
+  `library-import.test.ts` "the owned default" (8); `pnpm looks:pg` O1–O3
+  (10 rounds of an import racing a withdrawal: nothing licensed by a
+  withdrawn statement). 0007 re-verified on a scratch Postgres 16 at 0006
+  seeded with the owner's real network file under `NODE_ENV=production`
+  plus an Amazon setup with TEST IDs: `1 migration(s) applied, 6 already
+  applied`, the 15 non-empty tables' counts unchanged, a second seed
+  byte-identical (database dropped). `looks.sh owned` rehearsed against a
+  TEST stand-in for `docker` (Docker was not running), not on the
+  installer's stack (`deploy/linode/README.md` "What was checked").
+- **Celebrity looks after three independent reviews** (2026-09-30; 54
+  findings, TEST data only; `packages/api/ASSUMPTIONS.md` "After three
+  independent reviews", `packages/web/ASSUMPTIONS.md` 92 and 97–103,
+  `packages/api/test/celebrity-controls.test.ts`, 30 tests). `pnpm
+  looks:pg` **51/51** (47 before the owned default's O1–O3), "LOOKS: ALL PASS" (the headline without the name, the
+  still at its own address, a storefront named after a celebrity 422, `/r/`
+  302 with afflino.com's tag `demo-web-21`, the still 410 after the
+  takedown with the share URLs and the still listed, and a new race R5: 10
+  rounds of a mint against a review turning products off, never an active
+  link). 0007 (edited in place: `looks.place_confirmed_by/at/note`) on a
+  fresh Postgres 16 (`7 applied`, then `0 applied, 7 already applied`) and
+  on databases at 0006 seeded like production (network seed under
+  `NODE_ENV=production` + an Amazon setup; and the demo graph with 7 legacy
+  EXACT items without evidence): `1 migration(s) applied, 6 already
+  applied`, every row count unchanged, a second network seed
+  byte-identical. A local stack (scratch Postgres 16 + Redis 7, the tsx api
+  with `TRUST_PROXY` and redirect, `next start` and the standalone
+  `server.js`): the look page piece by piece with only `/r/` links, the
+  image at `/img/looks/<id>?v=…` (200 `image/png`; a name-only look's 404,
+  no image box; a withdrawn look's 410), the name-only look without the
+  commercial label, a withdrawn look **410 on both servers** (a rewrite had
+  answered 200 on both; the middleware now answers the 410 itself with the
+  `/withdrawn` page's markup, no script), a takedown through the API → the
+  web's 410 at 5.5 s on a page probed just before, the revalidation `web:
+  attempted, ok, 200, batches 1`, `public_cache: cleared`, `/r/` the paused
+  page, restore 409 then 200 after a new review, `/r/` 302 again; a
+  visitor through the web's `/api` over the limit: 247 × 200 then 429 with
+  Retry-After while another visitor and the pages stayed 200; the api's
+  answer and still caches `x-public-cache: hit`; Meta's data deletion 200
+  signed / 401 wrongly signed; no verify token and no client address in
+  the api log; rollups: today's row of the clicked link = its 2 raw
+  clicks; analytics 403 for `publisher_analyst`. Screenshots at 1280 and
+  390 px (17 pages each: feed, hub, look, name-only look, withdrawn 410,
+  storefront, storefront 404, the admin screens incl. the placing editor
+  and the street look for the rights reviewer) with no horizontal overflow
+  and no page error. `docker/README.md`'s smoke test verbatim on images
+  rebuilt from this tree (every observed line unchanged); the installer's
+  rehearsal in test mode with every `looks.sh` step (`keys` with a
+  made-up verify token at the hidden prompt, `webhook` printing the fields
+  and the data deletion address and no secret, `reply-test` with
+  `messaging stop: ok`, `takedown` listing the Sharing Debugger addresses
+  and the still, the web image's 410 through the edge;
+  `deploy/linode/README.md` "What was checked"); ShellCheck 0.11.0 and
+  0.9.0 clean; `pnpm install --frozen-lockfile`, the web build (0 files in
+  `.next` with `amazon.in/`, `/dp/B0` or `amzn.`), compose `config -q` in
+  three combinations; the money-loop demo on pg-mem and on Postgres 16 ("All
+  demo assertions passed.") and `pnpm race:pg` ("RACE: ALL PASS") re-run.
+  Not run on the Linode; no Meta call was made.
+- **Celebrity looks, stage 1 of 2: the backend** (2026-09-30; the owner's "we
+  are tag product according to celeb outfit or similar to celeb outfit"; TEST
+  data only, nothing about any celebrity on afflino.com; the web pages are
+  stage 2). `0007_celebrity_looks.sql` applies on a fresh Postgres 16 (0001–0007)
+  and on top of a database migrated to 0006 and seeded like production
+  (`1 migration(s) applied, 6 already applied`, every row count unchanged, a
+  second network seed byte-identical; the looks CLI then refusing TEST rows
+  under production, importing, re-importing without change, refusing a review
+  without evidence, reviewing, storefronts, takedown, restore 409 then 200).
+  `pnpm looks:pg` (`scripts/celebrity-looks-pg.ts`, scratch database
+  `paparazzi_demo_looks_<8 hex>` created and dropped; also in CI): **43/43**,
+  "LOOKS: ALL PASS" — import (2 drafts, 2 unreviewed celebrities, 4 pieces;
+  a second import changes nothing) → publish 409 while unreviewed, public 404
+  → rights review → EXACT without evidence 422, with evidence pending, the
+  tagger's own approval 403, a second editor's 200; 4 SIMILAR through instant
+  links → the publish gate passes → look page / feed / hub / storefront /
+  sitemap with only `/r/` links → `/r/` 302 to
+  `…/dp/B0DEMO0201?tag=demo-ig-21` → a signed Meta comment → one event, one
+  stub message carrying only `https://afflino.example.com/looks/<id>`, 5
+  replays no-op, a bad signature 401, no raw id or text stored → takedown:
+  410 look + hub, feed / storefront / sitemap empty, 5 links on the paused
+  page, a new comment queues nothing → restore 409 without a new review, 200
+  after it, `/r/` 302 again → rollups (2 clicks, 1 via the storefront); races
+  the pg-mem suite cannot prove: the partial unique indexes (23505) and EXACT
+  checks (23514), 10 rounds of a mint racing a takedown (never an active link
+  on a withdrawn look), 10 concurrent deliveries (one event), 5 senders (one
+  message). The api / workers / redirect images build with the new code;
+  in the api image the CLI refuses TEST rows under the image's
+  `NODE_ENV=production`, the public API answers 200 with `Cache-Control:
+  public, max-age=30`, the webhook's GET verification echoes the challenge
+  and a POST without the app secret is 503; the workers boot 7 queues
+  ('on' without Meta keys falls back to off, logged); the edge validates in
+  both modes and answers 404 for `/internal/*`. Not run on the Linode; no
+  Meta call was made.
+- **Celebrity looks, stage 2 of 2: the web, the owner's steps, the docs**
+  (2026-09-30, TEST data only). On a local stack (scratch Postgres 16 with
+  the TEST library, the tsx api and redirect, `next start` on the build):
+  `/shop` is the Spotted feed (the trending row, filters by celebrity and
+  page, the grid, the pager; "Nothing spotted yet." when empty), `/c/<slug>`
+  the hub, `/looks/<id>` the look (the still with numbered markers, none on
+  eyewear / headwear / jewellery; the moment; "View the original post"; the
+  outfit piece by piece, the exact match first, then similar styles; every
+  product "Buy on Amazon.in" through `/r/` only, "See price on Amazon.in", the
+  Associate statement beside the button; the non-endorsement line wherever a
+  celebrity is named), `/s/<slug>` the storefront (share, QR); the admin
+  screens (Celebrities, Library, Looks + the pieces editor, Takedowns,
+  Instant links, Comment replies, Analytics with CSV) live with a
+  network-admin sign-in and TEST data without one; no `amazon.in/` string in
+  a look's HTML or in `.next`; screenshots at 1280 and 390 px with no
+  horizontal overflow and no page error. A takedown: the middleware's 410
+  (no-store, noindex) 5.0 s after it on a page probed just before (at once
+  on one not probed), the revalidation call `web: attempted, ok, 200` after
+  the takedown and after its restore, a wrong secret 401; a hub with no
+  public look 404. An EXACT tag: its tagger's approval 403, the second
+  editor's sign-in (`looks.sh signin`, choice 3) 200. `docker/README.md`'s
+  smoke test verbatim (7 migrations, `/shop` titled "Spotted · Afflino",
+  `/internal/revalidate` 404 through the edge, `/c/nobody` 404); the
+  installer's rehearsal in test mode with every new `looks.sh` step
+  (`deploy/linode/README.md` "What was checked"); ShellCheck 0.11.0 and
+  0.9.0 clean. Not run on the Linode; no Meta call was made.
 - Demo: **51/51 assertions** on pg-mem (`tsx scripts/demo-money-loop.ts`) **and
   51/51 on a real PostgreSQL 16.13** (`DEMO_TARGET=postgres`, scratch database
   `paparazzi_demo_<8 hex>` created and dropped, no shims) — link → click →
@@ -157,8 +291,9 @@ Everything here runs from this directory; nothing outside it is needed.
   claim.
 - The CI workflow `afflino` (`.github/workflows/afflino.yml`, runs on changes
   under `affiliate/`) runs the frozen install, typecheck, vitest, both demos, the
-  web build and the real-Postgres migrate + seeds; no run has been observed from
-  this sandbox; it also runs ShellCheck on `deploy/linode/*.sh`
+  web build, the real-Postgres migrate + seeds, `race:pg` and (since 2026-09-30)
+  `looks:pg`; no run has been observed from this sandbox; it also runs
+  ShellCheck on `deploy/linode/*.sh`
 
 ## Commands
 
@@ -167,11 +302,12 @@ not at the repo root, so the scripts that need it are given with the api package
 copy.
 
 ```bash
-./node_modules/.bin/vitest run                                        # tests (784)
+./node_modules/.bin/vitest run                                        # tests (986)
 pnpm typecheck                                                        # 5 packages
 ./packages/api/node_modules/.bin/tsx scripts/demo-money-loop.ts       # demo on pg-mem (51 assertions)
 DATABASE_URL=postgresql://paparazzi:changeme@127.0.0.1:5432/paparazzi DEMO_TARGET=postgres ./packages/api/node_modules/.bin/tsx scripts/demo-money-loop.ts   # same demo on real Postgres (scratch DB, dropped)
 DATABASE_URL=postgresql://paparazzi:changeme@127.0.0.1:5432/paparazzi ./packages/api/node_modules/.bin/tsx scripts/amazon-import-race.ts   # Amazon imports under concurrency (pnpm race:pg; scratch DB, dropped)
+DATABASE_URL=postgresql://paparazzi:changeme@127.0.0.1:5432/paparazzi ./packages/api/node_modules/.bin/tsx scripts/celebrity-looks-pg.ts   # celebrity looks story + races (pnpm looks:pg; scratch DB, dropped)
 docker compose up -d postgres redis                                   # real Postgres + Redis (dev machine)
 DATABASE_URL=postgresql://paparazzi:changeme@127.0.0.1:5432/paparazzi node db/migrate.mjs             # apply pending migrations
 DATABASE_URL=postgresql://paparazzi:changeme@127.0.0.1:5432/paparazzi node db/migrate.mjs --status    # applied / pending
@@ -183,6 +319,7 @@ node scripts/load/redirect-soak.js --smoke                            # load smo
 JWT_SECRET=ci STUB_WEBHOOK_SECRET=ci POSTGRES_PASSWORD=ci docker compose -f docker-compose.prod.yml -f docker-compose.single-host.yml config -q   # compose check (as CI)
 shellcheck deploy/linode/*.sh                                         # the Linode scripts (CI; 0.11.0 and 0.9.0 were run by hand for the 2026-09-29 changes)
 DATABASE_URL=postgresql://paparazzi:changeme@127.0.0.1:5432/paparazzi ./packages/api/node_modules/.bin/tsx packages/api/src/cli/amazon.ts status   # the Amazon operator CLI (setup | offers | template | links | import-report | returns | apply-return | status | pause | resume)
+DATABASE_URL=postgresql://paparazzi:changeme@127.0.0.1:5432/paparazzi ./packages/api/node_modules/.bin/tsx packages/api/src/cli/looks.ts status    # the celebrity-looks CLI (import | ownership | status | celebrities | review | takedown | restore | takedowns | storefronts | events | reply-test | sign-in)
 ```
 
 The owner's one line, as root on the Linode (install and every update;
@@ -198,7 +335,16 @@ throwaway `AFFLINO_PROJECT`, scratch `AFFLINO_ENV_FILE` /
 `AFFLINO_BACKUP_DIR`; in this sandbox an `AFFLINO_EXTRA_COMPOSE_FILE`
 with `NODE_IMAGE: local/node22-alpine-ca` build args), then `down -v`.
 
-Notes: `pnpm demo`, `pnpm demo:pg`, `pnpm race:pg`, `pnpm seed`, `pnpm seed:network` call the api
+The owner's celebrity-look steps, one line each (`docs/runbooks/deploy.md` §1C;
+the library file copied from the Mac first, the runbook's line):
+`bash /opt/afflino/affiliate/deploy/linode/looks.sh owned` once (the ownership
+statement; `owned withdraw` ends it), then
+`bash /opt/afflino/affiliate/deploy/linode/looks.sh import` (then `celebrities`,
+`review`, `storefronts`, `storefronts live`, `signin`, `status`, `takedown`,
+`takedowns`, `restore`, `keys`, `webhook`, the update line, `accounts`,
+`reply-test`, `replies shadow | on | off`, `events`).
+
+Notes: `pnpm demo`, `pnpm demo:pg`, `pnpm race:pg`, `pnpm looks:pg`, `pnpm seed`, `pnpm seed:network` call the api
 package's `tsx` (`./packages/api/node_modules/.bin/tsx`); the root has none.
 `pnpm install --frozen-lockfile` **works** (the earlier "known-broken" note is
 obsolete; CI runs it). `packageManager` pins pnpm 9.12.0 and the Dockerfiles'
@@ -247,7 +393,67 @@ runs and the docker smoke test.
   non-published look for any role but `editor`/`network_admin`, and a
   `placement_id` outside the org are all `404 NOT_FOUND`. `url` is built by
   `src/redirect-url.ts` (`REDIRECT_BASE_URL` + `/r/` + token), shared with
-  `POST /v1/links`. Tests: `test/catalogue.test.ts`.
+  `POST /v1/links`. Tests: `test/catalogue.test.ts`. Since 0007 the catalogue
+  leaves out celebrity looks and looks under a takedown for consumer roles,
+  and removed items.
+- **Celebrity looks** (0007, 2026-09-30; `packages/api/src/looks/`,
+  `packages/api/ASSUMPTIONS.md` "Celebrity looks"): a look is a moment
+  (celebrity, event / place, date, video, still, the in-house page and post)
+  with the outfit piece by piece (`look_pieces`); products are tagged into a
+  piece on the existing `look_items` as EXACT (evidence + source, a second
+  person's approval, one per piece) or SIMILAR (default, several). The rules
+  live in `@paparazzi/shared` `celebrity.ts` (one capability matrix per
+  rights status, narrowed by the celebrity's review; the wording lint) and
+  `replies.ts`. Publishing goes through `looks/gate.ts` (rights, minors /
+  never-list, takedown, image licence, moment date, in-house page, wording,
+  every piece has a product, EXACT reviewed, live offers, the link guards as
+  a dry run of `src/links/mint.ts`), and every public read re-checks it in SQL
+  (`looks/public.ts` `readGateSql`) and masks in JS (`effectiveLookDisplay`).
+  The public read API `/v1/public/{org}/spotted | celebrities/{slug} |
+  looks/{id} | storefronts/{slug} | sitemap` (no token, published only,
+  resolved by the organisation's slug, `Cache-Control: public, max-age=30`;
+  410 `GONE` under a takedown); the operator API (`/v1/celebrities`,
+  `/v1/editorial/*` incl. instant links over `src/amazon/offers.ts`,
+  `/v1/takedowns`, `/v1/replies/*`, `/v1/analytics/*`); links of a look are
+  minted for afflino.com's web placement (its own tracking ID; the in-house
+  pages' links for their posts come from instant links), only for approved
+  items, and serialized with a takedown or a review by a row lock on the
+  look (`looks/look-links.ts`); a celebrity's name appears only in the
+  credit line of their own look — every other text is checked against every
+  name and alias when written and at every read (`looks/names.ts`); the
+  headline is name-free ("Spotted at <event>"); the still is served at
+  its own address (`GET /v1/public/{org}/looks/{id}/still`, `looks/still.ts`,
+  behind the web's `/img/looks/<id>`); the public API and the Meta webhook
+  are rate-limited per client and the public answers cached 30 s under a
+  Redis epoch every invalidation increments (`src/public-guard.ts`; the
+  web's own server-side calls are not counted); a takedown / rights
+  downgrade / unpublish pauses links with their reason and clears the route
+  cache twice (`looks/invalidate.ts`, plus a best-effort web revalidation,
+  `WEB_REVALIDATE_URL` / `WEB_REVALIDATE_SECRET`). The library import
+  (`looks/library-import.ts`, CLI `src/cli/looks.ts` → `dist/cli/looks.js`)
+  takes a row's licence from its own columns or, with none, from the
+  owner's ownership statement in force (`looks/ownership.ts`; none in
+  force → the row refuses the file), refuses a whole file on any bad row,
+  never widens a licence a person edited, is idempotent on the video
+  reference and runs under an advisory lock (recording or withdrawing the
+  statement takes it too). The Meta
+  webhook (`routes/meta-webhook.ts`: GET verify; POST
+  `X-Hub-Signature-256` over the raw body, constant-time; 503 without
+  `META_APP_SECRET`) stores one `reply_events` row per comment (`on conflict
+  (platform, comment_id) do nothing`), the commenter only as
+  HMAC(`COMMENT_ID_HASH_KEY`, platform:account:id). Stage 2 added what the
+  web needs: `/v1/public/{org}/spotted` carries `facets` (celebrities and live
+  storefronts with counts, through the read gate) and `commercial_label`;
+  `GET /v1/public/{org}/trending` (looks ranked by the last 1–30 days of
+  `click_daily`, re-gated, no counts returned); `GET
+  /v1/editorial/properties`; `POST /v1/editorial/library/import` (a dry run
+  by default: `checkLibrary`, the same checks as the import; 422 with the
+  problems); `GET /v1/replies/events` (never the comment id, commenter
+  hash, media id or message id); every reply rule answers with its
+  `dm_preview`. The CLI's `sign-in --role network_admin | editor |
+  rights_reviewer` mints the JWT stub for the admin (the second editor is a
+  user of its own, so the EXACT maker-checker holds), `reply-test` and
+  `events`.
 - `packages/redirect` — standalone `GET /r/{token}` click service. Persists click
   records binding `click_id → placement`; sets **no cookies**; for an Amazon
   programme it strips `tag` / `ascsubtag` / `subid`, sets `tag` to the
@@ -259,7 +465,9 @@ runs and the docker smoke test.
   (600 s on mint, 300 s on rebuild; the kill switch deletes a programme's
   entries after its commit and again 2 s later, `routes/programmes.ts`);
   fail-open (302 without `subid` if the click
-  cannot be persisted). The client address is `req.ip` under `TRUST_PROXY`
+  cannot be persisted). A paused link (0007: takedown, rights review,
+  unpublished look, removed product) serves the paused page; `?via=<slug>`
+  goes into `clicks.context.via` only. The client address is `req.ip` under `TRUST_PROXY`
   (`packages/shared/src/trust-proxy.ts`; unset = trust nothing; production
   compose `loopback,uniquelocal`, behind the edge that overwrites
   X-Forwarded-For) and is stored only as `ip_hash` = HMAC-SHA256(`IP_HASH_KEY`,
@@ -271,7 +479,14 @@ runs and the docker smoke test.
   mirror, outbox, suspense retry, retention purge (`src/retention/`), and the
   hourly Amazon price job (`src/amazon/`: drops prices older than 1 h; with
   Creators API credentials, `AMAZON_CREATORS_*`, refreshes them, backs off on
-  429 / 401 / 403, reactivates an offer Amazon lists again).
+  429 / 401 / 403, reactivates an offer Amazon lists again); since 0007
+  `comment-replies` (a sweep every `COMMENT_REPLIES_SWEEP_MS` enqueues ready
+  events; a conditional claim; one private reply per comment carrying only
+  the look's afflino.com URL; an unknown outcome is never resent;
+  `COMMENT_REPLIES_SENDING` off (default) | shadow | on, a stub sender unless
+  on with the Meta keys; `src/replies/`, `src/meta/graph.ts`) and `analytics`
+  (hourly IST rollups into `click_daily` / `reply_daily`, `src/analytics/`);
+  retention's fourth class deletes `reply_events` after 30 days.
 - `packages/web` — Next.js 14.2, the **Afflino** web app built to the design
   handover (tokens `app/globals.css`, self-hosted Archivo, primitives
   `components/ui`, shells `components/shell`; route map with artboard ids and
@@ -320,8 +535,45 @@ runs and the docker smoke test.
   `AMAZON_ASSOCIATE=on` (runtime, set by `amazon.sh setup`) puts the
   statement in every footer; robots.txt disallows `/r/`; `/privacy` is a
   `StubPage` (`data-document-status="stub"`), which `amazon.sh links` /
-  `shop` refuse to go past.
-- `db/migrations/` — `0001_core.sql` → `0006_amazon_associates.sql` (the
+  `shop` refuse to go past. **Celebrity pages** (2026-09-30, stage 2;
+  `packages/web/README.md` screen map, web ASSUMPTIONS 87+): `/shop` is the
+  Spotted feed (trending row, filters, grid, pager; the network's looks
+  below it as "More looks"), `/c/[slug]`, `/looks/[id]` (the public look
+  first, the catalogue look otherwise), `/s/[slug]` (own slim layout);
+  `lib/public-catalogue.ts` (server-only) reads `/v1/public/{PUBLIC_ORG_SLUG}/…`
+  with no token, `revalidate: 30` and cache tags, the TEST demo only when
+  the API is unreachable (an answer, even 404 / 410, is never replaced by
+  demo data); `lib/spotted.ts` maps the wire and drops any product link that
+  is not `https?://host/r/<32 hex>` and any post URL that is not a Facebook /
+  Instagram https URL, and gives eyewear, headwear and jewellery no marker
+  (`NO_MARKER_CATEGORIES`); the wording ("The same item", "Similar style.
+  <name> did not wear or endorse this product.", the non-endorsement line,
+  the commercial label) comes from the API, the page labels from
+  `CELEBRITY_WEB` in `lib/site-copy.ts` (drafts pending counsel).
+  `middleware.ts` (`/looks/*`, `/c/*`) answers 410 (no-store, noindex) for a
+  withdrawn look or hub after a HEAD on the public API (2 s; per process
+  "not withdrawn" kept 5 s, "withdrawn" 30 s; unreachable → the page renders,
+  which shows only the withdrawn notice or the error state); the 410's body
+  is the web's own `/withdrawn` page rendered from `WEB_INTERNAL_ORIGIN`
+  (default `http://127.0.0.1:$PORT`) with its scripts removed (a rewrite
+  cannot carry the 410 in Next 14).
+  `/internal/revalidate` (POST, `x-revalidate-secret` =
+  `WEB_REVALIDATE_SECRET`, HMAC-compared; 503 without a secret of 16+
+  characters; known tags only) is what a takedown calls; the edge answers
+  404 for `/internal/*`, so only the api reaches it over the compose
+  network. `CELEBRITY_INDEXING` (runtime, default off) only narrows
+  `SITE_INDEXING`: celebrity pages (and `/shop` while its feed shows a look)
+  are noindex and out of the sitemap unless both are `on`; og / twitter
+  descriptions are the non-endorsement line. The admin screens
+  (`components/admin/celebrity/`, `/admin/{celebrities,library,looks,
+  takedowns,instant-links,replies,analytics}`) call the operator API with
+  the `/login` bearer and fall back to TEST data (`lib/demo/celebrity.ts`,
+  a fixed clock) with the badge.
+- `db/migrations/` — `0001_core.sql` → `0007_celebrity_looks.sql` (0007:
+  celebrities and their rights reviews, licence facts on assets, the moment
+  on looks, pieces, piece-scoped EXACT / SIMILAR on `look_items`,
+  storefronts, takedowns, paused links, comment-reply tables, `click_daily`,
+  the `rights_reviewer` role; `db/README.md` "Celebrity looks (0007)"; 0006: the
   Associates account — no sub-tag or third-party column — tracking ID → one
   placement, nullable / time-limited offer prices with `stale_reason`,
   `conversions.placement_id`; 0006 was edited in place during review before
@@ -408,6 +660,37 @@ runs and the docker smoke test.
     payable sale (enforced in code).
 11. **Demo/seed data is always TEST-labeled** (`Demo-` / `demo.` / `txn-demo-*` /
     `example.com`); the demo refuses to run with `NODE_ENV=production`.
+    Celebrity fixtures are "Demo Star …" people only; real celebrity names and
+    library data live on the server, never in this repository.
+12. **The rights gate: nothing about a celebrity is public unless counsel's
+    review allows it.** A new celebrity is `unreviewed` (nothing shown);
+    `blocked` shows nothing; `editorial` at most the name, no products;
+    `cleared` at most name, image and products; each review narrows that and
+    defaults to name only, no products (`@paparazzi/shared` `celebrity.ts`,
+    the one matrix; a change to it is counsel's, then a code change). A minor
+    is never published. It is enforced at publish (`looks/gate.ts`),
+    re-checked in SQL on every public read (`readGateSql`: feed, hub, look,
+    storefront, trending, facets, sitemap) and masked in JS
+    (`effectiveLookDisplay`); a takedown answers 410 everywhere and pauses the
+    links at once, and lifting it needs a new review recorded after it. The
+    web never shows what the API did not return and never names a celebrity
+    without the non-endorsement line. Tests: `celebrity-looks.test.ts`,
+    `takedowns.test.ts`, `celebrity-web-support.test.ts`, shared
+    `celebrity.test.ts`, web `spotted.test.ts` / `celebrity-web.test.ts`.
+13. **EXACT only with evidence and a second person.** "The same item" (EXACT)
+    needs the evidence (10+ characters) and its source (3+), and approval by
+    a different user from its tagger (403 for the tagger; CHECK
+    `match_reviewed_by <> tagged_by` in 0007), one per piece; an unapproved
+    EXACT never shows. Everything else is SIMILAR, whose wording never claims
+    the same item ("Similar style. <name> did not wear or endorse this
+    product."); the wording lint refuses endorsement claims ("worn by",
+    "dupe", "for less", …) in any editor text. Tests:
+    `look-pieces.test.ts`.
+14. **Type never sits on a face** (the owner's rule). The still carries only
+    small numbered markers on garments; eyewear, headwear and jewellery get
+    none (`NO_MARKER_CATEGORIES`, the page and the editor's preview); all
+    other text sits outside the image (`StillImage`). Test: web
+    `spotted.test.ts`.
 
 ## Key acceptance numbers (don't regress)
 
@@ -425,7 +708,7 @@ runs and the docker smoke test.
   hot-path arithmetic (clicks/s, `clicks` growth, cache, replicas, the web) and
   what is still unmeasured
 - `docs/threat-model.md` — trust boundaries, mitigations cited to code/tests,
-  12 residual risks, pentest scope input
+  13 residual risks, pentest scope input
 - `docs/pentest-scope.md`, `docs/runbooks/` (deploy, backup-restore, alerts,
   incidents), `docs/monitoring/alerts.yaml`
 - `docs/infrastructure-recommendation.md` — the owner's Linode decision and the
@@ -448,8 +731,10 @@ runs and the docker smoke test.
 - Auth is a **JWT stub** (`scripts/mint-dev-token.mjs`, claims trusted verbatim;
   default TTL 8 h, `exp` enforced); production needs a real IdP + membership
   validation. The shop's `WEB_API_TOKEN` is that stub too.
-- No webhook signature verification on API ingress; no rate limiting (also not
-  on `/r/{token}`, nor at the edge); no CSP (the edge sets HSTS, nosniff,
+- No webhook signature verification on the stub-network ingress (the Meta
+  webhook of 0007 verifies `X-Hub-Signature-256`); no rate limiting on
+  `/r/{token}` or at the edge (the public read API and the Meta webhook have
+  a per-process, per-client limit in the api since 2026-09-30); no CSP (the edge sets HSTS, nosniff,
   Referrer-Policy and X-Frame-Options only); `localStorage` bearer token in
   the web app's areas (`/login` writes it) — all flagged in the threat model
   as pre-launch work.
@@ -471,7 +756,25 @@ runs and the docker smoke test.
   `/dp/<ASIN>?tag=`, not the API's own links; `docs/capacity-plan.md`).
 - CSV upload takes inline `csv_text` (2 MB cap) — production needs
   multipart/object-storage ingestion.
-- Retention defaults are 365-day placeholders; counsel sets real windows.
+- Retention defaults are 365-day placeholders (30 days for `reply_events`);
+  counsel sets real windows.
+- Celebrity looks (0007) are built, backend and web, with TEST data only;
+  nothing about any celebrity is on afflino.com until the owner imports the
+  library and counsel's reviews are recorded. Every rights, wording (the
+  web's labels in `CELEBRITY_WEB` too), evidence, takedown-timeline,
+  indexing and retention question is counsel's (`docs/counsel-briefing.md`
+  §10); comment replies need Meta App Review, Business Verification and Live
+  mode and are off by default; the rights reviewer and the second editor
+  are roles on the JWT stub, so they are as forgeable as every other role
+  until a real IdP exists (`looks.sh signin` writes one sign-in at a time to
+  a root-only file; the owner hands each to its person); the takedown SLA
+  figures are reported, not alerted. The web's 410 lags a takedown by up to
+  5 s per web process (the middleware's cache; the page itself shows only
+  the withdrawn notice at once); the Meta verify token is one the owner
+  makes up at `looks.sh keys`' hidden prompt and is never printed. The name
+  and endorsement checks are English word lists; the chain of title is
+  checked for presence, not validity; nothing alerts on Meta's
+  `messaging_policy_enforcement` deliveries yet.
 - "No cookies, hashed IPs" is an **implementation detail for counsel to assess**,
   not proof of DPDP/ASCI compliance — never present it as such. The keyed
   `ip_hash` is pseudonymous, not anonymous (`docs/threat-model.md` §4.11).

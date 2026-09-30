@@ -48,7 +48,10 @@ export type MembershipRole =
   | 'publisher_analyst'
   | 'merchant_manager'
   | 'finance_operator'
-  | 'finance_approver';
+  | 'finance_approver'
+  // counsel's reviewer (0007): the only role that sets a celebrity's rights
+  // status beyond 'blocked' and restores a takedown
+  | 'rights_reviewer';
 
 export interface Membership {
   user_id: string;

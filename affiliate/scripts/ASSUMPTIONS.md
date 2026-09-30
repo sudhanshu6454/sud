@@ -214,3 +214,25 @@ the one known driver difference.
     With the import lock disabled on purpose the pair check fails 10/10 while the returns
     stay exact (the atomic reversal insert on its own), so each guard is shown to cover its
     own case. Refuses `NODE_ENV=production`.
+
+## 2026-09-30 — celebrity looks
+
+23. **`scripts/celebrity-looks-pg.ts` (`pnpm looks:pg`) is the real-Postgres proof of 0007.**
+    It creates `paparazzi_demo_looks_<8 hex>` on the `DATABASE_URL` server (dropped at the
+    end, also on failure; only that prefix is ever dropped), migrates it with `db/migrate.mjs`
+    (0001–0007, no shims), seeds the example network (TEST) and a TEST Amazon account, and runs
+    the api, the redirect and the workers' sender (a stub: no Meta call) in process. The story
+    (E1–E14): import → publish refused while unreviewed → review → EXACT refused without
+    evidence, pending until a second person approves → SIMILAR → publish → the public reads →
+    `/r/` 302 → a signed comment → one stub message carrying only the look URL, replays and a
+    bad signature changing nothing → takedown (410, links paused, nothing queued) → restore
+    refused without a new review, then allowed → rollups. The races (R1–R4): the partial unique
+    indexes and the EXACT CHECKs (23505 / 23514), 10 rounds of a link mint racing a takedown
+    (never an active link on a withdrawn look), 10 concurrent deliveries of one comment (one
+    event), 5 senders on one event (one message). CI runs it after `race:pg`. Refuses
+    `NODE_ENV=production`. It keeps its own org of TEST values; it proves the sandbox, not the
+    owner's library, Meta or the web pages (stage 2).
+24. **`demo-money-loop.ts` carries 0007's pg-mem shims too** (`char_length`, the memberships
+    role check's pg-mem name, the partial indexes; `db/README.md` "pg-mem vs real Postgres").
+    The money loop does not touch the new tables; its 51 assertions are unchanged on both
+    targets.

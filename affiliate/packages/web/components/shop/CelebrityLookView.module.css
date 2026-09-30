@@ -1,0 +1,61 @@
+.original {
+  margin: var(--space-4) 0 0;
+  font-size: 14px;
+}
+
+.originalLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-weight: 600;
+}
+
+/* The pieces index: phones only (the desktop split shows the outfit beside the still). */
+.index {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .index {
+    display: block;
+    padding: var(--space-2) 20px 0;
+  }
+
+  .indexList {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 var(--space-4);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .indexLink {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: 44px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-text);
+  }
+
+  .indexNumber {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    background: var(--color-text);
+    color: var(--color-bg);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  /* The still takes at most 60% of the screen, so the outfit starts on the first screen. */
+  .still img {
+    max-height: 60vh;
+    width: auto;
+    margin-inline: auto;
+  }
+}

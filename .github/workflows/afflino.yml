@@ -58,6 +58,11 @@ jobs:
       # Amazon.in Associates report imports running at the same time (returns never reverse more
       # than the sale earned; a changed amount never lands twice), on its own scratch database
       - run: ./packages/api/node_modules/.bin/tsx scripts/amazon-import-race.ts
+      # celebrity looks end to end (import → rights review → pieces → publish → public reads →
+      # a signed Meta comment → one stub message → takedown 410 → restore → rollups) and what
+      # pg-mem cannot prove (the partial unique indexes, a mint racing a takedown, concurrent
+      # webhook deliveries and senders), on its own scratch database
+      - run: ./packages/api/node_modules/.bin/tsx scripts/celebrity-looks-pg.ts
       # the production compose files interpolate with only their required variables
       # (managed databases; single host, as the Linode installer runs it; the plain-HTTP
       # edge rehearsal), and the edge's Caddyfile is valid in both of its modes (HTTPS for

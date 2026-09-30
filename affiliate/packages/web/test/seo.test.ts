@@ -124,7 +124,10 @@ describe('pageMetadata (canonical + og:url per page)', () => {
       ['app/(marketing)/contact/page.tsx', "pageMetadata('/contact', 'Contact')"],
       ['app/(marketing)/terms/page.tsx', "pageMetadata('/terms', 'Terms of use')"],
       ['app/(marketing)/privacy/page.tsx', "pageMetadata('/privacy', 'Privacy notice')"],
-      ['app/(shop)/shop/page.tsx', "pageMetadata('/shop', 'Shop the looks')"],
+      // /shop is the Spotted feed since 2026-09-30: pageMetadata('/shop', 'Spotted') through shopMetadata (lib/seo.ts).
+      ['app/(shop)/shop/page.tsx', 'shopMetadata({ celebrityContent: value.items.length > 0 })'],
+      ['app/(shop)/c/[slug]/page.tsx', 'celebrityPageMetadata(`/c/${hub.value.celebrity.slug}`'],
+      ['app/s/[slug]/page.tsx', 'celebrityPageMetadata(`/s/${sf.value.slug}`'],
       ['app/(shop)/looks/[id]/page.tsx', 'shopDetailMetadata(`/looks/${encodeURIComponent(look.id)}`, look.title, {'],
       ['app/(shop)/looks/[id]/items/[itemId]/page.tsx', '`/looks/${encodeURIComponent(look.id)}/items/${encodeURIComponent(item.id)}`'],
     ];

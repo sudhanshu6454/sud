@@ -25,6 +25,8 @@
 # Routing:
 #   www.${SITE_HOST}/<path>?<query>  → 301 to https://${SITE_HOST}/<path>?<query>
 #   /r/*                             → REDIRECT_UPSTREAM (the click service)
+#   /internal/*                      → 404 (the web's internal endpoints are
+#                                      reached over the compose network only)
 #   everything else                  → WEB_UPSTREAM (the Next.js app; it serves
 #                                      /api/* as its same-origin proxy to the
 #                                      API, so the API itself is not public;
@@ -120,6 +122,13 @@
 		reverse_proxy {$REDIRECT_UPSTREAM:redirect:3001} {
 			import proxy_headers
 		}
+	}
+
+	# The web's internal endpoints (the page-cache revalidation the API calls
+	# over the compose network after a takedown, WEB_REVALIDATE_URL) are never
+	# reachable from outside.
+	handle /internal/* {
+		respond 404
 	}
 
 	handle {

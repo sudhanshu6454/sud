@@ -1,0 +1,21 @@
+.header.header {
+  padding-inline: 40px;
+}
+
+.body {
+  padding: var(--space-6) 40px;
+}
+
+@media (max-width: 899px) {
+  .header.header,
+  .body {
+    padding-inline: 20px;
+  }
+}
+
+@media (max-width: 760px) {
+  .body a,
+  .body button {
+    min-height: 44px;
+  }
+}

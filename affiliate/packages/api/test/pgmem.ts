@@ -219,6 +219,16 @@ export function createTestDb(opts: { rollback?: boolean } = {}): TestDatabase {
     implementation: () => randomUUID(),
   });
 
+  // char_length(text): a Postgres builtin pg-mem lacks; 0007's CHECKs use it
+  // (length bounds of names, labels, evidence). Characters, not bytes, as in
+  // Postgres.
+  db.public.registerFunction({
+    name: 'char_length',
+    args: [DataType.text],
+    returns: DataType.integer,
+    implementation: (t: string | null) => (t === null || t === undefined ? null : [...t].length),
+  });
+
   // Advisory locks (the Amazon report import runs one file at a time per
   // account, src/amazon/report-import.ts): pg-mem has none, so they are
   // emulated database-wide with a set of held keys — enough for the tests to
@@ -265,12 +275,31 @@ export function createTestDb(opts: { rollback?: boolean } = {}): TestDatabase {
     sql = sql.replace(/^\s*create extension[^;]*;/gim, '');
     // pg-mem does not parse `unique nulls not distinct`.
     sql = sql.replace(/unique nulls not distinct/gi, 'unique');
+    // pg-mem evaluates a CHECK of `col in (…)` on a NULL as false (Postgres: unknown, so the row passes).
+    // look_items.match_type is nullable by design (an Amazon shelf item has no verdict: "Unverified match"):
+    // the Postgres meaning is spelled out for pg-mem.
+    sql = sql.replace(/match_type text check \(match_type in \('exact','similar'\)\)/gi, "match_type text check (match_type is null or match_type in ('exact','similar'))");
     // pg-mem names inline CHECK constraints <table>_constraint_<N>, not the
     // Postgres auto-name <table>_<column>_check (see header comment).
     sql = sql.replace(
       /drop constraint ledger_entries_account_check/gi,
       'drop constraint ledger_entries_constraint_1',
     );
+    // Same for the memberships role check (0007 adds 'rights_reviewer'): the
+    // first CHECK of memberships, auto-named memberships_role_check by Postgres.
+    sql = sql.replace(/drop constraint memberships_role_check/gi, 'drop constraint memberships_constraint_1');
+    // Partial indexes (0007): pg-mem answers ANY query whose WHERE shares a
+    // predicate with a partial index's WHERE (even just `piece_id is not
+    // null`) from that index alone, returning only its rows (verified
+    // 2026-09-30 on pg-mem 3.0.14). So:
+    //   - the two whose predicate is only `<col> is not null` become plain
+    //     unique indexes (NULLs are distinct: the same constraint);
+    //   - the two look_items ones (one EXACT per piece, a product once per
+    //     piece, over rows not removed) are not created here; the API
+    //     pre-checks both (409), and scripts/celebrity-looks-pg.ts proves the
+    //     indexes themselves on a real PostgreSQL.
+    sql = sql.replace(/(create unique index uq_(?:assets_org_kind_key|looks_org_library_ref) on [^;]*?\))\s*where [^;]*;/gi, '$1;');
+    sql = sql.replace(/create unique index uq_look_items_piece_(?:exact|variant) on[^;]*;/gi, '');
     db.public.none(sql);
   }
 

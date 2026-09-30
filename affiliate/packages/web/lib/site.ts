@@ -63,3 +63,17 @@ export function siteIndexing(): boolean {
 export function amazonAssociate(): boolean {
   return process.env.AMAZON_ASSOCIATE?.trim().toLowerCase() === 'on';
 }
+
+/**
+ * CELEBRITY_INDEXING=on (server runtime, read per request) lets search
+ * engines index the pages about celebrities: the looks of the Spotted feed,
+ * the hubs (/c/<slug>), the storefronts (/s/<slug>, which list those looks)
+ * and /shop while its feed shows any. Anything else — the default, "off" in
+ * docker-compose.prod.yml — keeps them noindex and out of the sitemap even
+ * with SITE_INDEXING=on. Whether and when to index pages naming celebrities
+ * is the owner's decision with counsel (docs/counsel-briefing.md §10); it
+ * only ever narrows SITE_INDEXING, never widens it.
+ */
+export function celebrityIndexing(): boolean {
+  return process.env.CELEBRITY_INDEXING?.trim().toLowerCase() === 'on';
+}

@@ -3,7 +3,7 @@
  *
  * WHAT IT DOES
  * ------------
- * Three data classes, three windows (see ./config.ts):
+ * Four data classes, four windows (see ./config.ts):
  *
  *   click_context   clicks.context      — raw click metadata payloads.
  *                     Nulled (SET NULL) when clicks.occurred_at is older than
@@ -16,6 +16,9 @@
  *                     The outbox relay is at-least-once and consumers dedupe
  *                     on envelope.event_id, so a relayed row carries no
  *                     information that isn't already downstream.
+ *   reply_events    reply_events (whole row) — comment-reply events (0007),
+ *                     received_at older than the window (default 30 days, a
+ *                     placeholder pending counsel).
  *
  * WHY NULLING, NOT DELETING (clicks / conversions)
  * -------------------------------------------------
@@ -55,12 +58,12 @@
 
 import type { Pool, PoolClient } from 'pg';
 import { createLogger, errorMessage } from '../logging';
-import type { RetentionConfig } from './config';
+import { DEFAULT_REPLY_EVENTS_DAYS, type RetentionConfig } from './config';
 
 const log = createLogger('retention:purge');
 
 /** Data classes the purge handles. Ledger / audit / adjustments are never among them. */
-export const RETENTION_CLASSES = ['click_context', 'conversion_raw', 'outbox'] as const;
+export const RETENTION_CLASSES = ['click_context', 'conversion_raw', 'outbox', 'reply_events'] as const;
 
 export type RetentionClass = (typeof RETENTION_CLASSES)[number];
 
@@ -139,6 +142,19 @@ function classSpecs(config: RetentionConfig): ClassSpec[] {
                   where org_id = $1 and coalesce(published_at, now()) < $2`,
       purgeSql: `delete from outbox
                   where org_id = $1 and coalesce(published_at, now()) < $2`,
+    },
+    {
+      // Comment-reply events (0007): hashes, the matched keyword, the reply's
+      // status — no comment text, username or raw id is ever stored. Deleted
+      // whole once older than the window, measured from when the comment was
+      // taken in; Meta's 7-day reply window is long past by then, and the
+      // daily counts (reply_daily) and the opt-out list (reply_suppressions)
+      // are kept.
+      class: 'reply_events',
+      windowDays: config.replyEventsDays ?? DEFAULT_REPLY_EVENTS_DAYS,
+      measuredFrom: 'reply_events.received_at',
+      countSql: `select count(*)::int as n from reply_events where org_id = $1 and received_at < $2`,
+      purgeSql: `delete from reply_events where org_id = $1 and received_at < $2`,
     },
   ];
 }

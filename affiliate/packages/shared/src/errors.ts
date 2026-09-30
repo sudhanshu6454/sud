@@ -12,6 +12,9 @@ export const ERROR_CODES = [
   // verification), e.g. Amazon.in Associates (PR 9: links only on "your site").
   'PROPERTY_NOT_OWNER_OPERATED',
   'NOT_FOUND',
+  // 410: the content existed and was withdrawn (a takedown of a celebrity or
+  // a look); never used for content that was never published (404).
+  'GONE',
   'VALIDATION_ERROR',
   'UNAUTHORIZED',
   'FORBIDDEN',

@@ -122,3 +122,13 @@
   the 302.
 - Every `/r/` response carries `X-Robots-Tag: noindex, nofollow` (OA §7 excludes fees on
   Redirecting Links shown in organic search results).
+- **Paused links (0007)**: `ROUTE_SQL` no longer filters `links.status`; it returns
+  `link_status`, and a link that is not `active` (a takedown, a rights review, an unpublished
+  look, a removed product) gets `route_block = 'link_paused'`: the paused page (200, no
+  Location, no click row), never a 404 and never the merchant. Before 0007 a paused link was a
+  404. The route cache must be cleared when a link pauses or comes back (the api does it, twice,
+  after its commit).
+- **`?via=` (0007)**: the page surface a click came from (`s-<storefront>`, `look`, …),
+  `^[a-z0-9-]{1,40}$`, stored in `clicks.context.via` for the per-surface rollup; anything else
+  is dropped. It names a page, never a person, and never reaches the merchant (the destination
+  is built from the stored offer URL alone; tested).

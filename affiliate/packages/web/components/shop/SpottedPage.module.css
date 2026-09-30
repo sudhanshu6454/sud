@@ -1,0 +1,28 @@
+/* The Spotted pages (the feed on /shop, a celebrity's hub, a storefront):
+   the header on the 40px marketing gutters (20px from 899px down). */
+
+.header.header {
+  padding-inline: 40px;
+}
+
+.badge {
+  margin: 0;
+}
+
+.more {
+  margin-top: var(--space-8);
+}
+
+.hubLine {
+  max-width: 64ch;
+}
+
+@media (max-width: 899px) {
+  .header.header {
+    padding-inline: 20px;
+  }
+
+  .more {
+    margin-top: var(--space-6);
+  }
+}

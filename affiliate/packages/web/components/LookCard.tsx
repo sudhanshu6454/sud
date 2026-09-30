@@ -12,8 +12,9 @@ import styles from './LookCard.module.css';
  * (24px / 800) and a "View the look →" block button. The whole cell opens the
  * look (the button's hit area covers it) with one tab stop.
  */
-export default function LookCard({ look, now }: { look: LookSummary; now?: Date }) {
+export default function LookCard({ look, now, headingLevel = 'h2' }: { look: LookSummary; now?: Date; headingLevel?: 'h2' | 'h3' }) {
   const published = publishedLabel(look.publishedAt, now);
+  const Title = headingLevel;
   return (
     <li className={styles.cell}>
       <div className={styles.head}>
@@ -21,7 +22,7 @@ export default function LookCard({ look, now }: { look: LookSummary; now?: Date 
         {look.sponsored ? <Tag variant="accent">Sponsored</Tag> : null}
       </div>
       <Cover look={look} alt="" className={styles.cover} />
-      <h2 className={styles.title}>{look.title}</h2>
+      <Title className={styles.title}>{look.title}</Title>
       <p className={styles.source}>
         {look.sourcePage ? (
           <>

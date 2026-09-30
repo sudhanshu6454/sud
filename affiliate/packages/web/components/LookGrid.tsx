@@ -25,9 +25,15 @@ export interface LookGridProps {
   looks: LookSummary[];
   /** The catalogue fell back to the TEST demo data: render the badge. */
   demo: boolean;
+  /**
+   * Rendered as a section of a page that has its own h1 (/shop under the
+   * Spotted feed): the header is an h2 with this eyebrow, the cards' titles
+   * h3. Default: the grid is the page (h1, cards h2).
+   */
+  sectionEyebrow?: string;
 }
 
-export default function LookGrid({ looks, demo }: LookGridProps) {
+export default function LookGrid({ looks, demo, sectionEyebrow }: LookGridProps) {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<string | null>(null);
   const [sort, setSort] = useState<LookSort>('newest');
@@ -47,7 +53,8 @@ export default function LookGrid({ looks, demo }: LookGridProps) {
   return (
     <>
       <PageHeader
-        eyebrow="Shop the looks"
+        eyebrow={sectionEyebrow ?? 'Shop the looks'}
+        as={sectionEyebrow ? 'h2' : 'h1'}
         title={count}
         description="Spotted on your favourite pages — shop exact matches and similar styles."
         className={styles.header}
@@ -123,7 +130,7 @@ export default function LookGrid({ looks, demo }: LookGridProps) {
         <div className={styles.gridWrap}>
           <ul className={styles.grid} aria-label="Looks">
             {visible.map((look) => (
-              <LookCard key={look.id} look={look} now={now} />
+              <LookCard key={look.id} look={look} now={now} headingLevel={sectionEyebrow ? 'h3' : 'h2'} />
             ))}
           </ul>
         </div>

@@ -482,7 +482,7 @@ net.core.wmem_max = 7500000'; then
   }
   local k v
   # Secrets: generated here, never printed.
-  for k in POSTGRES_PASSWORD JWT_SECRET STUB_WEBHOOK_SECRET IP_HASH_KEY; do
+  for k in POSTGRES_PASSWORD JWT_SECRET STUB_WEBHOOK_SECRET IP_HASH_KEY COMMENT_ID_HASH_KEY WEB_REVALIDATE_SECRET; do
     env_has "$k" && continue
     if [ -n "${!k+x}" ] && [ -n "${!k}" ]; then append_key "$k" "${!k}" "preset"; continue; fi
     if [ "$k" = JWT_SECRET ]; then v="$(openssl rand -hex 48)"; else v="$(openssl rand -hex 32)"; fi
@@ -511,7 +511,7 @@ net.core.wmem_max = 7500000'; then
   # Any other contract key preset in the environment.
   for k in "${contract_keys[@]}"; do
     # (handled above, or read by scripts/backup.sh on a backup host, not by compose)
-    case "$k" in POSTGRES_PASSWORD|JWT_SECRET|STUB_WEBHOOK_SECRET|IP_HASH_KEY|SITE_HOST|SITE_INDEXING|ACME_EMAIL|BACKUP_DIR|PAPARAZZI_ALLOW_PROD|PAPARAZZI_RESTORE_DB) continue ;; esac
+    case "$k" in POSTGRES_PASSWORD|JWT_SECRET|STUB_WEBHOOK_SECRET|IP_HASH_KEY|COMMENT_ID_HASH_KEY|WEB_REVALIDATE_SECRET|SITE_HOST|SITE_INDEXING|ACME_EMAIL|BACKUP_DIR|PAPARAZZI_ALLOW_PROD|PAPARAZZI_RESTORE_DB) continue ;; esac
     if [ -n "${!k+x}" ] && ! env_has "$k"; then append_key "$k" "${!k}" "preset"; fi
   done
 

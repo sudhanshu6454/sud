@@ -124,6 +124,22 @@ services:
       # and Docker's proxy for the 127.0.0.1-published ports, which is how
       # the host-networked edge reaches them (docker/Caddyfile).
       TRUST_PROXY: ${TRUST_PROXY:-loopback,uniquelocal}
+      # Celebrity looks (0007): the site origin comment replies link to, the
+      # Meta webhook's secrets (unset = the webhook answers 503), the keyed
+      # hash of commenter ids, and the web's cache revalidation after a
+      # takedown (over the compose network; the edge 404s /internal/*).
+      SITE_URL: ${SITE_URL:-https://${SITE_HOST:-afflino.com}}
+      META_APP_SECRET: ${META_APP_SECRET:-}
+      META_VERIFY_TOKEN: ${META_VERIFY_TOKEN:-}
+      COMMENT_ID_HASH_KEY: ${COMMENT_ID_HASH_KEY:-}
+      WEB_REVALIDATE_URL: ${WEB_REVALIDATE_URL:-http://web:3000/internal/revalidate}
+      WEB_REVALIDATE_SECRET: ${WEB_REVALIDATE_SECRET:-}
+      # The public read API's and the Meta webhook's per-client limits (per
+      # minute; unset = 240 and 1200) and the api's own 30 s answer cache
+      # (unset = on with Redis; "off" turns it off). src/public-guard.ts.
+      PUBLIC_RATE_PER_MINUTE: ${PUBLIC_RATE_PER_MINUTE:-}
+      WEBHOOK_RATE_PER_MINUTE: ${WEBHOOK_RATE_PER_MINUTE:-}
+      PUBLIC_API_CACHE: ${PUBLIC_API_CACHE:-}
       LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
       - "127.0.0.1:3000:3000"
@@ -193,6 +209,17 @@ services:
       AMAZON_CREATORS_CREDENTIAL_SECRET: ${AMAZON_CREATORS_CREDENTIAL_SECRET:-}
       AMAZON_CREATORS_CREDENTIAL_VERSION: ${AMAZON_CREATORS_CREDENTIAL_VERSION:-3.2}
       AMAZON_REFRESH_CRON: ${AMAZON_REFRESH_CRON:-17 * * * *}
+      # Comment replies (0007): off until the owner turns them on (looks.sh
+      # replies); the Meta app secret and the system user's token only at
+      # looks.sh keys' hidden prompts. The analytics rollups, hourly.
+      SITE_URL: ${SITE_URL:-https://${SITE_HOST:-afflino.com}}
+      COMMENT_REPLIES_SENDING: ${COMMENT_REPLIES_SENDING:-off}
+      COMMENT_REPLIES_SWEEP_MS: ${COMMENT_REPLIES_SWEEP_MS:-5000}
+      META_APP_SECRET: ${META_APP_SECRET:-}
+      META_SYSTEM_USER_TOKEN: ${META_SYSTEM_USER_TOKEN:-}
+      META_GRAPH_VERSION: ${META_GRAPH_VERSION:-v26.0}
+      RETENTION_REPLY_EVENTS_DAYS: ${RETENTION_REPLY_EVENTS_DAYS:-30}
+      ANALYTICS_ROLLUP_CRON: ${ANALYTICS_ROLLUP_CRON:-7 * * * *}
       LOG_LEVEL: ${LOG_LEVEL:-info}
     depends_on:
       migrate:
@@ -232,6 +259,13 @@ services:
       # off) keeps them out: robots.txt Disallow: /, an empty sitemap and
       # noindex,nofollow on every page. The owner's switch (README.md).
       SITE_INDEXING: ${SITE_INDEXING:-off}
+      # Celebrity pages stay out of search engines until the owner (with
+      # counsel) turns this on; the revalidation secret the API presents.
+      CELEBRITY_INDEXING: ${CELEBRITY_INDEXING:-off}
+      WEB_REVALIDATE_SECRET: ${WEB_REVALIDATE_SECRET:-}
+      # The organisation whose celebrity looks the public pages show (the
+      # public read API /v1/public/<slug>/…, no token): the in-house network's.
+      PUBLIC_ORG_SLUG: ${PUBLIC_ORG_SLUG:-afflino}
       NEXT_PUBLIC_SITE_NAME: ${NEXT_PUBLIC_SITE_NAME:-Afflino}
       LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:

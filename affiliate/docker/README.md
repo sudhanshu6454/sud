@@ -285,7 +285,9 @@ curl -s -D - -o /dev/null -H 'Host: afflino.com' http://127.0.0.1:8088/ | grep -
 curl -s -H 'Host: afflino.com' http://127.0.0.1:8088/robots.txt
 curl -s -H 'Host: afflino.com' http://127.0.0.1:8088/sitemap.xml; echo
 curl -s -D - -o /dev/null -H 'Host: www.afflino.com' 'http://127.0.0.1:8088/shop?utm_source=smoke&x=1' | grep -i '^HTTP\|^location'
-curl -s -H 'Host: afflino.com' http://127.0.0.1:8088/shop | grep -o '<title>[^<]*</title>\|<h2 class="LookCard_title[^"]*">[^<]*</h2>\|Demo data[^<]*'
+curl -s -H 'Host: afflino.com' http://127.0.0.1:8088/shop | grep -o '<title>[^<]*</title>\|<h[23] class="LookCard_title[^"]*">[^<]*</h[23]>\|Nothing spotted yet\.\|Demo data[^<]*'
+curl -s -o /dev/null -w '%{http_code}\n' -X POST -H 'Host: afflino.com' -H 'content-type: application/json' --data '{"tags":["spotted"]}' http://127.0.0.1:8088/internal/revalidate
+curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: afflino.com' http://127.0.0.1:8088/c/nobody
 docker run --rm --network pz-test -e API_BASE=http://api:3000 -e API_TOKEN="$OWNER_TOKEN" paparazzi/api:test node scripts/mint-links.mjs --placement "$WEB_PLACEMENT_ID"
 curl -s -H 'Host: afflino.com' "http://127.0.0.1:8088/looks/$LOOK_ID" | grep -o '<title>[^<]*</title>\|<a href="https://afflino.com/r/[0-9a-f]*" rel="[^"]*"\|Link not available yet\|Demo data[^<]*'
 LINK_TOKEN=$(curl -s -H 'Host: afflino.com' "http://127.0.0.1:8088/looks/$LOOK_ID" | grep -o 'https://afflino.com/r/[0-9a-f]*' | head -1 | sed 's#.*/r/##')
@@ -301,16 +303,17 @@ sleep 8; docker logs pz-workers 2>&1 | grep -o '"message":"[^"]*"' | sort -u
 docker rm -f -v pz-edge pz-web pz-workers pz-redirect pz-api pz-redis pz-db && docker network rm pz-test && rm -f seed-network.json
 ```
 
-Observed on the last run (2026-09-29, verbatim, all five `:test` images
-rebuilt from this tree — last after the review fixes of the Amazon.in
-Associates integration (migration 0006 without the sub-tag / third-party
-columns, the import lock, the operator's returns step, the privacy gate);
-`caddy:2-alpine` = Caddy v2.11.4; every observed line below unchanged). The TEST programme here is not an Amazon one, so the shop
+Observed on the last run (2026-09-30, verbatim, all five `:test` images
+rebuilt from this tree after the celebrity looks (0007, the Spotted feed on
+`/shop`, the middleware, `/internal/revalidate`), and again after the fixes
+of three independent reviews of them, every line below unchanged; `caddy:2-alpine` = Caddy
+v2.11.4; the lines below are unchanged from the 2026-09-29 run except the
+migrate count, `/shop` and the two new probes). The TEST programme here is not an Amazon one, so the shop
 and the redirect answer exactly as before; the Amazon path (the tag, no
 `subid`, "Buy on Amazon.in", the report import) is rehearsed on the
 installer's stack (`deploy/linode/README.md` "What was checked"):
 
-- migrate: `6 migration(s) applied, 0 already applied`; `seed.ts` succeeds;
+- migrate: `7 migration(s) applied, 0 already applied`; `seed.ts` succeeds;
   `seed-network: 6 properties from /app/db/network.example.yaml, shop host afflino.com, with TEST demo programme`.
 - `/healthz` on 3100 (api) and 3101 (redirect), `/api/healthz` on 3200 (web
   proxy) and through the edge → `{"ok":true}` each.
@@ -327,9 +330,14 @@ installer's stack (`deploy/linode/README.md` "What was checked"):
 - `Host: www.afflino.com`, `/shop?utm_source=smoke&x=1` →
   `HTTP/1.1 301 Moved Permanently`,
   `Location: https://afflino.com/shop?utm_source=smoke&x=1`.
-- `/shop` → `<title>Shop the looks · Afflino</title>` and the six TEST
-  network looks (`Demo look — Demo Instagram` / Facebook / YouTube /
-  Snapchat / Telegram / Web), no "Demo data" badge (live).
+- `/shop` → `<title>Spotted · Afflino</title>`, `Nothing spotted yet.` (the
+  Spotted feed of the organisation `afflino`: no celebrity look is public;
+  printed twice, the page and its data payload) and, under "More looks", the
+  six TEST network looks as `<h3 class="LookCard_title…">` (`Demo look — Demo
+  Web` / Snapchat / Telegram / YouTube / Instagram / Facebook, in any order:
+  the seed publishes them at one time), no "Demo data" badge (live).
+- `POST /internal/revalidate` through the edge → `404` (the API reaches it on
+  the compose network only); `/c/nobody` → `404` (no such public hub).
 - mint-links: `summary: looks=6 items=6 minted=1 replayed=0 skipped_linked=5 skipped_no_offer=0 skipped_duplicate_offer=0 failed=0`, url `https://afflino.com/r/<token>`.
 - Look page → `<title>Demo look — Demo Instagram · Afflino</title>` and
   `<a href="https://afflino.com/r/<token>" rel="sponsored nofollow noopener"`.
@@ -348,8 +356,9 @@ installer's stack (`deploy/linode/README.md` "What was checked"):
   carried `Server: Caddy` and no security header).
 - workers log: `workers started`, `outbox relay started`, `retention repeat
   scheduled`, `amazon refresh repeat scheduled` (the hourly Amazon price job;
-  it does nothing without an Amazon programme), `outbox batch published`,
-  `click.observed`.
+  it does nothing without an Amazon programme), `analytics rollup
+  scheduled`, `comment-replies sweep scheduled`, `comment replies` (the
+  sending mode, off), `outbox batch published`, `click.observed`.
 - The last line removed the seven containers with their anonymous volumes (`-v`: the Postgres, Redis and Caddy images declare volumes; before 2026-09-29 the line left them behind) and the network.
 
 The sandbox that ran this build cannot reach the npm registry without an extra

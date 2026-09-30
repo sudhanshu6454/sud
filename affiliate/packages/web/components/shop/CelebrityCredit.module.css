@@ -1,0 +1,39 @@
+/* The name and the non-endorsement line: one paragraph, one size, the line
+   in ink (not faded), so it reads as part of the claim. */
+
+.credit {
+  display: block;
+  margin: 0;
+  line-height: 1.5;
+  color: var(--color-text);
+}
+
+.page {
+  font-size: 15px;
+}
+
+.card {
+  font-size: 14px;
+}
+
+.name {
+  font-weight: 700;
+  color: inherit;
+}
+
+a.name {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+a.name:hover {
+  color: var(--color-accent-700);
+}
+
+.sep {
+  color: var(--color-neutral-700);
+}
+
+.line {
+  color: var(--color-text);
+}

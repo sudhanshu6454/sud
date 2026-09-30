@@ -11,6 +11,9 @@
  *                      attached to proxied browser requests.
  *   WEB_PLACEMENT_ID   uuid of the shop's own placement; appended as
  *                      placement_id to GET /v1/looks/:id so items carry links.
+ *   PUBLIC_ORG_SLUG    the organisation whose celebrity looks the public pages
+ *                      show (the public read API /v1/public/<slug>/…; no token).
+ *                      Default "afflino", the in-house network's organisation.
  */
 
 const DEFAULT_API_BASE = 'http://localhost:3000';
@@ -42,4 +45,12 @@ export function webApiToken(): string | null {
 export function webPlacementId(): string | null {
   const id = process.env.WEB_PLACEMENT_ID?.trim();
   return id && UUID_RE.test(id) ? id : null;
+}
+
+export const DEFAULT_PUBLIC_ORG_SLUG = 'afflino';
+
+/** The organisation whose public looks the site shows (runtime; a malformed value → the default). */
+export function publicOrgSlug(): string {
+  const raw = process.env.PUBLIC_ORG_SLUG?.trim();
+  return raw && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(raw) && raw.length <= 63 ? raw : DEFAULT_PUBLIC_ORG_SLUG;
 }

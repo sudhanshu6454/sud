@@ -395,14 +395,15 @@ describe('retention purge', () => {
         where org_id = $1 and action = 'retention.purge' order by entity`,
       [chain.orgId],
     );
-    expect(rows.map((r) => r.entity)).toEqual(['click_context', 'conversion_raw', 'outbox']);
+    expect(rows.map((r) => r.entity)).toEqual(['click_context', 'conversion_raw', 'outbox', 'reply_events']);
     for (const r of rows) {
       expect(r.actor_id).toBeNull();
       const summary = JSON.parse(String(r.entity_id)) as {
         window_days: number;
         rows_affected: number;
       };
-      expect(summary.window_days).toBe(365);
+      // reply_events: the 30-day placeholder (config() leaves it unset)
+      expect(summary.window_days).toBe(r.entity === 'reply_events' ? 30 : 365);
       expect(typeof summary.rows_affected).toBe('number');
     }
     const byClass = new Map(rows.map((r) => [String(r.entity), JSON.parse(String(r.entity_id))]));
@@ -451,7 +452,7 @@ describe('retention purge', () => {
     const byOrg = new Map(results.map((r) => [r.org_id, r]));
     expect(byOrg.get(chainA.orgId)!.classes.find((c) => c.class === 'click_context')!.rows_affected).toBe(1);
     expect(byOrg.get(chainB.orgId)!.classes.find((c) => c.class === 'click_context')!.rows_affected).toBe(1);
-    // An org with nothing to purge still gets its three audit rows (rows_affected 0).
+    // An org with nothing to purge still gets its audit rows (rows_affected 0).
     expect(
       byOrg.get(chainEmpty.orgId)!.classes.every((c) => c.rows_affected === 0),
     ).toBe(true);
@@ -461,7 +462,7 @@ describe('retention purge', () => {
         chain.orgId,
       ]);
       expect(rows.every((r) => r.context === null)).toBe(true);
-      // Audit rows land on the org they describe — three per org per run.
+      // Audit rows land on the org they describe — one per class per org per run.
       const audit = await pool.query(
         `select entity from audit_log
           where org_id = $1 and action = 'retention.purge' order by entity`,
@@ -471,8 +472,43 @@ describe('retention purge', () => {
         'click_context',
         'conversion_raw',
         'outbox',
+        'reply_events',
       ]);
     }
+  });
+
+  it('(f) deletes comment-reply events older than their window; keeps the opt-out list and the daily counts', async () => {
+    const chain = await seedChain('replies');
+    const prop = await pool.query(`select id from properties where org_id = $1 limit 1`, [chain.orgId]);
+    const propertyId = String(prop.rows[0]!.id);
+    const celeb = await pool.query(
+      `insert into celebrities (org_id, name, name_key, slug) values ($1, 'Demo Star Ret', 'demo star ret', 'demo-star-ret') returning id`,
+      [chain.orgId],
+    );
+    const look = await pool.query(`insert into looks (org_id, title, celebrity_id) values ($1, 'Demo', $2) returning id`, [chain.orgId, celeb.rows[0]!.id]);
+    const rule = await pool.query(
+      `insert into reply_rules (org_id, look_id, property_id, platform_post_id, keywords) values ($1, $2, $3, 'p', $4) returning id`,
+      [chain.orgId, look.rows[0]!.id, propertyId, ['link']],
+    );
+    for (const [comment, at] of [
+      ['ret-old', `now() - interval '40 days'`],
+      ['ret-new', `now() - interval '2 days'`],
+    ] as const) {
+      await pool.query(
+        `insert into reply_events (org_id, rule_id, property_id, platform, meta_account_id, comment_id, commenter_hash, matched_keyword, status, received_at)
+         values ($1, $2, $3, 'instagram', '1', $4, $5, 'link', 'sent', ${at})`,
+        [chain.orgId, rule.rows[0]!.id, propertyId, comment, 'b'.repeat(64)],
+      );
+    }
+    await pool.query(`insert into reply_suppressions (org_id, platform, commenter_hash) values ($1, 'instagram', $2)`, [chain.orgId, 'c'.repeat(64)]);
+    await pool.query(`insert into reply_daily (org_id, day, rule_id, received, sent) values ($1, '2026-08-01', $2, 1, 1)`, [chain.orgId, rule.rows[0]!.id]);
+    const results = await runRetentionPurge(pool as unknown as Parameters<typeof runRetentionPurge>[0], config());
+    const mine = results.find((r) => r.org_id === chain.orgId)!;
+    expect(mine.classes.find((c) => c.class === 'reply_events')).toEqual({ class: 'reply_events', window_days: 30, rows_affected: 1 });
+    const left = await pool.query(`select comment_id from reply_events where org_id = $1`, [chain.orgId]);
+    expect(left.rows.map((r) => r.comment_id)).toEqual(['ret-new']);
+    expect(await tableCount('reply_suppressions', chain.orgId)).toBe(1);
+    expect(await tableCount('reply_daily', chain.orgId)).toBe(1);
   });
 
   it('dry-run reports counts without writing anything', async () => {
@@ -503,14 +539,16 @@ describe('retention purge', () => {
 });
 
 describe('retention config', () => {
-  it('defaults to 365-day conservative windows', () => {
+  it('defaults to 365-day conservative windows (comment-reply events: a 30-day placeholder)', () => {
     const cfg = loadRetentionConfig({});
     expect(cfg).toEqual({
       clickContextDays: 365,
       conversionRawDays: 365,
       outboxDays: 365,
+      replyEventsDays: 30,
       cron: '0 3 * * *',
     });
+    expect(loadRetentionConfig({ RETENTION_REPLY_EVENTS_DAYS: '7' }).replyEventsDays).toBe(7);
   });
 
   it('honours env overrides', () => {

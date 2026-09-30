@@ -9,7 +9,7 @@
  * Relative URLs below resolve against metadataBase (the SITE_URL origin).
  */
 import type { Metadata, MetadataRoute } from 'next';
-import { siteIndexing, siteName, siteUrl } from './site';
+import { celebrityIndexing, siteIndexing, siteName, siteUrl } from './site';
 import { SITE_DESCRIPTION } from './site-copy';
 
 /** The share image: the PWA icon (the only site image there is). */
@@ -190,4 +190,66 @@ export function sitemapFor(
     };
   });
   return [...pages, ...lookPages];
+}
+
+/**
+ * A page about a celebrity (a look of the Spotted feed, a hub, a storefront):
+ * pageMetadata, with the non-endorsement line as the share description
+ * (og:description / twitter:description), so a link preview that names the
+ * celebrity carries it too; the share image stays the site icon — a preview
+ * never shows the celebrity's still. `noindex, nofollow` unless both
+ * SITE_INDEXING and CELEBRITY_INDEXING are on, and always for demo data.
+ */
+export function celebrityPageMetadata(
+  path: string,
+  title: string,
+  description: string,
+  opts: { demo: boolean; indexing?: boolean; celebrityIndexing?: boolean },
+): Metadata {
+  const meta = pageMetadata(path, title);
+  const og = { ...(meta.openGraph ?? {}), description };
+  const tw = { ...(meta.twitter ?? {}), description };
+  const open = (opts.indexing ?? siteIndexing()) && (opts.celebrityIndexing ?? celebrityIndexing()) && !opts.demo;
+  return {
+    ...meta,
+    description,
+    openGraph: og,
+    twitter: tw,
+    ...(open ? {} : { robots: { ...NOT_FOR_INDEX_ROBOTS } }),
+  };
+}
+
+/** /shop's metadata: noindex while its Spotted feed shows a celebrity look and CELEBRITY_INDEXING is off. */
+export function shopMetadata(opts: { celebrityContent: boolean; celebrityIndexing?: boolean }): Metadata {
+  const meta = pageMetadata('/shop', 'Spotted');
+  const allowed = opts.celebrityIndexing ?? celebrityIndexing();
+  return opts.celebrityContent && !allowed ? { ...meta, robots: { ...NOT_FOR_INDEX_ROBOTS } } : meta;
+}
+
+/** Celebrity pages for the sitemap (from GET /v1/public/<org>/sitemap; never demo data). */
+export interface CelebritySitemapInput {
+  looks: ReadonlyArray<{ id: string; updated_at: string | null }>;
+  celebrities: ReadonlyArray<string>;
+  storefronts: ReadonlyArray<string>;
+}
+
+/**
+ * The sitemap entries for celebrity pages: none unless SITE_INDEXING and
+ * CELEBRITY_INDEXING are both on. The public API has already left out
+ * everything that is not public now (unreviewed, blocked, minors,
+ * never-listed, under takedown).
+ */
+export function celebritySitemapFor(base: string, input: CelebritySitemapInput | null, indexing: boolean, celebrity: boolean): MetadataRoute.Sitemap {
+  if (!indexing || !celebrity || !input) return [];
+  const slug = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const looks = input.looks
+    .filter((l) => uuid.test(l.id))
+    .map((l) => {
+      const t = l.updated_at ? new Date(l.updated_at) : null;
+      return { url: `${base}/looks/${l.id}`, ...(t && !Number.isNaN(t.getTime()) ? { lastModified: t.toISOString() } : {}) };
+    });
+  const hubs = input.celebrities.filter((s) => slug.test(s)).map((s) => ({ url: `${base}/c/${s}` }));
+  const fronts = input.storefronts.filter((s) => slug.test(s)).map((s) => ({ url: `${base}/s/${s}` }));
+  return [...looks, ...hubs, ...fronts];
 }

@@ -1,0 +1,124 @@
+/* The pieces: 24px vertical padding, 1px rules between; the head is the
+   number (a 28px ink square, the still's marker), the label 20px / 800 and
+   the category 12px uppercase on the right. Similar styles: a grid of tiles
+   (auto-fill ≥ 220px) that becomes a sideways row with scroll-snap on
+   phones. */
+
+.pieces {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.piece {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-6) 0;
+  border-bottom: 1px solid var(--color-divider);
+  scroll-margin-top: var(--space-6);
+}
+
+.piece:first-child {
+  padding-top: 0;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  background: var(--color-text);
+  color: var(--color-bg);
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 13px;
+}
+
+ /* The piece a marker (or the index) jumped to: its number in the accent. */
+.piece:target .number {
+  background: var(--color-accent-700);
+}
+
+.label {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 20px;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  min-width: 0;
+}
+
+.category {
+  margin-left: auto;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-neutral-700);
+  white-space: nowrap;
+}
+
+.note {
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-neutral-800);
+}
+
+.similar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.similarTitle {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-neutral-700);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cell {
+  display: flex;
+  min-width: 0;
+}
+
+.cell > * {
+  flex: 1;
+}
+
+@media (max-width: 760px) {
+  .row {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: 82%;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    margin: 0 -20px;
+    padding: 0 20px 4px;
+    scroll-padding-inline: 20px;
+  }
+
+  .cell {
+    scroll-snap-align: start;
+  }
+}

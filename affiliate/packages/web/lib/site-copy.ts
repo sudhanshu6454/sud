@@ -137,3 +137,54 @@ export const AMAZON_IN = {
   affiliateLinksFactLabel: 'Affiliate links',
   affiliateLinksFact: 'Yes (we earn from qualifying purchases)',
 } as const;
+
+/**
+ * Celebrity looks on the consumer side (the Spotted feed, a look piece by
+ * piece, a celebrity's hub, a storefront). DRAFTS PENDING COUNSEL SIGN-OFF
+ * (docs/counsel-briefing.md §10, questions Q7–Q11; docs/action-tracker.md
+ * "Celebrity look wording"). The wording that says anything about a
+ * celebrity or a product is NOT here: the headline, the commercial label,
+ * the non-endorsement line and each item's EXACT / SIMILAR line come from
+ * the API (packages/shared/src/celebrity.ts CELEBRITY_COPY), so the rule
+ * lives in one place. These are the web's own labels around them;
+ * test/spotted.test.ts checks them against the wording deny-list (nothing
+ * here says or implies that a celebrity wore, owns, chose, loves or
+ * recommends a product, no "dupe", no "for less", no savings claim).
+ */
+export const CELEBRITY_WEB = {
+  feedTitle: 'Spotted',
+  feedIntro: 'Moments from our pages, piece by piece: the exact item when our editors identified it, and similar styles.',
+  trendingTitle: 'Trending this week',
+  feedEmptyTitle: 'Nothing spotted yet.',
+  feedEmpty: 'New looks appear here as soon as our editors publish them.',
+  filterCelebrity: 'Celebrity',
+  filterPage: 'Page',
+  filterAll: 'All',
+  moreLooksTitle: 'More looks',
+  exactTag: 'Exact match',
+  similarTag: 'Similar style',
+  outfitTitle: 'The outfit, piece by piece',
+  noProducts: 'Products are not shown for this look.',
+  noProductsYet: 'No product for this piece yet.',
+  originalPost: 'View the original post',
+  fromPage: 'Posted on',
+  viewLook: 'View the look',
+  hubLooks: 'Looks',
+  storefrontLooks: 'Latest looks',
+  storefrontEmpty: 'No looks on this page yet.',
+  share: 'Share this page',
+  copied: 'Link copied',
+  qrLabel: 'Scan to open this page',
+  withdrawnTitle: 'This page was withdrawn.',
+  withdrawn: 'It is no longer available on Afflino.',
+  withdrawnAction: 'See every look on Spotted',
+  storefrontMissingTitle: 'This page is not on Afflino right now.',
+  storefrontMissing: 'The link may be old, or the page is not live yet.',
+  hubTitle: 'Spotted looks',
+  similarRowHint: 'Swipe for more similar styles',
+  piecesIndex: 'The pieces',
+  photoNotShown: 'Photo not shown',
+  qrShow: 'Show the QR code',
+  qrHide: 'Hide the QR code',
+  showLooks: 'Show looks',
+} as const;

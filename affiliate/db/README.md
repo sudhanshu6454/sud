@@ -221,6 +221,82 @@ apply-return | status | pause | resume` (`packages/api/src/cli/amazon.ts`; on th
 real values in files on the server; the TEST fixtures are
 `packages/api/test/fixtures/amazon-*.example.*`, refused under `NODE_ENV=production`).
 
+## Celebrity looks (0007)
+
+`0007_celebrity_looks.sql` is additive too (new tables, nullable columns, columns with defaults,
+checks every existing row satisfies, no triggers, no regular expressions in a CHECK). Verified
+2026-09-30 on PostgreSQL 16: 0001–0007 on a fresh database (`scripts/celebrity-looks-pg.ts`), and
+0007 on top of a database migrated to 0006 and seeded like production (`seed-network.ts` with a
+copy of the example network under `NODE_ENV=production`, the Amazon setup with TEST values under
+development): `1 migration(s) applied, 6 already applied`, every row count unchanged, a second
+network seed byte-identical. The three `place_confirmed_*` columns were added to 0007 in place
+during the reviews of 2026-09-30, before 0007 was ever committed or applied outside scratch
+databases (as 0006 was); the two verifications were re-run on the edited file.
+
+- `memberships.role` admits `rights_reviewer` (counsel's reviewer: the only role that sets a
+  celebrity beyond `blocked` and restores a takedown).
+- `celebrities` — `rights_status` (`unreviewed` default | `editorial` | `cleared` | `blocked`),
+  `max_display` (`none` default | `name_only` | `name_and_image`), `shoppable`, `is_minor`,
+  `never_list`, `name_key` / `aliases` (normalised, for matching library rows), `slug`, the
+  reviewer, time and evidence reference, `takedown_id`. The checks are the floor under the
+  capability matrix (`@paparazzi/shared` `celebrity.ts`): unreviewed / blocked allow nothing; a
+  minor or never-listed celebrity can never leave unreviewed / blocked; any other status names
+  its reviewer and time; editorial / cleared carry an evidence reference; `none` is never
+  shoppable. `celebrity_rights_reviews` keeps every decision (append-only; `review`, `rename`,
+  `minor_flag`).
+- `assets` gains the licence facts a library row must carry (`kind`, `commercial_reuse`
+  default `unknown`, `source_ref`, `copyright_owner`, `author`, `acquisition`,
+  `assignment_ref`, `live_performance`, `minor_in_frame`, `bystanders`, `sensitive_location`,
+  `screen_status` / `screened_by` / `screened_at`, and `licence_via`: `import` = the file's
+  own columns, `statement` = the owner's ownership statement, `review` = a person's edit through
+  the API, which a later import never widens); unique `(org_id, kind, storage_key)`.
+- `library_ownership_statements` — the owner's dated statement that the organisation owns its
+  library footage (`kind` `owned` | `withdrawn`, the copyright owner, `acquisition` `staff` |
+  `other`, the words the owner confirmed, who recorded it and when). Append-only, ordered by
+  `seq` (unique per organisation); the highest row decides. Added to 0007 in place on
+  2026-09-30 (the owner: "all clips are owned by us"), before 0007 was committed or applied
+  outside scratch databases, with `assets.licence_via`.
+- `looks` gains the moment (`celebrity_id`, `event_name`, `place`, `place_kind`,
+  `moment_date`, the video and still assets, `property_id` = the in-house page that posted
+  it, `post_permalink` https only, `platform_post_id`, `library_ref` = the library's video
+  reference, unique per organisation, the import's idempotency key), `celebrity_display`,
+  `takedown_id`, `withdrawn_at`, and the rights reviewer's confirmation of a `street` /
+  `other` place (`place_confirmed_by` / `place_confirmed_at`, both or neither, and an
+  optional `place_confirmed_note` of up to 300 characters; cleared by the API when the event,
+  the place or its kind changes).
+- `look_pieces` — the outfit piece by piece: label (1–60), `garment_category` (the 24 of
+  `GARMENT_CATEGORIES`, tested equal), `position`, an optional hotspot (both coordinates or
+  neither, 0..1), `removed_at`.
+- `look_items` belong to a piece (`piece_id`; `asset_id` now nullable). Four checks scoped to
+  piece items (legacy and Amazon shelf items untouched): a piece item has a match type, a review
+  state and its tagger; SIMILAR is always `approved`; EXACT carries evidence (≥ 10 characters)
+  and its source; an approved EXACT names a reviewer other than the tagger. Two partial unique
+  indexes over rows not removed: one EXACT per piece, a product variant once per piece.
+- `storefronts` — one per in-house property (its link-in-bio), `slug` unique per organisation,
+  `draft` | `live` | `hidden`.
+- `takedowns` (scope `celebrity` | `look`, `reason_code`, an opaque `requester_ref`,
+  `requested_at` = when the notice arrived, `actioned_at` = when the row committed,
+  `completed_at` = when the caches were cleared, restore fields, counts) and `takedown_looks`
+  (each withdrawn look's previous status; `post_removed_at`, the owner's confirmation).
+- `links.look_item_id`, `paused_by_takedown_id`, `paused_reason` (`takedown` |
+  `rights_review` | `item_removed` | `look_unpublished`): a restore or a rights upgrade
+  reactivates exactly the links it paused.
+- Comment replies: `meta_accounts` (a Meta account id → an in-house property), `reply_rules`
+  (keywords → one look; `enabled` default false; the public reply may not carry a link),
+  `reply_events` (unique `(platform, comment_id)`; `commenter_hash` = HMAC-SHA256 hex of the
+  scoped id — no comment text, username, raw id or token is stored anywhere),
+  `reply_suppressions` (opt-outs), `reply_daily`.
+- `click_daily` (`org_id`, IST `day`, `link_id`, `via`) and `idx_clicks_org_occurred` for the
+  hourly rollup.
+
+The rows are written by the API and by the api image's CLI (`node dist/cli/looks.js import |
+status | celebrities | review | takedown | restore | takedowns | storefronts`,
+`packages/api/src/cli/looks.ts`; on the Linode `deploy/linode/looks.sh`, `docs/runbooks/deploy.md`
+§1C), not by a seed here. The library file lives on the server (`/etc/afflino/library/`), never
+in this repository; the TEST example is `db/fixtures/library.example.csv` (people "Demo Star One" / "Demo Star
+Two", `example.com` hosts; the tests' world is `packages/api/test/celebrity-fixtures.ts`), and
+TEST rows are refused under `NODE_ENV=production`.
+
 ## In-process demo (sandbox — no Docker/Postgres/Redis needed)
 
 ```bash
@@ -306,6 +382,15 @@ The demo is a sandbox approximation, not a second implementation. Known divergen
   the demo asserts behaviour (row counts, money nets, balances), not constraint violations.
 - `bigint` aggregates are coerced with `Number(...)`/`BigInt(...)` in the demo — pg and
   pg-mem do not return identical JS types for every aggregate.
+- **0007 (2026-09-30):** `char_length(text)` is registered in-process (pg-mem lacks it; the
+  checks use it); the memberships role check is dropped by pg-mem's name for it
+  (`memberships_constraint_1`); pg-mem answers any query whose WHERE shares a predicate with a
+  partial index from that index alone, so the two partial indexes whose predicate is only
+  `<col> is not null` become plain unique indexes (the same constraint, NULLs being distinct)
+  and the two on `look_items` (one EXACT per piece, a variant once per piece) are not created
+  under pg-mem. The API pre-checks both (409) and `scripts/celebrity-looks-pg.ts` proves the
+  indexes themselves (23505) on a real PostgreSQL. The same shims are in
+  `packages/api/test/pgmem.ts` and `scripts/demo-money-loop.ts`.
 - No Redis/BullMQ in the sandbox: cache warming and event enqueueing are best-effort in the
   services and are skipped when `REDIS_URL` is unset; the database remains the source of truth.
 

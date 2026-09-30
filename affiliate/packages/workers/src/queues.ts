@@ -16,6 +16,10 @@ export const QUEUE_PROVIDER_EVENTS = 'provider-events';
 export const QUEUE_FEEDS = 'feeds';
 export const QUEUE_RECONCILIATION = 'reconciliation';
 export const QUEUE_RETENTION = 'retention';
+/** Comment replies (0007): the sweep and one 'send' job per matched comment. */
+export const QUEUE_COMMENT_REPLIES = 'comment-replies';
+/** Daily rollups for the analytics endpoints (0007). */
+export const QUEUE_ANALYTICS = 'analytics';
 
 export const ALL_QUEUE_NAMES = [
   QUEUE_CLICK_EVENTS,
@@ -23,6 +27,8 @@ export const ALL_QUEUE_NAMES = [
   QUEUE_FEEDS,
   QUEUE_RECONCILIATION,
   QUEUE_RETENTION,
+  QUEUE_COMMENT_REPLIES,
+  QUEUE_ANALYTICS,
 ] as const;
 
 export type QueueName = (typeof ALL_QUEUE_NAMES)[number];
@@ -55,6 +61,8 @@ export const providerEventsQueue = createQueue(QUEUE_PROVIDER_EVENTS);
 export const feedsQueue = createQueue(QUEUE_FEEDS);
 export const reconciliationQueue = createQueue(QUEUE_RECONCILIATION);
 export const retentionQueue = createQueue(QUEUE_RETENTION);
+export const commentRepliesQueue = createQueue(QUEUE_COMMENT_REPLIES);
+export const analyticsQueue = createQueue(QUEUE_ANALYTICS);
 
 export const queues: Record<QueueName, Queue> = {
   [QUEUE_CLICK_EVENTS]: clickEventsQueue,
@@ -62,4 +70,6 @@ export const queues: Record<QueueName, Queue> = {
   [QUEUE_FEEDS]: feedsQueue,
   [QUEUE_RECONCILIATION]: reconciliationQueue,
   [QUEUE_RETENTION]: retentionQueue,
+  [QUEUE_COMMENT_REPLIES]: commentRepliesQueue,
+  [QUEUE_ANALYTICS]: analyticsQueue,
 };

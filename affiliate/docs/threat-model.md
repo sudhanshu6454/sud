@@ -93,6 +93,35 @@ Boundaries, in order of exposure:
 7. **Database** — every API query goes through `tenantQuery`, which throws
    at runtime if the SQL does not reference `org_id`
    (`packages/api/src/db.ts`).
+8. **Celebrity looks: the public read API** (2026-09-30,
+   `packages/api/src/routes/public.ts`) — `GET /v1/public/:org/{spotted,
+   trending, celebrities/:slug, looks/:id, storefronts/:slug, sitemap}`,
+   UNAUTHENTICATED by design, public through the web's `/api` proxy. The
+   organisation is its public slug (`orgBySlug`, the one unscoped read);
+   everything after it is tenant-scoped. It serves only what the read gate
+   allows at that moment (`readGateSql` / `publicLook`); never `offer_url`,
+   evidence, reviewers, licence references or anything of a draft.
+9. **Celebrity looks: the Meta webhook** (`routes/meta-webhook.ts`) — `GET`
+   verification (the verify token, constant-time) and `POST` deliveries,
+   UNAUTHENTICATED except for `X-Hub-Signature-256` over the raw bytes with
+   `META_APP_SECRET`; public at `https://afflino.com/api/v1/integrations/meta/webhook`.
+10. **The web's `/internal/revalidate`** (stage 2,
+   `packages/web/app/internal/revalidate/route.ts`) — POST only, reached by
+   the API over the compose network with `x-revalidate-secret` =
+   `WEB_REVALIDATE_SECRET` (compared as HMACs, constant-time; 503 while the
+   secret is unset or shorter than 16 characters; 401 otherwise; at most
+   2000 tags, each one of the known cache-tag shapes, else 400). It can only
+   make the web refetch public data sooner, never change it. The edge
+   answers 404 for `/internal/*` (`docker/Caddyfile`; checked in the smoke
+   test and the rehearsal).
+11. **The web's middleware** (`packages/web/middleware.ts`, `/looks/*`,
+   `/c/*`) — sends a HEAD to the public read API for the page's look or
+   celebrity (2 s timeout) and answers 410 for a withdrawn one; it trusts
+   only the API's status code; the path is reduced to a uuid or a slug
+   before it is used (`withdrawalProbePath`). The 410's body is the web's
+   own `/withdrawn` page fetched from `WEB_INTERNAL_ORIGIN` (default
+   `http://127.0.0.1:$PORT`, the server itself; a fixed path, never a
+   request-derived URL), with its scripts removed.
 
 ## 2. Assets
 
@@ -321,6 +350,112 @@ token that never leaves the process.
   and self-auditing (`actor_id = NULL`, machine-readable entity_id).
 - **D** — BullMQ `removeOnComplete/removeOnFail` caps on click-event jobs.
 
+### 3h. Celebrity looks, takedowns, comment replies (0007, 2026-09-30)
+
+- **Rights-gate bypass attempts** — every public list filters in SQL
+  (`readGateSql`: published, no takedown on look or celebrity, not a minor /
+  never-listed, a publishable status, a review allowing the name) and every
+  look is masked in JS (`publicLook`: name, image, products, pending EXACT);
+  the legacy catalogue never serves a celebrity look to a consumer role
+  (`routes/looks.ts`; `celebrity-looks.test.ts`); the editorial routes need
+  network_admin / editor (reads: + rights_reviewer); only `rights_reviewer`
+  sets a status beyond `blocked` or restores a takedown (403, tested); a minor
+  can never leave unreviewed / blocked (a CHECK); EXACT needs evidence and a
+  second person (API 403 + a CHECK). A downgrade, an expiry or a takedown is
+  effective at the next read. Weak point: the JWT stub (§4.1) — whoever holds
+  `JWT_SECRET` can mint a `rights_reviewer` token.
+- **Takedown** — one transaction (looks locked, withdrawn, links paused,
+  reply rules off, queued replies cancelled, snapshot, audit, outbox), then
+  the route keys deleted twice and the web revalidated; mints serialise on the
+  look's row lock (10 racing rounds on real Postgres, never an active link on
+  a withdrawn look). Timestamps received / actioned / completed; SLA marks
+  (warn > 60 min, breach > 180 min) are computed, not alarmed (§4.13).
+- **Webhook (S, T, R)** — signature over the raw body (a re-serialised body
+  fails, tested), 503 while unconfigured, 401 on a bad or missing signature
+  before anything is read; the verify token compared in constant time and the
+  challenge echoed only as a short token (no reflected markup).
+  **Replay / D** — Meta retries for 36 hours: `unique (platform, comment_id)`
+  makes every repeat a no-op (10 concurrent deliveries → one event on real
+  Postgres); a body cap of 5 MB; a per-client token bucket
+  (`WEBHOOK_RATE_PER_MINUTE`, default 1200 a minute; Meta retries a refused
+  delivery for 36 hours), in the api process, not at the edge (§4.8).
+- **PII (I)** — no comment text, username or raw commenter id is stored:
+  `HMAC-SHA256(COMMENT_ID_HASH_KEY, platform:account:id)` only (tested by
+  scanning every stored row); events deleted after 30 days (placeholder);
+  Page tokens only in the workers' memory.
+- **Message content (T)** — the private reply is built and re-checked
+  (`replyTextRefusal`) right before the send: only `SITE_URL/looks/<uuid>`
+  (or `/s/<slug>`), https, no query, no second URL, no `/r/`, no merchant
+  host, ≤ 1000 bytes; a misconfigured `SITE_URL` fails closed (tested).
+  One message per comment: a conditional claim; an unknown outcome is never
+  resent.
+- **Stage 2 additions (the web and the owner's steps)** —
+  **Public trending and facets (I)**: `trending` ranks by `click_daily` but
+  returns only look cards through the same read gate (no click counts);
+  `facets` lists only celebrities with a public look and live storefronts,
+  through the gate (a takedown empties both, tested in
+  `celebrity-web-support.test.ts`). **The web's link guard (T)**:
+  `lib/spotted.ts` renders a product's button only for
+  `https?://host/r/<32 hex>` and a post link only for an https Facebook /
+  Instagram URL; anything else becomes the disabled control (tested), so a
+  bad row cannot put a merchant or foreign URL on the page. **Library upload
+  in the admin (T, D)**: `POST /v1/editorial/library/import`, editors only,
+  `csv_text` ≤ 900 000 characters, a dry run by default, the same checks as
+  the server-side import (a whole file refused on one bad row, the advisory
+  lock, idempotent). **Reply events (I)**: `GET /v1/replies/events` and
+  `looks.sh events` never return the comment id, the commenter hash, the
+  media id or the message id (tested). **The admin sign-in (S)**:
+  `looks.sh signin` mints an 8-hour JWT-stub bearer for the network admin,
+  the rights reviewer or the second editor, writes it to
+  `/etc/afflino/admin-sign-in.token` (root, 0600) and never prints it; the
+  owner's Mac line copies it to the clipboard. It is as strong as the stub
+  (§4.1). **The Meta verify token** is one the owner makes up and types at a
+  hidden prompt (`looks.sh keys`) and again in Meta's dashboard; nothing
+  prints it (`looks.sh webhook` shows only the fields and addresses), and
+  the api's and the redirect's request logs record the path without its
+  query string (the token travels in the GET's query; tested,
+  `request-log.test.ts`, `celebrity-controls.test.ts`). It only completes
+  the GET handshake — every delivery is authenticated by the app secret.
+- **After three independent reviews (2026-09-30)** —
+  **Names (I, T)**: a celebrity's name appears only in the credit line of
+  that person's own look and hub; every other text (event, place, piece
+  labels, product brand / model / category, a storefront's name / slug /
+  bio, an Amazon shelf's title) is checked against every celebrity's name
+  and aliases when written (422) and again at every read (the look 404s,
+  the product or storefront is left out), so a later alias or a takedown
+  also hides text written before (`celebrity-controls.test.ts`). The
+  headline is name-free ("Spotted at <event>"). **The still's own address
+  (I, SSRF)**: pages point at `/img/looks/<id>`; the web asks
+  `GET /v1/public/{org}/looks/{id}/still`, which re-applies every rule and
+  fetches the origin file (`src/looks/still.ts`: https only in production,
+  no loopback / private / `.internal` / `.local` host, no credentials in
+  the URL, no redirect followed, 8 s, 12 MB, image types only; the origin
+  URL is written only by the library import and editors) and never returns
+  its address; 410 after a takedown of a look that was public. Residual: a
+  DNS name that resolves to a private address is not caught (the check is
+  on the host name; the origin URLs are the owner's own). **Rate limit and
+  cache (D)**: `src/public-guard.ts` — a per-client token bucket on
+  `/v1/public/*` (`PUBLIC_RATE_PER_MINUTE`, 240) and the Meta POSTs, keyed
+  by an HMAC of `req.ip` in memory only; the web's own server-side calls
+  (no X-Forwarded-For from a private peer) are not counted, so one busy
+  client cannot put the whole site into 429 through the web's shared
+  address; public answers and stills are cached 30 s per process under a
+  Redis epoch every invalidation increments (a takedown drops them at
+  once; stills within a 64 MB budget, keyed by the look so a made-up
+  `?v=` cannot force an origin fetch). **Meta data deletion (S)**: `POST
+  /v1/integrations/meta/data-deletion` verifies `signed_request`
+  (HMAC-SHA256 with the app secret, constant time, 401 otherwise; 503
+  unconfigured), deletes that person's reply events on every in-house
+  account (the org of each account resolved first, then tenant-scoped
+  deletes), keeps the opt-out hash, logs only counts. **Maker-checker
+  (T)**: a tracked link of a piece's product is minted only for an approved
+  item (409 otherwise), under the look's row lock, for the look's web page
+  only (a post's placement never appears on afflino.com). **Asset licence
+  facts (T)**: widening one (commercial reuse, territory, expiry, the chain
+  of title, clearing a frame flag) needs the rights reviewer (403 for an
+  editor; the frame flags cannot be cleared at all), audited; a new image
+  address resets the frame screen.
+
 ### 3g. Web app (`packages/web`)
 
 - No `dangerouslySetInnerHTML` anywhere (verified by grep); React escapes
@@ -371,8 +506,13 @@ token that never leaves the process.
    `docker/Caddyfile`, but deliberately no Content-Security-Policy yet: one
    has to be written against the Next.js bundle and tested); React escaping
    is the only XSS control.
-8. **No rate limiting** on `/r/:token`, webhook, or CSV endpoints; Redis
-   outage degrades the click path to DB-per-click.
+8. **No rate limiting** on `/r/:token` or the CSV endpoint, and none at the
+   edge; the public read API and the Meta webhook have a per-process,
+   per-client token bucket in the api (2026-09-30, `src/public-guard.ts`;
+   several replicas each keep their own, and many users behind one carrier
+   NAT address share one bucket — 240 a minute for the public reads). Redis
+   outage degrades the click path to DB-per-click and turns the public
+   answer cache off.
 9. **Payout callback trust**: stub trusts the caller's `outcome`; real rail
    needs signed callbacks + the unknown-state requery discipline already
    modelled in `payout-rail.ts`.
@@ -427,6 +567,35 @@ token that never leaves the process.
     reversals of one conversion remain a pre-existing gap (they cannot reach
     Amazon rows).
 
+13. **Celebrity looks (2026-09-30).** (a) The takedown SLA marks are not
+    wired to an alert (only `GET /v1/takedowns` and `looks.sh takedowns`
+    show them). (b) The public API and the Meta webhook are rate-limited in
+    the api only (§4.8); the public answers may be cached downstream for
+    30 s, so a takedown reaches such a cache within that bound (the web's own
+    caches are revalidated; the api's own cache is dropped at once by the
+    epoch). A flood of made-up look ids or pages through the web is not
+    limited (the web's server-side calls are not counted; the edge has no
+    limit). (c) The web revalidation is
+    best-effort (a failed call is logged; pages then expire by their cache
+    time). (d) The endorsement-wording check is English only and cannot read
+    text inside images. (e) A Facebook user's comment id and message PSID may
+    differ: a "STOP" message may not suppress a later comment (Meta /
+    counsel). (f) The CLI records counsel's decisions as a placeholder
+    rights-reviewer user on the server (root on the Linode is trusted with
+    that), and the second editor's sign-in is a placeholder user too; the
+    API's role separation is intact, but the stub cannot tell two people
+    apart, so the EXACT maker-checker is only as good as the owner handing
+    each sign-in to its person. (g) The web's 410 lags a takedown by up to
+    5 s per web process (the middleware keeps "not withdrawn" 5 s; the page
+    itself shows only the withdrawn notice at once, revalidated). (h) The
+    sign-in file holds a live 8-hour bearer on the server, and the Mac's
+    clipboard keeps it until overwritten (a clipboard manager may keep it
+    longer); a new sign-in replaces the file but does not revoke the old
+    token (no revocation in the stub). (i) The public read API's answers
+    are public by design; enumeration of look ids is bounded by uuids, and
+    of celebrity slugs by the read gate (an unreviewed or blocked slug is a
+    404 like an unknown one).
+
 ## 5. Proposed pentest scope
 
 **In scope**
@@ -456,6 +625,16 @@ token that never leaves the process.
   in portal and console; token exfiltration via `localStorage`.
 - JWT: algorithm confusion, `none` alg, weak-secret brute force, claim
   tampering (`role` escalation, `org_id` swap), missing-claim handling.
+- Celebrity looks (2026-09-30): the rights gate on every public read
+  (`/v1/public/{org}/…`: an unreviewed, blocked, withdrawn or minor
+  celebrity through every list, the trending row, the facets, the
+  sitemap), the EXACT maker-checker (a tagger approving through another
+  role), the takedown → 410 path (the web's middleware and pages, the
+  revalidation), `/internal/revalidate` reached from outside the compose
+  network (the edge's 404, header tricks, the secret), the Meta webhook's
+  signature and replay handling, the admin's library upload (size,
+  formula payloads, endorsement words), the web's link guard (a non-`/r/`
+  or foreign URL reaching a button).
 
 **Out of scope**
 - Social engineering / phishing of staff or publishers.
@@ -498,3 +677,7 @@ token that never leaves the process.
    ledger entries until Amazon offers something better (no reporting API was
    found); who may run `amazon.sh import`; where the Creators API secret
    lives once a secret manager exists.
+9. **Celebrity looks** (counsel, `docs/counsel-briefing.md` §10): the
+   capability matrix, the takedown timelines Afflino commits to, the
+   retention of reply events and EXACT evidence, whether the keyed commenter
+   hash is personal data.

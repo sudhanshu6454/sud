@@ -270,6 +270,15 @@ function transformForPgMem(filename: string, sql: string): string {
   if (filename === '0002_money_loop.sql') {
     sql = sql.replace(/alter table ledger_entries[^;]*;/gi, '');
   }
+  if (filename === '0007_celebrity_looks.sql') {
+    // The same shims as packages/api/test/pgmem.ts: pg-mem names the inline
+    // role CHECK memberships_constraint_1, and answers queries from partial
+    // indexes alone (the two predicate-only ones become plain unique indexes;
+    // the two look_items ones are not created — the demo never tags items).
+    sql = sql.replace(/drop constraint memberships_role_check/gi, 'drop constraint memberships_constraint_1');
+    sql = sql.replace(/(create unique index uq_(?:assets_org_kind_key|looks_org_library_ref) on [^;]*?\))\s*where [^;]*;/gi, '$1;');
+    sql = sql.replace(/create unique index uq_look_items_piece_(?:exact|variant) on[^;]*;/gi, '');
+  }
   return sql;
 }
 
@@ -285,6 +294,14 @@ async function bootPgMem(): Promise<Booted> {
     returns: DataType.uuid,
     impure: true,
     implementation: () => randomUUID(),
+  });
+
+  // char_length(text): a Postgres builtin pg-mem lacks (0007's CHECKs).
+  db.public.registerFunction({
+    name: 'char_length',
+    args: [DataType.text],
+    returns: DataType.integer,
+    implementation: (t: string | null) => (t === null || t === undefined ? null : [...t].length),
   });
 
   const migDir = path.join(repoRoot, 'db', 'migrations');

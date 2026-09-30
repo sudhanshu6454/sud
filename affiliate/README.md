@@ -274,6 +274,73 @@ written word on the `/r/` redirect; counsel on the §9 items and the
 accountant on GST / TDS; and how Amazon's payments are to be recorded as
 merchant settlements (until then no Amazon earning becomes payable).
 
+## Celebrity looks (the paparazzi library)
+
+**Status (2026-09-30): built and verified with TEST data, backend and web (stages 1 and 2);
+nothing about any celebrity is on afflino.com.** The API answers only published looks, and a
+look publishes only through a server-side gate that starts from a rights review (default
+`unreviewed`: nothing is shown). Nothing here says any of it is lawful: the open questions are
+[`docs/counsel-briefing.md`](docs/counsel-briefing.md) §10 and
+[`docs/action-tracker.md`](docs/action-tracker.md) "Celebrity looks".
+
+What it does: the owner's paparazzi library (a file on the server, never in this repository)
+is imported as **draft looks**, one per moment (a celebrity, an event or place, a date, the
+source video, a still, the in-house page and post that published it), with the outfit **piece
+by piece** (a label, one of 24 garment categories, an optional hotspot on the still). Each piece
+gets products tagged as **EXACT** (the same item: evidence and its source, then a second
+person's approval; one per piece) or **SIMILAR** (the default, several per piece, the wording
+never claims the same item). The public read API (`/v1/public/{org}/…`, no token,
+`Cache-Control: public, max-age=30`) serves the Spotted feed, a celebrity's hub, the look page
+(pieces with their exact and similar products, each with the tracked `/r/` link of
+afflino.com's own placement) and a storefront per in-house page. A celebrity's name appears
+only in the credit line of their own look, with the non-endorsement line; every other text
+(the event, the place, the piece labels, a product's words, a storefront's name and bio) may
+name nobody, checked when written and at every read; headlines never carry the name
+("Spotted at <event>"). A takedown withdraws a celebrity or a look in one
+transaction: 410 on every public page, its links serve the paused page, its comment replies
+stop, the route cache is cleared; restoring needs a new rights review. Comment replies send one
+private message per matching comment carrying only the look's afflino.com URL (never a `/r/`
+or merchant URL), off until the owner turns them on.
+
+On the site (`packages/web`, Afflino's design system, desktop and phone): `/shop` is the
+**Spotted** feed (newest first, filters by celebrity and by in-house page, a "Trending this week"
+row ranked by the last 7 days' clicks, no counts shown); `/c/<slug>` a celebrity's hub;
+`/looks/<id>` the look (the still with numbered markers, never on a face: eyewear, headwear and
+jewellery get none; the moment's caption; "View the original post"; then the outfit piece by
+piece, the exact match first, then "Similar style" products); `/s/<slug>` a storefront per
+in-house page (share and a QR code for its bio). Every product: "Buy on Amazon.in" through
+`/r/` only, "See price on Amazon.in" unless the product API's price is fresh, the Associate
+statement beside the button; the non-endorsement line wherever a celebrity is named. A
+withdrawn page answers 410 (`middleware.ts`), a takedown revalidates the web's cached pages
+(`/internal/revalidate`, a shared secret), and celebrity pages stay `noindex` and out of the
+sitemap until `CELEBRITY_INDEXING=on` (counsel's call). The admin (network admin through the
+sign-in, live against the API, TEST data without it): Celebrities (rights review), Library
+(check and import a file), Looks (the pipeline and the pieces editor), Takedowns, Instant
+links, Comment replies (Engage), Analytics (CSV export).
+
+The owner's lines, as root on the Linode (details and what each prints:
+[`docs/runbooks/deploy.md`](docs/runbooks/deploy.md) §1C):
+
+| Step | Line |
+|---|---|
+| Once: your statement that you own the library's footage (rows without licence columns then take it; `owned withdraw` ends it) | `bash /opt/afflino/affiliate/deploy/linode/looks.sh owned` |
+| The library file → draft looks, unreviewed celebrities, licensed assets, pieces (idempotent) | `bash /opt/afflino/affiliate/deploy/linode/looks.sh import` |
+| Each celebrity's slug and status | `bash /opt/afflino/affiliate/deploy/linode/looks.sh celebrities` |
+| Counsel's decision for one celebrity (prompts; evidence reference required) | `bash /opt/afflino/affiliate/deploy/linode/looks.sh review` |
+| A draft storefront for every in-house page with its bio link, then make them public | `bash /opt/afflino/affiliate/deploy/linode/looks.sh storefronts` / `… storefronts live` |
+| An 8-hour admin sign-in, written to a root-only file (never shown) | `bash /opt/afflino/affiliate/deploy/linode/looks.sh signin` |
+| Counts | `bash /opt/afflino/affiliate/deploy/linode/looks.sh status` |
+| Take down a celebrity or a look now / the list with times / lift one | `bash /opt/afflino/affiliate/deploy/linode/looks.sh takedown` / `… takedowns` / `… restore` |
+| Meta keys and a verify token you make up (hidden prompts), what to set in Meta's dashboard (fields, callback and data deletion addresses; nothing secret shown), then the pages' Meta ids and webhooks | `bash /opt/afflino/affiliate/deploy/linode/looks.sh keys` / `… webhook` / `… accounts` |
+| A test DM against the stub and the webhook's own checks | `bash /opt/afflino/affiliate/deploy/linode/looks.sh reply-test` |
+| Comment replies off / shadow / on (`on` refused while `/privacy` is the stub); the latest events | `bash /opt/afflino/affiliate/deploy/linode/looks.sh replies shadow` / `… events` |
+
+**What the owner must supply** (none of it is in this repository): the library file with the
+licence fields of every row; counsel's decision per celebrity and the evidence reference;
+counsel's answers of §10 (the display matrix, the EXACT evidence standard, the wording, the
+takedown contact and timelines, retention); a Meta app with App Review, Business Verification
+and Live mode for comment replies; counsel's privacy notice on `/privacy`.
+
 ## Deploying afflino.com
 
 What the installer (above) deploys: the shape, rehearsed end to end on one
@@ -519,11 +586,14 @@ the two targets ([db/README.md](db/README.md)).
 ## Retention purge
 
 Raw tracking payloads age out on a schedule; financial and governance records
-never do. Three classes — aged `clicks.context` / `conversions.raw` payloads
-are nulled, aged **published** outbox rows are deleted — with per-class
-windows from `RETENTION_CLICK_CONTEXT_DAYS` / `RETENTION_CONVERSION_RAW_DAYS` /
+never do. Four classes — aged `clicks.context` / `conversions.raw` payloads
+are nulled, aged **published** outbox rows are deleted, comment-reply events
+(0007) are deleted whole — with per-class windows from
+`RETENTION_CLICK_CONTEXT_DAYS` / `RETENTION_CONVERSION_RAW_DAYS` /
 `RETENTION_OUTBOX_DAYS` (conservative sandbox default: 365 days each; counsel
-may shorten — see `docs/counsel-briefing.md` §1). `ledger_entries`,
+may shorten — see `docs/counsel-briefing.md` §1) and
+`RETENTION_REPLY_EVENTS_DAYS` (30 days, a placeholder for counsel,
+`docs/counsel-briefing.md` §10; the daily counts and the opt-out list are kept). `ledger_entries`,
 `audit_log`, and `adjustments` are never touched, so publisher statements stay
 reproducible after every purge.
 
@@ -623,7 +693,9 @@ per item; never a merchant URL), link minting with its guard error codes (`PROGR
 `PROPERTY_FORBIDDEN`, `PUBLISHER_NOT_ACTIVE`), the stub-network webhook and CSV
 uploads, suspense ops, payout batches (prepare/approve/disburse + provider
 callback), publisher earnings, disputes, programme pause/resume, publisher
-onboarding, and contracts. The bearer-JWT auth scheme is explicitly marked as
+onboarding, contracts, and the celebrity looks (the public read API
+`/v1/public/{org}/…` without a token, celebrities and their rights review, editorial looks,
+pieces and tagging, takedowns, comment-reply rules, the Meta webhook, analytics). The bearer-JWT auth scheme is explicitly marked as
 a temporary stub to be replaced by a production IdP.
 
 To view it:
@@ -673,6 +745,72 @@ payout rail, retention windows, secrets management).
   manifest) and `scripts/restore.sh` (scratch-DB drill with row-count and
   ledger-balance checks); production guards and open infra questions in
   [scripts/ASSUMPTIONS.md](scripts/ASSUMPTIONS.md).
+
+## Integration notes (2026-09-30, celebrity looks)
+
+The owner asked to tag products to a celebrity's outfit, the same item or a similar one. Built in
+two stages (1: the backend; 2: the web pages, the admin screens, the owner's steps) with TEST
+data only ("Demo Star …", `example.com`, `demo-*` tracking IDs, `B0DEMO…`).
+
+- **Migration** `db/migrations/0007_celebrity_looks.sql` (additive; `db/README.md` "Celebrity
+  looks (0007)"): celebrities with counsel's rights status and its append-only history, licence
+  facts on assets, the moment on looks, `look_pieces`, piece-scoped EXACT / SIMILAR on the
+  existing `look_items` (maker-checker for EXACT in a CHECK), storefronts, takedowns, links
+  paused with their reason, comment-reply tables (no text, no raw id, no token stored),
+  `click_daily`; the `rights_reviewer` role.
+- **Rules** in `@paparazzi/shared` `celebrity.ts` (one capability matrix per rights status, the
+  image rule, the wording lint) and `replies.ts` (the one message, its URL check, keywords,
+  opt-out, Meta's webhook shapes and error classes).
+- **API** (`packages/api/src/looks/`, routes `public`, `celebrities`, `editorial`,
+  `takedowns`, `replies`, `meta-webhook`, `analytics`; 42 new routes in `docs/openapi.yaml`):
+  the publish gate (`looks/gate.ts`, also re-checked in SQL at every public read), tagging and
+  review, instant links (an amazon.in URL or ASIN → tracked links for the chosen pages through
+  the same guards as `POST /v1/links`, `src/links/mint.ts`), takedown / restore, the library
+  import (`looks/library-import.ts`: refuses a row without its licence fields and the whole file
+  with it; idempotent on the video reference), the Meta webhook (GET verify; POST
+  `X-Hub-Signature-256` over the raw body, constant-time; one event per comment), analytics.
+  CLI in the image: `node dist/cli/looks.js import | status | celebrities | review | takedown |
+  restore | takedowns | storefronts`.
+- **Redirect**: a paused link (takedown, rights review, unpublished look, removed product)
+  serves the paused page, never the merchant; `?via=<slug>` is kept in the click's context
+  only.
+- **Workers**: `comment-replies` (a sweep enqueues sends; a conditional claim; one message per
+  comment; an unknown outcome is never resent; a stub sender unless `COMMENT_REPLIES_SENDING=on`
+  with the Meta keys, and `shadow` runs every check without sending), `analytics` (hourly IST
+  rollups into `click_daily` / `reply_daily`), `reply_events` retention (30 days).
+- **Web** (stage 2; `packages/web/README.md` screen map): the Spotted feed on `/shop` with the
+  trending row and filters, `/c/<slug>`, `/looks/<id>` piece by piece, `/s/<slug>`, empty and
+  withdrawn states; `lib/public-catalogue.ts` reads the public API (no token, `revalidate: 30`
+  with cache tags; the demo only when the API is unreachable); `lib/spotted.ts` keeps anything
+  that is not a `/r/<32 hex>` link off the page and puts no marker on eyewear, headwear or
+  jewellery; `middleware.ts` answers 410 for a withdrawn look or hub; `/internal/revalidate`
+  (POST, `WEB_REVALIDATE_SECRET`, constant-time) clears the tagged pages after a takedown;
+  `PUBLIC_ORG_SLUG` (default `afflino`) and `CELEBRITY_INDEXING`. The admin screens
+  (`components/admin/celebrity/`) are live with a sign-in and TEST data without one. Four API
+  additions for them: `GET /v1/public/{org}/trending`, `GET /v1/editorial/properties`,
+  `POST /v1/editorial/library/import` (a dry run by default), `GET /v1/replies/events` (no
+  comment id, commenter or message id).
+- **Ops**: `deploy/linode/looks.sh` (one-line steps, hidden prompts, ShellCheck clean; stage 2
+  added `storefronts live`, `signin`, `webhook`, `reply-test`, `events`), the installer
+  generates `COMMENT_ID_HASH_KEY` and `WEB_REVALIDATE_SECRET`, the edge answers 404 for
+  `/internal/*`, `docs/runbooks/deploy.md` §1C.
+- **Proof**: vitest; `pnpm looks:pg` (`scripts/celebrity-looks-pg.ts`, in CI) runs the whole
+  story on a scratch PostgreSQL and the races pg-mem cannot (the partial unique indexes, a mint
+  racing a takedown, concurrent webhook deliveries and senders); the web on a local stack
+  (scratch Postgres 16, `next start` on the build: the pages, the 410, the revalidation, the
+  screenshots at 1280 and 390 px); `docker/README.md`'s smoke test; the installer's rehearsal
+  with the new `looks.sh` steps (`deploy/linode/README.md` "What was checked").
+- **After three independent reviews** (2026-09-30; `packages/api/ASSUMPTIONS.md` "After three
+  independent reviews", `packages/web/ASSUMPTIONS.md` 97–103, `test/celebrity-controls.test.ts`):
+  names checked against every celebrity in every text, name-free headlines, the product-text
+  rule, the chain of title, place confirmation for streets, asset facts widened only by the
+  rights reviewer, EXACT links only after approval, look links on afflino.com's placement, the
+  still at its own address (`/img/looks/<id>`, `GET /v1/public/{org}/looks/{id}/still`), the
+  public API's rate limit and epoch cache (`src/public-guard.ts`), Meta's data deletion
+  callback (`POST /v1/integrations/meta/data-deletion`), place confirmation (`POST
+  /v1/editorial/looks/{id}/confirm-place`), fixed public comment answers, the webhook's
+  `messages` field and a verify token nobody prints; the withdrawn page in the design, the
+  commercial label only with products, the editor's keyboard route, the admin's sub-navigation.
 
 ## Integration notes (2026-09-29, Amazon.in Associates)
 

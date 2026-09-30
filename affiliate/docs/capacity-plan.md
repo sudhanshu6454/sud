@@ -200,6 +200,70 @@ limits rather than by traffic:
   reads the file whole. Unmeasured: the size of a real month's download for
   the in-house network (no sample yet).
 
+### Celebrity looks (2026-09-30)
+
+What 0007 adds, none of it on the `/r/` hot path except one column:
+- **The redirect**: its route query now selects `links.status` too (a paused link serves the
+  paused page); no extra query, no extra key. A takedown or a rights change deletes the
+  affected links' `route:*` keys after its commit and again 2 s later, like the kill switch.
+- **The public read API** (`/v1/public/{org}/…`): no token, `Cache-Control: public,
+  max-age=30`, pages of at most 48 cards; the read gate is part of every query (a join on the
+  celebrity, the takedown, the display level), so a look page costs a handful of indexed
+  queries (look, celebrity, pieces, items, live offers, links) plus one for the
+  organisation's celebrity names (the name check). Since the reviews of 2026-09-30 the api
+  keeps each answer 30 s per process (1000 URLs) under a Redis epoch every invalidation
+  increments, so a takedown drops them at once; stills the same within 64 MB (one origin
+  fetch per look per 30 s per process). A visitor is limited to `PUBLIC_RATE_PER_MINUTE`
+  (240) requests a minute per api process, by the address the edge saw; the web's own
+  server-side calls are not counted (they are bounded by the web's caches, below). Many
+  phones behind one carrier NAT address share one allowance — only the browser's own `/api`
+  calls count, and the shop's pages make none for the celebrity pages, so this bites only
+  direct API readers; measure before raising it. Unmeasured: the look page's latency under
+  load.
+- **The Meta webhook**: one insert per matching comment (`on conflict (platform, comment_id) do
+  nothing`), a 5 MB body cap, the signature checked before any parse, `WEBHOOK_RATE_PER_MINUTE`
+  (1200) per sending address and api process (Meta retries a refused delivery). A viral post's comment
+  burst lands as rows; sending is decoupled.
+- **Comment replies**: a sweep every `COMMENT_REPLIES_SWEEP_MS` (5 s) enqueues up to 200
+  ready events per run; each send is one Graph call. Meta's send limits apply and are not
+  measured here: a rate-limit error (codes 4 / 17 / 32 / 613) backs the event off, and events
+  older than Meta's 7-day private-reply window expire unsent. At 200 per 5 s the ceiling is
+  ≈ 144,000 sends a day before Meta's own limits.
+- **Rollups**: hourly (`ANALYTICS_ROLLUP_CRON`, `7 * * * *`), recomputing the last 2 IST days
+  of clicks and 8 of replies into `click_daily` / `reply_daily` with upserts (only days inside
+  the retention windows); the scan is bounded by `idx_clicks_org_occurred`. At the §2 click
+  rates that is up to ~2 days of `clicks` rows read per run per organisation: to be measured
+  before real traffic. A review's probe: 1,000,000 TEST clicks over 30 days rolled up exactly
+  (every day's count equal), the 2-day hourly run in 440 ms, an index scan at 48 ms a day.
+- **Analytics** (`GET /v1/analytics/clicks`): summed in SQL (`sum(clicks) … group by` the
+  chosen key over `click_daily`, up to 366 days), so the api holds one row per group, not
+  one per link and day.
+- **Growth**: `reply_events` is purged after 30 days (placeholder); `click_daily` grows by
+  (links clicked per day × surfaces), `takedowns` and `celebrity_rights_reviews` are kept.
+- **The web's celebrity pages** (stage 2): every public fetch is `revalidate: 30` with cache
+  tags, per web process, so the API sees at most one call per distinct URL per 30 s per
+  process — the feed per filter combination (a celebrity, a page, a page number: bounded by
+  the facets and the page count), a look, a hub, a storefront, the trending row, the sitemap.
+  A takedown clears the affected tags at once (`/internal/revalidate`) instead of waiting.
+- **The middleware** (`/looks/*`, `/c/*`): one HEAD to the public API per page per 5 s per web
+  process while it is not withdrawn (30 s once it is), at most 5,000 remembered pages per
+  process (the map is cleared whole when full). A crawler walking many look ids costs one
+  HEAD per id (a uuid lookup through the read gate) plus the page's own fetch; not rate
+  limited (the web's own calls are not counted; no limit at the edge).
+- **Trending**: one call per 30 s per web process; the API reads the last 7 days of
+  `click_daily` for the organisation joined to `links` and `look_items`, ranks in memory and
+  re-reads at most 12 cards through the read gate. The rows read grow with (links clicked per
+  day × 7); to be measured once real clicks exist.
+- **The library import**: the file is read whole and checked in full before anything is
+  written (one advisory lock per organisation); the admin's upload caps `csv_text` at 900,000
+  characters (roughly 2,500 rows of the example's width), larger files go through
+  `looks.sh import`. Unmeasured: the owner's real library size (not in the repository).
+- **Comment bursts**: a viral post's keyword comments queue as rows; the sweep's ceiling of 200
+  sends per 5 s (2,400 a minute) is above what Meta's own messaging limits are likely to allow
+  per account (not measured, not documented here as a number); the private-reply window of 7
+  days is the backlog's hard bound. A comment on a post whose look was taken down queues
+  nothing.
+
 ## 4. The consumer web (`packages/web`)
 
 - Every catalogue fetch carries `next: { revalidate: 60 }`

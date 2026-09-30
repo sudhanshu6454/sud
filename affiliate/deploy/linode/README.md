@@ -1,6 +1,6 @@
 # deploy/linode — afflino.com on the owner's Linode
 
-Five bash scripts, run as root on the Linode (Ubuntu 24.04 recommended;
+Six bash scripts, run as root on the Linode (Ubuntu 24.04 recommended;
 Ubuntu 22.04 and Debian 12 accepted). The server needs nothing installed
 first: no make, no node, no dig; bash, curl and python3 come with the image.
 The procedure around them (DNS, checks, rollback, the kill-switch drill) is
@@ -14,6 +14,7 @@ README.md "Deploying afflino.com on Linode".
 | `restore.sh` | Default: restores the newest dump into a scratch database and checks it (migrations, tables, row counts, the ledger balanced per currency), the live database untouched. `--replace-live`: after you type `REPLACE`, takes a pre-restore backup, loads the dump into a staging database (a failed load changes nothing), then swaps it in while web, api, redirect and workers are stopped for a few seconds, and clears the redirect's route cache in Redis (`route:*`) before starting them again |
 | `godaddy-dns.sh` | Optional, needs GoDaddy API access: sets `A @` and `AAAA @` for afflino.com to this server, keeps the `www` CNAME, prints before / after. Two hidden prompts — a personal access token (Enter at the secret prompt: `Bearer`) or an API key and its secret (`sso-key`); never stored |
 | `amazon.sh` | The owner's Amazon.in Associates steps (`docs/runbooks/deploy.md` §1A), one argument each: `keys` (hidden prompts: the Store ID, optionally the Creators API id and secret; the in-house share in percent; written to `/etc/afflino/afflino.env`, never printed), `template` (Facebook / Instagram / web pages only), `plan <N>` (`tracking-ids.csv` for the N most-viewed pages by the Meta exports in `/etc/afflino/meta` plus afflino.com, tracking IDs `<store>-p01-21` … and `<store>-web-21`, printed with each page's URL; the ranking is `amazon-plan.py`, tested by `packages/api/test/amazon-plan.test.ts`), `setup` (and `AMAZON_ASSOCIATE=on`, the web restarted), `offers`, `links` (→ `/etc/afflino/amazon/links.csv`; refused while `/privacy` is the stub), `shop` (`WEB_PLACEMENT_ID`, the shop's token minted in the api container, the web restarted; the same privacy condition), `import` (every new earnings download in `/etc/afflino/amazon/reports/`), `returns` (the returns an import could not match: a numbered choice each), `check` (counts and one `/r/` link's `Location`), `pause` / `resume` (the programme's kill switch). Each runs the api image's Amazon CLI (`node dist/cli/amazon.js`) with the files mounted read-only; nothing secret reaches a command line |
+| `looks.sh` | The owner's celebrity-look steps (`docs/runbooks/deploy.md` §1C), one argument each: `owned` (the owner's statement that the organisation owns the library's footage: the legal owner's name and who shot it, at prompts, dated; rows without licence columns then take it; `owned withdraw` ends it and hides what it licensed), `import` (the library file `/etc/afflino/library/library.csv` → draft looks, unreviewed celebrities, licensed assets, pieces; the whole file refused on any bad row; idempotent), `celebrities`, `review` (counsel's decision for one celebrity, at prompts; the evidence reference required), `storefronts` (a draft per in-house page with its bio link) and `storefronts live`, `signin` (an 8-hour admin sign-in as 1) the network admin, 2) the rights reviewer or 3) the second editor who approves EXACT tags, written to `/etc/afflino/admin-sign-in.token` 0600, never printed), `status`, `takedown` (also printing the Sharing Debugger addresses and the stills) / `takedowns` / `restore`, `keys` (the Meta app secret, a verify token the owner makes up, and the system user token, at hidden prompts), `webhook` (what to set in Meta's App Dashboard: the fields — Page `feed`, `messages`, `messaging_policy_enforcement`; Instagram `comments`, `messages` — the callback address, the data deletion callback address and each Page's hybrid response mode; no secret shown), `accounts`, `reply-test` (whether replies may go out for the look, its exact private reply through the stub sender and the webhook's own checks, a signed STOP message included), `replies off` / `shadow` / `on` (`on` refused while `/privacy` is the stub), `events` (no comment text, username or commenter id). Each runs the api image's looks CLI (`node dist/cli/looks.js`) with the files mounted read-only; nothing secret reaches a command line |
 
 The owner's lines (each one complete, as root on the Linode):
 
@@ -23,10 +24,12 @@ bash /opt/afflino/affiliate/deploy/linode/godaddy-dns.sh
 bash /opt/afflino/affiliate/deploy/linode/backup.sh manual
 bash /opt/afflino/affiliate/deploy/linode/restore.sh
 bash /opt/afflino/affiliate/deploy/linode/amazon.sh keys
+bash /opt/afflino/affiliate/deploy/linode/looks.sh owned
+bash /opt/afflino/affiliate/deploy/linode/looks.sh import
 ```
 
 (`amazon.sh`'s other steps, in order, and the lines on the Mac:
-`docs/runbooks/deploy.md` §1A.)
+`docs/runbooks/deploy.md` §1A; `looks.sh`'s: §1C.)
 
 The first line is also the update: run it again whenever the branch has new
 commits. It keeps every value in the environment file, stops (changing
@@ -108,7 +111,112 @@ that it refuses under the image's `NODE_ENV=production`) and
 is the stub); its prompts read standard input, so a rehearsal pipes the
 TEST answers in.
 
+`looks.sh` takes the same `AFFLINO_DIR`, `AFFLINO_ENV_FILE`,
+`AFFLINO_PROJECT`, `AFFLINO_EDGE_TEST`, `AFFLINO_EXTRA_COMPOSE_FILE`, plus
+`AFFLINO_LIBRARY_DIR` (instead of `/etc/afflino/library`),
+`AFFLINO_WEB_URL` (where `replies on` reads `/privacy`),
+`AFFLINO_LOOKS_ALLOW_TEST_VALUES=1` (the CLI accepts the TEST rows, "Demo
+…" and example.com, that it refuses under `NODE_ENV=production`) and
+`AFFLINO_LOOKS_SKIP_PRIVACY_CHECK=1`; its prompts read standard input too.
+
 ## What was checked (2026-09-29, in the sandbox)
+
+**`looks.sh owned`, the owner's ownership statement** (2026-09-30,
+ShellCheck 0.11.0 and 0.9.0 clean). Rehearsed against a TEST stand-in for
+`docker` (Docker was not running in the sandbox: `compose ps` answered
+"running", `compose run … api node dist/cli/looks.js …` ran the same CLI
+with tsx) on a scratch PostgreSQL 16 migrated to 0006, seeded with the
+owner's real network file under `NODE_ENV=production`, set up for Amazon
+with TEST IDs, then migrated to 0007 (`1 migration(s) applied, 6 already
+applied`, every row count unchanged, a second seed byte-identical; the
+database dropped after). The prompts fed from standard input: `owned` —
+the statement's words shown, recorded on `yes` ("Recorded 2026-09-30
+(statement 3)"); a choice of `3` and an answer other than `yes` stop with
+nothing recorded; `owned sideways` prints the usage. `import` with a TEST
+file without licence columns (under development, for the TEST names): "2
+look(s) from your ownership statement"; a second run: 0 new, 0 updated.
+`owned withdraw`: `nope` stops; `withdraw` answers "4 asset(s) back to an
+unknown licence"; the next `import` is refused with nothing written. Under
+production the CLI refuses TEST rows and a bad acquisition, and a second
+withdrawal ("no ownership statement is in force"). Not run on the
+installer's stack or the Linode.
+
+**`looks.sh` after three independent reviews** (2026-09-30, ShellCheck
+0.11.0 and 0.9.0 clean): `install.sh` with its test-only settings on a
+throwaway project (`afflino-final`, the sandbox's CA compose file) — `7
+migration(s) applied, 0 already applied`, api, redirect and web healthy,
+the environment file root 0600 with `COMMENT_ID_HASH_KEY` and
+`WEB_REVALIDATE_SECRET` generated — then the TEST example network seeded
+and the steps run through the script with the TEST library, the prompts fed
+from standard input. `import`: 2 looks new (drafts), 2 celebrities new
+(unreviewed), 4 assets, 4 pieces; a second run: 2 unchanged. `review`:
+Demo Star One cleared (name and image, products). `storefronts`: 2 drafts
+with their bio links; `storefronts live`: 2 made live. `signin` (1): the
+file root 0600, no token in the output. `keys`: three hidden prompts — the
+app secret, a verify token made up and typed at its prompt, the system
+user's token skipped — `set … META_APP_SECRET META_VERIFY_TOKEN`, no value
+in any output. `webhook`: the Page fields `feed, messages,
+messaging_policy_enforcement`, the Instagram fields `comments, messages`,
+the callback address, "the one you made up at the keys step (… it is not
+shown here)", the data deletion callback address and the hybrid response
+mode; no secret in the output. The update line: `unchanged: every key
+present, every value kept`, `0 migration(s) applied, 7 already applied`,
+the api and the workers recreated. `reply-test` (a draft look): "replies
+may go out for it: no", the exact private reply (262 of 1000 bytes, only
+`https://afflino.com/looks/<id>`), the stub sender 1 recorded and 0 sent;
+verify ok, a wrong token 403, a signed delivery 200 with nothing stored, a
+wrongly signed one 401, and — once a TEST account was mapped through the
+admin API, as `accounts` would — `messaging stop: ok: 200, the STOP message
+wrote the opt-out (the TEST row was removed again)`. `events`: none.
+`takedown` (one look): 1 withdrawn, acted in 0 min, then 1. the post to
+delete, 2. the two addresses for Meta's Sharing Debugger (the look, the
+storefront), 3. the still by its library reference. `takedowns`: `[ok]`.
+`restore` refused without a new review, accepted after `review` (the look
+back to draft). `replies shadow` ok; `replies on` refused without the
+system user's token, then (with a TEST one at the hidden prompt) refused
+while `/privacy` is the stub; `replies off` ok. Through the edge:
+`/internal/revalidate` 404, a wrongly signed data deletion request 401, and
+— for a TEST look given a `published_at` in the database, then taken down
+— `/looks/<id>` and its item page 410 with `Cache-Control: no-store`,
+`X-Robots-Tag: noindex, nofollow` and the withdrawn page in the shop's
+layout (no script; its CSS 200), `/img/looks/<id>` 410. Then `down -v`.
+
+**`looks.sh`, the celebrity-look steps** (2026-09-30, stage 2; ShellCheck
+0.11.0 and 0.9.0 clean): `install.sh` with its test-only settings on a
+throwaway project (`afflino-celeb`, the sandbox's CA compose file) — build,
+`7 migration(s) applied, 0 already applied`, api, redirect and web healthy,
+the environment file carrying `COMMENT_ID_HASH_KEY` and
+`WEB_REVALIDATE_SECRET` — then the TEST example network seeded and every
+step of `docs/runbooks/deploy.md` §1C run through the script with the TEST
+library (`db/fixtures/library.example.csv`'s kind of rows) and
+`AFFLINO_LOOKS_ALLOW_TEST_VALUES=1`, the prompts fed from standard input.
+`import`: 2 looks new (drafts), 2 celebrities new (unreviewed), 4 assets, 4
+pieces. `review`: Demo Star One cleared (name and image, products), as the
+rights-reviewer placeholder created then. `storefronts`: 2 drafts with their
+bio links (`https://afflino.com/s/demo-afflino`, `…-ig`); `storefronts live`:
+2 made live. `signin`: choices 3 (second editor, its placeholder created
+then) and 1 (network admin) each wrote `admin-sign-in.token` root 0600, 8
+hours, with the right role (choice 2, the rights reviewer, through the same
+CLI on the local stack); the token never appeared in the output;
+`GET /api/v1/editorial/looks` through the edge 200 with it; choice 4
+refused, nothing made. With those sign-ins through the
+edge: an EXACT tag by the network admin, its approval by the same sign-in
+403, by the second editor's 200. `keys`: no value in the output, the file
+still root 0600; `webhook`: a verify token generated and shown with the
+callback address; the update line recreated the api and the workers.
+`reply-test`: the exact private reply (262 of 1000 bytes: the "Ad" line
+with only `https://afflino.com/looks/<id>`, the commission line, the
+automated-message line with "Reply STOP"), the stub sender 1 recorded, 0
+sent; verify ok, a wrong verify token 403, a signed TEST delivery 200 with
+nothing stored, a wrongly signed one 401. `events`: none yet, no personal
+data. `takedown` (one look): 1 withdrawn, the caches cleared, the in-house
+post to delete listed; through the edge the look answered 410 with
+`Cache-Control: no-store`, `X-Robots-Tag: noindex, nofollow` and HSTS, its
+item pages too — 4.8 s after the takedown began on a page the web had
+checked just before (its 5 s window). `takedowns`: acted in 0 min [ok].
+`restore` refused without a new review, then accepted after `review` (the
+look back to draft). `status`. `replies shadow` ok; `replies on` refused
+while `/privacy` is the stub; `replies off` ok. Then `down -v`.
 
 **`amazon.sh`, after the review fixes of the Amazon.in Associates build**
 (2026-09-29, ShellCheck 0.11.0 and 0.9.0 clean): `install.sh` with its

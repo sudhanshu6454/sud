@@ -11,7 +11,7 @@
 #                                                                  list of tracking IDs to create in Associates Central
 #   bash /opt/afflino/affiliate/deploy/linode/amazon.sh setup      the programme, the account, placements, tracking IDs;
 #                                                                  the Associate statement in every page's footer
-#   bash /opt/afflino/affiliate/deploy/linode/amazon.sh offers     the ASIN list (and the shop's looks)
+#   bash /opt/afflino/affiliate/deploy/linode/amazon.sh offers     the ASIN list (and the shop's product shelves; never a celebrity look)
 #   bash /opt/afflino/affiliate/deploy/linode/amazon.sh links      the tracked links → /etc/afflino/amazon/links.csv
 #                                                                  (refused until the privacy notice is published)
 #   bash /opt/afflino/affiliate/deploy/linode/amazon.sh shop       the shop shows the Amazon looks (same condition)
@@ -27,7 +27,9 @@
 #                                            AMAZON_ASSOCIATE (setup), WEB_PLACEMENT_ID, WEB_API_TOKEN (shop)
 #   /etc/afflino/amazon/tracking-ids.csv     platform,account,tracking_id[,url] — one row per page
 #                                            listed on the Associates account (setup)
-#   /etc/afflino/amazon/asins.csv            asin_or_url,brand,model,category[,look] (offers)
+#   /etc/afflino/amazon/asins.csv            asin_or_url,brand,model,category[,look] (offers; brand / model /
+#                                            category and look in your own words: never a celebrity's name,
+#                                            never "worn by", "dupe", "<Brand> style" …: the whole file is refused)
 #   /etc/afflino/amazon/reports/             earnings downloads; imported ones move to reports/imported/
 #   /etc/afflino/amazon/setup.json, links.csv, tracking-ids.template.csv   written here
 #
@@ -413,7 +415,7 @@ kept = s.get("kept_not_accessible", [])
 if kept:
     print(f"   {len(kept)} stay paused: Amazon's product API reported them not accessible ({', '.join(kept[:5])}{' …' if len(kept) > 5 else ''}); the price refresh brings each back when Amazon lists it again")
 for l in s.get("looks", []):
-    print(f"   look '{l['title']}': {l['status']}, {l['items_added']} product(s) added")
+    print(f"   shelf '{l['title']}': {l['status']}, {l['items_added']} product(s) added (no match verdict: celebrity looks come from the library)")
 PY
       next "$SELF_LINE links"
       ;;

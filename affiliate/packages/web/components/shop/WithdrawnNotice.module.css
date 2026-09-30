@@ -1,0 +1,22 @@
+/* The same geometry as the shop's own 404 (app/(shop)/not-found.module.css). */
+.header.header {
+  padding-inline: 40px;
+}
+
+.wrap {
+  padding: var(--space-6) 40px;
+}
+
+@media (max-width: 899px) {
+  .header.header,
+  .wrap {
+    padding-inline: 20px;
+  }
+}
+
+@media (max-width: 760px) {
+  .wrap a,
+  .wrap button {
+    min-height: 44px;
+  }
+}

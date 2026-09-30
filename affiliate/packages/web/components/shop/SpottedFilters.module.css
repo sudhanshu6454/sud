@@ -1,0 +1,57 @@
+/* The filter row: labels 12px uppercase, the design system's compact selects
+   (2px ink box), a secondary "Show looks" button. One column on phones. */
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-6);
+  margin: 0;
+  padding: var(--space-3) 40px;
+  border-bottom: 2px solid var(--color-divider);
+}
+
+.filter {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 13px;
+  color: var(--color-neutral-700);
+}
+
+.label {
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 12px;
+}
+
+.select {
+  max-width: 260px;
+}
+
+.submit {
+  margin: 0;
+}
+
+@media (max-width: 899px) {
+  .filters {
+    padding-inline: 20px;
+  }
+}
+
+@media (max-width: 760px) {
+  .filter {
+    flex: 1 1 100%;
+    justify-content: space-between;
+  }
+
+  .select {
+    min-height: 44px;
+    flex: 1;
+    max-width: none;
+  }
+
+  .submit {
+    flex: 1 1 100%;
+  }
+}

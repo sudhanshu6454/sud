@@ -22,3 +22,5 @@ export * from './trust-proxy.js';
 export * from './request-log.js';
 export * from './money-parse.js';
 export * from './amazon.js';
+export * from './celebrity.js';
+export * from './replies.js';

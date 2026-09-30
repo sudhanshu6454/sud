@@ -10,8 +10,11 @@ import { ItemRow } from '@/components/shop/ItemRow';
 import { lookDisclosures, lookRelationshipFact, productCount, publishedLabel } from '@/components/shop/model';
 import styles from '@/components/shop/detail.module.css';
 import { EmptyState, Eyebrow, PageHeader, Tag } from '@/components/ui';
+import { CelebrityLookView } from '@/components/shop/CelebrityLookView';
+import { WithdrawnNotice } from '@/components/shop/WithdrawnNotice';
 import { getLook, lookOrMiss } from '@/lib/catalogue';
-import { shopDetailMetadata } from '@/lib/seo';
+import { getPublicLook } from '@/lib/public-catalogue';
+import { celebrityPageMetadata, shopDetailMetadata } from '@/lib/seo';
 
 interface Params {
   params: { id: string };
@@ -20,6 +23,12 @@ interface Params {
 export const dynamic = 'force-dynamic';
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
+  // A celebrity look first (the public read API, rights-gated); a miss there is a catalogue look.
+  const pub = await getPublicLook(params.id);
+  if (pub.kind === 'ok') {
+    return celebrityPageMetadata(`/looks/${encodeURIComponent(pub.value.id)}`, pub.value.headline, pub.value.nonEndorsement, { demo: pub.demo });
+  }
+  if (pub.kind === 'gone') return { title: 'Withdrawn', robots: { index: false, follow: false } };
   // An outage throws (the shop's error state), never a 404 for a look that exists.
   const result = await getLook(params.id);
   const look = lookOrMiss(result);
@@ -36,6 +45,10 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 }
 
 /**
+ * A celebrity look renders CelebrityLookView (components/shop); a look that
+ * was withdrawn renders only the withdrawn notice (HTTP 410 from the
+ * middleware). Any other look is a catalogue look:
+ *
  * Look detail, drawn like an offer detail: header (crumb · category, title,
  * source-page attribution, Sponsored tag), then the cover and the look's
  * facts beside "Shop this look" — the disclosure panel and one row per
@@ -47,6 +60,12 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
  * badge on fallback.
  */
 export default async function LookDetailPage({ params }: Params) {
+  // A celebrity look (a paparazzi moment, piece by piece): only what the rights allow, as the API sent it.
+  const pub = await getPublicLook(params.id);
+  if (pub.kind === 'ok') return <CelebrityLookView look={pub.value} demo={pub.demo} />;
+  // Withdrawn under a takedown: the middleware answered 410 already; nothing about the look renders.
+  if (pub.kind === 'gone') return <WithdrawnNotice />;
+
   const result = await getLook(params.id);
   const look = lookOrMiss(result);
   const { demo } = result;
@@ -60,14 +79,14 @@ export default async function LookDetailPage({ params }: Params) {
 
   return (
     <>
-      <BackBar href="/shop" label="Shop the looks" title="Look" />
+      <BackBar href="/shop" label="Spotted" title="Look" />
       <PageHeader
         className={styles.header}
         eyebrow={
           <>
             <span className={styles.crumbDesk}>
               <Link href="/shop" className={styles.crumb}>
-                Shop the looks
+                Spotted
               </Link>
               {look.category ? ' · ' : null}
             </span>

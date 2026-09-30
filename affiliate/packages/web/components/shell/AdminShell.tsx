@@ -8,7 +8,18 @@ import { cx } from '../ui/cx';
 import { activeNavIndex, type NavItem } from './nav';
 import styles from './AdminShell.module.css';
 
-/** Admin console tabs (2e), then the platform's live ops pages. */
+/** The celebrity-look screens: one admin tab, with this sub-nav under the bar (Takedowns second: its 3-hour clock). */
+export const CELEBRITY_TABS: ReadonlyArray<NavItem> = [
+  { label: 'Looks', href: '/admin/looks' },
+  { label: 'Takedowns', href: '/admin/takedowns' },
+  { label: 'Celebrities', href: '/admin/celebrities' },
+  { label: 'Library', href: '/admin/library' },
+  { label: 'Instant links', href: '/admin/instant-links' },
+  { label: 'Comment replies', href: '/admin/replies' },
+  { label: 'Analytics', href: '/admin/analytics' },
+];
+
+/** Admin console tabs (2e), then the platform's live ops pages, then one tab for the celebrity-look screens. */
 export const ADMIN_TABS: ReadonlyArray<NavItem> = [
   { label: 'Queue', href: '/admin', match: 'exact' },
   { label: 'Brands', href: '/admin/brands' },
@@ -17,7 +28,7 @@ export const ADMIN_TABS: ReadonlyArray<NavItem> = [
   { label: 'Fraud', href: '/admin/fraud' },
   { label: 'Settlements', href: '/admin/settlements' },
   { label: 'Suspense', href: '/admin/suspense' },
-  { label: 'Looks', href: '/admin/looks' },
+  { label: 'Celebrity looks', href: '/admin/looks', also: CELEBRITY_TABS.map((t) => t.href) },
 ];
 
 export interface AdminShellProps {
@@ -34,6 +45,7 @@ export interface AdminShellProps {
 export function AdminShell({ tabs = ADMIN_TABS, children }: AdminShellProps) {
   const pathname = usePathname() ?? '/admin';
   const active = activeNavIndex(tabs, pathname);
+  const sub = activeNavIndex(CELEBRITY_TABS, pathname);
   const tabsRef = useRef<HTMLElement>(null);
   const [more, setMore] = useState<{ start: boolean; end: boolean }>({ start: false, end: false });
 
@@ -87,6 +99,20 @@ export function AdminShell({ tabs = ADMIN_TABS, children }: AdminShellProps) {
           ))}
         </nav>
       </header>
+      {sub >= 0 ? (
+        <nav className={styles.subnav} aria-label="Celebrity looks">
+          {CELEBRITY_TABS.map((tab, i) => (
+            <Link
+              key={tab.href}
+              href={tab.href}
+              className={cx(styles.subtab, i === sub && styles.subActive)}
+              aria-current={i === sub ? 'page' : undefined}
+            >
+              {tab.label}
+            </Link>
+          ))}
+        </nav>
+      ) : null}
       <main id="main" data-shell-main className={styles.main} tabIndex={-1}>
         {children}
       </main>

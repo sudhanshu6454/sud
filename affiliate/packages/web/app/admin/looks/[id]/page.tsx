@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
-import { MatchReview } from './MatchReview';
+import { LookOrReview } from './LookOrReview';
 
-export const metadata: Metadata = { title: 'Match review' };
+export const metadata: Metadata = { title: 'Look' };
 
-/** Editorial product match review (was /console/looks/[id]): local, TEST demo looks. */
-export default function AdminLookReviewPage({ params }: { params: { id: string } }) {
-  return <MatchReview id={params.id} />;
+/** One look: the outfit editor for a live celebrity look; the local match review for a TEST board look. */
+export default function AdminLookPage({ params }: { params: { id: string } }) {
+  return <LookOrReview id={params.id} />;
 }
