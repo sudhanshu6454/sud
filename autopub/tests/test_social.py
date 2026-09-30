@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from autopub.social import REGISTRY, SocialPost, build_publishers, dispatch
-from autopub.social.base import Publisher, PublishResult, fit_text
+from autopub.social.base import CTA, Publisher, PublishResult, fit_text
 from autopub.social.linkedin import escape_little_text
 from autopub.social.twitter import TCO_LENGTH
 
@@ -21,9 +21,9 @@ def test_fit_text_word_boundary():
 def test_twitter_budget():
     pub = REGISTRY["twitter"]({})
     text = pub._text_with_link(_post(), link_len=TCO_LENGTH)
-    body, link = text.rsplit("\n\n", 1)
-    assert link == "https://marketingjunkies.in/x/"
-    assert len(body) + 2 + TCO_LENGTH <= 280
+    body, tail = text.rsplit("\n\n", 1)
+    assert tail == f"{CTA} https://marketingjunkies.in/x/", "the link never sits bare; a CTA leads into it"
+    assert len(body) + 2 + len(CTA) + 1 + TCO_LENGTH <= 280, "the link counts at its shortened (t.co) length, the CTA at its real one"
 
 
 def test_linkedin_escape():

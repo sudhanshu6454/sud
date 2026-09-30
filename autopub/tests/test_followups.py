@@ -96,7 +96,7 @@ def test_the_hook_is_set_large_on_the_card_and_opens_the_caption(monkeypatch, se
     assert drawn["card"].headline == "Discounts are training your customers"
     post = FeedRec.seen[0]
     assert post.captions["instagram"].startswith("Your sale is teaching people to wait.\n\n") and post.captions["facebook"].startswith("Your sale")
-    assert post.captions["twitter"] == "tw", "only the platforms that truncate get the hook line"
+    assert post.captions["twitter"] == "Your sale is teaching people to wait.\n\ntw", "every platform opens with the hook, not just the ones that truncate"
 
 
 def test_without_a_hook_the_card_reads_as_before(monkeypatch, settings, site, tmp_path):

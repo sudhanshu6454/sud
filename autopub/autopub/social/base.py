@@ -11,6 +11,7 @@ log = logging.getLogger(__name__)
 
 
 SHAPES = ("portrait", "square", "landscape")   # every card shape autopub renders, tallest first
+CTA = "Read the full story:"   # every platform with a clickable link leads into it the same way
 
 
 def _first(available: dict, preferred: tuple[str, ...]):
@@ -123,9 +124,12 @@ class Publisher(ABC):
     def _text_with_link(self, post: SocialPost, link_len: int | None = None) -> str:
         caption = post.caption_for(self.platform)
         if self.supports_link:
-            suffix = f"\n\n{post.link}"
-            # platforms that count links as fixed length (X) are handled via link_len
+            # the link never sits bare: a CTA leads into it, so the caption always ends with a
+            # reason to click, not just a URL
             if link_len is not None:
-                return fit_text(caption, self.text_limit - (link_len + 2)) + suffix
-            return fit_text(caption, self.text_limit, suffix)
+                # platforms that count links as fixed length (X's t.co) are handled via link_len;
+                # the CTA text itself still counts at its real length
+                trimmed = fit_text(caption, self.text_limit - (link_len + len(CTA) + 3))
+                return f"{trimmed}\n\n{CTA} {post.link}"
+            return fit_text(caption, self.text_limit, f"\n\n{CTA} {post.link}")
         return fit_text(caption, self.text_limit)

@@ -58,7 +58,8 @@ def narrator_for(settings: Settings):
 
 
 def _hooked(hook: str | None, caption: str) -> str:
-    """The caption with its hook as the first line: the one line Instagram shows before 'more'."""
+    """The caption with its hook as the first line, on every platform: the one line Instagram
+    shows before 'more', and the opening line everywhere else too."""
     hook = " ".join((hook or "").split())
     if len(hook) < 12 or hook.lower() in caption.lower()[:200]:
         return caption
@@ -427,11 +428,17 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
     credit_line = f"\n\n{ad_caption}" if reel_from_clip and ad_caption else ""
     social = SocialPost(
         title=post.title, link=link,
+        # every platform leads with the hook, not just Facebook and Instagram: the scroll-stopper
+        # comes first everywhere, then the platform's own caption, then (for link platforms) the
+        # CTA into the link (base.Publisher._text_with_link) or (Instagram) the CTA to the website
         captions={
-            "twitter": post.captions.twitter, "facebook": _hooked(post.caption_hook, post.captions.facebook) + credit_line,
-            "instagram": _hooked(post.caption_hook, post.captions.instagram) + credit_line, "linkedin": post.captions.linkedin,
-            "pinterest": post.captions.pinterest, "telegram": post.captions.telegram,
-            "threads": post.captions.threads,
+            "twitter": _hooked(post.caption_hook, post.captions.twitter),
+            "facebook": _hooked(post.caption_hook, post.captions.facebook) + credit_line,
+            "instagram": _hooked(post.caption_hook, post.captions.instagram) + credit_line,
+            "linkedin": _hooked(post.caption_hook, post.captions.linkedin),
+            "pinterest": _hooked(post.caption_hook, post.captions.pinterest),
+            "telegram": _hooked(post.caption_hook, post.captions.telegram),
+            "threads": _hooked(post.caption_hook, post.captions.threads),
         },
         hashtags=site.hashtags,
         images={shape: path for shape, path in cards_by_shape.items() if path},
