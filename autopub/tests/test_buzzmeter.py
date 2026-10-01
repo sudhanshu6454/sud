@@ -132,6 +132,7 @@ def test_the_slot_tracks_a_new_subject_and_publishes_the_digest(monkeypatch, set
         {"popularity": buzzmeter.popularity_score(250.0), "views": buzzmeter.view_score(200_000, None),
          "pageviews": buzzmeter.pageview_score(4000, None), "mentions": buzzmeter.mention_score(0)})
     assert len(carousels.parse_log(state.note(site.key, buzzmeter.NOTE))) == 1
+    assert Recorder.seen[0].story_urls == [], "the digest is a carousel; it does not also force a story"
     # same slot again: nothing, and the model is not asked
     rw2 = FakeRewriter()
     pipeline.run_site(site, settings, state, rewriter=rw2, wp=wp, publishers=[Recorder({})], work_dir=tmp_path / "img")

@@ -360,7 +360,7 @@ def publish_daily(site: Site, settings: Settings, state: State, rewriter: Rewrit
     photos, cover = stills(entries, settings.request_timeout)
     ok = pipeline.publish_post(site, settings, state, url, post, wp, publishers, work_dir, report,
                                image_url=cover, credit="TMDB" if cover else None, use_source_image=cover is not None,
-                               want_carousel=True, force_story=True, slide_photos=photos)
+                               want_carousel=True, slide_photos=photos)
     if ok:
         state.set_note(site.key, NOTE, carousels.dump_log(slot_log + [time.time()]))
     return ok

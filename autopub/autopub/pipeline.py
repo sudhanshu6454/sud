@@ -242,8 +242,10 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
     # 3b. the card Instagram will actually accept, trimmed out of the 3:4 master; and the same card
     # framed 9:16 for the story publishers, drawn from the master before it is cropped. A Story is a
     # bigger claim on the reader's attention than a feed post, so the news only gets one when the
-    # writer flagged the story genuinely significant (post.is_major); the features that are the
-    # day's showpieces (scorecards, watchlists, buzz meter...) always do, via force_story.
+    # writer flagged the story genuinely significant (post.is_major); a handful of single-image
+    # showpieces (scorecards, scenes, trailers, nostalgia) still force one via force_story, but a
+    # format that already publishes a carousel (watchlists, deep dives, buzz meter) does not also
+    # get a Story - the carousel is the feature's own feed presence.
     story_frames: list[Path] = []
     want_story = force_story or bool(post.is_major)
     if not want_story:

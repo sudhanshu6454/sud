@@ -238,7 +238,7 @@ def publish_daily(site: Site, settings: Settings, state: State, rewriter: Rewrit
         post.captions.instagram = (post.captions.instagram + "\n\nFilm images: TMDB. Facts: Wikipedia (CC BY-SA)").strip()
     ok = pipeline.publish_post(site, settings, state, url, post, wp, publishers, work_dir, report,
                                image_url=cover, credit=credit, use_source_image=cover is not None,
-                               want_carousel=True, force_story=True, slide_photos=photos)
+                               want_carousel=True, slide_photos=photos)
     if ok:
         state.set_note(site.key, USED_NOTE, "\n".join((used + [f"{choice.film} ({choice.year or '?'}): {KINDS[choice.kind]}"])[-500:]))
         state.set_note(site.key, NOTE, carousels.dump_log(slot_log + [time.time()]))
