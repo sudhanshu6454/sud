@@ -43,6 +43,8 @@ class Site:
     exclude_keywords: list[str] = field(default_factory=list)
     feeds: list[str] = field(default_factory=list)
     google_news_queries: list[str] = field(default_factory=list)
+    reddit_subreddits: list[str] = field(default_factory=list)   # name only, e.g. "movies": discovery,
+    # not a source - only a subreddit's link posts (to a real article) ever become a candidate
     hashtags: list[str] = field(default_factory=list)
     brand: Brand = field(default_factory=Brand)
     socials: list[str] = field(default_factory=list)

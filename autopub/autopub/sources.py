@@ -1,4 +1,5 @@
-"""Discover candidate stories from RSS/Atom feeds and Google News searches."""
+"""Discover candidate stories from RSS/Atom feeds, Google News searches, and a subreddit's own
+link posts (discovery only - see fetch_reddit)."""
 from __future__ import annotations
 
 import base64
@@ -176,6 +177,41 @@ def fetch_feed(url: str, timeout: int = 30) -> list[Candidate]:
     return out
 
 
+REDDIT_LINK = re.compile(r'<a href="(https?://[^"]+)">\[link\]</a>', re.IGNORECASE)
+REDDIT_OWN_DOMAINS = ("reddit.com", "redd.it")
+
+
+def fetch_reddit(subreddit: str, timeout: int = 30, limit: int = 25) -> list[Candidate]:
+    """A subreddit's link posts, each pointing at the real article behind it - discovery only,
+    never Reddit's own text. A link post's RSS entry carries both a `[link]` anchor (the article)
+    and a `[comments]` anchor (the thread); a self-text post (a discussion, a review thread, a meme)
+    carries neither, and is left out - there is no article behind it to extract and credit.
+
+    Reddit's JSON API (the usual way to read a subreddit programmatically) refuses most cloud and
+    datacenter IPs outright with a 403; the public RSS feed, read the same way as any other feed
+    here, does not.
+    """
+    url = f"https://www.reddit.com/r/{subreddit}/.rss?limit={limit}"
+    try:
+        resp = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=timeout)
+        resp.raise_for_status()
+    except requests.RequestException as exc:
+        log.warning("r/%s feed failed: %s", subreddit, exc)
+        return []
+    parsed = feedparser.parse(resp.content)
+    out: list[Candidate] = []
+    for entry in parsed.entries:
+        m = REDDIT_LINK.search(entry.get("summary") or "")
+        if not m or any(d in m.group(1) for d in REDDIT_OWN_DOMAINS):
+            continue   # a self-text post, or an image/video hosted on reddit itself: no article behind it
+        title = _strip_html(entry.get("title") or "")
+        if not title:
+            continue
+        out.append(Candidate(title=title, url=normalize_url(m.group(1)), summary="",
+                             published=_parse_time(entry), source=f"r/{subreddit}"))
+    return out
+
+
 def _matches(cand: Candidate, site: Site) -> bool:
     hay = f"{cand.title} {cand.summary}".lower()
     if any(k.lower() in hay for k in site.exclude_keywords):
@@ -201,7 +237,17 @@ def collect(site: Site, timeout: int = 30) -> list[Candidate]:
                 continue
             seen.add(cand.url)
             out.append(cand)
+    for subreddit in site.reddit_subreddits:
+        for cand in fetch_reddit(subreddit, timeout=timeout):
+            if cand.url in seen:
+                continue
+            if cand.published and cand.published < cutoff:
+                continue
+            if not _matches(cand, site):
+                continue
+            seen.add(cand.url)
+            out.append(cand)
     # newest first; undated entries go last
     out.sort(key=lambda c: c.published or datetime.fromtimestamp(0, tz=timezone.utc), reverse=True)
-    log.info("[%s] %d candidates from %d feeds", site.key, len(out), len(urls))
+    log.info("[%s] %d candidates from %d feeds and %d subreddits", site.key, len(out), len(urls), len(site.reddit_subreddits))
     return out

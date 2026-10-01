@@ -283,6 +283,9 @@ sites:
       - OTT streaming India subscribers
       - box office collection
       - streaming platform ad tier
+    # discovery only: a subreddit's link posts (not its own text) each point at a real article,
+    # which is extracted and credited exactly like any other source - see sources.fetch_reddit
+    reddit_subreddits: [movies, boxoffice]
     hashtags: [Streaming, OTT, BoxOffice, ScreenStat]
     brand:                          # the Screenstat theme's tokens: ink ground, coral accent, white type
       primary: "#16181D"
