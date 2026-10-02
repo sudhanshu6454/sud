@@ -146,7 +146,7 @@ class VideoRecorder(Publisher):
                              error=None if post.video_url else "no video")
 
 
-def _run(monkeypatch, settings, site, tmp_path, state, publishers, n=1):
+def _run(monkeypatch, settings, site, tmp_path, state, publishers, n=1, rewriter=None):
     now = datetime.now(timezone.utc)
     cands = [sources.Candidate(f"Story{i}", f"https://pub.com/{i}", "", now, "Pub") for i in range(n)]
     monkeypatch.setattr(sources, "collect", lambda s, timeout=30: cands)
@@ -156,7 +156,7 @@ def _run(monkeypatch, settings, site, tmp_path, state, publishers, n=1):
     real = video.render_reel
     monkeypatch.setattr(video, "render_reel", lambda frames, out, durations, accent, **kw: real(frames, out, [0.3] * len(frames), accent, fps=6, dissolve=0.1))
     wp = FakeWP()
-    report = pipeline.run_site(site, settings, state, rewriter=StoryRewriter(), wp=wp, publishers=publishers,
+    report = pipeline.run_site(site, settings, state, rewriter=rewriter or StoryRewriter(), wp=wp, publishers=publishers,
                                work_dir=tmp_path / "img", limit=n)
     return report, wp
 
@@ -177,6 +177,37 @@ def test_the_due_article_gets_a_reel_uploaded_and_the_slot_is_spent(monkeypatch,
     assert video.probe(first.video_path)["codec"] == "h264"
     # the second article in the slot is not a reel: the video publisher stands aside, no failure row
     assert len(carousels.parse_log(state.note(site.key, pipeline.REEL_NOTE))) == 1
+
+
+class OrdinaryRewriter(StoryRewriter):
+    def rewrite(self, *a, **k):
+        post = super().rewrite(*a, **k)
+        post.is_major = False
+        return post
+
+
+class StoryRecorder(Publisher):
+    platform = "story_rec"; env_prefix = "REC"; required_env = ()
+    needs_public_url = True; image_shapes = ("story",)
+    seen: list = []
+
+    def _publish(self, post):
+        StoryRecorder.seen.append(post)
+        return PublishResult(self.platform, True, remote_id="s1", format="story")
+
+
+def test_an_ordinary_article_in_the_reel_slot_still_gets_its_reel_but_no_story(monkeypatch, settings, site, tmp_path):
+    settings.reel_hours = [0]
+    settings.carousel_hours = []
+    VideoRecorder.seen.clear()
+    StoryRecorder.seen.clear()
+    report, _ = _run(monkeypatch, settings, site, tmp_path, State(tmp_path / "s.db"),
+                     [VideoRecorder({}), StoryRecorder({})], rewriter=OrdinaryRewriter())
+    (sent,) = VideoRecorder.seen
+    assert sent.video_url and sent.video_path.exists(), "the reel's footage is drawn even when no Story is wanted"
+    assert sent.video_cover_url, "the 9:16 cover is hosted for the reel"
+    assert sent.story_urls == [] and "story" not in sent.image_urls
+    assert StoryRecorder.seen == [], "not flagged major: the story publisher is handed nothing and stands aside"
 
 
 def test_no_video_publisher_means_no_reel_is_rendered(monkeypatch, settings, site, tmp_path):

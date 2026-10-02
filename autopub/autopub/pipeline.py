@@ -246,11 +246,13 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
     # showpieces (scorecards, scenes, trailers, nostalgia) still force one via force_story, but a
     # format that already publishes a carousel (watchlists, deep dives, buzz meter) does not also
     # get a Story - the carousel is the feature's own feed presence.
+    # The same 9:16 frames are the narrated reel's footage, so they are drawn whenever a reel is wanted
+    # too; only want_story decides whether they also go out as a Story.
     story_frames: list[Path] = []
     want_story = force_story or bool(post.is_major)
     if not want_story:
         log.info("[%s] no story for this article: not flagged major", site.key)
-    if cards_by_shape.get("portrait") and want_story:
+    if cards_by_shape.get("portrait") and (want_story or want_reel or force_reel):
         try:
             cards_by_shape["story"] = images.story_asset(cards_by_shape["portrait"], site, work_dir / site.slug / f"{stem}-story.jpg")
             # the rest of the story: the article's substance in one to three text frames, then the
@@ -394,7 +396,7 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
                 log.warning("[%s] ad film upload failed: %s; the embed stays", site.key, exc)
         post.body_html = adclip.place_video(post.body_html, clip_block)
         story_media: list[dict] = []
-        if "story" in hosted and media_by_shape.get("story"):
+        if want_story and "story" in hosted and media_by_shape.get("story"):
             for i, frame in enumerate(story_frames, 1):
                 try:
                     story_media.append(wp.upload_media(frame, f"{post.title} (story {i})", alt_text=post.image_headline))
@@ -461,13 +463,16 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
         },
         hashtags=site.hashtags,
         images={shape: path for shape, path in cards_by_shape.items() if path},
+        # a story publisher posts whatever 9:16 it is handed, so the reel's cover is kept out of here
+        # (it rides in video_cover_url) unless this article is meant to have a Story
         image_urls={shape: media["source_url"] for shape, media in
-                    (("landscape", landscape_media or {}), *media_by_shape.items()) if media.get("source_url")},
+                    (("landscape", landscape_media or {}), *media_by_shape.items())
+                    if media.get("source_url") and (want_story or shape != "story")},
         pinterest_title=post.captions.pinterest_title,
         alt_text=f"{post.image_kicker or post.category or site.category}: {post.image_headline or post.title}",
         mentions=mentions,
         story_urls=[m["source_url"] for m in ([media_by_shape["story"]] if media_by_shape.get("story") else []) + story_media
-                    if m.get("source_url")],
+                    if m.get("source_url")] if want_story else [],
         carousel_urls=[m["source_url"] for m in ([media_by_shape["portrait"]] if carousel_media else []) + carousel_media
                        if m.get("source_url")],
         video_url=(reel_media or {}).get("source_url"), video_path=reel_path,
