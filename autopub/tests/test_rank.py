@@ -112,7 +112,18 @@ def test_empty_candidate_list_is_not_an_api_call(site):
 def test_the_pool_is_capped(site):
     client = FakeClient(SCORES)
     rank.rank(site, _cands(*[f"h{i}" for i in range(60)]), pool=10, client=client)
-    assert client.calls[0]["messages"][0]["content"].count("\n") == 9   # 10 lines
+    listing = client.calls[0]["messages"][0]["content"]
+    assert sum(1 for line in listing.splitlines() if line.split(".", 1)[0].isdigit()) == 10
+
+
+def test_what_the_site_ran_recently_reaches_the_model_so_an_update_scores_as_a_repeat(site):
+    client = FakeClient(SCORES)
+    rank.rank(site, _cands("a", "b", "c"), client=client, recent=["Drishyam 3 collects Rs 33.50 cr by 5 PM on day one"])
+    listing = client.calls[0]["messages"][0]["content"]
+    assert "ALREADY PUBLISHED BY THIS SITE RECENTLY:\n- Drishyam 3 collects Rs 33.50 cr by 5 PM on day one" in listing
+    assert "Repeats score 0" in client.calls[0]["system"][0]["text"]
+    rank.rank(site, _cands("a"), client=client)
+    assert client.calls[-1]["messages"][0]["content"].endswith("RECENTLY:\n- (none)")
 
 
 # ---- the pipeline's use of it -------------------------------------------------------------
@@ -146,3 +157,18 @@ def test_min_relevance_zero_disables_ranking_entirely(site, monkeypatch):
     cands = _cands("a", "b")
     monkeypatch.setattr(rank, "rank", lambda *a, **k: (_ for _ in ()).throw(AssertionError("should not be called")))
     assert pipeline._by_relevance(site, _settings(site, min_relevance=0), cands) == cands
+
+
+def test_only_the_repeat_window_is_offered_as_recent(site, monkeypatch, tmp_path):
+    import time
+    from autopub.state import State
+    state = State(tmp_path / "s.db")
+    for url, title, age_h in (("https://a/1", "Fresh: day-one figure", 2), ("https://a/2", "Old: last week's trailer", 30)):
+        state.claim(url, site.key, title)
+        state.mark_published(url, site.key, 1, url, title)
+        state.conn.execute("UPDATE articles SET updated_at=? WHERE url=?", (time.time() - age_h * 3600, url))
+    seen = {}
+    cands = _cands("Drishyam 3 at Rs 36.70 cr by 4 PM")
+    monkeypatch.setattr(rank, "rank", lambda *a, **k: seen.update(k) or [rank.Scored(cands[0], 0, "repeat: day-one figure")])
+    kept = pipeline._by_relevance(site, _settings(site, min_relevance=5, repeat_window_hours=12), cands, state)
+    assert seen["recent"] == ["Fresh: day-one figure"] and kept == []

@@ -40,6 +40,13 @@ important, not how recent - how well it fits this beat.
 Be strict, and do not inflate scores to fill a quota. Most wire copy is off-beat for any one
 publication, so it is correct and expected for most of this list to score low.
 
+Repeats score 0, with "why" starting "repeat:". A repeat is the same event as a story the site
+already published (listed after the headlines) told again or with a newer figure: a box-office
+total at 5 PM after the site ran it at 4 PM, a second outlet's write-up of the same trailer. When
+several headlines in the list are the same event, score only the most complete one and the rest 0.
+A different development about the same film or person is NOT a repeat: the opening-day number
+and, later, the OTT deal are two stories.
+
 Reply with ONE JSON object and nothing else - no markdown fences, no commentary. Shape:
 {{"scores": [{{"i": <item number>, "s": <0-10>, "why": "<at most 8 words>"}}]}}
 Score every item exactly once."""
@@ -74,13 +81,16 @@ class Scored:
 
 
 def rank(site: Site, candidates: list[Candidate], model: str | None = None, effort: str = "low",
-         pool: int = 40, client: anthropic.Anthropic | None = None) -> list[Scored] | None:
+         pool: int = 40, client: anthropic.Anthropic | None = None,
+         recent: list[str] | None = None) -> list[Scored] | None:
     """Candidates ordered by fit, best first. None when the model could not be asked - the caller
-    then keeps the recency order rather than publishing nothing because of an API hiccup."""
+    then keeps the recency order rather than publishing nothing because of an API hiccup.
+    `recent` is what the site already published lately, so an update of one of those scores as a repeat."""
     shortlist = candidates[:pool]
     if not shortlist:
         return []
     listing = "\n".join(f"{i}. {c.title}  [{c.source}]" for i, c in enumerate(shortlist, 1))
+    listing += "\n\nALREADY PUBLISHED BY THIS SITE RECENTLY:\n" + ("\n".join(f"- {t}" for t in recent) if recent else "- (none)")
     system = SYSTEM.format(
         name=site.name, domain=site.domain, niche=site.niche, audience=site.audience,
         sections=", ".join(site.categories or [site.category]),

@@ -121,6 +121,14 @@ class State:
         ).fetchone()
         return row["t"] if row and row["t"] is not None else None
 
+    def recent_titles(self, site: str, hours: float) -> list[str]:
+        """What the site published in the last `hours`, newest first."""
+        rows = self.conn.execute(
+            "SELECT title FROM articles WHERE site=? AND status='published' AND updated_at>=? AND title IS NOT NULL "
+            "ORDER BY updated_at DESC", (site, time.time() - hours * 3600)
+        ).fetchall()
+        return [r["title"] for r in rows if r["title"]]
+
     def published(self, site: str) -> list[sqlite3.Row]:
         """Every post published for the site that WordPress knows the id of, newest first."""
         return self.conn.execute(

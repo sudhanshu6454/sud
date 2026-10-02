@@ -99,6 +99,7 @@ class Settings:
     # (autopub/rank.py). 0 disables it and restores plain newest-first selection.
     min_relevance: int = 5
     rank_pool: int = 40
+    repeat_window_hours: int = 12     # a headline that updates a story the site ran this recently scores as a repeat
     # Instagram's API documents a 4:5 floor for feed images and hard-refuses anything taller
     # (error 36003/2207009). The cards are drawn 3:4; this says which shape actually gets posted.
     # Flip to "3:4" once `python -m autopub instagram-probe` shows Meta accepting 0.75.

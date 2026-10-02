@@ -218,6 +218,13 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
             log.info("[%s] cast: %d of %d billed for %r have a TMDB Instagram id", site.key, added, len(cast), post.film.title)
         else:
             log.info("[%s] no TMDB match for %r; no cast to tag", site.key, post.film.title)
+    # a data card that contradicts its own headline (the 4 PM figure on the card, the 5 PM one in the
+    # title) costs a numbers brand more than the post earns, so the card only carries the title's figures
+    figure_ref = cards.reference_figures(post.title, post.body_html)
+    if card_brief is None:
+        dropped = cards.drop_stray_figures(post, figure_ref)
+        if dropped:
+            log.warning("[%s] off the card, not in the headline %r: %s", site.key, post.title[:80], "; ".join(dropped))
     history = cards.parse_history(state.note(site.key, "card_formats"))
     kind = card_brief.kind if card_brief is not None else cards.choose(history, post.card, photo=bool(use_source_image and image_url))
     kicker = post.image_kicker or post.category or site.category
@@ -226,6 +233,8 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
     hook = (post.hook or "").strip()
     card_headline = hook if len(hook) >= 8 else (post.image_headline or post.title)
     card_standfirst = (post.image_headline or post.title) if len(hook) >= 8 else post.excerpt
+    if card_brief is None and card_standfirst and cards.stray(card_standfirst, figure_ref):
+        card_standfirst = None
     brief = card_brief if card_brief is not None else cards.brief(
         kind, post.card, card_headline, kicker if kind == cards.HEADLINE else cards.KICKERS.get(kind, kicker), card_standfirst)
     log.info("[%s] instagram card: %s (recent: %s)", site.key, kind, ",".join(history[-cards.HISTORY:]) or "none")
@@ -499,7 +508,8 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
     return True
 
 
-def _by_relevance(site: Site, settings: Settings, fresh: list[sources.Candidate]) -> list[sources.Candidate]:
+def _by_relevance(site: Site, settings: Settings, fresh: list[sources.Candidate],
+                  state: State | None = None) -> list[sources.Candidate]:
     """Fresh candidates in beat order, with the off-beat ones dropped.
 
     Publishing nothing beats publishing somebody else's story, so a site with no on-beat candidate
@@ -508,10 +518,14 @@ def _by_relevance(site: Site, settings: Settings, fresh: list[sources.Candidate]
     """
     if settings.min_relevance <= 0:
         return fresh
-    scored = rank.rank(site, fresh, model=settings.llm_model, pool=settings.rank_pool)
+    recent = state.recent_titles(site.key, settings.repeat_window_hours) if state is not None else None
+    scored = rank.rank(site, fresh, model=settings.llm_model, pool=settings.rank_pool, recent=recent)
     if scored is None:
         return fresh
     keep = [s for s in scored if s.score >= settings.min_relevance]
+    repeats = [s for s in scored if s.reason.lower().startswith("repeat")]
+    if repeats:
+        log.info("[%s] %d repeat(s) of a recent story skipped, e.g. %r", site.key, len(repeats), repeats[0].candidate.title[:80])
     for s in keep[:3]:
         log.info("[%s] on beat (%d/10, %s): %s", site.key, s.score, s.reason, s.candidate.title[:80])
     if not keep:
@@ -570,7 +584,7 @@ def run_site(site: Site, settings: Settings, state: State, rewriter: Rewriter | 
         if not fresh:
             log.info("[%s] nothing new", site.key)
         else:
-            fresh = _by_relevance(site, settings, fresh)
+            fresh = _by_relevance(site, settings, fresh, state)
 
     if fresh:
         ready()

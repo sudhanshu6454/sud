@@ -162,7 +162,8 @@ def cmd_sources(settings, args) -> int:
         print(f"\n[{site.key}] {len(cands)} candidates, {len(cands) - len(used)} not yet used")
         if args.rank:
             # what the beat filter would actually keep, without writing or publishing anything
-            scored = rank.rank(site, cands, model=effective_model(settings.llm_model), pool=settings.rank_pool)
+            scored = rank.rank(site, cands, model=effective_model(settings.llm_model), pool=settings.rank_pool,
+                               recent=state.recent_titles(site.key, settings.repeat_window_hours))
             if scored is None:
                 print("  (ranking unavailable; showing newest first)")
             else:

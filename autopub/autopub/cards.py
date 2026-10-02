@@ -15,6 +15,7 @@ template.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 from pydantic import BaseModel, Field
@@ -55,7 +56,7 @@ CARD_SCHEMA = {
     "properties": {
         "quote": {"type": "string", "description": "A verbatim quotation from the source, max 140 characters, no surrounding quote marks. Omit if the source has no quotable line."},
         "quote_by": {"type": "string", "description": "Who said it: name and role, or the publication. Required when quote is present."},
-        "stat": {"type": "string", "description": "The single most striking figure exactly as the source gives it, max 14 characters, e.g. '72%', '₹350 cr', '2.4M'. Omit if there is no meaningful number."},
+        "stat": {"type": "string", "description": "The single most striking figure exactly as the source gives it, max 14 characters, e.g. '72%', '₹350 cr', '2.4M': the same figure the title gives, and the latest one when the source updates a running total. Omit if there is no meaningful number."},
         "stat_label": {"type": "string", "description": "What the figure measures, max 60 characters, sentence case. Required when stat is present."},
         "stat_context": {"type": "string", "description": "One line of context for the figure, max 120 characters. Optional."},
         "takeaways": {"type": "array", "items": {"type": "string"}, "description": "Exactly three takeaways, each max 70 characters, no trailing full stop, or an empty array."},
@@ -183,6 +184,73 @@ def brief(kind: str, ideas: CardIdeas | None, headline: str, kicker: str, standf
         return CardBrief(kind, headline, label, standfirst, dos=_items(ideas.dos, 70)[:3], donts=_items(ideas.donts, 70)[:3])
     # headline, inverse and poster all set the headline itself, under the article's own section label
     return CardBrief(kind if kind in (INVERSE, POSTER) else HEADLINE, headline, kicker, standfirst)
+
+
+# A figure is a number that makes a claim: it carries a currency or a magnitude. Bare numbers (day 1,
+# 4 PM, 2026, the 3 in Drishyam 3) are not figures and are never checked.
+_FIGURE = re.compile(
+    r"(?P<cur>₹|\brs\.?|\binr|us\$|\$|€|£)?\s*"
+    r"(?P<num>\d{1,3}(?:,\d{2,3})+(?:\.\d+)?|\d+(?:\.\d+)?)"
+    r"(?:\s*(?P<unit>%|per\s?cent\b|crores?\b|cr\b|lakhs?\b|lacs?\b|millions?\b|mn\b|billions?\b|bn\b|thousand\b|k\b|m\b))?",
+    re.IGNORECASE)
+_SCALE = {"crore": 1e7, "crores": 1e7, "cr": 1e7, "lakh": 1e5, "lakhs": 1e5, "lac": 1e5, "lacs": 1e5,
+          "million": 1e6, "millions": 1e6, "mn": 1e6, "m": 1e6, "billion": 1e9, "billions": 1e9, "bn": 1e9,
+          "thousand": 1e3, "k": 1e3}
+
+
+def figures(text: str | None) -> list[tuple[str, float]]:
+    """The figures in `text`, normalised so '₹36.70 crore', 'Rs. 36.7 cr' and '₹367 million' are one figure."""
+    out = []
+    for m in _FIGURE.finditer(text or ""):
+        unit = (m.group("unit") or "").lower().replace(" ", "")
+        if not m.group("cur") and not unit:
+            continue
+        value = float(m.group("num").replace(",", ""))
+        if unit in ("%", "percent"):
+            out.append(("pct", value))
+        else:
+            out.append(("amt", value * _SCALE.get(unit, 1.0)))
+    return out
+
+
+def reference_figures(title: str, body_html: str = "") -> list[tuple[str, float]]:
+    """What a card's figures must agree with: the title's, or when the title has none, the article's."""
+    return figures(title) or figures(re.sub(r"<[^>]+>", " ", body_html or ""))
+
+
+def _known(fig: tuple[str, float], reference: list[tuple[str, float]]) -> bool:
+    kind, value = fig
+    return any(k == kind and abs(v - value) <= 0.005 * max(abs(v), abs(value), 1e-9) for k, v in reference)
+
+
+def stray(text: str | None, reference: list[tuple[str, float]]) -> list[tuple[str, float]]:
+    """The figures in `text` the reference does not contain."""
+    return [f for f in figures(text) if not _known(f, reference)]
+
+
+def drop_stray_figures(post, reference: list[tuple[str, float]]) -> list[str]:
+    """Take off the card any figure the headline does not carry, so a data card never contradicts its own title.
+
+    The post still goes out: a stray stat or comparison leaves the material (the chooser picks another
+    format), a stray hook is dropped, a stray card headline gives way to the title. Returns what was dropped."""
+    dropped = []
+    ideas = post.card
+    if ideas is not None:
+        if ideas.stat and stray(ideas.stat, reference):
+            dropped.append(f"stat {ideas.stat!r}")
+            ideas.stat = ideas.stat_label = ideas.stat_context = None
+        sides = [v for v in (ideas.left_value, ideas.right_value) if v]
+        # a comparison sets the headline's figure against another, so one side matching is enough
+        if sides and any(figures(v) for v in sides) and all(stray(v, reference) or not figures(v) for v in sides):
+            dropped.append(f"comparison {ideas.left_value!r} vs {ideas.right_value!r}")
+            ideas.left_value = ideas.left_label = ideas.right_value = ideas.right_label = None
+    if post.hook and stray(post.hook, reference):
+        dropped.append(f"hook {post.hook!r}")
+        post.hook = None
+    if post.image_headline and stray(post.image_headline, reference):
+        dropped.append(f"card headline {post.image_headline!r}")
+        post.image_headline = post.title
+    return dropped
 
 
 def remember(kind_history: list[str], kind: str, keep: int = 6) -> list[str]:
