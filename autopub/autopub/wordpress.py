@@ -31,14 +31,21 @@ class WordPress:
         return f"{self.base_url}/wp-json/wp/v2/{path.lstrip('/')}"
 
     def _request(self, method: str, path: str, **kwargs) -> dict | list:
+        return self._send(method, self._url(path), path, **kwargs)
+
+    def plugin_request(self, method: str, route: str, **kwargs) -> dict | list:
+        """A plugin's own route outside wp/v2, e.g. plugin_request("GET", "autopub/v1/settings")."""
+        return self._send(method, f"{self.base_url}/wp-json/{route.lstrip('/')}", route, **kwargs)
+
+    def _send(self, method: str, url: str, label: str, **kwargs) -> dict | list:
         kwargs.setdefault("timeout", self.timeout)
-        resp = self.session.request(method, self._url(path), **kwargs)
+        resp = self.session.request(method, url, **kwargs)
         if resp.status_code >= 400:
             try:
                 detail = resp.json()
             except ValueError:
                 detail = resp.text[:500]
-            raise WordPressError(f"{method} {path} -> {resp.status_code}: {detail}")
+            raise WordPressError(f"{method} {label} -> {resp.status_code}: {detail}")
         return resp.json()
 
     def ping(self) -> dict:

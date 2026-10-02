@@ -9,7 +9,7 @@ from pathlib import Path
 
 from slugify import slugify
 
-from . import adclip, buzzmeter, cards, carousels, deepdives, extract, followups, images, music, nostalgia, poster, rank, scenes, scorecards, seo, sources, speech, trailers, video, watchlists, tmdb
+from . import adclip, buzzmeter, cards, carousels, control, deepdives, extract, followups, images, music, nostalgia, poster, rank, scenes, scorecards, seo, sources, speech, trailers, video, watchlists, tmdb
 from .config import Settings, Site
 from .rewrite import CuratedPost, Debate, Mention, Rewriter, RewriteSkipped, effective_model
 from .social import SocialPost, build_publishers, dispatch
@@ -643,6 +643,13 @@ def run_all(settings: Settings, state: State, only: str | None = None, limit: in
         if only and site.key != only.upper():
             continue
         try:
+            try:
+                site = control.apply(site, make_wordpress(site))
+            except WordPressError as exc:
+                log.debug("[%s] no wp-admin overrides: %s", site.key, exc)
+            if site.paused:
+                log.info("[%s] paused from wp-admin; skipping this cycle", site.key)
+                continue
             reports.append(run_site(site, settings, state, limit=limit))
         except Exception as exc:  # noqa: BLE001 - one site must not stop the fleet
             log.exception("[%s] run crashed: %s", site.key, exc)
