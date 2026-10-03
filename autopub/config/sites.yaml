@@ -28,11 +28,13 @@ settings:
   # silent, the brand ground, a progress bar). [] switches it off.
   reel_hours: [12, 21]
   reel_share_to_feed: true            # reels appear in the profile grid as well as the Reels tab
-  # The reel's narration. Local voices need no key: Kokoro af_heart / af_bella (female), am_michael
-  # (male), bf_emma / bm_george (British); Piper en_US-ryan-high. A real Indian English voice needs a
-  # cloud key, free at this volume: azure:en-IN-AartiNeural (AZURE_SPEECH_KEY + AZURE_SPEECH_REGION in
-  # .env) or google:en-IN-Neural2-A (GOOGLE_TTS_API_KEY). "" = silent.
-  reel_voice: af_heart
+  # The reel's narration: Azure's Neerja, a natural Indian English female voice (AZURE_SPEECH_KEY and
+  # AZURE_SPEECH_REGION in .env; free tier 500k characters a month, about a third of it at today's volume).
+  # Others: google:en-IN-Chirp3-HD-Aoede (GOOGLE_TTS_API_KEY); local, no key: Kokoro af_heart (American),
+  # hf_alpha / hf_beta (Indian). "" = silent.
+  reel_voice: azure:en-IN-NeerjaNeural
+  # Reads the reel when reel_voice cannot: before the Azure key is in .env, or during an outage.
+  reel_voice_fallback: af_heart
   # Music under the reel, matched to the story's mood (upbeat, calm, serious, nostalgic). Your own
   # licensed tracks go in /data/music/<mood>/ and are used first; otherwise a bed is composed.
   reel_music: true

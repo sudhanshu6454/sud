@@ -278,3 +278,18 @@ def test_the_narration_is_the_writers_voiceover_and_never_reads_a_heading_out(si
     assert lines[-1] == f"The full story's on {site.name}. Link's in our bio."
     post.voiceover = []
     assert pipeline._narration(post, site, spoken)[1] == "It made 36.7 crore.", "no voiceover: the body, not 'What happened.'"
+
+
+def test_a_voice_that_fails_mid_reel_hands_over_to_the_backup_not_to_silence(monkeypatch, settings, site, tmp_path):
+    from autopub import speech
+    settings.reel_hours, settings.carousel_hours, settings.reel_music = [0], [], False
+
+    def broken(text):
+        raise RuntimeError("azure speech 429: quota")
+    primary = speech.Narrator(voice="azure:en-IN-NeerjaNeural", synth=broken)
+    standby = speech.Narrator(voice="af_heart", synth=lambda t: speech.tone(0.3))
+    monkeypatch.setattr(pipeline, "narrator_for", lambda s, backup=False: standby if backup else primary)
+    VideoRecorder.seen.clear()
+    _run(monkeypatch, settings, site, tmp_path, State(tmp_path / "s.db"), [VideoRecorder({})])
+    (sent,) = VideoRecorder.seen
+    assert video.probe(sent.video_path)["audio"], "the backup voice read the reel"

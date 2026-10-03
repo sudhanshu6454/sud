@@ -74,3 +74,17 @@ def test_the_polish_keeps_the_take_exactly_as_long_and_falls_back_to_the_dry_one
     assert wet != dry
     monkeypatch.setattr(video, "ffmpeg_exe", lambda: "/nonexistent/ffmpeg")
     assert speech.polish(dry, speech.RATE) == dry, "a failed polish is the dry take, not a lost voice"
+
+
+def test_a_cloud_voice_without_its_key_hands_the_reel_to_the_backup_voice(settings, monkeypatch):
+    from autopub import pipeline
+    monkeypatch.setattr(pipeline, "_NARRATOR", {})
+    monkeypatch.delenv("AZURE_SPEECH_KEY", raising=False)
+    backup = speech.Narrator(voice="af_heart", synth=lambda t: speech.tone(0.1))
+    real_load = speech.Narrator.load
+    monkeypatch.setattr(speech.Narrator, "load", classmethod(lambda cls, v, d: backup if v == "af_heart" else real_load(v, d)))
+    settings.reel_voice, settings.reel_voice_fallback = "azure:en-IN-NeerjaNeural", "af_heart"
+    assert pipeline.narrator_for(settings) is backup, "no key yet: the backup reads it, the reel is not silent"
+    settings.reel_voice_fallback = ""
+    monkeypatch.setattr(pipeline, "_NARRATOR", {})
+    assert pipeline.narrator_for(settings) is None, "no backup configured: silent, as before"

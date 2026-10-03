@@ -114,6 +114,7 @@ class Settings:
     # The reel's narration: a Piper voice name (rhasspy/piper-voices), fetched once into <data_dir>/voices.
     # "" posts silent reels.
     reel_voice: str = "af_heart"      # local, no key; cloud Indian English voices are azure:... / google:...
+    reel_voice_fallback: str = "af_heart"   # reads the reel when reel_voice cannot (no cloud key yet, an outage); "" = silent instead
     # A music bed under the reel, matched to the story's mood: your own licensed tracks from
     # <data_dir>/music/<mood>/ when present, else one composed on the spot. False = voice only.
     reel_music: bool = True

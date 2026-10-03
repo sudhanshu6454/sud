@@ -49,11 +49,15 @@ def make_wordpress(site: Site) -> WordPress:
 _NARRATOR: dict = {}
 
 
-def narrator_for(settings: Settings):
-    """The reel's voice, loaded once per process; None when narration is off or unavailable."""
-    key = settings.reel_voice
+def narrator_for(settings: Settings, backup: bool = False):
+    """The reel's voice, loaded once per process; None when narration is off or unavailable. A voice
+    that cannot load (a cloud voice before its key is in .env) hands over to reel_voice_fallback, so
+    a reel is never silent for want of a key."""
+    key = settings.reel_voice_fallback if backup else settings.reel_voice
     if key not in _NARRATOR:
         _NARRATOR[key] = speech.Narrator.load(key, settings.data_dir / "voices") if key else None
+    if _NARRATOR[key] is None and not backup and settings.reel_voice and settings.reel_voice_fallback not in ("", settings.reel_voice):
+        return narrator_for(settings, backup=True)
     return _NARRATOR[key]
 
 
@@ -323,12 +327,19 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
                 # the narration sets the pace: each frame holds for as long as its lines take to say
                 scripts = _narration(post, site, spoken)[:len(frames)]
                 scripts += [None] * (len(frames) - len(scripts))
-                try:
-                    audio, durations = narrator.soundtrack(scripts, work_dir / site.slug / f"{stem}-voice.wav",
-                                                           floor=[speech.LEAD_IN + speech.PAD_AFTER + 1.5] * len(frames))
-                except Exception as exc:  # noqa: BLE001 - a lost voice is a silent reel, not a lost reel
-                    log.warning("[%s] narration failed (%s); the reel goes out silent", site.key, exc)
-                    audio, durations = None, video.plan(frames, texts)
+                # the chosen voice, then the backup (a cloud voice can fail mid-run: an outage, a spent
+                # quota); only when both fail does the reel go out silent - a lost voice is not a lost reel
+                audio = None
+                for voice in dict.fromkeys(v for v in (narrator, narrator_for(settings, backup=True)) if v is not None):
+                    try:
+                        audio, durations = voice.soundtrack(scripts, work_dir / site.slug / f"{stem}-voice.wav",
+                                                            floor=[speech.LEAD_IN + speech.PAD_AFTER + 1.5] * len(frames))
+                        break
+                    except Exception as exc:  # noqa: BLE001
+                        log.warning("[%s] narration by %s failed (%s)", site.key, voice.voice, exc)
+                if audio is None:
+                    log.warning("[%s] no voice could read this reel; it goes out silent", site.key)
+                    durations = video.plan(frames, texts)
             voiced = audio is not None
             if settings.reel_music:
                 # the music bed for the story's mood, under the voice when there is one
