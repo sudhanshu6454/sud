@@ -243,7 +243,7 @@ def cmd_cards(settings, args) -> int:
             path = video.render_reel(frames, out_dir / f"{site.slug}-reel.mp4", durations, images.hex_to_rgb(site.brand.accent), audio=audio)
             info = video.probe(path)
             print(f"   {path.stat().st_size // 1024:>5} KB  {info.get('width')}x{info.get('height')} {info.get('codec')} "
-                  f"{info.get('duration', 0):.1f}s  {'narrated by ' + settings.reel_voice if voiced else 'no voice loaded'}"
+                  f"{info.get('duration', 0):.1f}s  {'narrated by ' + narrator.voice if voiced else 'no voice loaded'}"
                   f"{', ' + mood + ' music' if settings.reel_music else ''}  {path}")
             continue
         if args.carousel:
