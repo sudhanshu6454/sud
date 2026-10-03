@@ -166,7 +166,7 @@ def test_sites_without_the_flag_and_hours_switched_off_never_run_it(monkeypatch,
 
 def test_config_marks_the_three_marketing_sites(settings):
     assert [s.key for s in settings.sites if s.nostalgia] == ["MENTALIST", "CRAZY", "JUNKIES"]
-    assert settings.ad_hours == [9, 12, 15, 18, 21] and settings.reel_voice == "azure:en-IN-NeerjaNeural" and settings.reel_voice_fallback == "af_heart"
+    assert settings.ad_hours == [9, 12, 15, 18, 21] and settings.reel_voice == "sarvam:priya" and settings.reel_voice_fallback == "af_heart"
 
 
 def test_the_days_slots_alternate_current_and_nostalgic_current_first(settings):

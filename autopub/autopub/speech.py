@@ -21,6 +21,7 @@ log = logging.getLogger(__name__)
 DEFAULT_VOICE = "hf_alpha"     # Indian English, female; af_heart / am_michael for American, bf_emma / bm_george for British
 RATE = 22050                 # Piper's output; Kokoro's is 24000; ffmpeg resamples to 48k for the reel
 KOKORO_RATE = 24000
+SARVAM_MODEL, SARVAM_RATE = "bulbul:v3", 24000   # Sarvam AI (api.sarvam.ai): Indian voices; 2500 characters a request
 KOKORO_FILES = {             # hexgrad/Kokoro-82M (Apache-2.0) as packaged by thewh1teagle/kokoro-onnx
     "kokoro-v1.0.onnx": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx",
     "voices-v1.0.bin": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin",
@@ -87,6 +88,8 @@ class Narrator:
             return cls._load_azure(voice[6:])
         if voice.startswith("google:"):
             return cls._load_google(voice[7:])
+        if voice.startswith("sarvam:"):
+            return cls._load_sarvam(voice[7:])
         if is_kokoro(voice):
             return cls._load_kokoro(voice, voice_dir)
         try:
@@ -166,6 +169,19 @@ class Narrator:
             return None
         n = cls(f"google:{voice}", None, lambda text: _google_synth(text, voice, key))
         n.rate = 24000
+        return n
+
+    @classmethod
+    def _load_sarvam(cls, speaker: str) -> "Narrator | None":
+        """Sarvam AI's Bulbul v3, voices trained on Indian speakers reading Indian English, e.g.
+        sarvam:priya. Needs SARVAM_API_KEY in .env."""
+        import os
+        key = os.environ.get("SARVAM_API_KEY")
+        if not key:
+            log.warning("no narration: sarvam voice %s needs SARVAM_API_KEY", speaker)
+            return None
+        n = cls(f"sarvam:{speaker}", None, lambda text: _sarvam_synth(text, speaker, key))
+        n.rate = SARVAM_RATE
         return n
 
     rate = RATE
@@ -261,12 +277,26 @@ def _download(url: str, target: Path) -> None:
     tmp.replace(target)
 
 
-def _pcm_from_wav(data: bytes) -> bytes:
+def _pcm_from_wav(data: bytes, rate: int | None = None) -> bytes:
     import io
     with wave.open(io.BytesIO(data)) as w:
         if w.getnchannels() != 1 or w.getsampwidth() != 2:
             raise RuntimeError(f"unexpected audio: {w.getnchannels()} ch, {w.getsampwidth() * 8} bit")
+        if rate and w.getframerate() != rate:
+            raise RuntimeError(f"unexpected audio: {w.getframerate()} Hz, wanted {rate}")
         return w.readframes(w.getnframes())
+
+
+def _sarvam_synth(text: str, speaker: str, key: str) -> bytes:
+    import base64
+    import requests
+    resp = requests.post("https://api.sarvam.ai/text-to-speech", timeout=60,
+                         headers={"api-subscription-key": key, "Content-Type": "application/json"},
+                         json={"text": text, "language_code": "en-IN", "speaker": speaker, "model": SARVAM_MODEL,
+                               "speech_sample_rate": SARVAM_RATE})
+    if resp.status_code != 200:
+        raise RuntimeError(f"sarvam tts {resp.status_code}: {resp.text[:200]}")
+    return _pcm_from_wav(base64.b64decode(resp.json()["audios"][0]), SARVAM_RATE)
 
 
 def _azure_synth(text: str, voice: str, key: str, region: str) -> bytes:

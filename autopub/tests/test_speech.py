@@ -88,3 +88,44 @@ def test_a_cloud_voice_without_its_key_hands_the_reel_to_the_backup_voice(settin
     settings.reel_voice_fallback = ""
     monkeypatch.setattr(pipeline, "_NARRATOR", {})
     assert pipeline.narrator_for(settings) is None, "no backup configured: silent, as before"
+
+
+def _wav(pcm: bytes, rate: int) -> bytes:
+    import io
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1); w.setsampwidth(2); w.setframerate(rate); w.writeframes(pcm)
+    return buf.getvalue()
+
+
+def test_sarvam_reads_indian_english_with_the_chosen_speaker(monkeypatch):
+    import base64
+    import requests
+    sent = {}
+
+    class R:
+        status_code = 200
+        def __init__(self, rate): self.rate = rate
+        def json(self): return {"request_id": "r1", "audios": [base64.b64encode(_wav(speech.tone(0.2, 24000), self.rate)).decode()]}
+
+    def post(url, json=None, headers=None, timeout=None):
+        sent.update(url=url, json=json, headers=headers)
+        return R(sent.get("rate", 24000))
+
+    monkeypatch.setattr(requests, "post", post)
+    monkeypatch.setenv("SARVAM_API_KEY", "k")
+    n = speech.Narrator.load("sarvam:priya", Path("unused"))
+    pcm = n.synth_many(["Drishyam 3 made ₹36.70 cr."])[0]
+    assert sent["url"] == "https://api.sarvam.ai/text-to-speech" and sent["headers"]["api-subscription-key"] == "k"
+    assert sent["json"] == {"text": "Drishyam 3 made rupees 36.7 crore.", "language_code": "en-IN", "speaker": "priya",
+                            "model": "bulbul:v3", "speech_sample_rate": 24000}
+    assert abs(n.duration(pcm) - 0.2) < 0.01
+    sent["rate"] = 22050
+    import pytest
+    with pytest.raises(RuntimeError, match="22050 Hz"):
+        n.synth_many(["x"])   # a wrong rate would play at the wrong speed; better the backup voice reads it
+
+
+def test_sarvam_without_its_key_is_no_narrator(monkeypatch):
+    monkeypatch.delenv("SARVAM_API_KEY", raising=False)
+    assert speech.Narrator.load("sarvam:priya", Path("unused")) is None
