@@ -39,10 +39,21 @@ def kokoro_lang(voice: str) -> str:
 PAD_AFTER = 0.7              # seconds of quiet after a frame's narration before the dissolve
 LEAD_IN = 0.35               # seconds before the first word of a frame
 
-# what the voice should say instead of what the card shows
-_SAY = [(re.compile(r"₹\s?"), "rupees "), (re.compile(r"\bRs\.?\s?(?=\d)"), "rupees "),
-        (re.compile(r"(?<!\w)#\w+"), ""), (re.compile(r"https?://\S+|www\.\S+", re.I), ""),
-        (re.compile(r"\bcr\b"), "crore"), (re.compile(r"\bQ([1-4])\b"), r"quarter \1"),
+# what the voice should say instead of what the card shows: figures the way a presenter says them
+# (36.70 -> 36.7, 72% -> 72 percent, 2.4M -> 2.4 million), units and abbreviations spelt for the ear
+_SAY = [(re.compile(r"(?<!\w)#\w+"), ""), (re.compile(r"https?://\S+|www\.\S+", re.I), ""),
+        (re.compile(r"(?<=\d),(?=\d)"), ""),
+        (re.compile(r"(\d+)\.(\d*?)0+(?!\d)"), lambda m: f"{m[1]}.{m[2]}" if m[2] else m[1]),
+        (re.compile(r"(\d)\s?%"), r"\1 percent"),
+        (re.compile(r"(\d)\s?(?:bn|B)\b"), r"\1 billion"), (re.compile(r"(\d)\s?(?:mn|M)\b"), r"\1 million"),
+        (re.compile(r"(\d)\s?[kK]\b"), r"\1 thousand"), (re.compile(r"(\d)x\b"), r"\1 times"),
+        (re.compile(r"\$\s?(\d[\d.]*(?: (?:billion|million|thousand))?)"), r"\1 dollars"),
+        (re.compile(r"₹\s?"), "rupees "), (re.compile(r"\bRs\.?\s?(?=\d)"), "rupees "),
+        (re.compile(r"\bcr\b\.?", re.I), "crore"), (re.compile(r"\bnett\b", re.I), "net"),
+        (re.compile(r"\bvs\.?(?=\s)", re.I), "versus"), (re.compile(r"\s&\s"), " and "),
+        (re.compile(r"\bNo\.\s?(?=\d)"), "number "), (re.compile(r"\bOTT\b"), "O T T"), (re.compile(r"\bIMDb\b"), "I M D B"),
+        (re.compile(r"(\d)-(?=[a-z])"), r"\1 "),
+        (re.compile(r"\bQ([1-4])\b"), r"quarter \1"),
         (re.compile(r"\bYoY\b"), "year on year"), (re.compile(r"\bCTR\b"), "click-through rate"),
         (re.compile(r"\bROI\b"), "R O I"), (re.compile(r"\bCEO\b"), "C E O"), (re.compile(r"\bCMO\b"), "C M O"),
         (re.compile(r"\bD2C\b"), "direct to consumer"), (re.compile(r"\bAI\b"), "A I"),
@@ -206,8 +217,37 @@ class Narrator:
             w.setnchannels(1)
             w.setsampwidth(frame_bytes)
             w.setframerate(self.rate)
-            w.writeframes(bytes(timeline))
+            w.writeframes(bytes(polish(bytes(timeline), self.rate)))
         return out_path, durations
+
+
+# A presenter's chain, not an effect: clear the rumble and the boxiness, lift presence, tame the
+# esses, even the level the way a mic and a compressor would, then a few milliseconds of small room
+# so the voice sounds recorded somewhere rather than generated nowhere. Loudness to -16 LUFS, the
+# level reels are mixed for.
+POLISH = ("highpass=f=75,lowpass=f=12500,equalizer=f=220:t=q:w=1.2:g=-2,equalizer=f=3200:t=q:w=1.4:g=2.5,"
+          "deesser=i=0.35,acompressor=threshold=-21dB:ratio=2.5:attack=6:release=140:makeup=2,"
+          "aecho=0.85:0.7:17|29:0.08|0.05,loudnorm=I=-16:TP=-1.5:LRA=9")
+
+
+def polish(pcm: bytes, rate: int) -> bytes:
+    """The narration through POLISH, exactly as long as it went in (the frames are timed to it).
+    Any failure hands the dry take back: a plain voice beats no voice."""
+    import subprocess
+    if not pcm:
+        return pcm
+    try:
+        from .video import ffmpeg_exe
+        proc = subprocess.run([ffmpeg_exe(), "-loglevel", "error", "-f", "s16le", "-ar", str(rate), "-ac", "1", "-i", "-",
+                               "-af", POLISH, "-f", "s16le", "-ar", str(rate), "-ac", "1", "-"],
+                              input=pcm, capture_output=True, timeout=300)
+        if proc.returncode != 0 or not proc.stdout:
+            raise RuntimeError(proc.stderr.decode(errors="replace")[-300:])
+        out = proc.stdout[:len(pcm)]
+        return out + b"\x00" * (len(pcm) - len(out))
+    except Exception as exc:  # noqa: BLE001
+        log.warning("voice polish skipped (%s); the dry take is used", exc)
+        return pcm
 
 
 def _download(url: str, target: Path) -> None:

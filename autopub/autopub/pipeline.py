@@ -87,6 +87,15 @@ def _story_texts(post: CuratedPost) -> list[tuple[str, str]]:
     return frames
 
 
+def _narration(post: CuratedPost, site: Site, spoken: list[tuple[str, str]]) -> list[str]:
+    """What the voice says over each reel frame: the writer's voiceover, written for the ear, where it
+    wrote one; otherwise the frames' own sentences - a heading is never read out - and a spoken sign-off."""
+    lines = [" ".join(v.split())[:400] for v in post.voiceover if v and v.strip()]
+    opener = lines[0] if lines else (post.hook or post.image_headline or post.title)
+    body = [lines[i] if i < len(lines) else text for i, (_, text) in enumerate(spoken, 1)]
+    return [opener, *body, f"The full story's on {site.name}. Link's in our bio."]
+
+
 def publish_one(site: Site, settings: Settings, state: State, cand: sources.Candidate, rewriter: Rewriter,
                 wp: WordPress, publishers, work_dir: Path, report: RunReport, use_source_image: bool | None = None) -> bool:
     url = cand.url
@@ -312,8 +321,7 @@ def publish_post(site: Site, settings: Settings, state: State, url: str, post: C
             narrator = narrator_for(settings)
             if narrator is not None:
                 # the narration sets the pace: each frame holds for as long as its lines take to say
-                scripts = [post.image_headline or post.title, *[f"{h}. {b}" for h, b in spoken],
-                           f"Read the full story on {site.domain}. Link in bio."][:len(frames)]
+                scripts = _narration(post, site, spoken)[:len(frames)]
                 scripts += [None] * (len(frames) - len(scripts))
                 try:
                     audio, durations = narrator.soundtrack(scripts, work_dir / site.slug / f"{stem}-voice.wav",

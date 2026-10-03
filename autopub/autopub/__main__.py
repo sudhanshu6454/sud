@@ -230,7 +230,8 @@ def cmd_cards(settings, args) -> int:
             from . import speech
             narrator = narrator_for(settings)
             if narrator is not None:
-                scripts = [headline, *[f"{h}. {b}" for h, b in sample], f"Read the full story on {site.domain}. Link in bio."]
+                # the sample has no writer voiceover, so this is the fallback a live reel uses without one
+                scripts = [headline, *[b for _, b in sample], f"The full story's on {site.name}. Link's in our bio."]
                 audio, durations = narrator.soundtrack(scripts, out_dir / f"{site.slug}-reel-voice.wav",
                                                        floor=[speech.LEAD_IN + speech.PAD_AFTER + 1.5] * len(frames))
             voiced = audio is not None

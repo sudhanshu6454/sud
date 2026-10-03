@@ -6,8 +6,8 @@ from autopub import speech, video
 
 
 def test_the_voice_reads_figures_and_drops_what_is_not_speech():
-    assert speech.say("Spend rose to ₹5,200 cr in Q3 #retail https://x.y") == "Spend rose to rupees 5,200 crore in quarter 3."
-    assert speech.say("Rs 1,299 vs Rs 1,899 - the anchor") == "rupees 1,299 vs rupees 1,899, the anchor."
+    assert speech.say("Spend rose to ₹5,200 cr in Q3 #retail https://x.y") == "Spend rose to rupees 5200 crore in quarter 3."
+    assert speech.say("Rs 1,299 vs Rs 1,899 - the anchor") == "rupees 1299 versus rupees 1899, the anchor."
     assert speech.say("The CMO said AI drove ROI") == "The C M O said A I drove R O I."
     assert speech.say("Already ends?") == "Already ends?"
     assert speech.say("   ") == ""
@@ -57,3 +57,20 @@ def test_a_missing_voice_means_no_narrator_not_an_error(tmp_path, monkeypatch):
     (tmp_path / "voices" / "en_US-x-high.onnx").write_bytes(b"x")
     (tmp_path / "voices" / "en_US-x-high.onnx.json").write_text("{}")
     assert speech.Narrator.load("en_US-x-high", tmp_path / "voices") is None, "a model that will not load is also just silence"
+
+
+def test_figures_are_said_the_way_a_presenter_says_them():
+    assert speech.say("Rs. 36.70 cr nett by 4 PM") == "rupees 36.7 crore net by 4 PM."
+    assert speech.say("72% occupancy and a 2.4M-view trailer") == "72 percent occupancy and a 2.4 million-view trailer."
+    assert speech.say("$1.2bn, 10K likes, 3x the opening, IMDb 8.0 on OTT") == \
+        "1.2 billion dollars, 10 thousand likes, 3 times the opening, I M D B 8 on O T T."
+    assert speech.say("Drishyam 3 is No. 1 & climbing") == "Drishyam 3 is number 1 and climbing."
+
+
+def test_the_polish_keeps_the_take_exactly_as_long_and_falls_back_to_the_dry_one(monkeypatch):
+    dry = b"\x00" * 4000 + speech.tone(1.0) + b"\x00" * 4000
+    wet = speech.polish(dry, speech.RATE)
+    assert len(wet) == len(dry), "the frames are timed to the narration, so not one sample may move"
+    assert wet != dry
+    monkeypatch.setattr(video, "ffmpeg_exe", lambda: "/nonexistent/ffmpeg")
+    assert speech.polish(dry, speech.RATE) == dry, "a failed polish is the dry take, not a lost voice"

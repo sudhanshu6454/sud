@@ -266,3 +266,15 @@ def test_the_reel_stands_in_for_the_card_and_a_failed_reel_hands_it_back():
     Card.seen = 0
     results = dispatch([Card({}), Story({}), Reel({})], without)
     assert [r.platform for r in results] == ["instagram"] and Card.seen == 1, "no reel: the card as always, the story idle"
+
+
+def test_the_narration_is_the_writers_voiceover_and_never_reads_a_heading_out(site):
+    spoken = [("What happened", "It made 36.7 crore."), ("Why it matters", "A record for the franchise.")]
+    post = StoryRewriter().rewrite(site, Article(url="u", title="t", text="", sitename="", image=None))
+    post.voiceover = ["So, Drishyam 3 just did something big.", "By four, it had nearly thirty-seven crore."]
+    lines = pipeline._narration(post, site, spoken)
+    assert lines[:2] == post.voiceover, "the writer's spoken lines, in order"
+    assert lines[2] == "A record for the franchise.", "a frame the voiceover did not reach falls back to its sentences"
+    assert lines[-1] == f"The full story's on {site.name}. Link's in our bio."
+    post.voiceover = []
+    assert pipeline._narration(post, site, spoken)[1] == "It made 36.7 crore.", "no voiceover: the body, not 'What happened.'"
